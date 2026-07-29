@@ -1,0 +1,414 @@
+/* Google Fonts chargé via <link> dans index.html (non-bloquant) — ne pas reimporter ici */
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: var(--font-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-serif), "Outfit", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  
+  --color-sage: #EC3875;
+  --color-wood: #8c734b;
+  --color-stone-deep: #23112E;
+  --color-paper: #FAF9FB;
+  --color-stone-muted: #e5e7eb;
+  --color-darkblue: #14213D;
+  --color-copper: #EC3875;
+}
+
+@layer base {
+  body {
+    @apply bg-paper text-stone-deep font-sans antialiased;
+  }
+  p {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+  p.text-xs,
+  p.text-sm {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+}
+
+/* ── Hero animations CSS (mobile — remplace motion.div) ── */
+@keyframes heroZoom {
+  from { transform: scale(1.08); }
+  to   { transform: scale(1); }
+}
+@keyframes heroFadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes heroFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.hero-bg-zoom   { animation: heroZoom   2.2s ease-out forwards; }
+.hero-fade-in   { animation: heroFadeIn 0.5s ease-out 0.2s both; }
+.hero-fade-up-1 { animation: heroFadeUp 0.65s cubic-bezier(.21,.47,.32,.98) 0.35s both; }
+.hero-fade-up-2 { animation: heroFadeUp 0.8s  cubic-bezier(.21,.47,.32,.98) 0.75s both; }
+.hero-fade-up-3 { animation: heroFadeUp 0.8s  cubic-bezier(.21,.47,.32,.98) 0.95s both; }
+
+/* ── Transition de page (fondu léger, respecte prefers-reduced-motion) ── */
+@keyframes fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fadein {
+  animation: fadein 0.18s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fadein { animation: none; }
+}
+
+/* ── Marquee CSS-only (remplace motion.div animate — zéro RAF JS) ── */
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee 28s linear infinite;
+  will-change: transform;
+}
+
+/* ── Quill WYSIWYG : même rendu que la page article ── */
+.ql-editor {
+  font-family: var(--font-sans);
+  font-size: 1.125rem;
+  line-height: 1.75;
+  color: #57534e;
+  font-weight: 300;
+  min-height: 480px;
+  padding: 1.5rem 2rem;
+}
+
+.ql-editor p { margin-bottom: 1.25rem; }
+
+.ql-editor h2 {
+  font-family: var(--font-serif);
+  font-size: 1.625rem;
+  font-weight: 700;
+  color: #1c1917;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  line-height: 1.3;
+}
+
+.ql-editor h3 {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #1c1917;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.35;
+}
+
+.ql-editor h4 {
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #1c1917;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.ql-editor blockquote {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: #98a994;
+  border-left: 4px solid #98a994;
+  background-color: rgba(152, 169, 148, 0.07);
+  padding: 1.5rem 2rem;
+  border-radius: 0 1rem 1rem 0;
+  margin: 2rem 0;
+}
+
+.ql-editor strong { font-weight: 700; color: #1c1917; }
+.ql-editor em     { font-style: italic; }
+
+.ql-editor a {
+  color: #98a994;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ql-editor ul,
+.ql-editor ol {
+  padding-left: 1.75rem;
+  margin: 1rem 0;
+}
+.ql-editor li { margin: 0.4rem 0; }
+
+.ql-editor img {
+  border-radius: 0.75rem;
+  max-width: 100%;
+  display: block;
+  margin: 1.5rem auto;
+}
+
+.ql-editor .ql-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  border: none;
+  border-radius: 0.75rem;
+  margin: 1.5rem auto;
+}
+
+/* ── Charte Graphique Visuelle: Dégradé Cercle & Animation ── */
+@keyframes spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 40s linear infinite;
+}
+
+.brand-ring-gradient {
+  background: conic-gradient(from 180deg at 50% 50%, #a3d9a5 0deg, #f7b733 90deg, #ec3875 180deg, #23112e 270deg, #a3d9a5 360deg);
+}
+
+.brand-gradient-text {
+  background: linear-gradient(135deg, #f7b733 0%, #ec3875 50%, #23112e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.btn-pink-to-purple {
+  background-color: #EC3875 !important;
+  color: #ffffff !important;
+  transition: all 0.3s ease-in-out !important;
+}
+.btn-pink-to-purple:hover {
+  background-color: #23112E !important;
+  color: #ffffff !important;
+  transform: translateY(-2px) !important;
+}
+
+/* ── Lisibilité des articles de blog ──
+   Force l'alignement à gauche et désactive la césure automatique, même si le
+   HTML stocké contient une justification ou des styles inline. Évite les
+   "rivières" du texte justifié et les coupures de mots disgracieuses. */
+.blog-article-body,
+.blog-article-body *,
+.blog-article-body p,
+.blog-article-body li,
+.blog-article-body h1,
+.blog-article-body h2,
+.blog-article-body h3,
+.blog-article-body blockquote {
+  text-align: left !important;
+  hyphens: manual !important;
+  -webkit-hyphens: manual !important;
+  -moz-hyphens: manual !important;
+  word-break: normal !important;
+  word-wrap: normal !important;
+}
+.blog-article-body p,
+.blog-article-body li {
+  overflow-wrap: break-word !important;
+  text-wrap: pretty;
+}
+
+.blog-article-body iframe {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  border: none;
+  border-radius: 0.75rem;
+  margin: 2rem auto;
+}
+
+
+/* ── Scroll reveal animations ──────────────────────────────────────────────
+   Couche purement additive — ne touche aucun contenu existant.
+   Déclenché par ScrollAnimations.tsx via IntersectionObserver.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* État initial : invisible, légèrement décalé */
+[data-reveal="up"] {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity  0.72s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+[data-reveal="scale"] {
+  opacity: 0;
+  transform: scale(0.96) translateY(12px);
+  transition:
+    opacity  0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+/* État visible */
+[data-reveal][data-revealed] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Pas d'animation si prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal],
+  [data-reveal][data-revealed] {
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Smooth scroll global */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Marquee animation ───────────────────────────────────────────────────── */
+@keyframes sde-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes sde-marquee {
+    from { transform: none; }
+    to   { transform: none; }
+  }
+}
+
+/* ── Interactions & hover avancés ─────────────────────────────────────────
+   Couche purement additive — ne touche aucun contenu ni composant existant.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Cursor glow */
+#sde-cursor-glow {
+  position: fixed;
+  top: 0; left: 0;
+  width: 400px; height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(236,56,117,0.055) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 9998;
+  will-change: transform;
+  transition: width 0.35s ease, height 0.35s ease, background 0.35s ease;
+}
+#sde-cursor-glow.sde-cursor-active {
+  width: 480px; height: 480px;
+  background: radial-gradient(circle, rgba(236,56,117,0.09) 0%, transparent 70%);
+}
+
+/* Reveal directions */
+[data-reveal="left"] {
+  opacity: 0;
+  transform: translateX(-32px);
+  transition:
+    opacity  0.72s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+[data-reveal="right"] {
+  opacity: 0;
+  transform: translateX(32px);
+  transition:
+    opacity  0.72s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+[data-reveal="left"][data-revealed],
+[data-reveal="right"][data-revealed] {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Hover: images dans containers overflow-hidden */
+main section .overflow-hidden > img,
+main section .overflow-hidden img:only-child {
+  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+main section .overflow-hidden:hover > img,
+main section .overflow-hidden:hover img:only-child {
+  transform: scale(1.045);
+}
+
+/* Hover: boutons CTA (bg-sage) — shimmer */
+main a.rounded-full,
+main button.rounded-full {
+  position: relative;
+  overflow: hidden;
+}
+main a.rounded-full::after,
+main button.rounded-full::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255,255,255,0.18) 50%,
+    transparent 70%
+  );
+  transform: translateX(-150%);
+  transition: transform 0.55s ease;
+  pointer-events: none;
+}
+main a.rounded-full:hover::after,
+main button.rounded-full:hover::after {
+  transform: translateX(150%);
+}
+
+/* Hover: liens texte dans sections — soulignement animé */
+main section a:not([class*="rounded"]):not([class*="btn"]) {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.3s ease;
+}
+main section a:not([class*="rounded"]):not([class*="btn"]):hover {
+  background-size: 100% 1px;
+}
+
+/* Cards — transition douce (le tilt 3D est géré en JS) */
+main section .rounded-3xl.border {
+  transition:
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease,
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1) !important;
+  will-change: transform;
+}
+
+/* Séparateurs / lignes HR */
+main section hr,
+main section [class*="border-b"]:not(*) {
+  transform-origin: left;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.7s ease;
+}
+
+/* prefers-reduced-motion override global */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal="left"],
+  [data-reveal="right"],
+  [data-reveal="left"][data-revealed],
+  [data-reveal="right"][data-revealed] {
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  #sde-cursor-glow { display: none; }
+  main section .overflow-hidden > img { transition: none !important; }
+  main a.rounded-full::after, main button.rounded-full::after { display: none; }
+}
+
+/* ── Focus visible cohérent (accessibilité clavier) ──
+   Un focus clavier doit toujours être visible, quel que soit le composant.
+   !important : prime sur les rings pâles / outline-none appliqués via Tailwind. */
+:focus-visible {
+  outline: 2px solid var(--color-sage) !important;
+  outline-offset: 2px !important;
+}

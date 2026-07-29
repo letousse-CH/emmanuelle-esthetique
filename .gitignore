@@ -1,0 +1,15 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+.next/
+vite_legacy_backup/
+scratch/
+*.tsbuildinfo
+
+# Local Netlify folder
+.netlify

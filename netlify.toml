@@ -1,0 +1,25 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Sécurité + aide les crawlers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-XSS-Protection = "1; mode=block"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(self)"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: http:; connect-src 'self' data: blob: https: http: wss://*.supabase.co; frame-src https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self';"
+
+# Proxy Supabase Storage (uploads admin : covers blog, images événements)
+[[redirects]]
+  from = "/medias/*"
+  to = "https://xyzyhzdabmbqyycxcpgl.supabase.co/storage/v1/object/public/medias/:splat"
+  status = 200
+  force = true
