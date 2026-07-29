@@ -155,12 +155,13 @@ function extractFaqItems(html: string): Array<{ question: string; answer: string
 }
 
 async function getAuthorSettings() {
-  const s = await getSettingsServer(['author_bio', 'author_link', 'author_photo', 'business_owner']);
+  const s = await getSettingsServer(['author_bio', 'author_link', 'author_photo', 'business_owner', 'global_logo']);
   return {
     bio: s.author_bio,
     link: s.author_link,
     photo: s.author_photo,
     name: s.business_owner || SITE_CONFIG.owner,
+    logo: s.global_logo,
   };
 }
 
@@ -295,10 +296,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       "@id": `${SITE_CONFIG.url}/#organization`,
       "name": SITE_CONFIG.name,
       "url": SITE_CONFIG.url,
-      "logo": {
-        "@type": "ImageObject",
-        "url": "https://pub-06788dc2f8884cb1bba449c00813d758.r2.dev/1780852325790-logo-au-dela-des-chaines--1-.png"
-      }
+      ...(author.logo ? { "logo": { "@type": "ImageObject", "url": author.logo } } : {})
     },
     "mainEntityOfPage": {
       "@type": "WebPage",
