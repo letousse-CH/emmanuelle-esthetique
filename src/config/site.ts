@@ -10,19 +10,37 @@ export const SITE_CONFIG = {
   name: "Emmanuelle Esthétique",
   owner: "Emmanuelle",
 
-  // URL canonique du site
+  // URL canonique du site — base des canonicals, du sitemap, de robots.txt,
+  // des @id Schema.org et des liens de partage.
+  //
+  // Ordre de résolution, et pourquoi il compte :
+  //  1. NEXT_PUBLIC_SITE_URL — le seul à être injecté AUSSI dans le bundle
+  //     navigateur (préfixe NEXT_PUBLIC_). C'est celui à définir.
+  //  2. URL — injecté automatiquement par Netlify, mais côté serveur
+  //     uniquement : dans le navigateur il vaut undefined.
+  //  3. Le repli ci-dessous, qui doit donc rester une URL réellement
+  //     joignable, sinon les liens générés côté client pointent dans le vide.
+  //
+  // ⚠️ Pas encore de nom de domaine : on reste sur l'URL Netlify. Le jour où
+  // le domaine est acheté, il suffit de définir NEXT_PUBLIC_SITE_URL dans les
+  // variables Netlify — rien d'autre à modifier dans le code.
   url: process.env.NEXT_PUBLIC_SITE_URL ||
        process.env.URL ||
-       "https://emmanuelle-esthetique.ch",
+       "https://emmanuelle-esthetique.netlify.app",
 
-  // E-mail où l'on reçoit les formulaires de contact / notifications de paiement
-  receiverEmail: process.env.CONTACT_EMAIL || "contact@emmanuelle-esthetique.ch",
+  // E-mail où l'on reçoit les formulaires de contact / notifications de
+  // paiement. À définir via CONTACT_EMAIL : tant qu'il n'y a pas de domaine,
+  // une adresse personnelle fait l'affaire. Pas de repli inventé ici — une
+  // adresse fictive ferait échouer les envois en silence.
+  receiverEmail: process.env.CONTACT_EMAIL || "",
 
-  // Configuration d'envoi via Resend
+  // Configuration d'envoi via Resend. Resend exige un domaine vérifié pour
+  // l'expéditeur : tant que le domaine n'existe pas, laisser RESEND_FROM_EMAIL
+  // vide (les envois échoueront proprement) ou utiliser onboarding@resend.dev
+  // pour les tests.
   emailSender: {
     name: "Emmanuelle Esthétique",
-    // Adresse d'expédition validée dans Resend
-    email: process.env.RESEND_FROM_EMAIL || "contact@emmanuelle-esthetique.ch",
+    email: process.env.RESEND_FROM_EMAIL || "",
     get full() {
       return `${this.name} <${this.email}>`;
     }

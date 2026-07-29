@@ -79,6 +79,35 @@ Pour démarrer un nouveau site à partir de ce template : `npm run setup` (coord
 modules, clés de service), puis appliquer `supabase/migrations/*.sql` sur le
 nouveau projet Supabase.
 
+## Nom de domaine & stockage des médias
+
+**Domaine.** Pas encore de domaine définitif : le site tourne sur
+`emmanuelle-esthetique.netlify.app`. `SITE_CONFIG.url` (`src/config/site.ts`)
+résout dans cet ordre : `NEXT_PUBLIC_SITE_URL` → `URL` (injecté par Netlify,
+**serveur uniquement**) → repli sur l'URL Netlify.
+
+Seul `NEXT_PUBLIC_SITE_URL` est injecté aussi dans le bundle navigateur — c'est
+donc lui qu'il faut définir. Le jour où le domaine est choisi :
+
+```bash
+netlify env:set NEXT_PUBLIC_SITE_URL "https://le-vrai-domaine.ch"
+```
+
+Rien d'autre à changer : canonicals, sitemap, robots.txt, `@id` Schema.org,
+Open Graph et liens de partage en découlent tous.
+
+**Médias.** Aucun stockage n'est requis pour faire tourner le site. Les images
+s'ajoutent **par URL** depuis la bibliothèque médias de l'admin (bouton
+« Ajouter » à côté du champ URL) — utile tant que R2 n'est pas configuré, et
+sans rapport avec le nom de domaine.
+
+Pour activer l'upload de fichiers, renseigner les cinq variables R2
+(`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`,
+`NEXT_PUBLIC_R2_PUBLIC_URL`) en local et sur Netlify. Tant qu'il en manque une,
+`/api/upload-media` répond `501` avec la liste des variables absentes au lieu
+d'une erreur S3 opaque. Le sous-domaine public `pub-xxxx.r2.dev` d'un bucket
+suffit : pas besoin de domaine personnalisé.
+
 ## Contenu des pages
 
 Les pages publiques ne sont **pas** des composants React : elles vivent dans la

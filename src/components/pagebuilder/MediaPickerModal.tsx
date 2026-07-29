@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
-import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Loader2, Image as ImageIcon, Link2, Plus } from 'lucide-react';
 import { compressImage, uploadFileToR2 } from '../../utils/imageUpload';
 
 interface MediaAsset {
@@ -25,6 +25,12 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
   const [isUploading, setIsUploading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Ajout par URL — permet d'utiliser une image déjà hébergée ailleurs sans
+  // dépendre du stockage (R2 / Supabase Storage), qui peut ne pas être encore
+  // configuré sur une nouvelle installation.
+  const [urlInput, setUrlInput] = useState('');
+  const [urlError, setUrlError] = useState('');
+  const [isAddingUrl, setIsAddingUrl] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -70,12 +76,53 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
         setMedias([data[0], ...medias]);
         onSelect(url);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Erreur lors de l'upload de l'image.");
+      // Remonter le message de l'API : il indique notamment quelles variables
+      // de stockage manquent, et rappelle l'alternative « ajouter par URL ».
+      setUrlError(err?.message || "Erreur lors de l'upload de l'image.");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleAddUrl = async () => {
+    const raw = urlInput.trim();
+    if (!raw) return;
+
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      setUrlError("URL invalide — elle doit commencer par https://");
+      return;
+    }
+    if (parsed.protocol !== 'https:') {
+      setUrlError("Seules les URLs en https:// sont acceptées.");
+      return;
+    }
+
+    setUrlError('');
+    setIsAddingUrl(true);
+    try {
+      const fileName = decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || 'image');
+      const { data, error } = await supabase.from('media_assets').insert([{
+        file_name: fileName,
+        url: raw,
+        alt_text: fileName.replace(/\.[a-z0-9]+$/i, ''),
+      }]).select('*');
+
+      if (error || !data?.length) throw new Error(error?.message || 'Enregistrement impossible');
+
+      setMedias([data[0], ...medias]);
+      setUrlInput('');
+      onSelect(raw);
+    } catch (err: any) {
+      console.error(err);
+      setUrlError(err?.message || "Impossible d'ajouter cette image.");
+    } finally {
+      setIsAddingUrl(false);
     }
   };
 
@@ -110,6 +157,32 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
           </div>
         </div>
 
+        {/* Ajout par URL — utilisable même sans stockage configuré */}
+        <div className="px-6 py-3 border-b border-stone-200 bg-white shrink-0">
+          <div className="flex items-center gap-2">
+            <Link2 size={15} className="text-stone-400 shrink-0" />
+            <input
+              type="url"
+              inputMode="url"
+              value={urlInput}
+              onChange={(e) => { setUrlInput(e.target.value); setUrlError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
+              placeholder="…ou collez l'URL d'une image déjà en ligne (https://…)"
+              className="flex-1 min-w-0 px-3 py-2 text-sm border border-stone-200 rounded-lg focus:border-sage focus:ring-1 focus:ring-sage outline-none"
+            />
+            <button
+              type="button"
+              onClick={handleAddUrl}
+              disabled={!urlInput.trim() || isAddingUrl}
+              className="shrink-0 inline-flex items-center gap-1.5 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-sage transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            >
+              {isAddingUrl ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              Ajouter
+            </button>
+          </div>
+          {urlError && <p className="text-xs text-red-600 mt-2 ml-6">{urlError}</p>}
+        </div>
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 bg-stone-100">
           {loading ? (
@@ -121,6 +194,10 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
             <div className="h-full flex flex-col items-center justify-center text-stone-400 gap-4">
               <ImageIcon size={48} className="opacity-30" />
               <p className="text-sm">Votre bibliothèque est vide.</p>
+              <p className="text-xs max-w-sm text-center leading-relaxed">
+                Uploadez un fichier, ou collez ci-dessus l'URL d'une image déjà
+                en ligne — pratique tant que le stockage n'est pas configuré.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

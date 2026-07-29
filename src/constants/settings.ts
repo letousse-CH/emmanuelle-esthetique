@@ -30,7 +30,9 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   // publiée telle quelle dans le Schema.org `BeautySalon` (voir app/layout.tsx).
   business_name: 'Emmanuelle Esthétique',
   business_owner: 'Emmanuelle',
-  business_email: 'contact@emmanuelle-esthetique.ch',
+  // Vide tant qu'il n'y a pas de domaine : le footer et la page contact
+  // masquent l'e-mail s'il est absent, plutôt que d'afficher une adresse morte.
+  business_email: '',
   business_phone: '',
   business_address_street:  '',
   business_address_postal:  '1607',

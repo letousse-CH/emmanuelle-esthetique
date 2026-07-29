@@ -30,13 +30,15 @@ export default async function ContactPage() {
             <p className="text-lg font-medium text-stone-900">{business.owner} — {business.name}</p>
           </div>
 
-          <div className="flex items-start gap-5">
-            <div className="bg-sage/10 p-3 rounded-full shrink-0"><Mail className="w-5 h-5 text-sage" /></div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-stone-400 mb-1">Email</p>
-              <a href={`mailto:${business.email}`} className="text-lg font-medium text-stone-900 hover:text-sage transition-colors">{business.email}</a>
+          {business.email && (
+            <div className="flex items-start gap-5">
+              <div className="bg-sage/10 p-3 rounded-full shrink-0"><Mail className="w-5 h-5 text-sage" /></div>
+              <div>
+                <p className="text-xs uppercase tracking-widest text-stone-400 mb-1">Email</p>
+                <a href={`mailto:${business.email}`} className="text-lg font-medium text-stone-900 hover:text-sage transition-colors">{business.email}</a>
+              </div>
             </div>
-          </div>
+          )}
 
           {business.phone && (
             <div className="flex items-start gap-5">
