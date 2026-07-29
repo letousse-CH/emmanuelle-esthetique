@@ -96,14 +96,14 @@ export default function Login() {
         <div className="absolute right-[-10%] top-[-10%] w-32 h-32 rounded-full bg-sage/5 blur-xl pointer-events-none" />
 
         <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 bg-[#23112E]/5 rounded-2xl flex items-center justify-center text-[#23112E]">
+          <div className="w-16 h-16 bg-[#3A3730]/5 rounded-2xl flex items-center justify-center text-[#3A3730]">
             {mode === 'login' && <Lock size={28} />}
             {mode === 'forgot' && <Mail size={28} />}
             {mode === 'reset' && <KeyRound size={28} />}
           </div>
         </div>
         
-        <h1 className="text-2xl text-center font-serif font-black text-[#23112E] mb-2 uppercase tracking-widest">
+        <h1 className="text-2xl text-center font-serif font-black text-[#3A3730] mb-2 uppercase tracking-widest">
           {mode === 'login' && 'Administration'}
           {mode === 'forgot' && 'Mot de passe oublié'}
           {mode === 'reset' && 'Nouveau mot de passe'}
@@ -132,7 +132,7 @@ export default function Login() {
         {mode === 'login' && (
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-[10px] uppercase tracking-widest text-[#23112E] mb-2 font-bold">
+              <label htmlFor="email" className="block text-[10px] uppercase tracking-widest text-[#3A3730] mb-2 font-bold">
                 Email
               </label>
               <input
@@ -141,20 +141,20 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-stone-200 focus:border-[#EC3875] focus:ring-1 focus:ring-[#EC3875] outline-none rounded-xl transition-all bg-[#FAF9FB] focus:bg-white text-stone-900 placeholder:text-stone-400 text-sm"
+                className="w-full px-4 py-3 border border-stone-200 focus:border-[#8A9A7B] focus:ring-1 focus:ring-[#8A9A7B] outline-none rounded-xl transition-all bg-[#FAF9FB] focus:bg-white text-stone-900 placeholder:text-stone-400 text-sm"
                 placeholder="votre@email.com"
               />
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label htmlFor="password" className="block text-[10px] uppercase tracking-widest text-[#23112E] font-bold">
+                <label htmlFor="password" className="block text-[10px] uppercase tracking-widest text-[#3A3730] font-bold">
                   Mot de passe
                 </label>
                 <button
                   type="button"
                   onClick={() => setMode('forgot')}
-                  className="text-[10px] text-[#EC3875] hover:text-[#23112E] font-bold uppercase tracking-wider transition-colors"
+                  className="text-[10px] text-[#8A9A7B] hover:text-[#3A3730] font-bold uppercase tracking-wider transition-colors"
                 >
                   Oublié ?
                 </button>
@@ -165,7 +165,7 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-stone-200 focus:border-[#EC3875] focus:ring-1 focus:ring-[#EC3875] outline-none rounded-xl transition-all bg-[#FAF9FB] focus:bg-white text-stone-900 placeholder:text-stone-400 text-sm"
+                className="w-full px-4 py-3 border border-stone-200 focus:border-[#8A9A7B] focus:ring-1 focus:ring-[#8A9A7B] outline-none rounded-xl transition-all bg-[#FAF9FB] focus:bg-white text-stone-900 placeholder:text-stone-400 text-sm"
                 placeholder="••••••••"
               />
             </div>
@@ -173,7 +173,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#23112E] text-white py-4 rounded-xl uppercase tracking-[0.2em] text-[11px] font-bold hover:bg-[#EC3875] transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-[#23112E]/10"
+              className="w-full bg-[#3A3730] text-white py-4 rounded-xl uppercase tracking-[0.2em] text-[11px] font-bold hover:bg-[#8A9A7B] transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-[#3A3730]/10"
             >
               {loading ? 'Connexion...' : 'Se connecter'}
             </button>
@@ -184,7 +184,7 @@ export default function Login() {
         {mode === 'forgot' && (
           <form onSubmit={handleForgotPassword} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-[10px] uppercase tracking-widest text-[#23112E] mb-2 font-bold">
+              <label htmlFor="email" className="block text-[10px] uppercase tracking-widest text-[#3A3730] mb-2 font-bold">
                 Votre email administrateur
               </label>
               <input
@@ -193,7 +193,7 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-stone-200 focus:border-[#EC3875] focus:ring-1 focus:ring-[#EC3875] outline-none rounded-xl transition-all bg-[#FAF9FB] focus:bg-white text-stone-900 placeholder:text-stone-400 text-sm"
+                className="w-full px-4 py-3 border border-stone-200 focus:border-[#8A9A7B] focus:ring-1 focus:ring-[#8A9A7B] outline-none rounded-xl transition-all bg-[#FAF9FB] focus:bg-white text-stone-900 placeholder:text-stone-400 text-sm"
                 placeholder="votre@email.com"
               />
             </div>
@@ -201,7 +201,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#23112E] text-white py-4 rounded-xl uppercase tracking-[0.2em] text-[11px] font-bold hover:bg-[#EC3875] transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-[#23112E]/10"
+              className="w-full bg-[#3A3730] text-white py-4 rounded-xl uppercase tracking-[0.2em] text-[11px] font-bold hover:bg-[#8A9A7B] transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-[#3A3730]/10"
             >
               {loading ? 'Envoi...' : 'Envoyer le lien'}
             </button>
@@ -209,7 +209,7 @@ export default function Login() {
             <button
               type="button"
               onClick={() => setMode('login')}
-              className="w-full flex items-center justify-center gap-2 text-stone-400 hover:text-[#23112E] text-xs transition-colors pt-2 cursor-pointer font-medium"
+              className="w-full flex items-center justify-center gap-2 text-stone-400 hover:text-[#3A3730] text-xs transition-colors pt-2 cursor-pointer font-medium"
             >
               <ArrowLeft size={14} /> Retour à la connexion
             </button>
@@ -220,7 +220,7 @@ export default function Login() {
         {mode === 'reset' && (
           <form onSubmit={handleResetPassword} className="space-y-6">
             <div>
-              <label htmlFor="new-password" className="block text-[10px] uppercase tracking-widest text-[#23112E] mb-2 font-bold">
+              <label htmlFor="new-password" className="block text-[10px] uppercase tracking-widest text-[#3A3730] mb-2 font-bold">
                 Nouveau mot de passe
               </label>
               <input
@@ -229,7 +229,7 @@ export default function Login() {
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-stone-200 focus:border-[#EC3875] focus:ring-1 focus:ring-[#EC3875] outline-none rounded-xl transition-all bg-[#FAF9FB] focus:bg-white text-stone-900 placeholder:text-stone-400 text-sm"
+                className="w-full px-4 py-3 border border-stone-200 focus:border-[#8A9A7B] focus:ring-1 focus:ring-[#8A9A7B] outline-none rounded-xl transition-all bg-[#FAF9FB] focus:bg-white text-stone-900 placeholder:text-stone-400 text-sm"
                 placeholder="••••••••"
               />
             </div>
@@ -237,7 +237,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#23112E] text-white py-4 rounded-xl uppercase tracking-[0.2em] text-[11px] font-bold hover:bg-[#EC3875] transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-[#23112E]/10"
+              className="w-full bg-[#3A3730] text-white py-4 rounded-xl uppercase tracking-[0.2em] text-[11px] font-bold hover:bg-[#8A9A7B] transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-[#3A3730]/10"
             >
               {loading ? 'Mise à jour...' : 'Mettre à jour'}
             </button>

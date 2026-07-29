@@ -18,22 +18,24 @@ export async function GET() {
     content += `> ${SITE_CONFIG.seoDefaults.description}\n\n`;
 
     content += `## Informations Clés & SEO Géo-Localisé (GEO SEO)\n`;
-    content += `- **Activité** : Accompagnement de posture, sortie d'emprise psychologique & décodage des personnalités manipulatrices / perverses narcissiques.\n`;
-    content += `- **Professionnel** : ${SITE_CONFIG.owner} (ancien Thérapeute & Coach de Posture).\n`;
-    content += `- **Localisation principale** : Palézieux, Canton de Vaud, Suisse Romande.\n`;
-    content += `- **Zone de couverture** : Présentiel en Suisse Romande (Lausanne, Fribourg, Genève, Vaud) et séances à distance (Visio) pour toute la Francophonie (France, Belgique, Canada).\n`;
-    content += `- **Contact** : Réservations sécurisées et sessions stratégiques privées de 30 minutes offertes.\n\n`;
+    content += `- **Activité** : Institut de beauté et bien-être à domicile — soins du visage, Head Spa, massages relaxants, beauté du regard et ateliers d'auto-soin.\n`;
+    content += `- **Professionnelle** : ${SITE_CONFIG.owner}, esthéticienne.\n`;
+    content += `- **Localisation** : institut à domicile à Palézieux, canton de Vaud, Suisse.\n`;
+    content += `- **Zone de couverture** : Palézieux et sa région (Lavaux-Oron, Broye-Vully, Riviera), canton de Vaud.\n`;
+    content += `- **Contact** : uniquement sur rendez-vous, pris via le formulaire de contact du site.\n\n`;
 
     content += `## Pages Principales\n`;
-    content += `- [Accueil](${SITE_CONFIG.url}/) : Présentation de l'accompagnement "Arsenal Tactique", des modules et de l'approche clinique.\n`;
-    content += `- [Ateliers & Événements](${SITE_CONFIG.url}/ateliers) : Rencontres régulières, ateliers de groupe et retraites spirituelles à Palézieux.\n`;
-    content += `- [Blog](${SITE_CONFIG.url}/blog) : Décryptages comportementaux et analyses cliniques des profils toxiques.\n`;
-    content += `- [À Propos & Contact](${SITE_CONFIG.url}/a-propos) : Présentation de Matthieu Le Tousse et prise de contact pour initier un parcours de libération.\n`;
+    content += `- [Accueil](${SITE_CONFIG.url}/) : Présentation de l'institut, des soins, des ateliers et des bons cadeaux.\n`;
+    content += `- [Soins](${SITE_CONFIG.url}/soins) : Soins du visage et du corps, Head Spa, massages relaxants et beauté du regard.\n`;
+    content += `- [Ateliers](${SITE_CONFIG.url}/ateliers) : Ateliers d'auto-soin en petit comité — Gua Sha, auto-massage du visage, Glowing Face.\n`;
+    content += `- [Bon cadeau](${SITE_CONFIG.url}/bon-cadeau) : Bons cadeaux à offrir et produits de soin naturels.\n`;
+    content += `- [Blog](${SITE_CONFIG.url}/blog) : Conseils de soin, rituels de beauté et bien-être au quotidien.\n`;
+    content += `- [À Propos & Contact](${SITE_CONFIG.url}/a-propos) : Présentation de ${SITE_CONFIG.owner} et prise de rendez-vous.\n`;
     content += `- [Mentions Légales](${SITE_CONFIG.url}/mentions-legales) : Informations juridiques et RGPD.\n\n`;
 
     if (pages && pages.length > 0) {
       // Filtrer les pages systèmes déjà listées
-      const systemSlugs = ['home', 'a-propos', 'mentions-legales', 'ateliers', 'blog'];
+      const systemSlugs = ['home', 'a-propos', 'soins', 'bon-cadeau', 'mentions-legales', 'ateliers', 'blog'];
       const customPages = pages.filter(p => !systemSlugs.includes(p.slug));
       
       if (customPages.length > 0) {
@@ -46,7 +48,7 @@ export async function GET() {
     }
 
     if (events && events.length > 0) {
-      content += `## Ateliers & Événements à Palézieux (Suisse)\n`;
+      content += `## Ateliers à Palézieux (Suisse)\n`;
       events.forEach(e => {
         const dateStr = e.date_start ? new Date(e.date_start).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Date à confirmer';
         const loc = e.location || 'Palézieux, Suisse';
@@ -56,9 +58,9 @@ export async function GET() {
     }
 
     if (articles && articles.length > 0) {
-      content += `## Articles Récents du Blog (Décryptage de l'Emprise)\n`;
+      content += `## Articles Récents du Blog\n`;
       articles.forEach(a => {
-        content += `- [${a.title}](${SITE_CONFIG.url}/blog/${a.slug}) : ${a.meta_description || 'Analyse clinique de la manipulation.'}\n`;
+        content += `- [${a.title}](${SITE_CONFIG.url}/blog/${a.slug}) : ${a.meta_description || 'Conseils de soin et de bien-être.'}\n`;
       });
       content += `\n`;
     }

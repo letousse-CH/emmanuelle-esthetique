@@ -8,7 +8,7 @@ import { resolveModelSpec } from '../../../constants/aiModels';
 import { getSettingsServer } from '../../../services/settingsServer';
 
 function buildPrompt(idea: any, settings: Record<string, string>): string {
-  const activityContext = settings.site_activity_context || "Au-delà des Chaînes — Coaching d'accompagnement des victimes de manipulation psychologique...";
+  const activityContext = settings.site_activity_context || '';
   const targetPersona   = settings.site_target_persona || "";
   const toneOfVoice     = settings.site_tone_of_voice || "";
   const brandTone       = settings.site_brand_tone || "";
@@ -32,7 +32,7 @@ ${idea.difficulty ? `Difficulté SEO : ${idea.difficulty} — ${idea.difficulty 
 ${idea.opportunity ? `\nOpportunité éditoriale (angle à exploiter) : "${idea.opportunity}"` : ''}
 
 Accroche suggérée (introduction) :
-"${idea.suggestedIntro || 'Développe une accroche clinique et directe qui nomme le problème sans détour, en tutoyant le lecteur.'}"
+"${idea.suggestedIntro || "Développe une accroche concrète qui part d'une situation vécue par le lecteur, dans le ton de voix défini ci-dessus."}"
 
 ${idea.secondaryKeywords?.length ? `
 ━━━ CLUSTER SÉMANTIQUE — RÈGLE ABSOLUE ━━━
@@ -57,39 +57,25 @@ CTA de fin d'article :
 
 ━━━ DIRECTIVES DU TON ET VOIX D'ÉCRITURE ━━━
 
-Tu écris comme le praticien/expert parle dans son cabinet : face à quelqu'un, pas devant une feuille blanche. C'est la parole d'un praticien qui pense à voix haute avec son interlocuteur. PAS de la prose littéraire. PAS des formules ciselées pour sonner beau.
+Le ton de voix défini plus haut fait autorité : applique-le à la lettre. Les règles ci-dessous s'y ajoutent, elles ne le remplacent pas.
 
-TON CHIRURGICAL, EXPERT ET LUCIDE : tu nommes les situations sans détour ni fioritures sentimentales — le ton d'un mentor qui a une longueur d'avance et donne un plan de match. Profondément bienveillant et sécurisant, jamais infantilisant, jamais victimisant sur le long terme.
+Tu écris comme le/la professionnel(le) parle à un client en face de lui : pas devant une feuille blanche. PAS de prose littéraire, PAS de formules ciselées pour sonner beau.
 
-TUTOIEMENT THÉRAPEUTIQUE : tu t'adresses au lecteur en le tutoyant ("tu"), pour créer une proximité immédiate, briser son isolement et installer une conversation privée et lucide.
-
-REGISTRE DE RÉFÉRENCE — parole de cabinet :
-- Valider avant d'affirmer. Partir de ce que le lecteur ressent déjà, le reconnaître, puis avancer.
+REGISTRE DE RÉFÉRENCE :
+- Valider avant d'affirmer. Partir de ce que le lecteur vit déjà, le reconnaître, puis avancer.
 - Utiliser "ça" (jamais "cela"), les virgules-pauses, les apartés entre virgules.
-- Infuser le vocabulaire tactique et clinique propre à la marque.
-- Commencer des phrases par : "Et là...", "C'est vrai que...", "Ce que je vois souvent...", "En fait...", "Parce que...", "Et ça, ça change tout."
-- Exemple ✅ : "C'est vrai que se reconstruire demande du temps, ça, ce n'est pas un secret."
-- Exemple ❌ : "Se reconstruire, c'est un travail d'artisan. Pas une révélation." (trop aphoristique, trop littéraire)
-- Exemple ✅ : "Et là, souvent, c'est là que ça coince vraiment."
-- Exemple ✅ : "Ce que j'observe dans mon cabinet, c'est que les gens arrivent épuisés d'avoir bien fait les choses."
-- Exemple ❌ : "On observe fréquemment que les individus présentent une fatigue accumulée."
+- Réutiliser le vocabulaire privilégié dans la charte de marque ci-dessus.
+- Exemple ✅ : "C'est vrai qu'une peau qui tiraille, on met souvent ça sur le compte de la fatigue."
+- Exemple ❌ : "La déshydratation cutanée constitue un phénomène fréquemment observé." (trop guindé)
 
-LE "ÇA" COMME MARQUEUR DE PROXIMITÉ :
-- Exemple ✅ : "Et ça, ça ne s'apprend pas dans un livre."
-- Exemple ✅ : "Le corps, lui, il n'oublie pas — ça, c'est certain."
-
-VALIDATION AVANT AFFIRMATION :
-- Exemple ✅ : "On a tous entendu qu'il faut lâcher prise. Et c'est vrai, dans un sens. Sauf que personne ne vous dit comment."
-- Exemple ❌ : "Le lâcher-prise est une notion centrale de la psychologie contemporaine."
-
-ÉMOTION — montrée, jamais nommée :
-- Exemple ✅ : "Je reste assis dans le silence. Je ne bouge plus."
-- Exemple ❌ : "Je ressentais une profonde tristesse face à cette situation."
+ÉMOTION ET SENSATION — montrées, jamais nommées :
+- Exemple ✅ : "La chaleur de la serviette sur le visage, et les épaules qui redescendent d'un cran."
+- Exemple ❌ : "Vous ressentirez une profonde relaxation."
 
 CONSTRUCTIONS INTERDITES :
 - La formule "X. Pas Y." en série → préférer "X, et ça ne ressemble pas vraiment à Y."
 - Les phrases nominales sans verbe en série
-- L'ouverture par une question rhétorique générale → commencer par une scène ou une phrase de cabinet
+- L'ouverture par une question rhétorique générale → commencer par une scène concrète
 - "cela", "constitue", "représente", "s'avère", "il convient de"
 
 VOCABULAIRE INTERDIT :
@@ -100,11 +86,11 @@ RÈGLES SEO OBLIGATOIRES :
 - Densité du mot-clé principal : entre 1,0 % et 1,5 % du total des mots. Ne jamais dépasser 2 %.
 - Chaque mot-clé secondaire du cluster : au moins 1 occurrence dans le corps, répartie naturellement (jamais groupée).
 - Longueur cible : 2400 mots. Minimum absolu : 2000 mots. En dessous, l'article est invalide.
-- "Matthieu Le Tousse" doit apparaître dans les 100 premiers mots de l'introduction.
+- Le nom de la marque doit apparaître naturellement dans les 100 premiers mots de l'introduction.
 - NE PAS commencer par "Bien sûr", "Voici", ou toute formule d'IA.
 - NE PAS mentionner que tu es une IA.
 - NE PAS transformer une narration en liste à puces sauf pour les outils pratiques.
-- Le "tu" thérapeutique est central — proximité, chaleur, lucidité, jamais condescendance ni infantilisation.
+- Respecter la personne d'adresse (tutoiement ou vouvoiement) fixée par le ton de voix ci-dessus, sans jamais en changer en cours d'article.
 
 ━━━ SOURCES EXTERNES OBLIGATOIRES ━━━
 - Inclure exactement 2 liens externes vers des sources de référence (PubMed, CNRS, APA, Inserm, université reconnue, ouvrage clinique de référence).
@@ -116,7 +102,7 @@ RÈGLES SEO OBLIGATOIRES :
 ━━━ FAQ POUR RICH SNIPPETS (OBLIGATOIRE) ━━━
 - Au minimum 2 H2 formulés comme des questions terminant par "?".
 - Le premier paragraphe après chaque H2 interrogatif répond directement à la question, sans introduction.
-- Exemple ✅ H2 "Comment reconnaître un pervers narcissique ?" → "Un pervers narcissique se reconnaît par un besoin obsessionnel d'admiration, une absence totale d'empathie et une propension systématique à inverser la culpabilité."
+- Exemple ✅ H2 "Combien de temps dure un soin du visage ?" → "Un soin du visage complet dure entre 60 et 90 minutes, temps d'accueil et de diagnostic de peau compris."
 - Exemple ❌ : "C'est une question que beaucoup se posent."
 - Ces paragraphes : 60-80 mots minimum, autonomes (compréhensibles sans lire le reste), contiennent un élément concret.
 
@@ -125,20 +111,20 @@ Les moteurs conversationnels citent les passages qui répondent vite, clairement
 1. ENCADRÉ "EN BREF" OBLIGATOIRE — juste après l'introduction. Un <h2>En bref</h2> suivi d'une <ul> de 3 à 5 puces qui répondent directement au mot-clé principal. Chaque puce = une affirmation complète, autonome et factuelle (pas une accroche). C'est le passage le plus cité par les IA et le plus susceptible de devenir un featured snippet Google. Exception explicite à la règle "pas de listes" : cet encadré EST une liste.
 2. PHRASES DÉFINITIONNELLES AUTONOMES. Au moins une fois par section, une phrase qui définit ou répond sans dépendre du contexte précédent (sujet + verbe + réponse complète) — une IA doit pouvoir l'extraire seule.
 3. PARAGRAPHES COURTS : 2 à 4 phrases. Un bloc dense est ignoré par les extracteurs.
-4. ENTITÉS NOMMÉES explicitement (pervers narcissique, gaslighting, lien de trauma, emprise…) plutôt que des pronoms vagues.
+4. ENTITÉS NOMMÉES explicitement (le nom exact du soin, de la technique, de l'ingrédient, du lieu) plutôt que des pronoms vagues.
 
-━━━ SIGNAUX E-E-A-T — EXPÉRIENCE & EXPERTISE (sujet YMYL sensible) ━━━
-Ce sujet touche à la santé psychique : Google et les IA exigent des preuves d'expérience réelle et d'expertise. Intègre, de façon naturelle et non promotionnelle :
-1. AU MOINS 2 MARQUEURS D'EXPÉRIENCE DIRECTE de cabinet, ancrés dans le texte : "Ce que je vois en cabinet, c'est que…", "En 20 ans à accompagner des personnes sous emprise…", "Les personnes qui passent ma porte arrivent souvent…". L'expérience vécue prime sur la théorie.
-2. UNE MENTION NATURELLE DE LÉGITIMITÉ, une seule fois, sans étalage : ancien thérapeute en cabinet privé, formé au Rêve Éveillé Libre (EREL), praticien validé IPHM. À tisser dans une phrase, jamais en CV.
-3. NUANCE ET HONNÊTETÉ : reconnaître les limites ("chaque situation est différente", "ceci ne remplace pas un suivi adapté"). La prudence est un signal de fiabilité, pas une faiblesse.
-4. JAMAIS de promesse thérapeutique absolue ni de diagnostic à distance.
+━━━ SIGNAUX E-E-A-T — EXPÉRIENCE & EXPERTISE ━━━
+Google et les IA privilégient les contenus qui montrent une expérience réelle du métier. Intègre, de façon naturelle et non promotionnelle :
+1. AU MOINS 2 MARQUEURS D'EXPÉRIENCE DIRECTE, ancrés dans le texte : "Ce que je vois le plus souvent en cabine, c'est…", "Les clientes qui poussent la porte arrivent souvent…". L'expérience vécue prime sur la théorie.
+2. UNE MENTION NATURELLE DE LÉGITIMITÉ, une seule fois, sans étalage, tirée UNIQUEMENT des informations fournies dans le contexte ci-dessus. N'invente jamais un diplôme, une certification, une durée d'expérience ou une affiliation.
+3. NUANCE ET HONNÊTETÉ : reconnaître les limites ("chaque peau est différente", "en cas de doute, demandez un avis médical"). La prudence est un signal de fiabilité.
+4. JAMAIS de promesse de résultat absolue, de diagnostic à distance, ni d'allégation médicale ou anti-âge non fondée.
 
 ━━━ FORMAT HTML ━━━
 Génère uniquement du HTML propre compatible avec l'éditeur Quill.
 Structure requise :
 
-<p>[Introduction 150-200 mots — "Matthieu Le Tousse" dans les 100 premiers mots]</p>
+<p>[Introduction 150-200 mots — le nom de la marque dans les 100 premiers mots]</p>
 
 <h2>En bref</h2>
 <ul>
@@ -183,7 +169,7 @@ Structure requise :
 ━━━ IMPORTANT ━━━
 - Commence directement avec le premier <p> de l'introduction. Pas de titre H1 (il est déjà dans la page).
 - Utilise des <strong> pour les concepts clés et les verrous psychologiques importants.
-- Utilise des <em> pour les termes tactiques ou cliniques (gaslighting, sevrage neuro-émotionnel, lien de trauma...) la première fois qu'ils apparaissent.
+- Utilise des <em> pour les termes techniques du métier (Gua Sha, Head Spa, acide hyaluronique…) la première fois qu'ils apparaissent.
 - Inclus au moins une <blockquote> de citation (réelle ou composée dans ton style).
 - Chaque H2 doit contenir la requête cible ou une variante naturelle.
 - L'article doit se lire naturellement, pas comme une liste de réponses.

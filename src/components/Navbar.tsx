@@ -60,7 +60,10 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
     e.currentTarget.onerror = null;
   };
 
-  const darkHeroPages = ['/', '/si-les-arbres-pouvaient-parler', '/reve-eveille-libre'];
+  // Pages dont la première section est sombre : les liens de la navbar
+  // transparente s'y affichent en blanc. Les pages du CMS émettent en plus
+  // l'événement `sde:heroColor` (voir SectionWrapper), qui fait autorité.
+  const darkHeroPages: string[] = [];
 
   useEffect(() => {
     const isDark = darkHeroPages.includes(pathname || '');
@@ -102,18 +105,10 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
   if (!menuItems || menuItems.length === 0) {
     menuItems = [
       { name: "Accueil", path: "/" },
+      { name: "À propos", path: "/a-propos" },
+      { name: "Soins", path: "/soins" },
       { name: "Ateliers", path: "/ateliers" },
-      { name: "Blog", path: "/blog" },
-      { name: "À Propos", path: "/about" },
-      { name: "Livres", type: "dropdown", children: [
-        { name: "Paroles & Silences", path: "/paroles-et-silences" },
-        { name: "Si les arbres pouvaient parler…", path: "/si-les-arbres-pouvaient-parler" }
-      ]},
-      { name: "Services", type: "dropdown", children: [
-        { name: "Séance Individuelle", path: "/seance-individuelle" },
-        { name: "Programme Complet", path: "/programme-complet" },
-        { name: "Rêve Éveillé Libre", path: "/reve-eveille-libre" }
-      ]},
+      { name: "Bon cadeau", path: "/bon-cadeau" },
       { name: "Contact", path: "/contact" }
     ];
   }
@@ -139,7 +134,7 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
             <img
               src={logoUrl}
               onError={handleImageError}
-              alt="Logo Au-delà des Chaînes - Retour à l'accueil"
+              alt="Emmanuelle Esthétique — retour à l'accueil"
               className="w-full h-full object-contain"
               referrerPolicy="no-referrer"
               width={250}
@@ -222,7 +217,7 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
                 : 'bg-stone-deep text-paper hover:bg-stone-deep/90'
             }`}
           >
-            S'inscrire
+            Prendre rendez-vous
           </Link>
         </div>
 
@@ -281,9 +276,9 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
 
               <Link 
                 href={registerLink} 
-                className="bg-sage text-stone-deep py-4 text-center font-bold uppercase tracking-widest"
+                className="bg-sage text-white py-4 text-center font-bold uppercase tracking-widest"
               >
-                Premier Contact
+                Prendre rendez-vous
               </Link>
             </div>
           </motion.div>

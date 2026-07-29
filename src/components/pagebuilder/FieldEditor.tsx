@@ -122,12 +122,12 @@ function RichTextarea({
 }
 
 const BG_PRESETS = [
-  { name: 'Noir', value: '#0A0A0A' },
-  { name: 'Gris foncé', value: '#1c1c1c' },
-  { name: 'Papier', value: '#fcfbf7' },
-  { name: 'Blanc', value: '#ffffff' },
-  { name: 'Sauge', value: '#5b7e5a' },
-  { name: 'Cuivre', value: '#B87333' },
+  { name: 'Crème', value: '#FAF7F2' },
+  { name: 'Blanc', value: '#FFFFFF' },
+  { name: 'Lin', value: '#F1EAE0' },
+  { name: 'Sauge profond', value: '#5E6B52' },
+  { name: 'Taupe', value: '#3A3730' },
+  { name: 'Terracotta', value: '#C08768' },
 ];
 const CARD_FIELDS_BY_TYPE: Record<string, string[]> = {
   features_2: ['title', 'description', 'icon', 'link_text', 'link_href', 'theme'],

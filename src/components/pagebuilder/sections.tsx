@@ -34,7 +34,7 @@ export interface Marquee1Data {
 }
 
 export function Marquee1({ data, sectionIndex }: { data: Marquee1Data; sectionIndex?: number }) {
-  const items: string[] = (data.items && data.items.length > 0) ? data.items : ['Reprendre le contrôle', 'Briser l\'emprise', 'Reconquérir sa liberté'];
+  const items: string[] = (data.items && data.items.length > 0) ? data.items : ['Soins du visage', 'Head Spa', 'Massages relaxants'];
   const sep = data.separator ?? '★';
   const speed = data.speed ?? 'normal';
   const durationMap = { slow: '40s', normal: '24s', fast: '12s' };

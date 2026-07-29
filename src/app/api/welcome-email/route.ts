@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { SITE_CONFIG } from '../../../config/site';
 import { sendEmail } from '../../../services/email';
 
-const SESSION_URL = `${SITE_CONFIG.url}/a-propos`;
+const SESSION_URL = `${SITE_CONFIG.url}/soins`;
 
 async function getPromoSettings(client: any): Promise<{ code: string; amount: string }> {
   const { data } = await client
@@ -79,31 +79,31 @@ function buildWelcomeHtml(email: string, promoCode: string, promoAmount: string)
       <span>${SITE_CONFIG.name} &nbsp;·&nbsp; ${SITE_CONFIG.owner}</span>
     </div>
     <div class="body">
-      <h1>Bienvenue dans l'espace de libération ✦</h1>
+      <h1>Bienvenue ✦</h1>
 
-      <p>Merci de rejoindre cet espace de clarté, de décodage et de reconstruction personnelle. C'est un honneur de vous accueillir.</p>
+      <p>Merci de rejoindre la lettre de l'institut. C'est un plaisir de vous compter parmi nous.</p>
 
-      <p>Vous recevrez régulièrement des analyses de profils complexes (personnalités toxiques, manipulatrices ou perverses), des conseils pour poser des limites saines et des stratégies concrètes pour briser l'emprise psychologique — des clés pour comprendre et reprendre le contrôle.</p>
+      <p>Vous recevrez de temps en temps des conseils de soin, des rituels de saison, les gestes à reproduire chez vous et les nouveautés de l'institut. Jamais de spam, jamais de survente.</p>
 
-      <p>Pour marquer ce départ, je vous offre une réduction sur votre premier entretien ou accompagnement :</p>
+      <p>Pour vous souhaiter la bienvenue, voici une réduction sur votre premier soin :</p>
 
       <div class="promo">
         <p class="promo-label">Votre code de bienvenue</p>
         <p class="promo-code">${promoCode}</p>
-        <p class="promo-desc">Réduction de <strong>${promoAmount}</strong> sur votre première session<br/>À mentionner lors de votre prise de contact.</p>
+        <p class="promo-desc">Réduction de <strong>${promoAmount}</strong> sur votre premier soin<br/>À mentionner lors de la prise de rendez-vous.</p>
         <p style="font-size:12px;color:#a8a29e;margin-top:0.75rem;">Valable jusqu'au <strong>${expiryDate()}</strong></p>
       </div>
 
-      <p>La session Découverte ou l'entretien stratégique est une invitation à poser les bases de votre reconstruction et à identifier les mécanismes de manipulation subis.</p>
+      <p>Que vous veniez pour un soin du visage, un Head Spa ou simplement pour souffler une heure, le soin est adapté à votre peau et à votre humeur du jour.</p>
 
       <div style="text-align:center; margin-top:2rem;">
-        <a class="cta" href="${SESSION_URL}">Découvrir les accompagnements</a>
+        <a class="cta" href="${SESSION_URL}">Découvrir les soins</a>
       </div>
 
       <p style="margin-top:2.5rem; font-style:italic; color:#78716c; font-size:15px;">
-        "On ne guérit pas d'une relation toxique par le simple passage du temps. On en guérit en comprenant les codes du bourreau et en appliquant une contre-stratégie implacable."
+        "Prendre soin de soi, ce n'est pas un luxe qu'on s'accorde quand tout va bien. C'est ce qui aide à tenir le reste."
       </p>
-      <p style="font-size:15px; color:#78716c;">— Matthieu Le Tousse</p>
+      <p style="font-size:15px; color:#78716c;">— ${SITE_CONFIG.owner}</p>
     </div>
     <div class="divider"></div>
     <div class="footer">

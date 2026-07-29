@@ -28,12 +28,12 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps) {
   const { slug } = await params;
   const page = await fetchPageBySlug(slug, false);
-  if (!page) return { title: "Page non trouvée | Au-delà des Chaînes" };
+  if (!page) return { title: `Page non trouvée | ${SITE_CONFIG.name}` };
 
   const defaults = {
-    title: `${page.title} | Au-delà des Chaînes`,
+    title: `${page.title} | ${SITE_CONFIG.name}`,
     description: SITE_CONFIG.seoDefaults.description,
-    og_title: `${page.title} | Au-delà des Chaînes`,
+    og_title: `${page.title} | ${SITE_CONFIG.name}`,
     og_description: SITE_CONFIG.seoDefaults.ogDescription,
     og_image: SITE_CONFIG.seoDefaults.ogImage,
     keywords: SITE_CONFIG.seoDefaults.keywords,

@@ -1,18 +1,23 @@
-/* Google Fonts chargé via <link> dans index.html (non-bloquant) — ne pas reimporter ici */
+/* Les polices sont chargées par next/font dans src/app/layout.tsx et par
+   GlobalStyles (réglages « Design & Style » de l'admin) — ne pas les importer ici. */
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
 @theme {
   --font-sans: var(--font-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-serif), "Outfit", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-serif: var(--font-serif), "Cormorant Garamond", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   
-  --color-sage: #EC3875;
-  --color-wood: #8c734b;
-  --color-stone-deep: #23112E;
-  --color-paper: #FAF9FB;
-  --color-stone-muted: #e5e7eb;
-  --color-darkblue: #14213D;
-  --color-copper: #EC3875;
+  /* Palette Emmanuelle Esthétique — tons neutres & organiques, esprit Hamptons.
+     `sage` est la couleur primaire (accents, eyebrows, CTA), `copper` la
+     terracotta douce, `paper` le blanc cassé de fond, `stone-deep` le taupe
+     profond du texte. */
+  --color-sage: #8A9A7B;
+  --color-wood: #C08768;
+  --color-stone-deep: #3A3730;
+  --color-paper: #FAF7F2;
+  --color-stone-muted: #EDE6DA;
+  --color-darkblue: #35505E;
+  --color-copper: #C08768;
 }
 
 @layer base {
@@ -30,25 +35,6 @@
   }
 }
 
-/* ── Hero animations CSS (mobile — remplace motion.div) ── */
-@keyframes heroZoom {
-  from { transform: scale(1.08); }
-  to   { transform: scale(1); }
-}
-@keyframes heroFadeUp {
-  from { opacity: 0; transform: translateY(24px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes heroFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-.hero-bg-zoom   { animation: heroZoom   2.2s ease-out forwards; }
-.hero-fade-in   { animation: heroFadeIn 0.5s ease-out 0.2s both; }
-.hero-fade-up-1 { animation: heroFadeUp 0.65s cubic-bezier(.21,.47,.32,.98) 0.35s both; }
-.hero-fade-up-2 { animation: heroFadeUp 0.8s  cubic-bezier(.21,.47,.32,.98) 0.75s both; }
-.hero-fade-up-3 { animation: heroFadeUp 0.8s  cubic-bezier(.21,.47,.32,.98) 0.95s both; }
-
 /* ── Transition de page (fondu léger, respecte prefers-reduced-motion) ── */
 @keyframes fadein {
   from { opacity: 0; }
@@ -59,16 +45,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-fadein { animation: none; }
-}
-
-/* ── Marquee CSS-only (remplace motion.div animate — zéro RAF JS) ── */
-@keyframes marquee {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-.marquee-track {
-  animation: marquee 28s linear infinite;
-  will-change: transform;
 }
 
 /* ── Quill WYSIWYG : même rendu que la page article ── */
@@ -116,9 +92,9 @@
 .ql-editor blockquote {
   font-family: var(--font-serif);
   font-style: italic;
-  color: #98a994;
-  border-left: 4px solid #98a994;
-  background-color: rgba(152, 169, 148, 0.07);
+  color: #8A9A7B;
+  border-left: 4px solid #8A9A7B;
+  background-color: rgba(138, 154, 123, 0.08);
   padding: 1.5rem 2rem;
   border-radius: 0 1rem 1rem 0;
   margin: 2rem 0;
@@ -128,7 +104,7 @@
 .ql-editor em     { font-style: italic; }
 
 .ql-editor a {
-  color: #98a994;
+  color: #8A9A7B;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -155,36 +131,6 @@
   border: none;
   border-radius: 0.75rem;
   margin: 1.5rem auto;
-}
-
-/* ── Charte Graphique Visuelle: Dégradé Cercle & Animation ── */
-@keyframes spin-slow {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-.animate-spin-slow {
-  animation: spin-slow 40s linear infinite;
-}
-
-.brand-ring-gradient {
-  background: conic-gradient(from 180deg at 50% 50%, #a3d9a5 0deg, #f7b733 90deg, #ec3875 180deg, #23112e 270deg, #a3d9a5 360deg);
-}
-
-.brand-gradient-text {
-  background: linear-gradient(135deg, #f7b733 0%, #ec3875 50%, #23112e 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.btn-pink-to-purple {
-  background-color: #EC3875 !important;
-  color: #ffffff !important;
-  transition: all 0.3s ease-in-out !important;
-}
-.btn-pink-to-purple:hover {
-  background-color: #23112E !important;
-  color: #ffffff !important;
-  transform: translateY(-2px) !important;
 }
 
 /* ── Lisibilité des articles de blog ──
@@ -292,7 +238,7 @@ html {
   top: 0; left: 0;
   width: 400px; height: 400px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(236,56,117,0.055) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(138,154,123,0.07) 0%, transparent 70%);
   pointer-events: none;
   z-index: 9998;
   will-change: transform;
@@ -300,7 +246,7 @@ html {
 }
 #sde-cursor-glow.sde-cursor-active {
   width: 480px; height: 480px;
-  background: radial-gradient(circle, rgba(236,56,117,0.09) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(138,154,123,0.12) 0%, transparent 70%);
 }
 
 /* Reveal directions */

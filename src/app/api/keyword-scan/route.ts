@@ -1,56 +1,67 @@
 /**
  * Keyword Scan stratégique.
  * Deux appels Haiku parallèles de 10 recommandations chacun → fusion (évite la troncature JSON).
- * Positionnement : Matthieu Le Tousse — Coach Relation Toxique & Pervers Narcissique.
+ * Le positionnement de la marque n'est pas codé en dur : il est lu depuis les
+ * réglages « Éditorial & Marque » de l'admin (table `settings`).
  */
 import { NextResponse, NextRequest } from 'next/server';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { callClaude, extractJson } from '../../../utils/ai';
+import { getSettingsServer } from '../../../services/settingsServer';
+import { SITE_CONFIG } from '../../../config/site';
 
-// ── Contexte commun — encodé une fois ────────────────────────────────────────
+// ── Contexte commun — construit une fois par requête depuis les réglages ─────
 
-const CONTEXT = `Tu es un expert SEO pour les coachs et accompagnants francophones.
+async function buildContext(): Promise<string> {
+  const s = await getSettingsServer([
+    'site_activity_context',
+    'site_target_persona',
+    'site_brand_tone',
+    'site_blog_topics',
+  ]);
 
-## Qui est Matthieu Le Tousse
-Site : audeladeschaines.com — Suisse.
-Titre : **Coach Relation Toxique & Pervers Narcissique**.
-Approche : accompagnement chirurgical, lucide et orienté résultats des victimes de relations toxiques, de pervers narcissiques et de manipulation psychologique. 6 ans de pratique thérapeutique + expertise terrain (structures familiales complexes).
-Programme phare : **l'Arsenal Tactique** (6 modules : Mindset, Sortir du brouillard, Protocole de défense, Sevrage neuro-émotionnel, Reconstruction, Immunisation).
-Médias : podcast "Au-delà des Chaînes" + chaîne YouTube (analyses chirurgicales des profils toxiques).
-Cible : hommes et femmes 25-45 ans, en couple toxique, en séparation, ou en reconstruction post-rupture traumatique.
+  return `Tu es un expert SEO francophone spécialisé dans les activités de service de proximité.
 
-## Pages existantes (ne pas dupliquer)
-- / · /about · /seance-individuelle · /programme-complet · /contact · /blog
+## La marque
+Site : ${SITE_CONFIG.url} — ${SITE_CONFIG.name}.
+${s.site_activity_context || ''}
+${s.site_target_persona ? `\n### Persona cible\n${s.site_target_persona}` : ''}
+${s.site_brand_tone ? `\n### Charte de marque & offres\n${s.site_brand_tone}` : ''}
+${s.site_blog_topics ? `\n### Piliers de contenu\n${s.site_blog_topics}` : ''}
 
 ## Entonnoir
-- **symptôme (TOFU)** : souffrance concrète, fort volume — brouillard mental, marcher sur des œufs, culpabilité, hypervigilance, épuisement, ne pas réussir à partir.
-- **méthode (MOFU)** : mécanismes et outils — gaslighting, inversion de culpabilité, love bombing, lien de trauma, sevrage neuro-émotionnel, méthode de la roche grise.
-- **thérapeute (BOFU)** : conversion directe — coach relation toxique, accompagnement pervers narcissique, se reconstruire, couper les ponts en sécurité, entretien stratégique.
+- **découverte (TOFU)** : besoin ou problème exprimé sans connaître la prestation — fort volume, intention informationnelle.
+- **comparaison (MOFU)** : comparaison de méthodes, de techniques ou de prestations.
+- **conversion (BOFU)** : recherche d'un prestataire, d'un tarif ou d'une réservation — souvent avec une intention locale.
+
+## Règle absolue
+N'invente jamais le nom d'une offre, d'un produit ou d'un service : n'utilise que ceux nommés dans la charte de marque ci-dessus.
 
 ## Format de chaque recommandation (JSON strict, champs courts)
 {
   "keyword": "requête exacte Google",
-  "funnel_level": "symptôme|méthode|thérapeute",
-  "category": "Profils toxiques|Brouillard mental|Trauma & addiction|Protocole de défense|Sphère familiale|Reconstruction",
+  "funnel_level": "découverte|comparaison|conversion",
+  "category": "une des catégories issues des piliers de contenu ci-dessus",
   "difficulty": "faible|moyen|élevé",
   "volume": "faible|moyen|élevé",
   "priority": 1,
   "opportunity": "1 phrase max",
   "suggested_title": "Titre H1 50-65 caractères, mot-clé dans les 4 premiers mots",
   "suggested_slug": "url-sans-accents",
-  "rel_bridge": "1 phrase max : comment amener vers l'Arsenal Tactique / l'entretien stratégique"
+  "rel_bridge": "1 phrase max : comment amener vers une offre de la marque ou la prise de rendez-vous"
 }`;
+}
 
-function buildBatchPrompt(batch: 'A' | 'B', alreadyUsed: string[]): string {
+function buildBatchPrompt(context: string, batch: 'A' | 'B', alreadyUsed: string[]): string {
   const exclude = alreadyUsed.length > 0
     ? `\nMots-clés DÉJÀ GÉNÉRÉS dans l'autre lot (ne pas dupliquer) :\n${alreadyUsed.map(k => `- ${k}`).join('\n')}`
     : '';
 
   const levels = batch === 'A'
-    ? '5 symptôme, 3 méthode, 2 thérapeute'
-    : '3 symptôme, 4 méthode, 3 thérapeute';
+    ? '5 découverte, 3 comparaison, 2 conversion'
+    : '3 découverte, 4 comparaison, 3 conversion';
 
-  return `${CONTEXT}${exclude}
+  return `${context}${exclude}
 
 ## Ta mission (lot ${batch})
 Génère EXACTEMENT 10 recommandations : ${levels}.
@@ -60,11 +71,11 @@ Retourne UNIQUEMENT ce JSON valide, rien d'autre :
 }`;
 }
 
-async function runBatch(batch: 'A' | 'B', alreadyUsed: string[] = []): Promise<any[]> {
+async function runBatch(context: string, batch: 'A' | 'B', alreadyUsed: string[] = []): Promise<any[]> {
   const response = await callClaude({
     feature: 'keyword-scan',
     max_tokens: 2500,
-    messages:   [{ role: 'user', content: buildBatchPrompt(batch, alreadyUsed) }],
+    messages:   [{ role: 'user', content: buildBatchPrompt(context, batch, alreadyUsed) }],
     timeout: 8000
   });
 
@@ -88,10 +99,12 @@ export async function POST(req: NextRequest) {
   if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 500 });
 
   try {
+    const context = await buildContext();
+
     // Lot A et B en parallèle
     const [batchA, batchB] = await Promise.all([
-      runBatch('A'),
-      runBatch('B'),
+      runBatch(context, 'A'),
+      runBatch(context, 'B'),
     ]);
 
     const recommendations = [...batchA, ...batchB];
@@ -102,11 +115,11 @@ export async function POST(req: NextRequest) {
       max_tokens: 1000,
       messages: [{
         role: 'user',
-        content: `${CONTEXT}
+        content: `${context}
 
 Retourne UNIQUEMENT ce JSON :
 {
-  "strategy_summary": "2 phrases sur la priorité SEO pour Matthieu",
+  "strategy_summary": "2 phrases sur la priorité SEO du site",
   "coverage_gaps": ["lacune 1", "lacune 2", "lacune 3", "lacune 4"]
 }`,
       }],

@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
         await sendEmail({
           to: email,
           subject: `Inscription confirmée — ${ev.title}`,
-          html: `<p>Bonjour ${firstName},</p><p>Votre inscription à <strong>${ev.title}</strong>${dateLabel ? ` (${dateLabel})` : ''} est confirmée. Cet événement est gratuit, aucun paiement n'est requis.</p><p>À bientôt,<br/>Matthieu</p>`,
+          html: `<p>Bonjour ${firstName},</p><p>Votre inscription à <strong>${ev.title}</strong>${dateLabel ? ` (${dateLabel})` : ''} est confirmée. Cet événement est gratuit, aucun paiement n'est requis.</p><p>À bientôt,<br/>${SITE_CONFIG.owner}</p>`,
         });
       } catch (mailErr) {
         console.error('[create-checkout] Erreur envoi email bienvenue gratuit:', mailErr);

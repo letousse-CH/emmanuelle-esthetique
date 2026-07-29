@@ -5,6 +5,7 @@ import { supabase } from '../../../../services/supabase';
 import { SdeEvent } from '../../../../types/events';
 import { isModuleEnabledServer } from '../../../../config/modules';
 import EventDetailClient from './EventDetailClient';
+import { SITE_CONFIG } from '../../../../config/site';
 
 async function getEvent(slug: string): Promise<SdeEvent | null> {
   try {
@@ -48,29 +49,29 @@ export async function generateMetadata({ params }: PageProps) {
 
   if (!event) {
     return {
-      title: "Événement non trouvé | Au-delà des Chaînes",
+      title: `Atelier non trouvé | ${SITE_CONFIG.name}`,
     };
   }
 
-  const title = event.meta_title || `${event.title} | Au-delà des Chaînes`;
-  const description = event.meta_description || event.excerpt || `Atelier animé par Matthieu Le Tousse — coach relation toxique & emprise psychologique. Réservez votre place en ligne.`;
+  const title = event.meta_title || `${event.title} | ${SITE_CONFIG.name}`;
+  const description = event.meta_description || event.excerpt || `Atelier bien-être animé par ${SITE_CONFIG.owner} à Palézieux.`;
 
   return {
     title,
     description,
     ...(event.meta_keywords ? { keywords: event.meta_keywords } : {}),
     alternates: {
-      canonical: `https://audeladeschaines.com/ateliers/${event.slug}`,
+      canonical: `${SITE_CONFIG.url}/ateliers/${event.slug}`,
     },
     openGraph: {
       title,
       description,
-      url: `https://audeladeschaines.com/ateliers/${event.slug}`,
+      url: `${SITE_CONFIG.url}/ateliers/${event.slug}`,
       type: "website" as const,
       images: [
         {
-          url: event.image_url || "https://pub-06788dc2f8884cb1bba449c00813d758.r2.dev/1782229256675-Matthieu-Le-Tousse.webp",
-          alt: `${event.title} — Au-delà des Chaînes`,
+          url: event.image_url || SITE_CONFIG.seoDefaults.ogImage,
+          alt: `${event.title} — ${SITE_CONFIG.name}`,
         }
       ]
     }
@@ -94,7 +95,7 @@ export default async function AteliersDetailPage({ params }: PageProps) {
     "@type": "Event",
     "name": event.title,
     "description": event.excerpt || event.title,
-    "url": `https://audeladeschaines.com/ateliers/${event.slug}`,
+    "url": `${SITE_CONFIG.url}/ateliers/${event.slug}`,
     ...(event.image_url ? { "image": event.image_url } : {}),
     "startDate": event.date_start
       ? `${event.date_start}${event.time_start ? `T${event.time_start}` : ''}`
@@ -105,7 +106,7 @@ export default async function AteliersDetailPage({ params }: PageProps) {
       ? "https://schema.org/OnlineEventAttendanceMode"
       : "https://schema.org/OfflineEventAttendanceMode",
     "location": event.is_online
-      ? { "@type": "VirtualLocation", "url": event.visio_url || `https://audeladeschaines.com/ateliers/${event.slug}` }
+      ? { "@type": "VirtualLocation", "url": event.visio_url || `${SITE_CONFIG.url}/ateliers/${event.slug}` }
       : {
           "@type": "Place",
           "name": event.location,
@@ -117,15 +118,15 @@ export default async function AteliersDetailPage({ params }: PageProps) {
         },
     "organizer": {
       "@type": "Person",
-      "@id": "https://audeladeschaines.com/#matthieu",
-      "name": "Matthieu Le Tousse"
+      "@id": `${SITE_CONFIG.url}/#owner`,
+      "name": SITE_CONFIG.owner
     },
     "offers": {
       "@type": "Offer",
       "price": event.price_chf === 0 ? "0" : String(event.price_chf),
       "priceCurrency": "CHF",
       "availability": "https://schema.org/InStock",
-      "url": `https://audeladeschaines.com/ateliers/${event.slug}`
+      "url": `${SITE_CONFIG.url}/ateliers/${event.slug}`
     },
     ...(event.max_participants ? { "maximumAttendeeCapacity": event.max_participants } : {})
   };

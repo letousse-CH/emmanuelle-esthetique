@@ -3,7 +3,6 @@ import React from 'react';
 import { notFound } from 'next/navigation';
 import { Calendar, Clock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { posts as staticPosts } from '../../../data/posts';
 import { fetchPublishedArticles } from '../../../services/articles';
 import { proxyUrl } from '../../../utils/media';
 import { NewsletterBanner } from '../../../components/NewsletterBanner';
@@ -12,19 +11,19 @@ import { isModuleEnabledServer } from '../../../config/modules';
 
 export const metadata = {
   title: `Blog | ${SITE_CONFIG.name} - ${SITE_CONFIG.owner}`,
-  description: "Découvrez les articles de Matthieu Le Tousse sur les relations toxiques, la manipulation mentale et les stratégies pour sortir de l'emprise psychologique.",
-  keywords: "blog relation toxique, emprise psychologique, pervers narcissique, manipulation mentale, se reconstruire après emprise, Matthieu Le Tousse",
+  description: "Conseils de soin du visage, rituels de beauté naturelle, Gua Sha et bien-être au quotidien, par Emmanuelle Esthétique à Palézieux.",
+  keywords: "conseils soin du visage, routine peau naturelle, gua sha, head spa, cosmétique naturelle, bien-être Palézieux",
   alternates: {
     canonical: `${SITE_CONFIG.url}/blog`,
   },
   openGraph: {
-    title: `Blog | Sortir de l'Emprise & Se Reconstruire — ${SITE_CONFIG.name}`,
-    description: "Analyses cliniques et décryptages sur la manipulation mentale pour vous libérer et retrouver votre souveraineté. Par Matthieu Le Tousse.",
+    title: `Blog — Beauté & bien-être | ${SITE_CONFIG.name}`,
+    description: "Conseils de soin, rituels de beauté naturelle et gestes bien-être à reproduire chez soi.",
     url: `${SITE_CONFIG.url}/blog`,
     images: [
       {
-        url: `${SITE_CONFIG.url}/images/hero.jpg`,
-        alt: `Blog ${SITE_CONFIG.name} — Matthieu Le Tousse`,
+        url: SITE_CONFIG.seoDefaults.ogImage,
+        alt: `Blog ${SITE_CONFIG.name}`,
       }
     ]
   }
@@ -42,29 +41,26 @@ export default async function BlogPage() {
     console.error('Error fetching articles on server:', err);
   }
 
-  const displayPosts = articles.length > 0 ? articles.map(a => ({
+  const displayPosts = articles.map(a => ({
     id: a.id,
     title: a.title,
     slug: a.slug,
     excerpt: a.meta_description || "Découvrez cet article de blog...",
     date: new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
     author: SITE_CONFIG.owner,
-    category: a.category || "Emprise",
+    category: a.category || "Beauté & bien-être",
     image: proxyUrl(a.cover_image) || "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1000&auto=format&fit=crop",
     readTime: "5 min"
-  })) : staticPosts.map(p => ({
-    ...p,
-    image: proxyUrl(p.image)
   }));
 
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     "name": `Blog ${SITE_CONFIG.name}`,
-    "description": "Articles sur les profils toxiques, la manipulation psychologique et les stratégies de sortie d'emprise par Matthieu Le Tousse.",
+    "description": "Conseils de soin, rituels de beauté naturelle et gestes bien-être à reproduire chez soi.",
     "url": `${SITE_CONFIG.url}/blog`,
     "inLanguage": "fr-CH",
-    "author": { "@type": "Person", "@id": `${SITE_CONFIG.url}/#matthieu`, "name": SITE_CONFIG.owner },
+    "author": { "@type": "Person", "@id": `${SITE_CONFIG.url}/#owner`, "name": SITE_CONFIG.owner },
     "publisher": { "@type": "Organization", "name": SITE_CONFIG.name, "url": SITE_CONFIG.url },
     "breadcrumb": {
       "@type": "BreadcrumbList",

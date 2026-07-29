@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { supabase } from '../../services/supabase';
 import { Pencil, Check, Loader2, Image as ImageIcon, Lock, Globe, Power } from 'lucide-react';
 import MediaPickerModal from './MediaPickerModal';
+import { SITE_CONFIG } from '../../config/site';
 
 // Helper to slugify page paths & text for safe database keys
 function slugify(text: string): string {
@@ -60,7 +61,7 @@ export default function UniversalPageEditor() {
         .slice(0, 4000);
 
       setDefaults({
-        title: document.title || 'Au-delà des Chaînes',
+        title: document.title || SITE_CONFIG.name,
         description: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
         og_title: document.querySelector('meta[property="og:title"]')?.getAttribute('content') || '',
         og_description: document.querySelector('meta[property="og:description"]')?.getAttribute('content') || '',

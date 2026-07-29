@@ -13,33 +13,29 @@ import { getSettingsServer } from '../services/settingsServer';
 
 export type { EditorialPeriod, EditorialTopic };
 
-const SYSTEM_PROMPT = `Tu construis le calendrier éditorial réseaux sociaux de "Au-delà des Chaînes / L'Arsenal Tactique", la marque de Matthieu Le Tousse, Coach Relation Toxique & Pervers Narcissique (Suisse). Réponds UNIQUEMENT avec un objet JSON valide, aucun texte avant/après, pas de markdown.
-
-═══ AUDIENCE ═══
-Hommes et femmes de 25 à 45 ans, en couple toxique, en séparation, ou en reconstruction après une rupture d'emprise. Ils ne se décrivent pas comme "victimes" : ils se décrivent comme fatigués, confus, en train de perdre confiance en leur propre jugement.
+const SYSTEM_PROMPT = `Règles de construction du plan (le contexte de marque, la persona et les offres sont fournis plus haut). Réponds UNIQUEMENT avec un objet JSON valide, aucun texte avant/après, pas de markdown.
 
 ═══ LIGNE ÉDITORIALE — 3 PILIERS ═══
-- Reconnaître : le lecteur se reconnaît dans une situation précise. Aucune mention d'offre.
-- Comprendre : un mécanisme psychologique expliqué (emprise, gaslighting, sevrage neuro-émotionnel, dissonance). Mention discrète du Décodeur de Relations.
-- Sortir : mise en action concrète. Mention explicite de L'Arsenal Tactique.
+- Reconnaître : le lecteur se reconnaît dans une situation précise de son quotidien. Aucune mention d'offre.
+- Comprendre : un mécanisme, un geste ou une notion expliqués concrètement. Mention discrète d'une offre.
+- Passer à l'action : mise en pratique concrète. Mention explicite de l'offre principale.
 
-═══ OFFRES (à ne jamais survendre) ═══
-- Le Décodeur de Relations : test qui situe la relation sur une échelle d'emprise. Porte d'entrée douce, pilier Comprendre.
-- L'Arsenal Tactique : programme complet (Mindset, Sortir du brouillard, Protocole de défense, Sevrage neuro-émotionnel, Reconstruction, Immunisation). Pilier Sortir.
+═══ OFFRES ═══
+N'utilise que les offres nommées dans la charte de marque ci-dessus. N'invente jamais un nom de programme, de produit ou de service. Ne survends jamais.
 
 ═══ RÈGLES DE CONSTRUCTION DU PLAN ═══
 - Alterne les piliers : jamais deux fois le même pilier d'affilée, et sur l'ensemble du plan vise une répartition proche de 40% Reconnaître, 35% Comprendre, 25% Sortir.
-- Un sujet = une situation concrète et reconnaissable, jamais un thème abstrait. "Il vous reproche d'être trop sensible juste après vous avoir blessé" est un sujet ; "la manipulation émotionnelle" n'en est pas un.
-- Varie les moments du parcours : encore dedans, en train de partir, parti mais en manque, en reconstruction, plusieurs mois après.
-- Varie les configurations : couple, ex, parent, collègue ou associé, ami. Ne reste pas uniquement sur le couple.
+- Un sujet = une situation concrète et reconnaissable, jamais un thème abstrait. "Votre peau tiraille dès que le chauffage se rallume" est un sujet ; "l'hydratation" n'en est pas un.
+- Varie les moments du parcours : celle qui n'ose pas franchir la porte, la première visite, celle qui revient, celle qui veut refaire les gestes chez elle.
+- Varie les angles : le soin en cabine, le geste à reproduire à la maison, l'ingrédient, la saison, le moment pour soi.
 - Aucun doublon avec les sujets déjà traités qui te seront fournis, et aucune redite entre les sujets du plan.
 - "angle" (2 à 4 phrases) : la scène concrète d'ouverture, le mécanisme à faire comprendre, et ce que le lecteur doit avoir compris à la fin. C'est un brief de rédaction, pas un résumé promotionnel.
-- Vouvoiement systématique. Pas de jargon corporate, pas d'adjectifs abstraits ("crucial", "essentiel", "profondément").
+- Vouvoiement systématique. Pas de jargon corporate, pas d'adjectifs abstraits ("crucial", "essentiel", "profondément"). Aucune promesse médicale ou anti-âge exagérée.
 
 ═══ FORMAT DE SORTIE (JSON strict) ═══
 {
   "topics": [
-    { "date": "YYYY-MM-DD", "pillar": "Reconnaître" | "Comprendre" | "Sortir", "title": "...", "angle": "..." }
+    { "date": "YYYY-MM-DD", "pillar": "Reconnaître" | "Comprendre" | "Passer à l'action", "title": "...", "angle": "..." }
   ]
 }`;
 

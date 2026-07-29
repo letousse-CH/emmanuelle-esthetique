@@ -64,6 +64,9 @@ export default function Footer({ initialLogoUrl, initialFooterImage, initialNavi
     'global_logo',
     'footer_logo',
     'footer_image',
+    'footer_tagline_line1',
+    'footer_tagline_line2',
+    'footer_tagline_text',
     'navigation_menu',
     'social_instagram',
     'social_linkedin',
@@ -71,7 +74,10 @@ export default function Footer({ initialLogoUrl, initialFooterImage, initialNavi
     'social_spotify',
     'business_name',
     'business_owner',
+    'business_email',
+    'business_phone',
     'business_address_city',
+    'business_address_postal',
     'business_address_region',
   ]);
 
@@ -106,8 +112,8 @@ export default function Footer({ initialLogoUrl, initialFooterImage, initialNavi
           <div className="flex justify-center md:justify-start">
             <img
               src={settings.footer_image}
-              alt="Au-delà des Chaînes — Matthieu Le Tousse"
-              className="w-56 md:w-72 object-contain"
+              alt={`${settings.business_name} — institut à domicile à ${settings.business_address_city}`}
+              className="w-56 md:w-72 object-cover rounded-2xl"
               loading="lazy"
               decoding="async"
             />
@@ -116,11 +122,11 @@ export default function Footer({ initialLogoUrl, initialFooterImage, initialNavi
           {/* Colonne centrale : tagline */}
           <div className="text-left space-y-3 pb-10">
             <p className="text-2xl font-serif font-light text-white/90 leading-snug">
-              Reprendre le contrôle.<br />
-              <span className="text-sage">Définitivement.</span>
+              {settings.footer_tagline_line1}<br />
+              <span className="text-sage">{settings.footer_tagline_line2}</span>
             </p>
             <p className="text-white/40 text-sm leading-relaxed">
-              Coaching relation toxique &amp; pervers narcissique. Accompagnement pragmatique pour décoder les mécanismes de manipulation.
+              {settings.footer_tagline_text}
             </p>
           </div>
 
@@ -165,24 +171,46 @@ export default function Footer({ initialLogoUrl, initialFooterImage, initialNavi
             </nav>
           </div>
 
-          {/* Lieu */}
+          {/* Lieu & contact */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/30 mb-5">Localisation</p>
-            <p className="text-sm text-white/50 leading-relaxed">
-              {settings.business_owner}<br />
-              <span className="text-white/30">{[settings.business_address_city, settings.business_address_region].filter(Boolean).join(', ')}</span>
-            </p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/30 mb-5">Institut &amp; contact</p>
+            <address className="not-italic text-sm text-white/50 leading-relaxed space-y-2">
+              <p>
+                Institut à domicile<br />
+                <span className="text-white/30">
+                  {[settings.business_address_postal, settings.business_address_city, settings.business_address_region]
+                    .filter(Boolean)
+                    .join(' ')}
+                </span>
+              </p>
+              {settings.business_phone && (
+                <p>
+                  <a href={`tel:${settings.business_phone.replace(/\s+/g, '')}`} className="hover:text-white transition-colors">
+                    {settings.business_phone}
+                  </a>
+                </p>
+              )}
+              {settings.business_email && (
+                <p>
+                  <a href={`mailto:${settings.business_email}`} className="hover:text-white transition-colors break-all">
+                    {settings.business_email}
+                  </a>
+                </p>
+              )}
+            </address>
           </div>
 
           {/* Logo */}
           <div className="flex justify-center md:justify-end items-start">
-            <img
-              src={logoUrl}
-              alt="Au-delà des Chaînes"
-              className="h-28 w-auto object-contain opacity-80"
-              loading="lazy"
-              decoding="async"
-            />
+            {logoUrl && (
+              <img
+                src={logoUrl}
+                alt={settings.business_name}
+                className="h-28 w-auto object-contain opacity-80"
+                loading="lazy"
+                decoding="async"
+              />
+            )}
           </div>
         </div>
       </div>

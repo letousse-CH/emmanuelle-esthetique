@@ -1,6 +1,8 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { callClaude, extractJson } from '../../../utils/ai';
+import { getSettingsServer } from '../../../services/settingsServer';
+import { SITE_CONFIG } from '../../../config/site';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface SeoFix {
@@ -132,11 +134,18 @@ export async function POST(req: NextRequest) {
     if (needs('new_meta_title'))       requestedFields.push(`  "new_meta_title": "Meta titre idéal 50–60 car., mot-clé focus en début"`);
     if (needs('new_meta_description')) requestedFields.push(`  "new_meta_description": "Meta description 150–160 car., mot-clé focus présent, incitative au clic"`);
     if (needs('new_h2'))               requestedFields.push(`  "new_h2": "Premier H2 réécrit avec le mot-clé focus (style inchangé)"`);
-    if (needs('new_intro'))            requestedFields.push(`  "new_intro": "Premier paragraphe réécrit avec le mot-clé focus, voix de Matthieu préservée"`);
+    if (needs('new_intro'))            requestedFields.push(`  "new_intro": "Premier paragraphe réécrit avec le mot-clé focus, ton de voix de la marque préservé"`);
+
+    const brand = await getSettingsServer([
+      'site_activity_context',
+      'site_tone_of_voice',
+      'site_brand_tone',
+    ]);
 
     const prompt = [
-      `Tu es le rédacteur officiel du blog "Au-delà des Chaînes" de Matthieu Le Tousse, Coach Relation Toxique & Pervers Narcissique basé en Suisse.`,
-      `Génère les corrections SEO demandées en respectant strictement sa voix.`,
+      `Tu es le rédacteur officiel du blog de ${SITE_CONFIG.name}.`,
+      brand.site_activity_context ? `Activité : ${brand.site_activity_context}` : '',
+      `Génère les corrections SEO demandées en respectant strictement le ton de voix de la marque.`,
       ``,
       `CONTEXTE :`,
       `- Titre H1 : "${title}"`,
@@ -147,9 +156,10 @@ export async function POST(req: NextRequest) {
       p.firstParaText ? `- Introduction : "${p.firstParaText.slice(0, 500)}"` : '',
       `- Extrait du corps : "${p.plain.slice(0, 1200)}"`,
       ``,
-      `VOIX DE MATTHIEU — RÈGLES NON NÉGOCIABLES :`,
-      `Conversationnel, direct, chirurgical et lucide, tutoiement ("tu"), "ça" (jamais "cela"), virgules-pauses.`,
-      `Vocabulaire tactique/clinique à privilégier : emprise, gaslighting, brouillard mental, pervers narcissique, sevrage neuro-émotionnel, protocole de défense, reprendre le contrôle.`,
+      `TON DE VOIX — RÈGLES NON NÉGOCIABLES :`,
+      brand.site_tone_of_voice || `Conversationnel, direct et concret. "ça" plutôt que "cela", virgules-pauses.`,
+      brand.site_brand_tone ? `CHARTE DE MARQUE & VOCABULAIRE :\n${brand.site_brand_tone}` : '',
+      `N'invente jamais le nom d'une offre, d'un produit ou d'un service.`,
       `Mots INTERDITS : crucial, fondamental, essentiel, clé, optimiser, booster, transformer, naviguer (métaphorique), cela, constitue, s'avère, néanmoins, synergies, "dans un monde où", "déclic magique", jargon ésotérique.`,
       ``,
       `CORRECTIONS (JSON valide uniquement, sans markdown) :`,

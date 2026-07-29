@@ -28,9 +28,11 @@ export default function MenuClient() {
   }, []);
 
   const loadDefaults = () => setMenuItems([
-    { name: "Accueil", path: "/" }, { name: "Ateliers", path: "/ateliers" }, { name: "Blog", path: "/blog" }, { name: "À Propos", path: "/about" },
-    { name: "Livres", type: "dropdown", children: [{ name: "Paroles & Silences", path: "/paroles-et-silences" }, { name: "Si les arbres pouvaient parler…", path: "/si-les-arbres-pouvaient-parler" }] },
-    { name: "Services", type: "dropdown", children: [{ name: "Séance Individuelle", path: "/seance-individuelle" }, { name: "Programme Complet", path: "/programme-complet" }, { name: "Rêve Éveillé Libre", path: "/reve-eveille-libre" }] },
+    { name: "Accueil", path: "/" },
+    { name: "À propos", path: "/a-propos" },
+    { name: "Soins", path: "/soins" },
+    { name: "Ateliers", path: "/ateliers" },
+    { name: "Bon cadeau", path: "/bon-cadeau" },
     { name: "Contact", path: "/contact" }
   ]);
 

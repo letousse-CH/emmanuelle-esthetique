@@ -5,7 +5,7 @@ import { validateSupabaseToken } from '../../../utils/apiAuth';
 const ACCOUNT_ID  = process.env.R2_ACCOUNT_ID!;
 const ACCESS_KEY  = process.env.R2_ACCESS_KEY_ID!;
 const SECRET_KEY  = process.env.R2_SECRET_ACCESS_KEY!;
-const BUCKET      = process.env.R2_BUCKET_NAME || 'audeladeschaines-medias';
+const BUCKET      = process.env.R2_BUCKET_NAME || 'emmanuelle-esthetique-medias';
 const ENDPOINT    = `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
 const s3Client = new S3Client({

@@ -13,7 +13,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes = [
     { url: '',                    priority: 1.0, changeFrequency: 'weekly' },
     ...(moduleFlags.blog ? [{ url: '/blog',      priority: 0.9, changeFrequency: 'weekly' }] : []),
-    ...(moduleFlags.decodeur ? [{ url: '/decodeur', priority: 0.9, changeFrequency: 'monthly' }] : []),
     ...(moduleFlags.events ? [{ url: '/ateliers', priority: 0.8, changeFrequency: 'weekly' }] : []),
     { url: '/contact',            priority: 0.6, changeFrequency: 'yearly' },
     // /a-propos est inclus automatiquement via les pages dynamiques ci-dessous.

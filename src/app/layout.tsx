@@ -1,10 +1,10 @@
-import { Inter, Playfair_Display } from 'next/font/google';
+import { Inter, Cormorant_Garamond } from 'next/font/google';
 import '../index.css';
 import GlobalStyles from '../components/GlobalStyles';
 import UniversalPageEditor from '../components/pagebuilder/UniversalPageEditor';
 import ScrollAnimations from '../components/ScrollAnimations';
 import { getSettingsServer } from '../services/settingsServer';
-import { getBusinessInfoServer, BusinessInfo } from '../config/site';
+import { getBusinessInfoServer, BusinessInfo, SITE_CONFIG } from '../config/site';
 
 // ISR : le shell global (favicon, liens sociaux, Schema.org) est mis en cache
 // et revalidé toutes les heures au lieu d'un SSR par requête. Les composants du
@@ -19,9 +19,9 @@ const inter = Inter({
   display: 'swap',
 });
 
-const playfair = Playfair_Display({
+const cormorant = Cormorant_Garamond({
   subsets: ['latin'],
-  weight: ['400', '700'],
+  weight: ['300', '400', '500', '600', '700'],
   style: ['normal', 'italic'],
   variable: '--font-serif',
   display: 'swap',
@@ -31,24 +31,24 @@ export async function generateMetadata() {
   const settings = await getSettingsServer(['favicon_url']);
   const favicon = settings.favicon_url || undefined;
   return {
-    title: "Coach Relation Toxique & Pervers Narcissique | Matthieu Le Tousse",
-    description: "Décoder les mécanismes de l'emprise, briser le brouillard mental et reprendre définitivement le contrôle. Matthieu Le Tousse — Coach Relation Toxique & PN.",
-    metadataBase: new URL('https://audeladeschaines.com'),
+    title: SITE_CONFIG.seoDefaults.title,
+    description: SITE_CONFIG.seoDefaults.description,
+    metadataBase: new URL(SITE_CONFIG.url),
     icons: favicon ? {
       icon: favicon,
       shortcut: favicon,
       apple: favicon,
     } : undefined,
     openGraph: {
-      siteName: "Au-delà des Chaînes",
+      siteName: SITE_CONFIG.name,
       locale: "fr_CH",
       type: "website",
       images: [
         {
-          url: "https://pub-06788dc2f8884cb1bba449c00813d758.r2.dev/1782229256675-Matthieu-Le-Tousse.webp",
+          url: SITE_CONFIG.seoDefaults.ogImage,
           width: 1200,
           height: 630,
-          alt: "Matthieu Le Tousse — Coach Relation Toxique & Emprise Psychologique",
+          alt: "Emmanuelle Esthétique — Institut de beauté à domicile à Palézieux",
         }
       ],
     },
@@ -58,54 +58,23 @@ export async function generateMetadata() {
   };
 }
 
-// Données structurées Schema.org — Identité (E-E-A-T) + Service
-// Schéma combiné Person ⇄ ProfessionalService reliés par @id.
+// Données structurées Schema.org — Identité (E-E-A-T) + Service local
+// Schéma combiné Person ⇄ BeautySalon reliés par @id.
 // Le `sameAs` est construit dynamiquement à partir des liens sociaux du footer
 // (réglages Supabase) : si un lien change dans l'admin, la balise suit.
-const LOGO_URL =
-  'https://pub-06788dc2f8884cb1bba449c00813d758.r2.dev/1780852325790-logo-au-dela-des-chaines--1-.png';
-const PHOTO_URL =
-  'https://pub-06788dc2f8884cb1bba449c00813d758.r2.dev/1782229256675-Matthieu-Le-Tousse.webp';
+const SITE_URL = SITE_CONFIG.url;
+const PHOTO_URL = SITE_CONFIG.seoDefaults.ogImage;
 
-// Compétences thématiques — signal d'expertise (E-E-A-T) pour un sujet YMYL.
+// Prestations proposées — signal de pertinence pour le SEO local.
 const KNOWS_ABOUT = [
-  'Relations toxiques',
-  'Emprise psychologique',
-  'Pervers narcissique',
-  'Manipulation mentale',
-  "Sortie d'emprise",
-  'Dépendance affective',
-  'Traumatismes',
-  'Angoisses existentielles',
-  'Reconstruction après une relation toxique',
-];
-
-// Diplômes et reconnaissances réels (source : page À Propos).
-const CREDENTIALS = [
-  {
-    '@type': 'EducationalOccupationalCredential',
-    credentialCategory: 'diploma',
-    name: 'Diplôme de Rêve Éveillé Libre',
-    recognizedBy: {
-      '@type': 'EducationalOrganization',
-      name: 'École du Rêve Éveillé Libre (EREL)',
-      address: { '@type': 'PostalAddress', addressLocality: 'Paris', addressCountry: 'FR' },
-    },
-  },
-  {
-    '@type': 'EducationalOccupationalCredential',
-    credentialCategory: 'certificate',
-    name: 'Certification Spirivie — Coaching de Vie',
-  },
-  {
-    '@type': 'EducationalOccupationalCredential',
-    credentialCategory: 'certification',
-    name: 'Praticien validé IPHM',
-    recognizedBy: {
-      '@type': 'Organization',
-      name: 'International Practitioners of Holistic Medicine (IPHM)',
-    },
-  },
+  'Soin du visage',
+  'Head Spa',
+  'Massage relaxant',
+  'Gua Sha',
+  'Auto-massage du visage',
+  'Beauté du regard',
+  'Cosmétique naturelle',
+  'Ateliers bien-être',
 ];
 
 function buildStructuredData(sameAs: string[], business: BusinessInfo) {
@@ -121,71 +90,63 @@ function buildStructuredData(sameAs: string[], business: BusinessInfo) {
     addressCountry: business.addressCountry,
   } as const;
 
+  const phone = business.phone ? business.phone.replace(/\s+/g, '') : '';
+
   return {
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'WebSite',
-        '@id': 'https://audeladeschaines.com/#website',
-        url: 'https://audeladeschaines.com',
+        '@id': `${SITE_URL}/#website`,
+        url: SITE_URL,
         name: business.name,
         inLanguage: 'fr-CH',
-        publisher: { '@id': 'https://audeladeschaines.com/#organization' },
-        about: { '@id': 'https://audeladeschaines.com/#matthieu-le-tousse' },
+        publisher: { '@id': `${SITE_URL}/#organization` },
+        about: { '@id': `${SITE_URL}/#emmanuelle` },
       },
       {
         '@type': 'Person',
-        '@id': 'https://audeladeschaines.com/#matthieu-le-tousse',
-        name: 'Matthieu Le Tousse',
-        givenName: 'Matthieu',
-        familyName: 'Le Tousse',
-        jobTitle: 'Coach Relation Toxique & Pervers Narcissique',
+        '@id': `${SITE_URL}/#emmanuelle`,
+        name: business.owner,
+        jobTitle: 'Esthéticienne',
         description:
-          "Coach spécialisé dans la sortie d'emprise, les relations toxiques et le pervers narcissique. Plus de 20 ans d'expérience dans le champ des relations toxiques et 6 ans de consultation thérapeutique individuelle en cabinet privé, aujourd'hui dédié à l'accompagnement de la dépendance et de l'emprise relationnelle.",
-        url: 'https://audeladeschaines.com',
+          "Esthéticienne à Palézieux, Emmanuelle propose des soins du visage doux et naturels, des Head Spa, des massages relaxants et des ateliers bien-être dans son institut à domicile.",
+        url: SITE_URL,
         image: PHOTO_URL,
         knowsAbout: KNOWS_ABOUT,
-        hasCredential: CREDENTIALS,
-        alumniOf: {
-          '@type': 'EducationalOrganization',
-          name: 'École du Rêve Éveillé Libre (EREL)',
-          address: { '@type': 'PostalAddress', addressLocality: 'Paris', addressCountry: 'FR' },
-        },
         address: postalAddress,
         ...(sameAs.length ? { sameAs } : {}),
-        worksFor: { '@id': 'https://audeladeschaines.com/#organization' },
+        worksFor: { '@id': `${SITE_URL}/#organization` },
       },
       {
-        '@type': 'ProfessionalService',
-        '@id': 'https://audeladeschaines.com/#organization',
+        '@type': 'BeautySalon',
+        '@id': `${SITE_URL}/#organization`,
         name: business.name,
-        alternateName: `${business.owner} — Coaching`,
+        alternateName: `${business.name} — Institut à domicile`,
         description:
-          "Accompagnement et coaching pour victimes de relations toxiques, d'emprise psychologique et de pervers narcissique.",
-        url: 'https://audeladeschaines.com',
+          "Institut de beauté et bien-être à domicile à Palézieux : soins du visage, Head Spa, massages relaxants, beauté du regard et ateliers de cosmétique naturelle.",
+        url: SITE_URL,
         image: PHOTO_URL,
-        logo: LOGO_URL,
-        founder: { '@id': 'https://audeladeschaines.com/#matthieu-le-tousse' },
+        founder: { '@id': `${SITE_URL}/#emmanuelle` },
         address: postalAddress,
-        telephone: business.phone.replace(/\s+/g, ''),
-        contactPoint: {
-          '@type': 'ContactPoint',
-          telephone: business.phone.replace(/\s+/g, ''),
-          contactType: 'customer service',
-          availableLanguage: ['fr'],
-        },
-        // Présentiel dans le canton de Vaud (siège de l'activité) + séances à
-        // distance / visio pour toute la Suisse et la francophonie.
+        ...(phone
+          ? {
+              telephone: phone,
+              contactPoint: {
+                '@type': 'ContactPoint',
+                telephone: phone,
+                contactType: 'customer service',
+                availableLanguage: ['fr'],
+              },
+            }
+          : {}),
+        // Institut à domicile à Palézieux — clientèle de proximité (Broye-Vully,
+        // Lavaux-Oron, Riviera) dans le canton de Vaud.
         areaServed: [
+          { '@type': 'City', name: 'Palézieux' },
+          { '@type': 'AdministrativeArea', name: 'District de Lavaux-Oron', containedInPlace: { '@type': 'Country', name: 'Suisse' } },
           { '@type': 'AdministrativeArea', name: 'Canton de Vaud', containedInPlace: { '@type': 'Country', name: 'Suisse' } },
-          { '@type': 'Country', name: 'Suisse' },
-          { '@type': 'Country', name: 'France' },
-          { '@type': 'Country', name: 'Belgique' },
-          { '@type': 'Country', name: 'Canada' },
         ],
-        // Gamme confirmée par Matthieu (2026-07) : 450 CHF (accès seul, sans
-        // coaching privé) à 1295 CHF (coaching individuel, tarif normal — prix
-        // de lancement actuel 895 CHF, promotionnel donc non reflété ici).
         priceRange: business.priceRange,
         knowsAbout: KNOWS_ABOUT,
         ...(sameAs.length ? { sameAs } : {}),
@@ -208,9 +169,9 @@ export default async function RootLayout({
     ]),
     getBusinessInfoServer(),
   ]);
-  // Profil Google Business officiel (signal d'autorité externe pour l'entité).
-  const GOOGLE_PROFILE = 'https://share.google/3SjbvnmLq5JvHf3a8';
-  // dédoublonnage : social_youtube pointe parfois vers la même URL que LinkedIn.
+  // dédoublonnage : deux réglages sociaux peuvent pointer vers la même URL.
+  // Ajouter ici l'URL du profil Google Business dès qu'il est créé (signal
+  // d'autorité externe pour l'entité).
   const sameAs = Array.from(
     new Set(
       [
@@ -218,14 +179,13 @@ export default async function RootLayout({
         social.social_instagram,
         social.social_youtube,
         social.social_spotify,
-        GOOGLE_PROFILE,
       ].filter(Boolean)
     )
   );
   const structuredData = buildStructuredData(sameAs, business);
 
   return (
-    <html lang="fr" className={`${inter.variable} ${playfair.variable}`}>
+    <html lang="fr" className={`${inter.variable} ${cormorant.variable}`}>
       <body className="bg-paper text-stone-deep font-sans antialiased min-h-screen selection:bg-sage/20 flex flex-col overflow-x-hidden">
         <script
           type="application/ld+json"

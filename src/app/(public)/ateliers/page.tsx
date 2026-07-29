@@ -5,22 +5,26 @@ import { supabase } from '../../../services/supabase';
 import { SdeEvent } from '../../../types/events';
 import { isModuleEnabledServer } from '../../../config/modules';
 import EventsClient from './EventsClient';
+import { SITE_CONFIG } from '../../../config/site';
+
+const ATELIERS_DESCRIPTION =
+  "Ateliers d'auto-soin en petit comité à Palézieux : Gua Sha, auto-massage du visage, Glowing Face. Apprenez les gestes pour prendre soin de votre peau au quotidien.";
 
 export const metadata = {
-  title: "Ateliers & Événements | Au-delà des Chaînes",
-  description: "Ateliers collectifs et événements en groupe animés par Matthieu Le Tousse — coach relation toxique & emprise psychologique. Présentiel et visio.",
-  keywords: "atelier relation toxique, groupe emprise psychologique, événement coaching Matthieu Le Tousse, sortir d'une relation toxique Suisse",
+  title: `Ateliers bien-être à Palézieux | ${SITE_CONFIG.name}`,
+  description: ATELIERS_DESCRIPTION,
+  keywords: "atelier gua sha Vaud, atelier auto-massage visage Palézieux, atelier bien-être Lavaux-Oron, glowing face Suisse",
   alternates: {
-    canonical: "https://audeladeschaines.com/ateliers",
+    canonical: `${SITE_CONFIG.url}/ateliers`,
   },
   openGraph: {
-    title: "Ateliers & Événements | Au-delà des Chaînes — Matthieu Le Tousse",
-    description: "Ateliers collectifs et événements animés par Matthieu Le Tousse — coach relation toxique & emprise psychologique. Présentiel et visio.",
-    url: "https://audeladeschaines.com/ateliers",
+    title: `Ateliers bien-être à Palézieux | ${SITE_CONFIG.name}`,
+    description: ATELIERS_DESCRIPTION,
+    url: `${SITE_CONFIG.url}/ateliers`,
     images: [
       {
-        url: "https://pub-06788dc2f8884cb1bba449c00813d758.r2.dev/1782229256675-Matthieu-Le-Tousse.webp",
-        alt: "Ateliers Au-delà des Chaînes — Matthieu Le Tousse",
+        url: SITE_CONFIG.seoDefaults.ogImage,
+        alt: `Ateliers ${SITE_CONFIG.name} à Palézieux`,
       }
     ]
   }
@@ -46,11 +50,11 @@ export default async function AteliersPage() {
   const collectionSchema = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    "name": "Ateliers & Événements — Au-delà des Chaînes",
-    "description": "Ateliers collectifs et événements animés par Matthieu Le Tousse — coach relation toxique & emprise psychologique. Présentiel et visio.",
-    "url": "https://audeladeschaines.com/ateliers",
+    "name": `Ateliers — ${SITE_CONFIG.name}`,
+    "description": ATELIERS_DESCRIPTION,
+    "url": `${SITE_CONFIG.url}/ateliers`,
     "inLanguage": "fr-CH",
-    "organizer": { "@type": "Person", "@id": "https://audeladeschaines.com/#matthieu", "name": "Matthieu Le Tousse" }
+    "organizer": { "@type": "Person", "@id": `${SITE_CONFIG.url}/#owner`, "name": SITE_CONFIG.owner }
   };
 
   const itemListSchema = events.length > 0 ? {
@@ -63,7 +67,7 @@ export default async function AteliersPage() {
         "@type": "Event",
         "name": ev.title,
         "description": ev.excerpt || ev.title,
-        "url": `https://audeladeschaines.com/ateliers/${ev.slug}`,
+        "url": `${SITE_CONFIG.url}/ateliers/${ev.slug}`,
         ...(ev.image_url ? { "image": ev.image_url } : {}),
         ...(ev.date_start ? { "startDate": `${ev.date_start}${ev.time_start ? `T${ev.time_start}` : ''}` } : {}),
         ...(ev.date_end ? { "endDate": `${ev.date_end}${ev.time_end ? `T${ev.time_end}` : ''}` } : {}),
@@ -72,15 +76,15 @@ export default async function AteliersPage() {
           ? "https://schema.org/OnlineEventAttendanceMode"
           : "https://schema.org/OfflineEventAttendanceMode",
         "location": ev.is_online
-          ? { "@type": "VirtualLocation", "url": `https://audeladeschaines.com/ateliers/${ev.slug}` }
+          ? { "@type": "VirtualLocation", "url": `${SITE_CONFIG.url}/ateliers/${ev.slug}` }
           : { "@type": "Place", "name": ev.location, "address": { "@type": "PostalAddress", "streetAddress": ev.address || ev.location, "addressCountry": "CH" } },
-        "organizer": { "@type": "Person", "@id": "https://audeladeschaines.com/#matthieu", "name": "Matthieu Le Tousse" },
+        "organizer": { "@type": "Person", "@id": `${SITE_CONFIG.url}/#owner`, "name": SITE_CONFIG.owner },
         "offers": {
           "@type": "Offer",
           "price": ev.price_chf === 0 ? "0" : String(ev.price_chf),
           "priceCurrency": "CHF",
           "availability": "https://schema.org/InStock",
-          "url": `https://audeladeschaines.com/ateliers/${ev.slug}`
+          "url": `${SITE_CONFIG.url}/ateliers/${ev.slug}`
         }
       }
     }))
