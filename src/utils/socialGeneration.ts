@@ -33,7 +33,7 @@ export function stripHtml(html: string): string {
     .trim();
 }
 
-const SYSTEM_PROMPT = `Tu écris pour la marque "Au-delà des Chaînes / L'Arsenal Tactique" de Matthieu Le Tousse, Coach Relation Toxique & Pervers Narcissique (Suisse). Réponds UNIQUEMENT avec un objet JSON valide, aucun texte avant/après, pas de markdown.
+const SYSTEM_PROMPT = `Règles de rédaction (le contexte de marque est fourni plus haut). Réponds UNIQUEMENT avec un objet JSON valide, aucun texte avant/après, pas de markdown.
 
 ═══ VOIX — RÈGLES NON NÉGOCIABLES ═══
 - Vouvoiement systématique, sans exception, sur tous les formats.
@@ -48,8 +48,8 @@ Varie parmi ces frameworks selon le sujet : Fracture de Croyance ("Vous croyez q
 
 ═══ PILIER (à déterminer selon le sujet fourni) ═══
 - Reconnaître (le lecteur se reconnaît dans une situation) → CTA de fin : aucune mention de l'offre, question ouverte ou invitation à sauvegarder.
-- Comprendre (mécanisme psychologique expliqué) → CTA de fin : mention discrète du Décodeur de Relations.
-- Sortir (mise en action) → CTA de fin : mention explicite de L'Arsenal Tactique, direction vers la bio / le lien.
+- Comprendre (un mécanisme ou un geste expliqué) → CTA de fin : mention discrète de l'offre décrite dans la charte de marque ci-dessus.
+- Passer à l'action → CTA de fin : mention explicite de l'offre principale, direction vers la bio / le lien.
 
 ═══ INSTAGRAM — CARROUSEL (8 à 10 slides) ═══
 Structure fixe : Slide 1 = hook (2 lignes max, texte seul) · Slide 2 = ouverture de la boucle (promet une réponse sans la donner) · Slides 3 à 7/8 = une seule idée par slide, micro-récompense qui donne envie de swiper · avant-dernière slide = bascule qui referme la boucle du hook · dernière slide = CTA calibré par pilier.
@@ -68,10 +68,11 @@ Chacune de ces deux plateformes reçoit UN visuel unique (pas de carrousel) qui 
 - "text" : le hook de la plateforme, resserré pour être lisible en une image. 12 à 22 mots maximum, une à deux phrases. Ce n'est pas un résumé du post : c'est la phrase qui arrête le défilement.
 - "highlight" : 2 à 4 mots CONSÉCUTIFS extraits EXACTEMENT de "text", ceux qui portent le twist.
 - Le visuel LinkedIn est carré, celui de Facebook est en paysage (donc plus court encore) : garde le texte Facebook au bas de la fourchette.
+- N'invente jamais le nom d'une offre, d'un produit ou d'un service : n'utilise que ceux nommés dans la charte de marque ci-dessus.
 
 ═══ FORMAT DE SORTIE (JSON strict) ═══
 {
-  "pillar": "Reconnaître" | "Comprendre" | "Sortir",
+  "pillar": "Reconnaître" | "Comprendre" | "Passer à l'action",
   "instagram": {
     "slides": [ { "number": 1, "text": "...", "highlight": "..." } ],
     "caption": { "hook": "...", "body": "...", "cta": "...", "hashtags": "#... #..." }

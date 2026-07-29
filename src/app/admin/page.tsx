@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase';
 import { Eye, FileText, Mail, TrendingUp, ExternalLink, ArrowUpRight } from 'lucide-react';
+import { SITE_CONFIG } from '../../config/site';
 
 interface DayCount { date: string; count: number }
 interface PageStat  { page: string; count: number }
@@ -164,7 +165,7 @@ export default function Dashboard() {
           { label: 'Nouvel article', href: '/admin/blog/new', icon: FileText },
           { label: 'Gérer les pages', href: '/admin/pages', icon: ExternalLink },
           { label: 'Envoyer newsletter', href: '/admin/newsletter', icon: Mail },
-          { label: 'Voir le site', href: 'https://audeladeschaines.com', icon: ArrowUpRight, external: true },
+          { label: 'Voir le site', href: SITE_CONFIG.url, icon: ArrowUpRight, external: true },
         ].map((a) => (
           <a
             key={a.label}

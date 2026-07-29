@@ -5,7 +5,7 @@ import { SITE_CONFIG } from '../config/site';
 const SITE_NAME = SITE_CONFIG.name;
 const BASE_URL = SITE_CONFIG.url;
 const DEFAULT_IMAGE = SITE_CONFIG.seoDefaults.ogImage;
-const DEFAULT_IMAGE_ALT = `Matthieu Le Tousse — ${SITE_CONFIG.name}, coaching relation toxique`;
+const DEFAULT_IMAGE_ALT = `${SITE_CONFIG.name} — institut de beauté à domicile à Palézieux`;
 
 interface ArticleMeta {
   publishedTime: string;
@@ -58,7 +58,7 @@ export default function OpenGraph({
       <meta property="og:locale:alternate" content="fr_BE" />
 
       {/* Article-specific */}
-      {article && <meta property="article:author" content={article.author ?? 'Matthieu Le Tousse'} />}
+      {article && <meta property="article:author" content={article.author ?? SITE_CONFIG.owner} />}
       {article && <meta property="article:published_time" content={article.publishedTime} />}
       {article?.modifiedTime && <meta property="article:modified_time" content={article.modifiedTime} />}
       {article?.section && <meta property="article:section" content={article.section} />}

@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { extractJson } from '../../../utils/ai';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { recordAiUsage } from '../../../services/aiUsage';
+import { getSettingsServer } from '../../../services/settingsServer';
 
 /**
  * Les balises méta sont une micro-tâche : elles restent volontairement sur le
@@ -51,6 +52,14 @@ export async function POST(req: NextRequest) {
 
   const client = new Anthropic({ apiKey });
 
+  // Contexte de marque (réglages « Éditorial & Marque » de l'admin) : les
+  // prompts ne codent en dur aucune activité ni positionnement.
+  const brandSettings = await getSettingsServer(['site_activity_context', 'site_brand_tone']);
+  const brandContext = [
+    brandSettings.site_activity_context ? `\n\nActivité du site : ${brandSettings.site_activity_context}` : '',
+    brandSettings.site_brand_tone ? `\nCharte de marque : ${brandSettings.site_brand_tone}` : '',
+  ].join('');
+
   try {
     if (mode === 'page') {
       // ── Mode page statique : génère tous les champs SEO ──────────────────
@@ -60,7 +69,7 @@ export async function POST(req: NextRequest) {
         messages: [
           {
             role: 'user',
-            content: `Tu es un expert SEO francophone spécialisé dans l'accompagnement des victimes de relations toxiques, de pervers narcissiques et de manipulation psychologique (site de Matthieu Le Tousse, Coach Relation Toxique & Pervers Narcissique).
+            content: `Tu es un expert SEO francophone.${brandContext}
 
 Génère toutes les balises SEO pour cette page web :
 
@@ -116,7 +125,9 @@ Réponds UNIQUEMENT avec du JSON valide, sans markdown :
         messages: [
           {
             role: 'user',
-            content: `Tu es un expert SEO francophone. Génère une balise meta title et une meta description optimisées pour cet article de blog sur les relations toxiques, les pervers narcissiques et la reconstruction après l'emprise.
+            content: `Tu es un expert SEO francophone.${brandContext}
+
+Génère une balise meta title et une meta description optimisées pour cet article de blog.
 
 Titre de l'article : "${title}"
 ${plainContent ? `Extrait du contenu : "${plainContent}"` : ''}
@@ -124,7 +135,7 @@ ${plainContent ? `Extrait du contenu : "${plainContent}"` : ''}
 Règles absolues :
 - meta_title : 50 à 60 caractères maximum, accrocheur, mot-clé principal en tête
 - meta_description : EXACTEMENT entre 140 et 160 caractères. Compte précisément. Incite au clic, résume la valeur de l'article, phrase complète sans coupure. Si trop courte, enrichis-la.
-- meta_keywords : 5 à 8 mots-clés séparés par des virgules, pertinents et longue traîne, en lien avec les relations toxiques, la manipulation, le pervers narcissique ou la reconstruction
+- meta_keywords : 5 à 8 mots-clés séparés par des virgules, pertinents et longue traîne, en lien avec l'activité décrite ci-dessus
 
 Réponds UNIQUEMENT avec du JSON valide, sans markdown, sans commentaire :
 {"meta_title": "...", "meta_description": "...", "meta_keywords": "..."}`,

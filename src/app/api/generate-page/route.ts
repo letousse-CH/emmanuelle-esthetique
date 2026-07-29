@@ -40,8 +40,9 @@ Règles :
 - Termine toujours par cta_1
 - Utilise 4 à 7 sections au total
 - Pour les href/links, utilise "#" (ou "/contact" pour les boutons d'appel à l'action principaux)
-- Contenu en français sauf si le prompt est dans une autre langue. Les textes doivent être rédigés dans le style de Matthieu Le Tousse (thérapeute/coach spécialisé en relations toxiques, emprise, pervers narcissiques), tutoiement thérapeutique ("tu"), direct, pragmatique et rassurant.
-- Pour les images/galleries, utilise des URLs d'images d'ambiance de qualité depuis Unsplash (ex: nature sauvage, forêts, chemins embrumés, portraits, symbolisme).
+- Contenu en français sauf si le prompt est dans une autre langue. Les textes doivent respecter le contexte d'activité et le ton de voix fournis ci-dessus.
+- N'invente jamais le nom d'une offre, d'un produit, d'un service, d'un tarif ou d'un horaire : n'utilise que ce qui figure dans le contexte fourni.
+- Pour les images/galleries, utilise des URLs d'images d'ambiance de qualité depuis Unsplash, cohérentes avec l'activité décrite ci-dessus.
 
 Format de réponse (tableau JSON strictement) :
 [

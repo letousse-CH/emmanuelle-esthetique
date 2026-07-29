@@ -6,12 +6,12 @@ import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Calendar, Clock, ArrowLeft, ArrowRight } from 'lucide-react';
-import { posts as staticPosts } from '../../../../data/posts';
 import { supabase } from '../../../../services/supabase';
 import { getSettingsServer } from '../../../../services/settingsServer';
 import { proxyUrl } from '../../../../utils/media';
 import { NewsletterBanner } from '../../../../components/NewsletterBanner';
 import { ShareButtons, TableOfContents, TocEntry } from '../../../../components/blog/BlogClientComponents';
+import { SITE_CONFIG } from '../../../../config/site';
 import { isModuleEnabledServer } from '../../../../config/modules';
 
 /* ── Regex-based server helpers to avoid browser DOMParser crashes ── */
@@ -155,8 +155,14 @@ function extractFaqItems(html: string): Array<{ question: string; answer: string
 }
 
 async function getAuthorSettings() {
-  const s = await getSettingsServer(['author_bio', 'author_link']);
-  return { bio: s.author_bio, link: s.author_link };
+  const s = await getSettingsServer(['author_bio', 'author_link', 'author_photo', 'business_owner', 'global_logo']);
+  return {
+    bio: s.author_bio,
+    link: s.author_link,
+    photo: s.author_photo,
+    name: s.business_owner || SITE_CONFIG.owner,
+    logo: s.global_logo,
+  };
 }
 
 async function getPost(slug: string) {
@@ -180,8 +186,8 @@ async function getPost(slug: string) {
         date: new Date(data.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
         dateIso: data.created_at,
         updatedAtIso: data.updated_at || data.created_at,
-        author: "Matthieu Le Tousse",
-        category: data.category || "Relation toxique",
+        author: SITE_CONFIG.owner,
+        category: data.category || "Beauté & bien-être",
         image: proxyUrl(data.cover_image) || "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1000&auto=format&fit=crop",
         // Temps de lecture calculé (~200 mots/min) au lieu d'une valeur figée :
         // signal de profondeur de contenu pour le SEO/GEO (cf. timeRequired JSON-LD).
@@ -192,18 +198,6 @@ async function getPost(slug: string) {
     console.error('Error fetching blog post from Supabase:', err);
   }
 
-  // 2. Fallback to static data
-  const staticPost = staticPosts.find(p => p.slug === slug);
-  if (staticPost) {
-    return {
-      ...staticPost,
-      meta_title: null,
-      dateIso: new Date().toISOString(),
-      updatedAtIso: new Date().toISOString(),
-      image: proxyUrl(staticPost.image),
-      keywords: null
-    };
-  }
   return null;
 }
 
@@ -214,20 +208,12 @@ export async function generateStaticParams() {
       .select('slug')
       .eq('published', true);
 
-    const supabaseParams = (articles || []).map((art) => ({
+    return (articles || []).map((art) => ({
       slug: art.slug,
     }));
-
-    const staticParams = staticPosts.map((post) => ({
-      slug: post.slug,
-    }));
-
-    return [...supabaseParams, ...staticParams];
   } catch (err) {
     console.error('Error generating static params:', err);
-    return staticPosts.map((post) => ({
-      slug: post.slug,
-    }));
+    return [];
   }
 }
 
@@ -237,30 +223,30 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   if (!post) {
     return {
-      title: "Article non trouvé | Au-delà des Chaînes",
+      title: `Article non trouvé | ${SITE_CONFIG.name}`,
     };
   }
 
-  const title = post.meta_title || `${post.title} | Au-delà des Chaînes`;
+  const title = post.meta_title || `${post.title} | ${SITE_CONFIG.name}`;
 
   return {
     title: title,
     description: post.excerpt,
-    keywords: post.keywords || `${post.category}, relation toxique, emprise psychologique, Matthieu Le Tousse`,
+    keywords: post.keywords || `${post.category}, ${SITE_CONFIG.name}, ${SITE_CONFIG.seoDefaults.keywords}`,
     alternates: {
-      canonical: `https://audeladeschaines.com/blog/${post.slug}`,
+      canonical: `${SITE_CONFIG.url}/blog/${post.slug}`,
     },
     openGraph: {
       title: title,
       description: post.excerpt,
-      url: `https://audeladeschaines.com/blog/${post.slug}`,
+      url: `${SITE_CONFIG.url}/blog/${post.slug}`,
       type: "article",
       images: [
         {
           url: post.image,
           width: 1200,
           height: 630,
-          alt: `${title} — Au-delà des Chaînes`,
+          alt: `${title} — ${SITE_CONFIG.name}`,
         }
       ],
       publishedTime: post.dateIso,
@@ -276,7 +262,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   }
 
   const { slug } = await params;
-  const [post, author, decodeurEnabled] = await Promise.all([getPost(slug), getAuthorSettings(), isModuleEnabledServer('decodeur')]);
+  const [post, author] = await Promise.all([getPost(slug), getAuthorSettings()]);
 
   if (!post) {
     notFound();
@@ -295,31 +281,28 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     "headline": post.title,
     "description": post.excerpt,
     "image": post.image,
-    "url": `https://audeladeschaines.com/blog/${post.slug}`,
+    "url": `${SITE_CONFIG.url}/blog/${post.slug}`,
     "datePublished": post.dateIso,
     "dateModified": post.updatedAtIso,
     "wordCount": wordCount,
     "timeRequired": `PT${readingMinutes}M`,
     "author": {
       "@type": "Person",
-      "@id": "https://audeladeschaines.com/#matthieu-le-tousse",
-      "name": "Matthieu Le Tousse"
+      "@id": `${SITE_CONFIG.url}/#owner`,
+      "name": SITE_CONFIG.owner
     },
     "publisher": {
       "@type": "Organization",
-      "@id": "https://audeladeschaines.com/#organization",
-      "name": "Au-delà des Chaînes",
-      "url": "https://audeladeschaines.com",
-      "logo": {
-        "@type": "ImageObject",
-        "url": "https://pub-06788dc2f8884cb1bba449c00813d758.r2.dev/1780852325790-logo-au-dela-des-chaines--1-.png"
-      }
+      "@id": `${SITE_CONFIG.url}/#organization`,
+      "name": SITE_CONFIG.name,
+      "url": SITE_CONFIG.url,
+      ...(author.logo ? { "logo": { "@type": "ImageObject", "url": author.logo } } : {})
     },
     "mainEntityOfPage": {
       "@type": "WebPage",
-      "@id": `https://audeladeschaines.com/blog/${post.slug}`
+      "@id": `${SITE_CONFIG.url}/blog/${post.slug}`
     },
-    "isPartOf": { "@type": "Blog", "@id": "https://audeladeschaines.com/blog" },
+    "isPartOf": { "@type": "Blog", "@id": `${SITE_CONFIG.url}/blog` },
     "articleSection": post.category,
     "inLanguage": "fr-CH"
   };
@@ -339,9 +322,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
         "@context": "https://schema.org", "@type": "BreadcrumbList",
         "itemListElement": [
-          { "@type": "ListItem", "position": 1, "name": "Accueil", "item": "https://audeladeschaines.com/" },
-          { "@type": "ListItem", "position": 2, "name": "Blog",    "item": "https://audeladeschaines.com/blog" },
-          { "@type": "ListItem", "position": 3, "name": post.title, "item": `https://audeladeschaines.com/blog/${post.slug}` }
+          { "@type": "ListItem", "position": 1, "name": "Accueil", "item": `${SITE_CONFIG.url}/` },
+          { "@type": "ListItem", "position": 2, "name": "Blog",    "item": `${SITE_CONFIG.url}/blog` },
+          { "@type": "ListItem", "position": 3, "name": post.title, "item": `${SITE_CONFIG.url}/blog/${post.slug}` }
         ]
       }) }} />
 
@@ -432,26 +415,22 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             <aside className="lg:sticky lg:top-28 space-y-5">
               {toc.length > 0 && <TableOfContents entries={toc} />}
 
-              {/* Maillage interne : Décodeur (capture) + Arsenal (conversion) —
-                  généré automatiquement, présent sur tout article. */}
+              {/* Maillage interne — généré automatiquement, présent sur tout article. */}
               <div className="bg-stone-900 text-white rounded-2xl p-5 space-y-3">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Aller plus loin</p>
-                {decodeurEnabled && (
-                  <Link
-                    href="/decodeur"
-                    className="block bg-sage/15 hover:bg-sage/25 border border-sage/30 rounded-xl p-4 transition-colors"
-                  >
-                    <span className="inline-block text-[9px] font-bold uppercase tracking-widest text-sage bg-sage/15 rounded-full px-2 py-0.5 mb-2">Gratuit</span>
-                    <p className="font-serif text-base font-bold text-white mb-1">Le Décodeur</p>
-                    <p className="text-xs text-stone-300 leading-relaxed">Identifiez gratuitement, en 2 minutes, le profil auquel vous faites face.</p>
-                  </Link>
-                )}
                 <Link
-                  href="/arsenal-tactique"
+                  href="/soins"
+                  className="block bg-sage/15 hover:bg-sage/25 border border-sage/30 rounded-xl p-4 transition-colors"
+                >
+                  <p className="font-serif text-base font-bold text-white mb-1">Les soins</p>
+                  <p className="text-xs text-stone-300 leading-relaxed">Soins du visage, Head Spa et massages, dans un cocon à domicile à Palézieux.</p>
+                </Link>
+                <Link
+                  href="/contact"
                   className="block bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors"
                 >
-                  <p className="font-serif text-sm font-bold text-white mb-1">L'Arsenal Tactique</p>
-                  <p className="text-xs text-stone-400 leading-relaxed">L'accompagnement complet pour sortir de l'emprise.</p>
+                  <p className="font-serif text-sm font-bold text-white mb-1">Prendre rendez-vous</p>
+                  <p className="text-xs text-stone-400 leading-relaxed">Un créneau qui vous arrange, en semaine comme le samedi.</p>
                 </Link>
               </div>
             </aside>
@@ -463,15 +442,17 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       <section className="py-12 px-6 border-t border-stone-100 bg-stone-50">
         <div className="max-w-3xl mx-auto">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-            <img
-              src="https://pub-06788dc2f8884cb1bba449c00813d758.r2.dev/1782229256675-Matthieu-Le-Tousse.webp"
-              alt="Matthieu Le Tousse"
-              className="w-20 h-20 rounded-full object-cover ring-4 ring-white shadow-md shrink-0"
-              loading="lazy"
-            />
+            {author.photo && (
+              <img
+                src={author.photo}
+                alt={author.name}
+                className="w-20 h-20 rounded-full object-cover ring-4 ring-white shadow-md shrink-0"
+                loading="lazy"
+              />
+            )}
             <div className="text-center sm:text-left space-y-2">
               <p className="text-[10px] font-bold uppercase tracking-widest text-sage">À propos de l'auteur</p>
-              <p className="font-serif text-lg font-bold text-stone-900">Matthieu Le Tousse</p>
+              <p className="font-serif text-lg font-bold text-stone-900">{author.name}</p>
               <p className="text-stone-500 text-sm leading-relaxed">{author.bio}</p>
               <Link
                 href={author.link}

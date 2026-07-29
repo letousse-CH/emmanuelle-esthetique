@@ -18,12 +18,12 @@ interface SectionStyleEditorProps {
 }
 
 const PRESETS = [
-  { name: 'Sombre Profond', value: '#0A0A0A' },
-  { name: 'Gris Foncé', value: '#0F0F0F' },
-  { name: 'Papier Clair', value: '#fcfbf7' },
-  { name: 'Blanc Pur', value: '#ffffff' },
-  { name: 'Vert Sauge', value: '#5b7e5a' },
-  { name: 'Cuivre', value: '#B87333' },
+  { name: 'Crème', value: '#FAF7F2' },
+  { name: 'Blanc', value: '#FFFFFF' },
+  { name: 'Lin', value: '#F1EAE0' },
+  { name: 'Sauge profond', value: '#5E6B52' },
+  { name: 'Taupe', value: '#3A3730' },
+  { name: 'Terracotta', value: '#C08768' },
 ];
 
 export default function SectionStyleEditor({

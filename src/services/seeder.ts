@@ -8,267 +8,405 @@ interface DefaultPageSeed {
   published: boolean;
 }
 
+// Palette Emmanuelle Esthétique (miroir des tokens `@theme` de src/index.css) —
+// utilisée comme `bg_color` des sections pour alterner crème / blanc / lin.
+const CREAM = "#FAF7F2";   // blanc cassé (fond principal)
+const WHITE = "#FFFFFF";   // blanc pur
+const LINEN = "#F1EAE0";   // lin
+const SAND = "#EDE6DA";    // lin plus soutenu (bandeau)
+const SAGE_DEEP = "#5E6B52"; // vert sauge profond (sections sombres)
+
 const DEFAULT_PAGES: DefaultPageSeed[] = [
   {
     title: "Accueil",
     slug: "home",
     published: true,
     sections: [
+      // ── 1. Hero ────────────────────────────────────────────────────────────
       {
         type: "hero_1",
         data: {
-          theme: "dark",
-          bg_color: "#0A0A0A",
-          eyebrow: "Coaching Relation Toxique",
-          title: "Comprendre l'Emprise, Briser les Chaînes",
-          title_italic: "et Se Reconstruire",
-          description: "Tu as longtemps cru que le problème venait de toi. Aujourd'hui, la confusion laisse place à une certitude : tu es ou tu as été sous emprise. Ne reste plus seul(e) face au doute. Bénéficie d'un accompagnement pragmatique, direct et orienté résultats pour décoder les mécanismes de manipulation.",
-          cta_primary_text: "RÉSERVER MA SESSION OFFERTE",
+          theme: "light",
+          bg_color: CREAM,
+          eyebrow: "Institut à domicile · Palézieux",
+          title: "Une parenthèse de douceur et de beauté",
+          title_italic: "au cœur de Palézieux",
+          description: "Soins du visage, Head Spa et ateliers bien-être personnalisés, dans un cocon à domicile pensé pour que vous n'ayez plus qu'une seule chose à faire : vous laisser aller.",
+          cta_primary_text: "Réserver un soin",
           cta_primary_href: "/contact",
-          image_url: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1600",
-          image_opacity: 40,
+          cta_secondary_text: "Découvrir les soins",
+          cta_secondary_href: "/soins",
+          image_url: "https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?q=80&w=1600",
+          image_alt: "Ambiance cocooning : serviettes en coton, lumière naturelle et plantes vertes",
+          image_opacity: 100,
+          button_style: "green"
+        }
+      },
+
+      // ── 2. Bandeau défilant ────────────────────────────────────────────────
+      {
+        type: "marquee_1",
+        data: {
+          items: [
+            "Soins du visage",
+            "Head Spa",
+            "Massages relaxants",
+            "Beauté du regard",
+            "Ateliers Gua Sha",
+            "Cosmétique naturelle"
+          ],
+          bg_color: SAND,
+          text_color: "#7C8A6E",
+          separator: "●",
+          speed: "slow",
+          italic: false
+        }
+      },
+
+      // ── 3. Les 3 univers ───────────────────────────────────────────────────
+      {
+        type: "features_2",
+        data: {
+          theme: "light",
+          bg_color: WHITE,
+          eyebrow: "Les 3 univers",
+          title: "Trois façons de prendre soin de vous",
+          description: "Que vous veniez pour souffler une heure, pour apprendre les bons gestes ou pour faire plaisir à quelqu'un — il y a une porte d'entrée pour chacune.",
+          cards: [
+            {
+              icon: "🌿",
+              title: "Les soins",
+              description: "Soins du visage et du corps doux et naturels, Head Spa, massages relaxants et beauté du regard. Chaque protocole est adapté à votre peau et à votre humeur du jour.",
+              link_text: "Découvrir les soins",
+              link_href: "/soins"
+            },
+            {
+              icon: "🤲",
+              title: "Les ateliers",
+              description: "Apprenez à prendre soin de votre peau en toute autonomie : Gua Sha, auto-massage du visage, Glowing Face. En petit comité, dans une ambiance conviviale.",
+              link_text: "Découvrir les ateliers",
+              link_href: "/ateliers"
+            },
+            {
+              icon: "🎁",
+              title: "Bons cadeaux & produits",
+              description: "Offrez une bulle de détente à quelqu'un que vous aimez, ou repartez avec les soins naturels que j'utilise en cabine.",
+              link_text: "Offrir un bon cadeau",
+              link_href: "/bon-cadeau"
+            }
+          ]
+        }
+      },
+
+      // ── 4. À propos / le concept ───────────────────────────────────────────
+      {
+        type: "intro_1",
+        data: {
+          theme: "light",
+          bg_color: CREAM,
+          eyebrow: "Le concept",
+          quote: "Bienvenue chez Emmanuelle",
+          text: "Je vous accueille dans mon institut à domicile, à Palézieux. Un espace intime et apaisant, loin de l'agitation des grandes enseignes, pensé pour vous proposer une autre façon de prendre soin de vous : en douceur, en prenant le temps, et sans jamais aucun jugement.",
+          cta_text: "Faire connaissance",
+          cta_href: "/a-propos",
+          image_url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?q=80&w=1200",
+          image_alt: "Soin du visage prodigué dans l'institut à domicile de Palézieux",
+          image_position: "right"
+        }
+      },
+
+      // ── 5. Témoignages ─────────────────────────────────────────────────────
+      // ⚠️ PLACEHOLDER — ces avis sont des exemples de mise en page.
+      // À remplacer par de vrais témoignages (ou avis Google) avant la mise en
+      // ligne : publier des avis inventés serait trompeur pour les visiteuses.
+      {
+        type: "reviews_1",
+        data: {
+          theme: "light",
+          bg_color: LINEN,
+          eyebrow: "Témoignages",
+          title: "Ce que disent",
+          title_bold: "mes clientes",
+          description: "Exemples de mise en page — à remplacer par de vrais avis avant la mise en ligne.",
+          cards: [
+            {
+              name: "Exemple — avis à remplacer",
+              date: "—",
+              rating: 5,
+              text: "Emplacement réservé à un témoignage authentique sur l'accueil et la douceur du soin. Remplacez ce texte depuis l'admin (section « Témoignages »)."
+            },
+            {
+              name: "Exemple — avis à remplacer",
+              date: "—",
+              rating: 5,
+              text: "Emplacement réservé à un témoignage sur le cadre à domicile, intime et chaleureux. Remplacez ce texte depuis l'admin."
+            },
+            {
+              name: "Exemple — avis à remplacer",
+              date: "—",
+              rating: 5,
+              text: "Emplacement réservé à un témoignage sur un atelier (Gua Sha, Glowing Face) et les gestes appris. Remplacez ce texte depuis l'admin."
+            },
+            {
+              name: "Exemple — avis à remplacer",
+              date: "—",
+              rating: 5,
+              text: "Emplacement réservé à un témoignage sur un massage ou un Head Spa. Remplacez ce texte depuis l'admin."
+            }
+          ]
+        }
+      },
+
+      // ── 6. Bannière bon cadeau ─────────────────────────────────────────────
+      {
+        type: "cta_1",
+        data: {
+          theme: "dark",
+          bg_color: SAGE_DEEP,
+          eyebrow: "Bon cadeau",
+          title: "Faites plaisir à vos proches",
+          description: "Offrez un moment de relaxation dont on se souvient. Choisissez le montant ou le soin, commandez en ligne, et repartez avec un bon prêt à offrir.",
+          cta_text: "Commander un bon cadeau",
+          cta_href: "/bon-cadeau",
+          button_style: "white"
+        }
+      },
+
+      // ── 7. Infos pratiques & contact ───────────────────────────────────────
+      {
+        type: "text_image_1",
+        data: {
+          theme: "light",
+          bg_color: CREAM,
+          eyebrow: "Infos pratiques",
+          title: "Venir à l'institut",
+          content:
+            "<p>L'institut se trouve à <strong>Palézieux</strong>, dans le canton de Vaud. C'est un espace à domicile : l'adresse exacte et le plan d'accès vous sont transmis à la confirmation de votre rendez-vous.</p>" +
+            "<h2>Prendre rendez-vous</h2>" +
+            "<p>Les soins se font <strong>uniquement sur rendez-vous</strong>. Nous fixons ensemble le créneau qui vous arrange, en semaine comme le samedi. Écrivez-moi via le <a href=\"/contact\">formulaire de contact</a> et je vous réponds rapidement.</p>" +
+            "<h2>Bon à savoir</h2>" +
+            "<ul>" +
+            "<li>Comptez 15 minutes de plus que la durée du soin pour l'accueil et le temps d'échange.</li>" +
+            "<li>Les produits utilisés en cabine sont naturels et sélectionnés un par un.</li>" +
+            "<li>Un doute sur le soin à choisir ? Dites-moi simplement où vous en êtes, je vous oriente.</li>" +
+            "</ul>",
+          image_url: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1200",
+          image_alt: "Espace de soin chaleureux et lumineux à Palézieux",
+          image_position: "left",
+          ratio: "half"
+        }
+      }
+    ]
+  },
+
+  // ══ À propos ═══════════════════════════════════════════════════════════════
+  {
+    title: "À propos",
+    slug: "a-propos",
+    published: true,
+    sections: [
+      {
+        type: "hero_2",
+        data: {
+          theme: "light",
+          bg_color: CREAM,
+          eyebrow: "Qui suis-je",
+          title: "Bienvenue chez Emmanuelle",
+          description: "Esthéticienne à Palézieux, je vous accueille dans mon institut à domicile pour des soins doux, naturels et pensés pour vous.",
+          cta_text: "Prendre rendez-vous",
+          cta_href: "/contact",
+          button_style: "green"
+        }
+      },
+      {
+        type: "intro_1",
+        data: {
+          theme: "light",
+          bg_color: WHITE,
+          eyebrow: "Mon parcours",
+          quote: "Prendre soin, c'est d'abord prendre le temps",
+          // ⚠️ Texte de départ à personnaliser avec le vrai parcours d'Emmanuelle
+          // (formation, années d'expérience, ce qui l'a menée à ouvrir son institut).
+          text: "Ce texte est un point de départ, à remplacer par votre histoire depuis l'admin : votre formation, ce qui vous a menée à l'esthétique, et pourquoi vous avez choisi de recevoir chez vous plutôt qu'en salon.",
+          image_url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?q=80&w=1200",
+          image_alt: "Emmanuelle, esthéticienne à Palézieux",
+          image_position: "left"
+        }
+      },
+      {
+        type: "features_2",
+        data: {
+          theme: "light",
+          bg_color: LINEN,
+          eyebrow: "Ma façon de travailler",
+          title: "Trois choses qui ne changent jamais",
+          cards: [
+            { icon: "🌿", title: "Des produits naturels", description: "Les soins utilisés en cabine sont choisis un par un, pour leur composition et leur douceur sur la peau." },
+            { icon: "⏳", title: "Du temps, vraiment", description: "Chaque rendez-vous prévoit un moment d'échange avant le soin. On regarde ensemble ce dont votre peau a besoin ce jour-là." },
+            { icon: "🤍", title: "Aucun jugement", description: "Peau sensible, réactive, négligée depuis des mois : rien de tout ça ne se commente. On part d'où vous en êtes." }
+          ]
+        }
+      },
+      {
+        type: "cta_1",
+        data: {
+          theme: "dark",
+          bg_color: SAGE_DEEP,
+          title: "Envie de faire connaissance ?",
+          description: "Le plus simple reste de venir. Écrivez-moi et nous trouvons un créneau ensemble.",
+          cta_text: "Prendre rendez-vous",
+          cta_href: "/contact",
+          button_style: "white"
+        }
+      }
+    ]
+  },
+
+  // ══ Soins ══════════════════════════════════════════════════════════════════
+  // ⚠️ Prestations, durées et tarifs à compléter avec les vraies informations
+  // avant la mise en ligne — les cartes ci-dessous ne portent volontairement
+  // aucun prix inventé.
+  {
+    title: "Soins",
+    slug: "soins",
+    published: true,
+    sections: [
+      {
+        type: "hero_2",
+        data: {
+          theme: "light",
+          bg_color: CREAM,
+          eyebrow: "Les soins",
+          title: "Des soins doux, adaptés à votre peau",
+          description: "Soins du visage, Head Spa, massages relaxants et beauté du regard, dans un cocon à domicile à Palézieux.",
+          cta_text: "Réserver un soin",
+          cta_href: "/contact",
           button_style: "green"
         }
       },
       {
         type: "features_2",
         data: {
-          theme: "dark",
-          bg_color: "#0F0F0F",
-          eyebrow: "Symptômes de l'emprise",
-          title: "Reconnaître les Signaux d'Alerte",
-          description: "Vivre aux côtés d'une personnalité manipulatrice toxique n'est pas neutre. C'est une érosion lente et méthodique de ton identité psychique.",
+          theme: "light",
+          bg_color: WHITE,
+          eyebrow: "Prestations",
+          title: "Ce que je propose",
+          description: "Durées et tarifs à confirmer lors de la prise de rendez-vous.",
           cards: [
-            { title: "La confusion (Gaslighting)", description: "Tu doutes continuellement de tes propres souvenirs et de ton jugement.", icon: "🤯" },
-            { title: "La marche sur des œufs", description: "Ton quotidien est dicté par la peur de la prochaine explosion ou du silence punitif.", icon: "🍳" },
-            { title: "L'épuisement biologique", description: "Ton corps envoie des signaux massifs de détresse (crises d'angoisse, insomnie).", icon: "🚨" }
+            { icon: "✨", title: "Soin du visage", description: "Nettoyage, gommage, masque et modelage, avec des produits choisis pour votre type de peau. Le protocole est ajusté à chaque visite." },
+            { icon: "💆", title: "Head Spa", description: "Un soin du cuir chevelu qui détend autant qu'il fait du bien aux cheveux. Massage lent, chaleur douce, et on ne pense plus à rien." },
+            { icon: "🤲", title: "Massage relaxant", description: "Un massage du corps pensé pour relâcher les tensions, pas pour travailler en profondeur. L'objectif est de souffler." },
+            { icon: "👁️", title: "Beauté du regard", description: "Mise en forme des sourcils, teinture, rehaussement de cils : des retouches discrètes qui changent tout." },
+            { icon: "🌿", title: "Gua Sha en cabine", description: "Le modelage au Gua Sha intégré au soin du visage : drainage, éclat et un vrai moment de détente." },
+            { icon: "🎁", title: "Bon cadeau", description: "Tous les soins peuvent s'offrir sous forme de bon cadeau, au montant ou à la prestation." }
           ]
         }
       },
       {
-        type: "intro_1",
+        type: "faq_1",
         data: {
-          theme: "dark",
-          bg_color: "#0A0A0A",
-          eyebrow: "De la Clinique au Terrain",
-          quote: "Pourquoi mon Approche fait Autorité",
-          text: "Je ne vais pas me contenter de t'accueillir et de hocher la tête. Je connais intimement les verrous psychologiques de ton agresseur pour les avoir vécus dans ma chair, et je possède la clé tactique pour les faire sauter.",
-          cta_text: "Découvrir mon parcours",
-          cta_href: "/about",
-          image_url: "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?q=80&w=800"
-        }
-      },
-      {
-        type: "features_3",
-        data: {
-          theme: "dark",
-          bg_color: "#0F0F0F",
-          eyebrow: "L'Arsenal Tactique",
-          title: "Accompagnements Stratégiques",
-          description: "Découvrez nos formats de consultations adaptés à l'urgence de votre situation.",
+          theme: "light",
+          bg_color: LINEN,
+          eyebrow: "Questions fréquentes",
+          title: "Avant votre premier rendez-vous",
           cards: [
             {
-              title: "Programme Complet",
-              description: "Un voyage complet de reconstruction identitaire intense sur 3 mois.",
-              items: ["12 séances de 90 minutes", "Support par messagerie", "Immunisation définitive"],
-              cta_text: "Découvrir le programme",
-              cta_href: "/programme-complet",
-              badge: "Recommandé"
+              question: "Comment se passe une première visite ?",
+              answer: "On commence par échanger quelques minutes sur votre peau, vos habitudes et ce qui vous amène. Le soin est ensuite adapté à ce que nous avons vu ensemble. Comptez environ 15 minutes de plus que la durée annoncée du soin."
             },
             {
-              title: "Séance Individuelle",
-              description: "Une immersion ciblée pour débloquer un point de crise précis.",
-              items: ["Séance unique de 90 min", "Focus résolution de blocage", "Analyse symbolique de rêve"],
-              cta_text: "Réserver la séance",
-              cta_href: "/seance-individuelle"
+              question: "Où se trouve exactement l'institut ?",
+              answer: "L'institut est à domicile, à Palézieux, dans le canton de Vaud. L'adresse exacte et le plan d'accès vous sont transmis à la confirmation de votre rendez-vous."
+            },
+            {
+              question: "J'ai la peau très sensible ou réactive, est-ce un problème ?",
+              answer: "Non, au contraire : dites-le-moi à la prise de rendez-vous. Les produits et l'intensité du soin sont ajustés en conséquence, et on privilégie des textures douces."
+            },
+            {
+              question: "Comment prendre rendez-vous ?",
+              answer: "Uniquement sur rendez-vous, via le formulaire de contact du site. Je vous réponds rapidement et nous fixons ensemble le créneau qui vous arrange, en semaine comme le samedi."
             }
           ]
         }
       },
       {
-        type: "gallery_grid",
-        data: {
-          theme: "dark",
-          bg_color: "#0A0A0A",
-          eyebrow: "Galerie & Ressources",
-          title: "Livres et Analyses Gratuites",
-          description: "Plongez dans des outils cliniques concrets d'émancipation psychologique.",
-          columns: "3",
-          cards: [
-            { title: "Paroles et Silences", description: "Livre philosophique pour cesser la guerre intérieure.", image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800", link: "/paroles-et-silences" },
-            { title: "Si les arbres pouvaient parler", description: "Récit d'une reconstruction post-traumatique.", image: "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=800", link: "/si-les-arbres-pouvaient-parler" },
-            { title: "Podcast & Vidéos", description: "Décryptages cliniques hebdomadaires de la manipulation.", image: "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?q=80&w=800", link: "/blog" }
-          ]
-        }
-      },
-      {
         type: "cta_1",
         data: {
           theme: "dark",
-          bg_color: "#0F0F0F",
-          title: "Ne laisse plus un profil manipulateur écrire ta vie",
-          description: "Faisons le point de manière strictement confidentielle et sécurisée.",
-          cta_text: "RÉSERVER MON ENTRETIEN OFFERT",
-          cta_href: "/contact"
+          bg_color: SAGE_DEEP,
+          title: "Réserver votre soin",
+          description: "Dites-moi simplement ce qui vous ferait du bien, je vous oriente vers le soin le plus adapté.",
+          cta_text: "Prendre rendez-vous",
+          cta_href: "/contact",
+          button_style: "white"
         }
       }
     ]
   },
+
+  // ══ Bon cadeau ═════════════════════════════════════════════════════════════
   {
-    title: "À Propos",
-    slug: "about",
+    title: "Bon cadeau",
+    slug: "bon-cadeau",
     published: true,
     sections: [
       {
         type: "hero_2",
         data: {
           theme: "light",
-          bg_color: "#fcfbf7",
-          eyebrow: "Qui suis-je",
-          title: "Je vous aide à vous libérer",
-          description: "Matthieu Le Tousse — Ancien thérapeute en cabinet reconverti dans l'accompagnement de la dépendance et de l'emprise relationnelle.",
-          cta_text: "Me Contacter",
-          cta_href: "/contact"
-        }
-      },
-      {
-        type: "intro_1",
-        data: {
-          theme: "light",
-          bg_color: "#ffffff",
-          eyebrow: "Mon Histoire",
-          quote: "De la blessure à la transmission",
-          text: "Après 6 ans d'expérience intensive en cabinet et un parcours personnel confronté directement aux structures familiales toxiques et psychotiques, j'ai choisi de transmettre les clés opérationnelles de défense émotionnelle.",
-          image_url: "https://images.unsplash.com/photo-1507537297725-24a1c029d3ca?q=80&w=800"
-        }
-      },
-      {
-        type: "features_2",
-        data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          eyebrow: "Compétences clés",
-          title: "Un cadre professionnel solide",
-          cards: [
-            { title: "Psychologie Clinique", description: "6 ans de consultation thérapeutique individuelle en cabinet privé." },
-            { title: "Rêve Éveillé Libre", description: "Diplômé de l'école de Paris (curation des traumatismes profonds)." },
-            { title: "Crisis Management", description: "Méthodes comportementales face à la perversion et au harcèlement." }
-          ]
-        }
-      },
-      {
-        type: "testimonial_1",
-        data: {
-          theme: "light",
-          bg_color: "#ffffff",
-          quote: "Les ressources pour guérir et rebâtir votre autonomie sont déjà présentes. Mon rôle est de vous équiper de la stratégie pour les libérer.",
-          author: "Matthieu Le Tousse",
-          role: "Semeur d'Eveil"
-        }
-      },
-      {
-        type: "cta_1",
-        data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          title: "Brisez l'isolement dès aujourd'hui",
-          description: "Bénéficiez d'une écoute qualifiée et sans aucun jugement.",
-          cta_text: "Réserver un premier contact",
+          bg_color: CREAM,
+          eyebrow: "Bon cadeau",
+          title: "Offrez une parenthèse",
+          description: "Un soin, un Head Spa ou simplement un montant libre : le bon cadeau s'adapte à ce que vous voulez offrir.",
+          cta_text: "Commander un bon cadeau",
           cta_href: "/contact",
           button_style: "green"
         }
-      }
-    ]
-  },
-  {
-    title: "Accompagnement",
-    slug: "accompagnement",
-    published: true,
-    sections: [
-      {
-        type: "hero_1",
-        data: {
-          theme: "dark",
-          bg_color: "#1c1c1c",
-          eyebrow: "Posture masculine & autonomie",
-          title: "L'Accompagnement Posture",
-          title_italic: "& Leadership",
-          description: "Un parcours sur mesure conçu pour cesser de douter de votre réalité, restaurer des frontières relationnelles impénétrables et reprendre le contrôle de votre destin.",
-          cta_primary_text: "ÉVALUER MA SITUATION (OFFERT)",
-          cta_primary_href: "/contact",
-          image_url: "https://images.unsplash.com/photo-1507537297725-24a1c029d3ca?q=80&w=1600",
-          button_style: "green"
-        }
       },
       {
-        type: "features_1",
+        type: "timeline_1",
         data: {
           theme: "light",
-          bg_color: "#ffffff",
-          eyebrow: "Objectifs tactiques",
-          title: "Développer un Mindset Impénétrable",
-          description: "L'emprise s'effondre lorsque la victime cesse de réagir émotionnellement aux provocations de l'agresseur.",
-          items: [
-            "Comprendre cliniquement la structure psychique perverse ou manipulatrice.",
-            "Maîtriser les scripts de communication d'urgence (méthode de la roche grise).",
-            "Éliminer la culpabilité induite et le syndrome de Stockholm.",
-            "Reprogrammer ses croyances pour interdire définitivement l'accès aux prédateurs."
+          bg_color: WHITE,
+          eyebrow: "Comment ça marche",
+          title: "En trois étapes",
+          cards: [
+            { title: "Vous choisissez", description: "Un soin précis ou un montant libre, selon ce qui fera le plus plaisir." },
+            { title: "Vous commandez", description: "Écrivez-moi via le formulaire de contact en précisant le soin ou le montant." },
+            { title: "Vous offrez", description: "Vous recevez le bon prêt à offrir, et la personne prend rendez-vous quand elle le souhaite." }
           ]
-        }
-      },
-      {
-        type: "cta_1",
-        data: {
-          theme: "dark",
-          bg_color: "#0A0A0A",
-          title: "Reprenez le leadership de votre vie relationnelle",
-          description: "30 minutes d'échange pour dessiner votre plan de sevrage émotionnel.",
-          cta_text: "Réserver mon appel stratégique",
-          cta_href: "/contact"
-        }
-      }
-    ]
-  },
-  {
-    title: "Contact",
-    slug: "contact",
-    published: true,
-    sections: [
-      {
-        type: "hero_2",
-        data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          eyebrow: "Discrétion assurée",
-          title: "Entrer en contact",
-          description: "Que ce soit pour un message d'information ou pour planifier votre entretien offert de 30 minutes, je lis et réponds personnellement sous 24h ouvrées."
         }
       },
       {
         type: "text_1",
         data: {
           theme: "light",
-          bg_color: "#ffffff",
-          title: "Formulaire de premier échange",
-          content: "Veuillez remplir le formulaire disponible sur cette page. Vos données restent strictement confidentielles et ne seront jamais partagées."
+          bg_color: LINEN,
+          eyebrow: "Bon à savoir",
+          title: "Validité et utilisation",
+          // ⚠️ Durée de validité à confirmer avant la mise en ligne.
+          content: "Le bon cadeau est nominatif et s'utilise en une seule fois. La durée de validité est indiquée sur le bon. Il n'est ni échangeable, ni remboursable en espèces. Une question ? Écrivez-moi, on trouvera une solution."
         }
       },
       {
         type: "cta_1",
         data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          title: "Accéder directement à l'agenda",
-          description: "Pour un rendez-vous rapide, choisissez votre créneau horaire en ligne.",
-          cta_text: "Consulter l'agenda en ligne",
-          cta_href: "https://calendly.com",
-          button_style: "green"
+          theme: "dark",
+          bg_color: SAGE_DEEP,
+          title: "Faire plaisir à quelqu'un",
+          description: "Dites-moi le soin ou le montant, je m'occupe du reste.",
+          cta_text: "Commander un bon cadeau",
+          cta_href: "/contact",
+          button_style: "white"
         }
       }
     ]
   },
+
+  // ══ Mentions légales ═══════════════════════════════════════════════════════
+  // ⚠️ À compléter avec la raison sociale, l'adresse et l'hébergeur réels.
   {
-    title: "Mentions Légales",
+    title: "Mentions légales",
     slug: "mentions-legales",
     published: true,
     sections: [
@@ -276,249 +414,26 @@ const DEFAULT_PAGES: DefaultPageSeed[] = [
         type: "hero_2",
         data: {
           theme: "light",
-          bg_color: "#fcfbf7",
-          title: "Mentions Légales",
-          description: "Mentions d'information obligatoires concernant le site et l'hébergement."
+          bg_color: CREAM,
+          title: "Mentions légales",
+          description: "Informations légales relatives au site et à son hébergement."
         }
       },
       {
         type: "text_1",
         data: {
           theme: "light",
-          bg_color: "#ffffff",
-          content: "Editeur du site : Matthieu Le Tousse. Hébergement : Netlify. Propriété intellectuelle : Tous les textes, logos et images de ce site sont protégés par le droit d'auteur. Données personnelles : Vos informations de contact ne servent qu'à traiter vos demandes et ne sont jamais vendues ni partagées."
+          bg_color: WHITE,
+          content:
+            "Éditrice du site : Emmanuelle Esthétique, institut de beauté à domicile à Palézieux (Vaud, Suisse). " +
+            "Hébergement : Netlify. " +
+            "Propriété intellectuelle : les textes, visuels et logos de ce site sont protégés par le droit d'auteur. " +
+            "Données personnelles : les informations transmises via le formulaire de contact servent uniquement à traiter votre demande de rendez-vous. Elles ne sont ni vendues, ni partagées. " +
+            "Vous pouvez demander leur suppression à tout moment en écrivant à l'adresse e-mail de contact."
         }
       }
     ]
   },
-  {
-    title: "Paroles & Silences",
-    slug: "paroles-et-silences",
-    published: true,
-    sections: [
-      {
-        type: "hero_1",
-        data: {
-          theme: "dark",
-          bg_color: "#1c1c1c",
-          eyebrow: "Livre broché & ebook",
-          title: "Paroles & Silences",
-          description: "Un recueil de réflexions intimes et brutes pour cesser la lutte psychologique et accueillir le silence souverain au coeur de nos vies.",
-          cta_primary_text: "Acheter sur Amazon",
-          cta_primary_href: "https://amzn.eu",
-          image_url: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=1600"
-        }
-      },
-      {
-        type: "text_1",
-        data: {
-          theme: "light",
-          bg_color: "#ffffff",
-          eyebrow: "Présentation",
-          title: "Faire le vide pour retrouver le plein",
-          content: "Ce recueil réunit des textes écrits en fin de journée thérapeutique. Ils traitent de l'amour propre, du deuil, de la solitude nécessaire et des clés de réconciliation avec ses propres ombres."
-        }
-      },
-      {
-        type: "cta_1",
-        data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          title: "Disponible sur toutes les plateformes",
-          description: "Commandez le livre en format broché ou numérique.",
-          cta_text: "Commander mon exemplaire",
-          cta_href: "https://amzn.eu",
-          button_style: "green"
-        }
-      }
-    ]
-  },
-  {
-    title: "Si les arbres pouvaient parler",
-    slug: "si-les-arbres-pouvaient-parler",
-    published: true,
-    sections: [
-      {
-        type: "hero_1",
-        data: {
-          theme: "dark",
-          bg_color: "#0A0A0A",
-          eyebrow: "Témoignage autobiographique",
-          title: "Si les arbres pouvaient parler",
-          description: "Le récit d'une enfance adoptée en Roumanie, d'une amnésie traumatique lourde et de la renaissance progressive grâce au Rêve Éveillé Libre.",
-          cta_primary_text: "Commander le livre",
-          cta_primary_href: "https://amzn.eu",
-          image_url: "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=1600"
-        }
-      },
-      {
-        type: "text_1",
-        data: {
-          theme: "light",
-          bg_color: "#ffffff",
-          eyebrow: "À propos du récit",
-          title: "Un guide d'espoir thérapeutique",
-          content: "Ce témoignage démontre comment le cerveau parvient à enfouir des traumas et comment le travail symbolique sur les rêves permet d'en libérer la charge émotionnelle toxique sans revivre l'effroi."
-        }
-      },
-      {
-        type: "cta_1",
-        data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          title: "Commandez sur Amazon",
-          description: "Découvrez cette histoire inspirante de survie et d'éveil.",
-          cta_text: "Acheter le livre",
-          cta_href: "https://amzn.eu",
-          button_style: "green"
-        }
-      }
-    ]
-  },
-  {
-    title: "Séance Individuelle",
-    slug: "seance-individuelle",
-    published: true,
-    sections: [
-      {
-        type: "hero_1",
-        data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          eyebrow: "Entretien ciblé",
-          title: "La Séance Individuelle",
-          description: "Une consultation unique de 90 minutes pour analyser une situation critique de communication, poser des mots sur un blocage ou analyser vos rêves.",
-          cta_primary_text: "Prendre rendez-vous",
-          cta_primary_href: "/contact",
-          image_url: "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?q=80&w=1600",
-          button_style: "green"
-        }
-      },
-      {
-        type: "features_1",
-        data: {
-          theme: "light",
-          bg_color: "#ffffff",
-          eyebrow: "Déroulement de la séance",
-          title: "Un espace d'écoute et d'action",
-          description: "Chaque séance est individualisée pour répondre à votre état émotionnel immédiat.",
-          items: [
-            "90 minutes de décodage stratégique.",
-            "Analyse symbolique jungienne (rêve ou symptôme).",
-            "Mise en place de scripts de communication roche grise.",
-            "Exercices respiratoires de régulation du système nerveux."
-          ]
-        }
-      },
-      {
-        type: "cta_1",
-        data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          title: "Investissement : 140 CHF / séance",
-          description: "Consultations à distance ou en cabinet à Palézieux.",
-          cta_text: "Réserver un créneau",
-          cta_href: "/contact",
-          button_style: "green"
-        }
-      }
-    ]
-  },
-  {
-    title: "Programme Complet",
-    slug: "programme-complet",
-    published: true,
-    sections: [
-      {
-        type: "hero_1",
-        data: {
-          theme: "dark",
-          bg_color: "#1c1c1c",
-          eyebrow: "Parcours 3 mois",
-          title: "L'Arsenal Tactique",
-          description: "Le système pas-à-pas pour inverser le rapport de force relationnel, traverser le manque émotionnel et s'immuniser définitivement contre la manipulation.",
-          cta_primary_text: "Demander mon entretien préalable",
-          cta_primary_href: "/contact",
-          image_url: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=1600",
-          button_style: "green"
-        }
-      },
-      {
-        type: "features_2",
-        data: {
-          theme: "light",
-          bg_color: "#ffffff",
-          eyebrow: "Piliers d'éveil",
-          title: "Le chemin vers la souveraineté",
-          cards: [
-            { title: "1. Stabilité nerveuse", description: "Sortir du mode survie et de l'hypervigilance en calmant la chimie du stress." },
-            { title: "2. Sevrage du Trauma-Bond", description: "Casser l'addiction biologique aux cycles alternants du manipulateur." },
-            { title: "3. Pose de limites fermes", description: "Verrouiller son territoire et automatiser ses réflexes de défense comportementale." }
-          ]
-        }
-      },
-      {
-        type: "cta_1",
-        data: {
-          theme: "dark",
-          bg_color: "#0A0A0A",
-          title: "Accompagnement sélectif sur entretien",
-          description: "Vérifions ensemble si le programme Arsenal Tactique correspond à vos objectifs.",
-          cta_text: "Postuler à l'accompagnement",
-          cta_href: "/contact"
-        }
-      }
-    ]
-  },
-  {
-    title: "Rêve Éveillé Libre",
-    slug: "reve-eveille-libre",
-    published: true,
-    sections: [
-      {
-        type: "hero_1",
-        data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          eyebrow: "Hypnose douce par le symbole",
-          title: "Le Rêve Éveillé Libre",
-          description: "Une approche thérapeutique par l'imaginaire pour décoder et dissoudre les empreintes traumatiques inconscientes.",
-          cta_primary_text: "Prendre rendez-vous",
-          cta_primary_href: "/contact",
-          image_url: "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?q=80&w=1600",
-          button_style: "green"
-        }
-      },
-      {
-        type: "features_1",
-        data: {
-          theme: "light",
-          bg_color: "#ffffff",
-          eyebrow: "Cure symbolique",
-          title: "Comment se déroule la séance ?",
-          description: "Allongé dans un état de détente, vous observez et décrivez les images qui apparaissent à vos yeux fermés.",
-          items: [
-            "Libération des charges émotionnelles du passé sans avoir à revivre le trauma.",
-            "Dialogue direct avec les symboles et archétypes de l'inconscient.",
-            "Accompagnement agréé ADREL (Association Rêve Éveillé Libre).",
-            "Soutien idéal pour les phases de deuil, de séparation ou de dépression."
-          ]
-        }
-      },
-      {
-        type: "cta_1",
-        data: {
-          theme: "light",
-          bg_color: "#fcfbf7",
-          title: "Prenez rendez-vous en cabinet ou visio",
-          description: "Faites l'expérience du nettoyage inconscient.",
-          cta_text: "Réserver une séance d'essai",
-          cta_href: "/contact",
-          button_style: "green"
-        }
-      }
-    ]
-  }
 ];
 
 export async function seedDefaultPages(): Promise<void> {

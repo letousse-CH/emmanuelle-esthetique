@@ -309,8 +309,9 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
               </div>
 
               <p className="text-[11px] text-stone-500 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 leading-relaxed">
-                L'IA propose d'abord les sujets, adossés à vos trois piliers (Reconnaître, Comprendre, Sortir)
-                et à vos offres (Décodeur, Arsenal Tactique). Vous validez le plan avant toute rédaction.
+                L'IA propose d'abord les sujets, adossés à vos trois piliers (Reconnaître, Comprendre,
+                Passer à l'action) et à vos offres définies dans Paramètres &gt; Éditorial &amp; Marque.
+                Vous validez le plan avant toute rédaction.
               </p>
             </>
           )}

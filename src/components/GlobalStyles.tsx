@@ -4,21 +4,21 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 
 const DEFAULTS = {
-  style_font_headings: 'Outfit',
+  style_font_headings: 'Cormorant Garamond',
   style_font_body: 'Inter',
-  style_color_primary: '#EC3875',
-  style_color_btn_dark_bg: '#23112E',
+  style_color_primary: '#8A9A7B',
+  style_color_btn_dark_bg: '#3A3730',
   style_color_btn_dark_text: '#ffffff',
-  style_color_btn_dark_hover_bg: '#EC3875',
+  style_color_btn_dark_hover_bg: '#8A9A7B',
   style_color_btn_light_bg: '#ffffff',
-  style_color_btn_light_text: '#23112E',
-  style_color_btn_light_border: '#e5e7eb',
-  style_color_btn_light_hover_bg: '#F8F6F9',
-  style_color_btn_light_hover_text: '#EC3875',
-  style_color_btn_light_hover_border: '#EC3875',
-  style_border_radius_base: '12px',
-  style_color_text_h2: '#23112E',
-  style_color_text_body: '#23112E',
+  style_color_btn_light_text: '#3A3730',
+  style_color_btn_light_border: '#E2D9CB',
+  style_color_btn_light_hover_bg: '#F5F0E8',
+  style_color_btn_light_hover_text: '#8A9A7B',
+  style_color_btn_light_hover_border: '#8A9A7B',
+  style_border_radius_base: '14px',
+  style_color_text_h2: '#3A3730',
+  style_color_text_body: '#3A3730',
 };
 
 type StyleConfig = typeof DEFAULTS;
@@ -52,28 +52,17 @@ export default function GlobalStyles() {
           const fetchedMap = Object.fromEntries(data.map(r => [r.key, r.value]));
           const mergedStyles = { ...DEFAULTS } as any;
           
-          // Function to filter out old styling values so we discard them in favor of the new branding
-          const isOldStyleDefault = (k: string, v: string) => {
-            if (k === 'style_font_headings' && (v === 'Playfair Display' || v === 'Libre Baskerville')) return true;
-            if (k === 'style_color_primary' && v === '#5b7e5a') return true;
-            if (k === 'style_color_btn_dark_bg' && v === '#5b7e5a') return true;
-            if (k === 'style_color_btn_dark_hover_bg' && (v === '#433e37' || v === '#2e4a62')) return true;
-            if (k === 'style_color_btn_light_text' && (v === '#433e37' || v === '#5b7e5b')) return true;
-            if (k === 'style_color_btn_light_hover_bg' && v === '#fafaf9') return true;
-            if (k === 'style_color_btn_light_hover_text' && (v === '#5b7e5a' || v === '#2e4a62')) return true;
-            if (k === 'style_color_btn_light_hover_border' && (v === '#5b7e5a' || v === '#2e4a62')) return true;
-            return false;
-          };
-
+          // La table `settings` fait autorité : ce qui est réglé dans
+          // /admin/settings (onglet Design & Style) l'emporte, et DEFAULTS ne
+          // sert que pour les clés absentes. Ne pas réintroduire de liste noire
+          // de valeurs « héritées » : elle empêcherait de choisir ces couleurs
+          // depuis l'admin.
           for (const key of keys) {
-            if (fetchedMap[key] !== undefined && fetchedMap[key] !== null) {
-              const val = fetchedMap[key];
-              if (!isOldStyleDefault(key, val)) {
-                mergedStyles[key] = val;
-              }
+            if (fetchedMap[key] !== undefined && fetchedMap[key] !== null && fetchedMap[key] !== '') {
+              mergedStyles[key] = fetchedMap[key];
             }
           }
-          
+
           setStyles(mergedStyles);
           localStorage.setItem('site_global_styles', JSON.stringify(mergedStyles));
         } else {
@@ -122,7 +111,7 @@ export default function GlobalStyles() {
       --color-copper: ${primaryColor} !important;
       --color-stone-deep: ${textBodyColor} !important;
       --color-text-h2: ${textH2Color} !important;
-      --color-paper: #FAF9FB !important;
+      --color-paper: #FAF7F2 !important;
       --font-serif: "${headingFont}", sans-serif !important;
       --font-sans: "${bodyFont}", sans-serif !important;
       --border-radius-base: ${borderRadiusBase} !important;

@@ -656,7 +656,7 @@ export default function SeoHub() {
                 <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
                 <input type="text" value={seed} onChange={e => setSeed(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !analyzing && handleAnalyze()}
-                  placeholder="ex : comment reconnaître un pervers narcissique, sortir de l'emprise…"
+                  placeholder="ex : soin du visage à Palézieux, head spa, atelier gua sha…"
                   className="w-full pl-10 pr-4 py-3.5 border border-stone-200 rounded-xl text-sm outline-none focus:border-sage bg-stone-50 focus:bg-white transition-colors" />
               </div>
               <button onClick={() => handleAnalyze()} disabled={analyzing || !seed.trim()}

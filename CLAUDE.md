@@ -1,7 +1,13 @@
-# Au-delà des Chaînes — Projet Dev
+# Emmanuelle Esthétique — Projet Dev
 
-Site web de Matthieu Le Tousse : Coach Relation Toxique & Pervers Narcissique.
-URL : audeladeschaines.com
+Site web d'Emmanuelle : institut de beauté et bien-être **à domicile** à
+Palézieux (Vaud, Suisse). Soins du visage, Head Spa, massages relaxants, beauté
+du regard, ateliers d'auto-soin (Gua Sha, Glowing Face) et bons cadeaux.
+
+⚠️ Le `.env` de ce dépôt a été copié depuis le projet d'origine et peut encore
+pointer sur **une autre base Supabase**. Vérifier `NEXT_PUBLIC_SUPABASE_URL`
+avant toute écriture (seeder, admin) : le bouton « Pages par défaut » de
+`/admin/pages` fait un upsert par slug et écraserait les pages du projet visé.
 
 Ce dépôt est aussi la base d'un **template réutilisable** pour de futurs sites
 (module system, coordonnées d'entreprise et branding pilotables depuis l'admin —
@@ -56,8 +62,9 @@ stack Vite/Express conservée pour référence historique — pas utilisée par 
 
 Le site a un système de modules activables/désactivables depuis
 `/admin/settings` (onglet **Modules**) : Blog/Articles, Génération IA d'article,
-Événements. Un module désactivé disparaît des pages publiques, de la nav et du
-sitemap, mais reste modifiable dans l'admin. Voir `src/config/modules.ts`.
+Événements/Ateliers, Newsletter, Réseaux sociaux. Un module désactivé disparaît
+des pages publiques, de la nav et du sitemap, mais reste modifiable dans
+l'admin. Voir `src/config/modules.ts`.
 
 Le modèle Claude utilisé par toutes les générations, le niveau de réflexion et
 le budget mensuel se règlent dans `/admin/settings` (onglet **IA & Budget**) —
@@ -72,12 +79,28 @@ Pour démarrer un nouveau site à partir de ce template : `npm run setup` (coord
 modules, clés de service), puis appliquer `supabase/migrations/*.sql` sur le
 nouveau projet Supabase.
 
-## Rédaction d'articles
+## Contenu des pages
 
-Pour rédiger des articles blog, charge le prompt de rédaction en début de session :
+Les pages publiques ne sont **pas** des composants React : elles vivent dans la
+table Supabase `dynamic_pages` et sont rendues par le page builder
+(`src/components/pagebuilder/`). `src/app/(public)/page.tsx` lit la page de slug
+`home` ; `(public)/[slug]/page.tsx` sert toutes les autres.
 
-```
-/load CLAUDE-redaction.md
-```
+Le contenu de départ des pages (accueil, à propos, soins, bon cadeau, mentions
+légales) est défini dans `src/services/seeder.ts` et s'importe en base via
+`/admin/pages` → bouton **Pages par défaut**. Les sections disponibles et leur
+schéma de données sont listés dans
+`src/components/pagebuilder/wireframes.config.ts`.
 
-Ce fichier contient : voix de Matthieu, structure SEO/GEO, checklist complète.
+## Ton éditorial & prompts IA
+
+Aucun prompt IA ne code en dur l'activité ni le positionnement du site : tous
+lisent les réglages **Éditorial & Marque** de `/admin/settings`
+(`site_activity_context`, `site_target_persona`, `site_tone_of_voice`,
+`site_brand_tone`, `site_blog_topics`), avec repli sur
+`src/constants/settings.ts`. Pour changer la voix du site, modifier ces
+réglages — pas les fichiers `src/app/api/*` ni `src/utils/*Generation.ts`.
+
+Règle appliquée dans tous les prompts : ne jamais inventer un nom d'offre, un
+tarif, un horaire, un diplôme ou une certification qui ne figure pas dans les
+réglages.

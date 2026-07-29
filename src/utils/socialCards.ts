@@ -11,6 +11,7 @@
  * capturerait la mauvaise police.
  */
 import { supabase } from '../services/supabase';
+import { SITE_CONFIG } from '../config/site';
 
 export interface BrandTokens {
   accent: string;
@@ -21,24 +22,21 @@ export interface BrandTokens {
 }
 
 const FALLBACK_BRAND: BrandTokens = {
-  accent: '#EC3875',
-  dark: '#23112E',
-  headingFont: 'Outfit',
+  accent: '#8A9A7B',
+  dark: '#3A3730',
+  headingFont: 'Cormorant Garamond',
   bodyFont: 'Inter',
-  siteName: 'Au-delà des Chaînes',
+  siteName: SITE_CONFIG.name,
 };
 
 const BRAND_SETTING_KEYS = ['style_color_primary', 'style_color_btn_dark_bg', 'style_font_headings', 'style_font_body'] as const;
 
-// Anciennes valeurs par défaut du template (avant rebranding) qui peuvent
-// encore traîner en base sur ce site — GlobalStyles les ignore au profit du
-// nouveau branding ; on applique le même filtre pour rester visuellement
-// cohérent avec ce qui est réellement affiché sur le site.
-function isOldStyleDefault(key: string, value: string): boolean {
-  if (key === 'style_font_headings') return value === 'Playfair Display' || value === 'Libre Baskerville';
-  if (key === 'style_color_primary') return value === '#5b7e5a';
-  if (key === 'style_color_btn_dark_bg') return value === '#5b7e5a';
-  return false;
+// Les réglages « Design & Style » de l'admin font autorité, comme dans
+// GlobalStyles : on ne retombe sur FALLBACK_BRAND que si la valeur est vide.
+function isOldStyleDefault(_key: string, value: string): boolean {
+  // La table `settings` fait autorité (même règle que GlobalStyles) : seule une
+  // valeur vide justifie de retomber sur FALLBACK_BRAND.
+  return !value;
 }
 
 export async function fetchBrandTokens(siteName?: string): Promise<BrandTokens> {

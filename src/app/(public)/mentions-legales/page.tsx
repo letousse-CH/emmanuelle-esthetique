@@ -1,11 +1,11 @@
 import { fetchPageBySlug } from '../../../services/dynamicPages';
 import DynamicPageClient from '../pages/[slug]/DynamicPageClient';
-import { getBusinessInfoServer } from '../../../config/site';
+import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
 
 const SLUG = 'mentions-legales';
 
 export const metadata = {
-  title: "Mentions Légales | Au-delà des Chaînes - Matthieu Le Tousse",
+  title: `Mentions Légales | ${SITE_CONFIG.name}`,
   robots: {
     index: false,
     follow: false,

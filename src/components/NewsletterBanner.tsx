@@ -106,12 +106,12 @@ export function NewsletterBannerCompact() {
   return (
     <section className="py-16 px-6 bg-sage">
       <div className="max-w-lg mx-auto text-center">
-        <p className="text-white text-xs font-bold uppercase tracking-[0.3em] mb-4">La lettre d'Au-delà des Chaînes</p>
+        <p className="text-white text-xs font-bold uppercase tracking-[0.3em] mb-4">La lettre d'Emmanuelle Esthétique</p>
         <h2 className="font-serif text-3xl md:text-4xl font-bold text-white leading-snug mb-4">
           Des clés concrètes livrées<br className="hidden sm:block" /> directement dans votre boîte.
         </h2>
         <p className="text-white/80 text-sm leading-relaxed mb-8">
-          Chaque semaine : analyses, stratégies et ressources pour décoder l'emprise et reprendre le contrôle — sans filtre, sans jargon.
+          De temps en temps : conseils de soin, rituels de saison et nouveautés de l'institut — sans jamais aucun spam.
         </p>
         <NewsletterForm email={email} setEmail={setEmail} status={status} setStatus={setStatus} submit={submit} />
       </div>

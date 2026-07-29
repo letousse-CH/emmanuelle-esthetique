@@ -18,6 +18,7 @@ import { savePage, updatePage, fetchPageById, generateSlug } from '../../../serv
 import { supabase } from '../../../services/supabase';
 import { getSeoPrefix } from '../../../services/pageMeta';
 import MediaPickerModal from '../../../components/pagebuilder/MediaPickerModal';
+import { SITE_CONFIG } from '../../../config/site';
 
 type Status = 'idle' | 'generating' | 'saving' | 'success' | 'error';
 
@@ -198,7 +199,7 @@ export default function PageBuilder() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           mode: 'page',
-          title: title || 'Au-delà des Chaînes',
+          title: title || SITE_CONFIG.name,
           content: pageText || '',
         }),
       });
@@ -593,7 +594,7 @@ export default function PageBuilder() {
                   type="text"
                   value={seoKeywords}
                   onChange={e => setSeoKeywords(e.target.value)}
-                  placeholder="pervers narcissique, emprise..."
+                  placeholder="soin du visage, head spa, gua sha..."
                   className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-sage bg-white text-stone-800 focus:ring-1 focus:ring-sage/20 focus:border-sage transition-all"
                 />
               </div>

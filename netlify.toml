@@ -17,9 +17,7 @@
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(self)"
     Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: http:; connect-src 'self' data: blob: https: http: wss://*.supabase.co; frame-src https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self';"
 
-# Proxy Supabase Storage (uploads admin : covers blog, images événements)
-[[redirects]]
-  from = "/medias/*"
-  to = "https://xyzyhzdabmbqyycxcpgl.supabase.co/storage/v1/object/public/medias/:splat"
-  status = 200
-  force = true
+# Pas de proxy /medias/* : les médias sont servis directement depuis Cloudflare
+# R2 (NEXT_PUBLIC_R2_PUBLIC_URL) ou depuis Supabase Storage du projet courant.
+# Un `to` codé en dur ici pointerait sur le Storage du projet d'origine —
+# voir src/utils/media.ts, qui dérive l'URL de NEXT_PUBLIC_SUPABASE_URL.

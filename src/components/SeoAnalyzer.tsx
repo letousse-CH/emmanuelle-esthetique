@@ -274,7 +274,7 @@ export default function SeoAnalyzer({ formData, setFormData, initialKeyword }: S
               value={keyword}
               onChange={e => setKeyword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && status !== 'loading' && analyze()}
-              placeholder="Mot-clé focus (ex: reconnaître un pervers narcissique)"
+              placeholder="Mot-clé focus (ex : soin du visage Palézieux)"
               className="w-full pl-8 pr-4 py-2.5 text-sm border border-stone-200 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-300 outline-none bg-stone-50 focus:bg-white transition-all rounded-xl"
             />
           </div>

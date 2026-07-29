@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     'site_blog_topics',
   ]);
 
-  const activityContext = settings.site_activity_context || "Au-delà des Chaînes — Coaching d'accompagnement des victimes de manipulation psychologique...";
+  const activityContext = settings.site_activity_context || '';
   const targetPersona   = settings.site_target_persona || "";
   const brandTone       = settings.site_brand_tone || "";
   const blogTopics      = settings.site_blog_topics || "";
@@ -61,7 +61,7 @@ Réponds UNIQUEMENT avec ce JSON valide, rien d'autre :
   "ideas": [
     {
       "id": "generated-[timestamp]-1",
-      "category": "Nom de la catégorie (ex: Brouillard mental, Profils toxiques, etc.)",
+      "category": "Nom de la catégorie, tirée des piliers de contenu ci-dessus",
       "keyword": "requête exacte google en français",
       "question": "reformulation en question",
       "difficulty": "faible",

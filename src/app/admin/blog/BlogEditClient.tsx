@@ -229,7 +229,7 @@ export default function BlogEdit() {
       question: '',
       suggestedTitle: formData.title || '',
       suggestedSlug: formData.slug || '',
-      category: (formData.category || 'Profils toxiques') as any,
+      category: (formData.category || 'Rituels de soin') as any,
       intent: 'informationnel' as const,
       difficulty: 'moyen' as const,
       volume: 'moyen' as const,
@@ -237,12 +237,12 @@ export default function BlogEdit() {
       relatedQuestions: [],
       secondaryKeywords: [],
       contentTips: [
-        'Respecter scrupuleusement la voix de Matthieu Le Tousse',
-        'Approfondir avec des exemples concrets issus du cabinet',
+        'Respecter scrupuleusement le ton de voix réglé dans Paramètres > Éditorial & Marque',
+        'Ancrer le propos dans des situations concrètes vécues en cabine',
         'Inclure une méthode actionnable en étapes numérotées',
-        'Nommer les mécanismes psychologiques avec le vocabulaire clinique',
+        'Nommer précisément les gestes, les techniques et les ingrédients',
       ],
-      cta: 'Pour aller plus loin dans ce chemin, découvrez la séance individuelle avec Matthieu Le Tousse.',
+      cta: 'Pour aller plus loin, découvrez les soins proposés à l\'institut.',
       opportunity: '',
     };
     setAiStatus('generating');

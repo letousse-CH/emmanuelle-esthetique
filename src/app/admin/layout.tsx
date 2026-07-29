@@ -7,6 +7,7 @@ import { supabase } from '../../services/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useModuleFlags } from '../../hooks/useModuleFlags';
 import { LayoutDashboard, FileText, Settings, LogOut, Image as ImageIcon, Mail, Send, BarChart2, CalendarDays, Layers, Menu, ChevronRight, ExternalLink, HelpCircle, Share2 } from 'lucide-react';
+import { SITE_CONFIG } from '../../config/site';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -99,7 +100,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       items: [
         { name: 'Abonnés', path: '/admin/subscribers', icon: Mail },
         ...(moduleFlags.newsletter ? [{ name: 'Newsletter', path: '/admin/newsletter', icon: Send }] : []),
-        ...(moduleFlags.decodeur ? [{ name: 'Décodeur', path: '/admin/decodeur', icon: HelpCircle }] : []),
         ...(moduleFlags.social ? [{ name: 'Réseaux Sociaux', path: '/admin/social', icon: Share2 }] : []),
         { name: 'SEO', path: '/admin/seo', icon: BarChart2 },
       ],
@@ -201,7 +201,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Bottom */}
         <div className="px-2 pb-3 space-y-0.5 border-t border-stone-100 pt-3">
           <a
-            href="https://audeladeschaines.com"
+            href={SITE_CONFIG.url}
             target="_blank"
             rel="noopener noreferrer"
             title={collapsed ? 'Voir le site' : undefined}

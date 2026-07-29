@@ -92,25 +92,25 @@ export default function Settings() {
   const [headerRegisterFetching, setHeaderRegisterFetching]   = useState(true);
 
   // ── Style Global ──────────────────────────────────────────
-  const [headingFont, setHeadingFont]                 = useState('Playfair Display');
+  const [headingFont, setHeadingFont]                 = useState('Cormorant Garamond');
   const [customHeadingFont, setCustomHeadingFont]       = useState('');
   const [bodyFont, setBodyFont]                       = useState('Inter');
   const [customBodyFont, setCustomBodyFont]             = useState('');
-  const [primaryColor, setPrimaryColor]               = useState('#5b7e5a');
+  const [primaryColor, setPrimaryColor]               = useState('#8A9A7B');
   
-  const [btnDarkBg, setBtnDarkBg]                     = useState('#5b7e5a');
+  const [btnDarkBg, setBtnDarkBg]                     = useState('#3A3730');
   const [btnDarkText, setBtnDarkText]                 = useState('#ffffff');
   const [btnDarkHoverBg, setBtnDarkHoverBg]           = useState('#433e37');
   
   const [btnLightBg, setBtnLightBg]                   = useState('#ffffff');
-  const [btnLightText, setBtnLightText]               = useState('#433e37');
-  const [btnLightBorder, setBtnLightBorder]           = useState('#e5e7eb');
-  const [btnLightHoverBg, setBtnLightHoverBg]         = useState('#fafaf9');
-  const [btnLightHoverText, setBtnLightHoverText]     = useState('#5b7e5a');
-  const [btnLightHoverBorder, setBtnLightHoverBorder] = useState('#5b7e5a');
+  const [btnLightText, setBtnLightText]               = useState('#3A3730');
+  const [btnLightBorder, setBtnLightBorder]           = useState('#E2D9CB');
+  const [btnLightHoverBg, setBtnLightHoverBg]         = useState('#F5F0E8');
+  const [btnLightHoverText, setBtnLightHoverText]     = useState('#8A9A7B');
+  const [btnLightHoverBorder, setBtnLightHoverBorder] = useState('#8A9A7B');
   
-  const [textH2Color, setTextH2Color]                 = useState('#23112E');
-  const [textBodyColor, setTextBodyColor]             = useState('#23112E');
+  const [textH2Color, setTextH2Color]                 = useState('#3A3730');
+  const [textBodyColor, setTextBodyColor]             = useState('#3A3730');
   
   const [borderRadiusBase, setBorderRadiusBase]       = useState('8px');
   
@@ -123,7 +123,6 @@ export default function Settings() {
   const [moduleAiEnabled, setModuleAiEnabled]               = useState(true);
   const [moduleEventsEnabled, setModuleEventsEnabled]       = useState(true);
   const [moduleNewsletterEnabled, setModuleNewsletterEnabled] = useState(true);
-  const [moduleDecodeurEnabled, setModuleDecodeurEnabled]   = useState(true);
   const [moduleSocialEnabled, setModuleSocialEnabled]       = useState(true);
   const [modulesLoading, setModulesLoading]                 = useState(false);
   const [modulesFetching, setModulesFetching]               = useState(true);
@@ -176,12 +175,12 @@ export default function Settings() {
   const renderPresets = (setter: (val: string) => void) => (
     <div className="flex flex-wrap gap-1 mt-1">
       {[
-        { name: 'Rose', value: '#EC3875' },
-        { name: 'Sauge', value: '#5b7e5a' },
-        { name: 'Bois', value: '#8c734b' },
-        { name: 'Charbon', value: '#23112E' },
-        { name: 'Bleu', value: '#14213D' },
-        { name: 'Papier', value: '#FAF9FB' },
+        { name: 'Sauge', value: '#8A9A7B' },
+        { name: 'Terracotta', value: '#C08768' },
+        { name: 'Lin', value: '#EDE6DA' },
+        { name: 'Taupe', value: '#3A3730' },
+        { name: 'Bleu', value: '#35505E' },
+        { name: 'Crème', value: '#FAF7F2' },
         { name: 'Blanc', value: '#ffffff' },
         { name: 'Gris', value: '#e5e7eb' }
       ].map(preset => (
@@ -411,14 +410,13 @@ export default function Settings() {
     const { data } = await supabase
       .from('settings')
       .select('key, value')
-      .in('key', ['module_blog_enabled', 'module_ai_generation_enabled', 'module_events_enabled', 'module_newsletter_enabled', 'module_decodeur_enabled', 'module_social_enabled']);
+      .in('key', ['module_blog_enabled', 'module_ai_generation_enabled', 'module_events_enabled', 'module_newsletter_enabled', 'module_social_enabled']);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.module_blog_enabled !== undefined)          setModuleBlogEnabled(map.module_blog_enabled !== 'false');
       if (map.module_ai_generation_enabled !== undefined) setModuleAiEnabled(map.module_ai_generation_enabled !== 'false');
       if (map.module_events_enabled !== undefined)        setModuleEventsEnabled(map.module_events_enabled !== 'false');
       if (map.module_newsletter_enabled !== undefined)    setModuleNewsletterEnabled(map.module_newsletter_enabled !== 'false');
-      if (map.module_decodeur_enabled !== undefined)      setModuleDecodeurEnabled(map.module_decodeur_enabled !== 'false');
       if (map.module_social_enabled !== undefined)        setModuleSocialEnabled(map.module_social_enabled !== 'false');
     }
     setModulesFetching(false);
@@ -435,7 +433,6 @@ export default function Settings() {
         { key: 'module_ai_generation_enabled', value: String(moduleAiEnabled) },
         { key: 'module_events_enabled',         value: String(moduleEventsEnabled) },
         { key: 'module_newsletter_enabled',     value: String(moduleNewsletterEnabled) },
-        { key: 'module_decodeur_enabled',       value: String(moduleDecodeurEnabled) },
         { key: 'module_social_enabled',         value: String(moduleSocialEnabled) },
       ], { onConflict: 'key' });
     if (error) {
@@ -446,7 +443,6 @@ export default function Settings() {
       settingsCache.set('module_ai_generation_enabled', String(moduleAiEnabled));
       settingsCache.set('module_events_enabled', String(moduleEventsEnabled));
       settingsCache.set('module_newsletter_enabled', String(moduleNewsletterEnabled));
-      settingsCache.set('module_decodeur_enabled', String(moduleDecodeurEnabled));
       settingsCache.set('module_social_enabled', String(moduleSocialEnabled));
     }
     setModulesLoading(false);
@@ -1897,7 +1893,7 @@ export default function Settings() {
                     className="p-5 border border-stone-200/40 text-stone-700 italic text-sm font-light leading-relaxed"
                   >
                     <span style={{ fontFamily: 'var(--preview-font-headings)' }} className="font-bold block text-stone-900 not-italic mb-1">Citation ou Témoignage</span>
-                    « Ce voyage intérieur à travers le Rêve Éveillé Libre m'a permis de dénouer des blocages profonds. Une expérience transformatrice. »
+                    « Un vrai moment pour soi, dans un cadre chaleureux. On ressort le teint reposé et la tête légère. »
                   </div>
                 </div>
               </div>
@@ -2133,7 +2129,6 @@ export default function Settings() {
                   { label: "Génération IA d'article", desc: "Bouton de rédaction assistée par IA dans l'éditeur d'articles.", value: moduleAiEnabled, setter: setModuleAiEnabled },
                   { label: 'Événements / Ateliers', desc: 'Pages /ateliers, admin Événements et inscriptions/paiement.', value: moduleEventsEnabled, setter: setModuleEventsEnabled },
                   { label: 'Newsletter', desc: "Admin Newsletter (envoi d'e-mails), formulaires d'inscription et bannière sur le site.", value: moduleNewsletterEnabled, setter: setModuleNewsletterEnabled },
-                  { label: 'Décodeur', desc: 'Page /decodeur, admin Décodeur et séquence e-mail associée.', value: moduleDecodeurEnabled, setter: setModuleDecodeurEnabled },
                   { label: 'Réseaux Sociaux', desc: "Génération de contenu Instagram/LinkedIn/Facebook (articles, flux RSS, suggestions), calendrier et automatisation.", value: moduleSocialEnabled, setter: setModuleSocialEnabled },
                 ].map((mod) => (
                   <div key={mod.label} className="flex items-start gap-4 py-3 border-b border-stone-50 last:border-0">
