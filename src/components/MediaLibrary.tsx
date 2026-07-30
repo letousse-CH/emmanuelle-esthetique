@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
 import { X, Upload, Trash2, Image as ImageIcon, Copy, Check } from 'lucide-react';
+import AddMediaByUrl from './AddMediaByUrl';
 
 interface MediaLibraryProps {
   onClose: () => void;
@@ -166,6 +167,12 @@ export default function MediaLibrary({ onClose, onSelect }: MediaLibraryProps) {
             />
           </label>
         </div>
+
+        {/* Ajout par URL — utilisable même sans stockage configuré */}
+        <AddMediaByUrl
+          className="px-6 py-3 border-b border-stone-100 bg-white shrink-0"
+          onAdded={(asset) => setMedias((prev) => [asset, ...prev])}
+        />
 
         <div className="flex-1 overflow-y-auto p-6 bg-stone-50">
           {loading ? (

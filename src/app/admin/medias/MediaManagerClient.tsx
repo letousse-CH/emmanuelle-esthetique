@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../../../services/supabase';
 import { Upload, Trash2, Copy, CheckCircle, Zap, Image as ImageIcon } from 'lucide-react';
+import AddMediaByUrl from '../../../components/AddMediaByUrl';
 
 interface MediaAsset {
   id: string;
@@ -349,6 +350,14 @@ export default function MediaManager() {
           />
         </label>
       </div>
+
+      {/* Ajout par URL — seul chemin disponible tant que R2 n'est pas
+          configuré (l'upload de fichier répond alors 501). */}
+      <AddMediaByUrl
+        variant="card"
+        className="mb-6"
+        onAdded={(asset) => setMedias((prev) => [asset, ...prev])}
+      />
 
       {/* Compression info capsule */}
       <div className="flex items-center gap-2 mb-6 text-[11px] text-stone-400 uppercase tracking-widest font-bold">
