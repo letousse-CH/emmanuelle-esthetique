@@ -1,7 +1,7 @@
 /**
  * Automatisation planifiée du contenu réseaux sociaux — à appeler
  * périodiquement par un déclencheur externe (ce projet n'a pas de scheduler
- * intégré ; même principe que /api/cron/quiz-sequence). Détecte les
+ * intégré ; même principe que /api/cron/publish). Détecte les
  * nouveaux articles/entrées RSS/suggestions et pré-génère du contenu prêt à
  * relire dans le calendrier admin (/admin/social).
  */

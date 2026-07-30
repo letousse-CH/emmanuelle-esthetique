@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
 import { SITE_CONFIG } from '../../../config/site';
+import { verifyUnsubToken } from '../../../utils/unsubToken';
 
 function renderHtmlPage(title: string, message: string, isError = false): string {
   return `<!DOCTYPE html>
@@ -47,27 +47,8 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  let email: string;
-  try {
-    const decoded = decodeURIComponent(encoded);
-    const dotIdx = decoded.lastIndexOf('.');
-    if (dotIdx === -1) throw new Error('format invalide');
-    const emailB64 = decoded.slice(0, dotIdx);
-    const receivedHmac = decoded.slice(dotIdx + 1);
-    const candidate = Buffer.from(emailB64, 'base64url').toString('utf-8').trim();
-
-    const secret = process.env.UNSUB_SECRET || '';
-    const expectedHmac = crypto.createHmac('sha256', secret).update(candidate).digest('hex');
-
-    if (
-      receivedHmac.length !== expectedHmac.length ||
-      !crypto.timingSafeEqual(Buffer.from(receivedHmac, 'hex'), Buffer.from(expectedHmac, 'hex'))
-    ) {
-      throw new Error('signature invalide');
-    }
-    email = candidate;
-    if (!email.includes('@')) throw new Error('email invalide');
-  } catch (err) {
+  const email = verifyUnsubToken(encoded);
+  if (!email) {
     return new NextResponse(
       renderHtmlPage('Lien invalide', 'Ce lien de désinscription est invalide ou expiré.', true),
       {

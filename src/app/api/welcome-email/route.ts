@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
 import { SITE_CONFIG } from '../../../config/site';
 import { sendEmail } from '../../../services/email';
+import { buildUnsubToken, isUnsubConfigured } from '../../../utils/unsubToken';
 
 const SESSION_URL = `${SITE_CONFIG.url}/soins`;
 
@@ -23,13 +23,6 @@ function expiryDate(): string {
   const d = new Date();
   d.setMonth(d.getMonth() + 1);
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-function buildUnsubToken(email: string): string {
-  const secret = process.env.UNSUB_SECRET || '';
-  const emailB64 = Buffer.from(email).toString('base64url');
-  const hmac = crypto.createHmac('sha256', secret).update(email).digest('hex');
-  return encodeURIComponent(`${emailB64}.${hmac}`);
 }
 
 function buildWelcomeHtml(email: string, promoCode: string, promoAmount: string): string {
@@ -123,6 +116,14 @@ export async function POST(req: NextRequest) {
 
     if (!token) {
       return NextResponse.json({ error: 'Non autorisé. Token manquant.' }, { status: 401 });
+    }
+
+    // Pas d'envoi sans lien de désinscription vérifiable (voir utils/unsubToken).
+    if (!isUnsubConfigured()) {
+      return NextResponse.json(
+        { error: "UNSUB_SECRET n'est pas configuré : le lien de désinscription serait invalide." },
+        { status: 501 }
+      );
     }
 
     const { email } = await req.json();

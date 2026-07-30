@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
 import { SITE_CONFIG } from '../../../config/site';
 import { sendEmail } from '../../../services/email';
-
-function buildUnsubToken(email: string): string {
-  const secret = process.env.UNSUB_SECRET || '';
-  const emailB64 = Buffer.from(email).toString('base64url');
-  const hmac = crypto.createHmac('sha256', secret).update(email).digest('hex');
-  return encodeURIComponent(`${emailB64}.${hmac}`);
-}
+import { buildUnsubToken, isUnsubConfigured } from '../../../utils/unsubToken';
 
 function buildNewsletterHtml(email: string, contentHtml: string): string {
   const unsubToken = buildUnsubToken(email);
@@ -61,6 +54,15 @@ export async function POST(req: NextRequest) {
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Session invalide ou expirée.' }, { status: 401 });
+    }
+
+    // Une newsletter sans lien de désinscription vérifiable n'est pas
+    // envoyable (obligation légale, et le lien serait forgeable).
+    if (!isUnsubConfigured()) {
+      return NextResponse.json(
+        { error: "Envoi impossible : la variable d'environnement UNSUB_SECRET n'est pas configurée, le lien de désinscription serait invalide." },
+        { status: 501 }
+      );
     }
 
     const { subject, html, testEmail } = await req.json();

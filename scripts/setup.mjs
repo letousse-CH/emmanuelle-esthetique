@@ -9,6 +9,7 @@
  */
 import { createInterface } from 'node:readline/promises';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -104,6 +105,12 @@ async function main() {
 
   // ── .env.local ────────────────────────────────────────────
   const existing = existsSync(ENV_PATH) ? readFileSync(ENV_PATH, 'utf8') : '';
+
+  // Le secret de désinscription ne doit être tiré qu'une seule fois : le faire
+  // tourner invaliderait les liens des e-mails déjà partis. On ne le régénère
+  // donc que s'il est absent (ou vide) du .env.local existant.
+  const hasUnsubSecret = /^UNSUB_SECRET=.+$/m.test(existing);
+
   const envValues = {
     NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
@@ -123,6 +130,9 @@ async function main() {
     GOOGLE_PLACES_API_KEY: googlePlacesApiKey,
     GOOGLE_PLACE_ID: googlePlaceId,
     CRON_SECRET: cronSecret,
+    // Secret de signature des liens de désinscription : aucune raison de le
+    // demander, on le tire au sort. Sans lui, les envois d'e-mails sont bloqués.
+    UNSUB_SECRET: hasUnsubSecret ? '' : randomBytes(32).toString('hex'),
   };
   writeFileSync(ENV_PATH, mergeEnvFile(existing, envValues));
   console.log(`\n✓ .env.local écrit (${ENV_PATH})`);

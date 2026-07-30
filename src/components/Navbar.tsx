@@ -13,10 +13,10 @@ import { Menu, X, ChevronDown } from 'lucide-react';
 import { useSettings, settingsCache } from '../hooks/useSettings';
 import { useModuleFlags } from '../hooks/useModuleFlags';
 
-const images = {
-  logo: "",
-  logoPlaceholder: "",
-};
+// Pas de logo par défaut : tant qu'aucun fichier n'est déposé dans
+// Paramètres > Design & Style, la navbar affiche le nom du site en toutes
+// lettres (voir plus bas). Un `src=""` ferait recharger la page entière par le
+// navigateur en plus d'afficher une image cassée.
 
 function readHeroColor(): 'dark' | 'light' {
   try {
@@ -47,7 +47,7 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
   }
   const settings = useSettings(['global_logo', 'navigation_menu', 'header_register_link']);
   const moduleFlags = useModuleFlags();
-  const logoUrl = settings.global_logo || images.logo;
+  const logoUrl = settings.global_logo;
   const registerLink = settings.header_register_link || '/contact';
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -55,10 +55,9 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
   const [heroColor, setHeroColor] = useState<'dark' | 'light'>('dark');
   const pathname = usePathname();
 
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    e.currentTarget.src = images.logoPlaceholder;
-    e.currentTarget.onerror = null;
-  };
+  // Si l'URL du logo est cassée (média supprimé, bucket renommé), on bascule
+  // sur le nom en toutes lettres plutôt que de laisser une image cassée.
+  const [logoBroken, setLogoBroken] = useState(false);
 
   // Pages dont la première section est sombre : les liens de la navbar
   // transparente s'y affichent en blanc. Les pages du CMS émettent en plus
@@ -130,16 +129,25 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
     <nav className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-6'}`} data-light={lightMode ? 'true' : undefined}>
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
         <Link href="/" className="flex items-center gap-3 group">
-          <div className={`transition-all duration-500 bg-transparent shrink-0 ${scrolled ? 'h-[80px] w-[225px]' : 'h-[88px] w-[250px]'}`}>
-            <img
-              src={logoUrl}
-              onError={handleImageError}
-              alt="Emmanuelle Esthétique — retour à l'accueil"
-              className="w-full h-full object-contain"
-              referrerPolicy="no-referrer"
-              width={250}
-              height={88}
-            />
+          <div className={`transition-all duration-500 bg-transparent shrink-0 flex items-center ${scrolled ? 'h-[80px] w-[225px]' : 'h-[88px] w-[250px]'}`}>
+            {logoUrl && !logoBroken ? (
+              <img
+                src={logoUrl}
+                onError={() => setLogoBroken(true)}
+                alt="Emmanuelle Esthétique — retour à l'accueil"
+                className="w-full h-full object-contain"
+                referrerPolicy="no-referrer"
+                width={250}
+                height={88}
+              />
+            ) : (
+              <span className="font-serif text-2xl leading-tight tracking-wide">
+                Emmanuelle
+                <span className="block text-xs tracking-[0.25em] uppercase opacity-70">
+                  Esthétique
+                </span>
+              </span>
+            )}
           </div>
         </Link>
 

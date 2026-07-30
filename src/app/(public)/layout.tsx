@@ -1,5 +1,6 @@
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
+import PageViewTracker from '../../components/PageViewTracker';
 import { getSettingsServer } from '../../services/settingsServer';
 
 export default async function PublicLayout({
@@ -24,6 +25,7 @@ export default async function PublicLayout({
 
   return (
     <>
+      <PageViewTracker />
       <Navbar
         initialLogoUrl={settings.global_logo}
         initialNavigationMenu={settings.navigation_menu}

@@ -4,9 +4,8 @@ import Link from 'next/link';
 import { Instagram, Linkedin, Youtube, Music2 } from 'lucide-react';
 import { useSettings, settingsCache } from '../hooks/useSettings';
 
-const images = {
-  logo: "",
-};
+// Pas de logo par défaut : l'affichage est conditionné à un logo réellement
+// renseigné dans Paramètres > Design & Style.
 
 interface NavItem { name: string; path?: string; type?: string; children?: NavItem[] }
 
@@ -81,7 +80,7 @@ export default function Footer({ initialLogoUrl, initialFooterImage, initialNavi
     'business_address_region',
   ]);
 
-  const logoUrl = settings.footer_logo || settings.global_logo || images.logo;
+  const logoUrl = settings.footer_logo || settings.global_logo;
 
   let navLinks: { name: string; path: string }[] = [];
   try {
@@ -110,13 +109,17 @@ export default function Footer({ initialLogoUrl, initialFooterImage, initialNavi
 
           {/* Colonne gauche : image */}
           <div className="flex justify-center md:justify-start">
-            <img
-              src={settings.footer_image}
-              alt={`${settings.business_name} — institut à domicile à ${settings.business_address_city}`}
-              className="w-56 md:w-72 object-cover rounded-2xl"
-              loading="lazy"
-              decoding="async"
-            />
+            {/* Tant qu'aucune image n'est choisie dans l'admin, on n'affiche
+                rien : un `src=""` fait recharger la page entière. */}
+            {settings.footer_image && (
+              <img
+                src={settings.footer_image}
+                alt={`${settings.business_name} — institut à domicile à ${settings.business_address_city}`}
+                className="w-56 md:w-72 object-cover rounded-2xl"
+                loading="lazy"
+                decoding="async"
+              />
+            )}
           </div>
 
           {/* Colonne centrale : tagline */}

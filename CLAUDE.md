@@ -49,9 +49,18 @@ src/
   config/         # SITE_CONFIG, modules.ts (feature flags)
   constants/      # SETTINGS_DEFAULTS (valeurs par défaut de la table settings)
 supabase/
-  migrations/     # Migrations SQL versionnées (settings, articles, events)
+  migrations/     # Migrations SQL versionnées — seule source de vérité du schéma
 scripts/
   setup.mjs       # Assistant d'installation (npm run setup)
+```
+
+`supabase/migrations/` couvre **toutes** les tables utilisées par le code. Les
+scripts SQL ad-hoc qui traînaient à la racine de `supabase/` (dont ceux du site
+précédent : `quiz_*`) ont été supprimés — pour vérifier qu'aucune table
+n'échappe aux migrations :
+
+```bash
+comm -23 <(grep -rhoE "\.from\('[a-z_]+'\)" src | sed "s/\.from('//;s/')//" | sort -u) <(grep -rhoiE "CREATE TABLE (IF NOT EXISTS )?[a-z_]+" supabase/migrations/ | sed -E 's/.* //' | sort -u)
 ```
 
 Il n'y a plus de `server.ts` Express ni de prerender Puppeteer : Next.js gère le
@@ -107,6 +116,23 @@ Pour activer l'upload de fichiers, renseigner les cinq variables R2
 `/api/upload-media` répond `501` avec la liste des variables absentes au lieu
 d'une erreur S3 opaque. Le sous-domaine public `pub-xxxx.r2.dev` d'un bucket
 suffit : pas besoin de domaine personnalisé.
+
+## E-mails & désinscription
+
+Tous les liens de désinscription sont signés en HMAC-SHA256 avec `UNSUB_SECRET`
+(`src/utils/unsubToken.ts`). Ce secret **n'a pas de repli** : signer avec une
+clé vide rendrait le lien reproductible, donc n'importe qui pourrait désinscrire
+l'adresse d'un tiers. Tant qu'il n'est pas défini, `/api/send-newsletter` et
+`/api/welcome-email` répondent `501` au lieu d'envoyer.
+
+Le générer une fois (`npm run setup` le fait automatiquement) :
+
+```bash
+openssl rand -hex 32
+```
+
+Ne jamais le faire tourner ensuite : cela invaliderait les liens des e-mails
+déjà partis.
 
 ## Contenu des pages
 
