@@ -170,7 +170,9 @@ export default function EditableImage({
   };
 
   const imgStyle = { objectPosition, ...style };
-  const canEdit  = (isAdmin || pageEditor?.isEditing) && (!!settingKey || !!fieldPath);
+  // Même règle que EditableText : un `fieldPath` sans contexte page builder
+  // (aperçu de l'éditeur admin) enregistrait dans `settings` avec une clé vide.
+  const canEdit  = (isAdmin && !!settingKey) || (!!fieldPath && !!pageEditor?.isEditing);
 
   // ── Non-admin : simple img ────────────────────────────────────────────────────
   if (!canEdit) {

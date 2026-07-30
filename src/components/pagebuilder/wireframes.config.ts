@@ -352,7 +352,10 @@ export const WIREFRAME_REGISTRY: Record<SectionType, WireframeEntry> = {
     component: Marquee1,
     description: 'Bandeau défilant (marquee) avec mots personnalisés, couleur de fond, séparateur et vitesse',
     dataSchema: {
-      'items[]': 'string (texte défilant)',
+      // Déclaré comme string[] : les clés en `xxx[]` sont ignorées par
+      // FieldEditor (réservées aux cartes), les mots du bandeau étaient donc
+      // impossibles à modifier depuis le panneau.
+      items: 'string[] (texte défilant)',
       bg_color: 'string couleur CSS (optionnel)',
       text_color: 'string couleur CSS (optionnel)',
       separator: "'★' | '●' | '•' | '◆' | '—' | '/' | '|' (optionnel)",

@@ -6,6 +6,26 @@ import { Check } from 'lucide-react';
 import { PageEditorContext } from '../../contexts/PageEditorContext';
 import { fetchAllSettings, settingsCache } from '../../hooks/useSettings';
 
+/**
+ * Convertit l'HTML d'un bloc contentEditable vers la valeur stockée : les sauts
+ * de ligne redeviennent des `\n` (convention de stockage, voir le rendu plus
+ * bas), les blocs que le navigateur insère au passage à la ligne sont aplatis,
+ * et le balisage de mise en forme (gras, italique, liens) est conservé.
+ */
+function htmlToStoredValue(html: string): string {
+  return html
+    // `<div>` est l'artefact que les navigateurs insèrent à chaque retour à la
+    // ligne dans un bloc contentEditable — on le ramène à un simple `\n`. Le
+    // reste du balisage (gras, italique, liens, titres, listes) est conservé.
+    .replace(/<div><br\s*\/?><\/div>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<div[^>]*>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 interface EditableTextProps {
   settingKey?: string;
   value: string;
@@ -73,7 +93,11 @@ export default function EditableText({
 
   const handleBlur = async (e: FormEvent<HTMLElement>) => {
     setIsEditing(false);
-    const newValue = e.currentTarget.innerText.trim();
+    // On relit l'innerHTML, pas l'innerText : la valeur est réaffichée via
+    // dangerouslySetInnerHTML et peut contenir du gras, de l'italique ou des
+    // liens posés depuis le panneau d'édition. `innerText` les effaçait à la
+    // première modification en ligne.
+    const newValue = htmlToStoredValue(e.currentTarget.innerHTML);
     if (newValue !== currentValue) {
       const oldValue = currentValue;
       setCurrentValue(newValue);
@@ -116,8 +140,39 @@ export default function EditableText({
     setIsEditing(true);
   };
 
-  // En mode Dynamic Page, si isEditing est forcé par le contexte, on le gère.
-  if ((!isAdmin && !pageEditor?.isEditing) || (!settingKey && !fieldPath)) {
+  /** Collage en texte brut : évite d'injecter le balisage de Word ou d'un site. */
+  const handlePaste = (e: React.ClipboardEvent<HTMLElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+  };
+
+  /** Échap annule la modification en cours, Ctrl/⌘+Entrée valide. */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (contentEditableRef.current) {
+        contentEditableRef.current.innerHTML = (currentValue || '').replace(/\n/g, '<br/>');
+      }
+      setIsEditing(false);
+      contentEditableRef.current?.blur();
+    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      contentEditableRef.current?.blur();
+    }
+  };
+
+  /*
+   * Deux modes d'édition seulement :
+   *  — `settingKey` : réglage global, écrit dans la table `settings` ;
+   *  — `fieldPath` + contexte page builder : écrit dans la section.
+   * Un `fieldPath` sans contexte (aperçu de l'éditeur admin) rendait le texte
+   * modifiable alors que l'enregistrement retombait sur la branche `settings`
+   * avec une clé vide — la saisie était perdue et polluait la table.
+   */
+  const canEdit = (isAdmin && !!settingKey) || (!!fieldPath && !!pageEditor?.isEditing);
+
+  if (!canEdit) {
     return <Component className={className} data-no-edit="true" dangerouslySetInnerHTML={{ __html: (currentValue || '').replace(/\n/g, '<br/>') }} />;
   }
 
@@ -129,8 +184,11 @@ export default function EditableText({
         suppressContentEditableWarning
         onBlur={handleBlur}
         onFocus={handleFocus}
+        onPaste={handlePaste}
+        onKeyDown={handleKeyDown}
+        title={isEditing ? 'Échap pour annuler — ⌘/Ctrl + Entrée pour valider' : 'Cliquer pour modifier ce texte'}
         className={`outline-none transition-all duration-200 ${
-          isEditing ? 'ring-2 ring-stone-400 bg-stone-100/80 rounded px-1 text-stone-900' : 'hover:outline-dashed hover:outline-1 hover:outline-stone-300 rounded'
+          isEditing ? 'ring-2 ring-stone-400 bg-stone-100/80 rounded px-1 text-stone-900' : 'hover:outline-dashed hover:outline-1 hover:outline-stone-300 rounded cursor-text'
         } ${className}`}
         dangerouslySetInnerHTML={{ __html: (currentValue || '').replace(/\n/g, '<br/>') }}
         data-no-edit="true"

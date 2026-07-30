@@ -524,6 +524,7 @@ export interface Features1Data {
   cta_href?: string;
   show_image?: boolean;
   image_url?: string;
+  image_url_pos?: string;
   image_alt?: string;
   image_position?: 'left' | 'right';
   stretch_image?: boolean;
@@ -587,7 +588,7 @@ export function Features1({ data, sectionIndex }: { data: Features1Data, section
         contentClassName={`max-w-6xl mx-auto grid lg:grid-cols-[1fr_480px] gap-16 ${stretchImg ? 'items-stretch' : 'items-center'}`}>
         <div className={`relative overflow-hidden rounded-3xl ${isImageRight ? 'lg:order-last' : ''} ${stretchImg ? 'h-full min-h-[350px]' : 'h-[55vw] lg:h-[520px] min-h-[300px]'}`}>
           <EditableImage sectionIndex={sectionIndex} fieldPath="image_url" src={data.image_url!} alt={data.image_alt || data.title}
-            className="w-full h-full object-cover" loading="lazy" />
+            className="w-full h-full object-cover" loading="lazy" initialPosition={data.image_url_pos} />
           <div className="absolute inset-0 bg-gradient-to-t from-stone-900/20 to-transparent pointer-events-none" />
         </div>
         <div className={`flex flex-col justify-center ${isImageRight ? 'lg:order-first' : ''}`}>{content}</div>
@@ -624,6 +625,7 @@ export interface Features2Data {
   cards: Features2Card[];
   show_image?: boolean;
   image_url?: string;
+  image_url_pos?: string;
   image_alt?: string;
   image_position?: 'left' | 'right';
   cards_theme?: 'light' | 'dark';
@@ -685,7 +687,7 @@ export function Features2({ data, sectionIndex }: { data: Features2Data, section
         contentClassName={`max-w-6xl mx-auto grid lg:grid-cols-[420px_1fr] gap-16 ${stretchImg ? 'items-stretch' : 'items-center'}`}>
         <div className={`relative overflow-hidden rounded-3xl ${isImageRight ? 'lg:order-last' : ''} ${stretchImg ? 'h-full min-h-[450px]' : 'h-[60vw] lg:h-[560px] min-h-[400px]'}`}>
           <EditableImage sectionIndex={sectionIndex} fieldPath="image_url" src={data.image_url!} alt={data.image_alt || data.title}
-            className="w-full h-full object-cover" loading="lazy" />
+            className="w-full h-full object-cover" loading="lazy" initialPosition={data.image_url_pos} />
           <div className="absolute inset-0 bg-gradient-to-t from-stone-900/20 to-transparent pointer-events-none" />
         </div>
         <div className={`flex flex-col justify-center ${isImageRight ? 'lg:order-first' : ''}`}>
@@ -1060,6 +1062,9 @@ export function TextImage1({ data, sectionIndex }: { data: TextImage1Data, secti
 // ─── GALLERY SECTIONS (Relume Inspired) ───────────────────────────────────────
 export interface GalleryCard {
   image: string;
+  // Cadrage choisi via le bouton « Position » de l'image : il était enregistré
+  // mais jamais relu, le recadrage disparaissait donc au rechargement.
+  image_pos?: string;
   title?: string;
   description?: string;
   link?: string;
@@ -1130,6 +1135,7 @@ export function GalleryGrid({ data, sectionIndex }: { data: GalleryGridData, sec
                   sectionIndex={sectionIndex} 
                   fieldPath={`cards.${i}.image`} 
                   src={card.image || 'https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=800'} 
+                  initialPosition={card.image_pos}
                   alt={card.title || ""}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   loading="lazy"
@@ -1240,6 +1246,7 @@ export function GalleryCarousel({ data, sectionIndex }: { data: GalleryCarouselD
                     sectionIndex={sectionIndex} 
                     fieldPath={`cards.${i}.image`} 
                     src={card.image || 'https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=800'} 
+                    initialPosition={card.image_pos}
                     alt={card.title || ""}
                     className="w-full h-full object-cover"
                     loading="lazy"
@@ -1353,6 +1360,7 @@ export function GalleryMasonry({ data, sectionIndex }: { data: GalleryMasonryDat
                   sectionIndex={sectionIndex} 
                   fieldPath={`cards.${i}.image`} 
                   src={card.image || 'https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=800'} 
+                  initialPosition={card.image_pos}
                   alt={card.title || ""}
                   className="w-full h-auto object-cover group-hover:scale-[1.03] transition-transform duration-500"
                   loading="lazy"

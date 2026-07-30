@@ -78,16 +78,23 @@ function RichTextarea({
     if (!el) return;
     const start = el.selectionStart;
     const end = el.selectionEnd;
-    const selected = value.slice(start, end) || 'texte du lien';
-    const url = window.prompt('URL du lien :', 'https://');
-    if (!url) return;
-    wrap(`<a href="${url}">`, '</a>');
-    // si rien n'était sélectionné, on injecte un libellé par défaut
-    if (start === end) {
-      const open = `<a href="${url}">`;
-      const next = value.slice(0, start) + open + selected + '</a>' + value.slice(end);
-      onChange(next);
+    const raw = window.prompt('URL du lien :', 'https://');
+    if (!raw) return;
+    const url = raw.trim();
+    // Le contenu est réinjecté via dangerouslySetInnerHTML côté page publique :
+    // on refuse les schémas exécutables (javascript:, data:).
+    if (/^\s*(javascript|data|vbscript):/i.test(url)) {
+      window.alert('URL refusée : seuls les liens http(s), mailto:, tel: et les chemins internes (/…) sont acceptés.');
+      return;
     }
+    const label = value.slice(start, end) || 'texte du lien';
+    const open = `<a href="${url.replace(/"/g, '&quot;')}">`;
+    const next = value.slice(0, start) + open + label + '</a>' + value.slice(end);
+    onChange(next);
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + open.length, start + open.length + label.length);
+    }, 0);
   };
 
   const btn = 'px-1.5 py-0.5 border border-stone-200 rounded text-[10px] font-bold text-stone-600 hover:bg-stone-100 transition-colors';
@@ -129,6 +136,167 @@ const BG_PRESETS = [
   { name: 'Taupe', value: '#3A3730' },
   { name: 'Terracotta', value: '#C08768' },
 ];
+
+/**
+ * Libellés lisibles des champs — l'éditeur affichait jusqu'ici la clé technique
+ * brute (`cta_primary_href`, `bg_image_opacity`…), illisible pour l'éditrice du
+ * site. Toute clé absente de cette table retombe sur un formatage automatique.
+ */
+const FIELD_LABELS: Record<string, string> = {
+  eyebrow: 'Sur-titre',
+  title: 'Titre',
+  title_italic: 'Titre — suite en italique',
+  title_bold: 'Titre — suite en gras',
+  description: 'Description',
+  content: 'Contenu',
+  text: 'Texte',
+  quote: 'Citation',
+  author: 'Auteur',
+  role: 'Rôle / fonction',
+  items: 'Liste de points',
+  cta_text: 'Bouton — libellé',
+  cta_href: 'Bouton — lien',
+  cta_primary_text: 'Bouton principal — libellé',
+  cta_primary_href: 'Bouton principal — lien',
+  cta_secondary_text: 'Bouton secondaire — libellé',
+  cta_secondary_href: 'Bouton secondaire — lien',
+  button_style: 'Couleur du bouton',
+  image_url: 'Image',
+  image_alt: 'Image — texte alternatif',
+  image_opacity: "Opacité de l'image",
+  image_position: "Position de l'image",
+  image_width: "Taille de l'image",
+  show_image: "Afficher l'image",
+  stretch_image: "Étirer l'image en hauteur",
+  ratio: 'Proportion image / texte',
+  bg_image: 'Image de fond',
+  bg_image_opacity: "Opacité de l'image de fond",
+  bg_image_position: "Cadrage de l'image de fond",
+  bg_color: 'Couleur de fond',
+  text_color: 'Couleur du texte',
+  min_height: 'Hauteur minimale',
+  columns: 'Nombre de colonnes',
+  separator: 'Séparateur',
+  speed: 'Vitesse de défilement',
+  italic: 'Texte en italique',
+  badge: 'Badge',
+  price: 'Prix',
+  price_original: 'Prix barré',
+  price_note: 'Note sous le prix',
+  footnote: 'Note de bas de section',
+  guarantee: 'Garantie',
+  theme: 'Thème',
+  cards_theme: 'Thème des cartes',
+  // Champs de cartes
+  icon: 'Icône (emoji)',
+  link: 'Lien',
+  link_text: 'Lien — libellé',
+  link_href: 'Lien — URL',
+  image: 'Image',
+  alt: 'Texte alternatif',
+  question: 'Question',
+  answer: 'Réponse',
+  name: 'Nom',
+  date: 'Date',
+  rating: 'Note',
+  value: 'Valeur',
+  label: 'Légende',
+};
+
+function labelFor(key: string): string {
+  if (FIELD_LABELS[key]) return FIELD_LABELS[key];
+  const pretty = key.replace(/_/g, ' ');
+  return pretty.charAt(0).toUpperCase() + pretty.slice(1);
+}
+
+/** Les champs `*_href`, `*_url` et libellés courts tiennent sur une seule ligne. */
+const SINGLE_LINE_RE = /(_href|_url|_alt|^slug$|^icon$|^separator$)/;
+
+/** Libellés des valeurs d'énumération affichées en boutons segmentés. */
+const ENUM_LABELS: Record<string, string> = {
+  slow: 'Lente',
+  normal: 'Normale',
+  fast: 'Rapide',
+};
+
+/** Extrait les valeurs d'une union littérale du schéma : "'2' | '3' | '4'". */
+function parseEnumHint(hint: string): string[] | null {
+  const matches = hint.match(/'([^']*)'/g);
+  if (!matches || matches.length < 2) return null;
+  return matches.map((m) => m.slice(1, -1));
+}
+
+function moveInArray<T>(arr: T[], from: number, to: number): T[] {
+  if (to < 0 || to >= arr.length) return arr;
+  const next = [...arr];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function ColorField({
+  label,
+  value,
+  onChange,
+  presets = BG_PRESETS,
+  fallback = '#ffffff',
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  presets?: { name: string; value: string }[];
+  fallback?: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{label}</label>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="text-[10px] text-stone-400 hover:text-red-500 flex items-center gap-0.5 transition-colors cursor-pointer"
+          >
+            <RotateCcw size={9} /> Réinitialiser
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {presets.map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => onChange(p.value)}
+            style={{ backgroundColor: p.value }}
+            title={p.name}
+            aria-label={p.name}
+            className={`w-6 h-6 rounded-full border transition-all cursor-pointer shrink-0 ${
+              value?.toLowerCase() === p.value.toLowerCase()
+                ? 'border-sage ring-2 ring-sage/40 scale-110 shadow'
+                : 'border-stone-300 hover:scale-110'
+            }`}
+          />
+        ))}
+        <div className="relative w-6 h-6 rounded-full border border-stone-300 overflow-hidden shrink-0">
+          <input
+            type="color"
+            value={value || fallback}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 w-[150%] h-[150%] -translate-x-[15%] -translate-y-[15%] cursor-pointer border-none p-0"
+            title="Couleur personnalisée"
+          />
+        </div>
+        <input
+          type="text"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Auto"
+          className="flex-1 min-w-0 border border-stone-200 rounded px-2 py-1 text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-sage text-stone-700"
+        />
+      </div>
+    </div>
+  );
+}
 const CARD_FIELDS_BY_TYPE: Record<string, string[]> = {
   features_2: ['title', 'description', 'icon', 'link_text', 'link_href', 'theme'],
   features_3: ['title', 'description', 'items', 'cta_text', 'cta_href', 'badge', 'theme'],
@@ -166,90 +334,71 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
 
   return (
     <div className="space-y-3">
-      {/* ── Couleur de fond — toujours visible ── */}
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Couleur de fond</label>
-          {(data.bg_color as string | undefined) && (
-            <button onClick={() => onUpdate(i, 'bg_color', '')} className="text-[10px] text-stone-400 hover:text-red-500 flex items-center gap-0.5 transition-colors">
-              <RotateCcw size={9} /> Reset
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {BG_PRESETS.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => onUpdate(i, 'bg_color', p.value)}
-              style={{ backgroundColor: p.value }}
-              title={p.name}
-              className={`w-6 h-6 rounded-full border transition-all cursor-pointer shrink-0 ${
-                (data.bg_color as string | undefined)?.toLowerCase() === p.value.toLowerCase()
-                  ? 'border-sage ring-2 ring-sage/40 scale-110 shadow'
-                  : 'border-stone-300 hover:scale-110'
-              }`}
-            />
-          ))}
-          <div className="relative w-6 h-6 rounded-full border border-stone-300 overflow-hidden shrink-0">
-            <input
-              type="color"
-              value={(data.bg_color as string | undefined) || '#ffffff'}
-              onChange={(e) => onUpdate(i, 'bg_color', e.target.value)}
-              className="absolute inset-0 w-[150%] h-[150%] -translate-x-[15%] -translate-y-[15%] cursor-pointer border-none p-0"
-              title="Couleur personnalisée"
-            />
-          </div>
-          <input
-            type="text"
-            value={(data.bg_color as string | undefined) || ''}
-            onChange={(e) => onUpdate(i, 'bg_color', e.target.value)}
-            placeholder="Auto"
-            className="flex-1 min-w-0 border border-stone-200 rounded px-2 py-1 text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-sage text-stone-700"
-          />
-        </div>
-      </div>
+      {/* ── Couleur de fond — toujours visible (toutes les sections la gèrent) ── */}
+      <ColorField
+        label={labelFor('bg_color')}
+        value={(data.bg_color as string | undefined) || ''}
+        onChange={(v) => onUpdate(i, 'bg_color', v)}
+      />
 
-      {/* ── Thème ☀️ / 🌙 — toujours en premier ── */}
-      <div>
-        <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">Thème</label>
-        <div className="flex gap-2">
-          {(['light', 'dark'] as const).map((opt) => {
-            const current = (data.theme as string | undefined) ?? (section.type === 'cta_1' ? 'dark' : 'light');
-            return (
-              <button
-                key={opt}
-                onClick={() => onUpdate(i, 'theme', opt)}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                  current === opt
-                    ? opt === 'dark'
-                      ? 'bg-stone-900 text-white border-stone-900'
-                      : 'bg-stone-50 text-stone-900 border-stone-300 shadow'
-                    : 'border-stone-200 text-stone-400 hover:border-stone-400'
-                }`}
-              >
-                {opt === 'light' ? '☀️ Clair' : '🌙 Sombre'}
-              </button>
-            );
-          })}
+      {/* ── Thème ☀️ / 🌙 — uniquement pour les sections qui le gèrent ── */}
+      {'theme' in schema && (
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">Thème</label>
+          <div className="flex gap-2">
+            {(['light', 'dark'] as const).map((opt) => {
+              const current = (data.theme as string | undefined) ?? (section.type === 'cta_1' ? 'dark' : 'light');
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => onUpdate(i, 'theme', opt)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                    current === opt
+                      ? opt === 'dark'
+                        ? 'bg-stone-900 text-white border-stone-900'
+                        : 'bg-stone-50 text-stone-900 border-stone-300 shadow'
+                      : 'border-stone-200 text-stone-400 hover:border-stone-400'
+                  }`}
+                >
+                  {opt === 'light' ? '☀️ Clair' : '🌙 Sombre'}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Champs scalaires du schema (hors cards, theme, button_style) ── */}
       {Object.entries(schema).map(([key, typeHint]) => {
         if (key.includes('[]')) return null;
         if (key === 'cards') return null;
-        if (key === 'theme') return null; // affiché ci-dessus
+        if (key === 'theme') return null;   // affiché ci-dessus
+        if (key === 'bg_color') return null; // idem — évitait un doublon sur marquee_1 / pricing_1
 
         const val = data[key];
         const hint = typeHint as string;
         const isImage = hint === 'image (optionnel)' || hint.startsWith('image');
         const isArray = hint.startsWith('string[]') || hint.startsWith('array');
 
+        // ── Couleur (autre que bg_color, ex. text_color du bandeau défilant) ──
+        if (key.endsWith('_color') || hint.includes('couleur')) {
+          return (
+            <ColorField
+              key={key}
+              label={labelFor(key)}
+              value={String(val ?? '')}
+              onChange={(v) => onUpdate(i, key, v)}
+              fallback="#000000"
+            />
+          );
+        }
+
         // ── Thème des cartes ──
         if (key === 'cards_theme') {
           return (
             <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">Thème des cartes</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
               <div className="flex gap-2">
                 {(['light', 'dark'] as const).map((opt) => (
                   <button
@@ -288,7 +437,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
                 htmlFor={`field-${i}-${key}`}
                 className="text-xs font-bold text-stone-700 cursor-pointer select-none"
               >
-                {key === 'show_image' ? "Afficher l'image" : key === 'stretch_image' ? "Étirer l'image en hauteur" : key}
+                {labelFor(key)}
               </label>
             </div>
           );
@@ -300,7 +449,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
           return (
             <div key={key}>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Opacité de l'image</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{labelFor(key)}</label>
                 <span className="text-[10px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">{opacityVal}%</span>
               </div>
               <input
@@ -321,7 +470,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
           return (
             <div key={key}>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Hauteur minimale</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{labelFor(key)}</label>
                 <span className="text-[10px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">
                   {heightVal > 0 ? `${heightVal}px` : 'Auto (100vh)'}
                 </span>
@@ -360,7 +509,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
           const current = (val as string | undefined) || 'center';
           return (
             <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">Position de l'image de fond</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
               <div className="grid grid-cols-3 gap-1">
                 {positions.map((p) => (
                   <button
@@ -391,7 +540,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
           const current = (val as string | undefined) || 'half';
           return (
             <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">Proportion image / texte</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
               <div className="flex gap-2">
                 {ratios.map((r) => (
                   <button
@@ -418,7 +567,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
           return (
             <div key={key}>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Taille de l'image</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{labelFor(key)}</label>
                 <span className="text-[10px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">{widthVal}%</span>
               </div>
               <input
@@ -438,7 +587,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
         if (key === 'button_style') {
           return (
             <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">Couleur du bouton</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
               <div className="flex gap-2">
                 {(['green', 'white'] as const).map((opt) => (
                   <button
@@ -462,7 +611,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
         if (key === 'image_position') {
           return (
             <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">Position de l'image</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
               <div className="flex gap-2">
                 {(['left', 'right'] as const).map((opt) => (
                   <button
@@ -487,7 +636,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
           const imgUrl = String(val ?? '');
           return (
             <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{key}</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
               {imgUrl && (
                 <div className="relative mb-2 group">
                   <img src={imgUrl} alt="" className="w-full h-24 object-cover rounded-lg border border-stone-200" />
@@ -519,40 +668,90 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
           );
         }
 
-        // ── string[] ──
+        // ── string[] — liste réordonnable ──
         if (isArray && Array.isArray(val)) {
           const arr = val as string[];
+          const moveItem = (from: number, to: number) => {
+            if (to < 0 || to >= arr.length) return;
+            const n = [...arr];
+            const [it] = n.splice(from, 1);
+            n.splice(to, 0, it);
+            onUpdate(i, key, n);
+          };
           return (
             <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{key}</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
               {arr.map((item, j) => (
-                <div key={j} className="flex gap-2 mb-2 items-start">
-                  <div className="flex-1">
+                <div key={j} className="flex gap-1.5 mb-2 items-start">
+                  <div className="flex-1 min-w-0">
                     <RichTextarea className={inputCls} value={item}
                       onChange={(v) => { const n = [...arr]; n[j] = v; onUpdate(i, key, n); }} />
                   </div>
-                  <button onClick={() => onUpdate(i, key, arr.filter((_, k) => k !== j))}
-                    className="text-stone-400 hover:text-red-500 px-2 mt-6">✕</button>
+                  <div className="flex flex-col gap-0.5 mt-6 shrink-0">
+                    <button type="button" title="Monter" onClick={() => moveItem(j, j - 1)} disabled={j === 0}
+                      className="text-stone-300 hover:text-stone-700 disabled:opacity-20 cursor-pointer leading-none text-[10px]">▲</button>
+                    <button type="button" title="Descendre" onClick={() => moveItem(j, j + 1)} disabled={j === arr.length - 1}
+                      className="text-stone-300 hover:text-stone-700 disabled:opacity-20 cursor-pointer leading-none text-[10px]">▼</button>
+                  </div>
+                  <button type="button" title="Supprimer cette ligne" onClick={() => onUpdate(i, key, arr.filter((_, k) => k !== j))}
+                    className="text-stone-400 hover:text-red-500 px-1 mt-6 shrink-0 cursor-pointer">✕</button>
                 </div>
               ))}
-              <button onClick={() => onUpdate(i, key, [...arr, ''])} className="text-xs text-sage hover:underline mt-1">
-                + Ajouter
+              <button type="button" onClick={() => onUpdate(i, key, [...arr, ''])} className="text-xs text-sage hover:underline mt-1 cursor-pointer">
+                + Ajouter une ligne
               </button>
+            </div>
+          );
+        }
+
+        // ── Union littérale du schéma (colonnes, séparateur, vitesse…) ──
+        const enumValues = parseEnumHint(hint);
+        if (enumValues && enumValues.length <= 8) {
+          const current = String(val ?? enumValues[0]);
+          return (
+            <div key={key}>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
+              <div className="flex gap-1.5 flex-wrap">
+                {enumValues.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => onUpdate(i, key, opt)}
+                    className={`flex-1 min-w-8 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      current === opt
+                        ? 'bg-sage text-white border-sage'
+                        : 'border-stone-200 text-stone-500 hover:border-stone-400'
+                    }`}
+                  >
+                    {ENUM_LABELS[opt] ?? opt}
+                  </button>
+                ))}
+              </div>
             </div>
           );
         }
 
         // ── scalar ──
         const isLong = ['description', 'text', 'content', 'quote'].some((k) => key.includes(k));
+        const isSingleLine = SINGLE_LINE_RE.test(key);
         return (
           <div key={key}>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{key}</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
             {isLong ? (
               <RichTextarea
                 className={inputCls}
                 value={String(val ?? '')}
                 onChange={(v) => onUpdate(i, key, v)}
                 minRows={2}
+              />
+            ) : isSingleLine ? (
+              // Un lien ou une URL ne doit pas pouvoir contenir de retour ligne.
+              <input
+                type="text"
+                className={inputCls}
+                placeholder={key.endsWith('_href') ? '/contact ou https://…' : undefined}
+                value={String(val ?? '')}
+                onChange={(e) => onUpdate(i, key, e.target.value)}
               />
             ) : (
               <AutoTextarea
@@ -595,10 +794,40 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
             <div key={j} className="bg-stone-50 rounded-xl p-3 mb-2 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold text-stone-500 uppercase">Carte {j + 1}</p>
-                <button
-                  onClick={() => onUpdate(i, 'cards', cards.filter((_: unknown, k: number) => k !== j))}
-                  className="text-[10px] text-stone-400 hover:text-red-500"
-                >✕ Supprimer</button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    title="Monter"
+                    disabled={j === 0}
+                    onClick={() => onUpdate(i, 'cards', moveInArray(cards, j, j - 1))}
+                    className="text-[10px] text-stone-400 hover:text-stone-800 disabled:opacity-20 cursor-pointer"
+                  >▲</button>
+                  <button
+                    type="button"
+                    title="Descendre"
+                    disabled={j === cards.length - 1}
+                    onClick={() => onUpdate(i, 'cards', moveInArray(cards, j, j + 1))}
+                    className="text-[10px] text-stone-400 hover:text-stone-800 disabled:opacity-20 cursor-pointer"
+                  >▼</button>
+                  <button
+                    type="button"
+                    title="Dupliquer cette carte"
+                    onClick={() => onUpdate(i, 'cards', [
+                      ...cards.slice(0, j + 1),
+                      JSON.parse(JSON.stringify(card)),
+                      ...cards.slice(j + 1),
+                    ])}
+                    className="text-[10px] text-stone-400 hover:text-sage cursor-pointer"
+                  >⧉</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm(`Supprimer la carte ${j + 1} ?`)) return;
+                      onUpdate(i, 'cards', cards.filter((_: unknown, k: number) => k !== j));
+                    }}
+                    className="text-[10px] text-stone-400 hover:text-red-500 cursor-pointer"
+                  >✕ Supprimer</button>
+                </div>
               </div>
               {(CARD_FIELDS_BY_TYPE[section.type] || Object.keys(card)).map((field) => {
                 const isCardImage = field === 'image' || field.includes('image');
@@ -606,7 +835,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
                 const val = card[field] ?? (field === 'items' ? [] : undefined);
                 return (
                   <div key={field}>
-                    <label className="text-[10px] text-stone-400 uppercase tracking-widest block mb-0.5">{field}</label>
+                    <label className="text-[10px] text-stone-400 uppercase tracking-widest block mb-0.5">{labelFor(field)}</label>
                     {field === 'rating' ? (
                       <div className="flex gap-1">
                         {[1, 2, 3, 4, 5].map((s) => (

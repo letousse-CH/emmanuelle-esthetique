@@ -6,11 +6,11 @@ import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft, Sparkles, Save, Eye, EyeOff, Trash2, Plus, ChevronUp, ChevronDown,
   Loader2, CheckCircle2, AlertCircle, ExternalLink, GripVertical, ChevronRight,
-  LayoutGrid, Wand2
+  LayoutGrid, Wand2, Copy, Undo2
 } from 'lucide-react';
 import DynamicPageRenderer from '../../../components/pagebuilder/DynamicPageRenderer';
-import { WIREFRAME_REGISTRY, AVAILABLE_SECTION_TYPES } from '../../../components/pagebuilder/wireframes.config';
-import type { SectionType } from '../../../components/pagebuilder/wireframes.config';
+import { WIREFRAME_REGISTRY } from '../../../components/pagebuilder/wireframes.config';
+import type { SectionType, PageSection } from '../../../components/pagebuilder/wireframes.config';
 import { SECTION_LABELS, SectionPreview } from '../../../components/pagebuilder/sectionPreviews';
 import FieldEditor from '../../../components/pagebuilder/FieldEditor';
 import { usePageEditor } from '../../../components/pagebuilder/usePageEditor';
@@ -21,6 +21,13 @@ import MediaPickerModal from '../../../components/pagebuilder/MediaPickerModal';
 import { SITE_CONFIG } from '../../../config/site';
 
 type Status = 'idle' | 'generating' | 'saving' | 'success' | 'error';
+type Viewport = 'mobile' | 'tablet' | 'desktop';
+
+const VIEWPORTS: Record<Viewport, { label: string; short: string; width?: number }> = {
+  mobile:  { label: 'Aperçu mobile (390 px)',  short: '📱', width: 390 },
+  tablet:  { label: 'Aperçu tablette (820 px)', short: '📲', width: 820 },
+  desktop: { label: 'Aperçu ordinateur',        short: '🖥', width: undefined },
+};
 
 const SECTION_CATEGORIES: { label: string; types: SectionType[] }[] = [
   { label: 'Hero', types: ['hero_1', 'hero_2'] },
@@ -30,10 +37,18 @@ const SECTION_CATEGORIES: { label: string; types: SectionType[] }[] = [
   { label: 'Action', types: ['cta_1', 'marquee_1', 'pricing_1'] },
 ];
 
-// Gardée en phase avec LEGACY_SLUGS dans services/pageMeta.ts (source de
-// vérité pour le préfixe seo_* — voir getSeoPrefix, importé ci-dessus).
-const isLegacySlug = (slug: string) => ['home','about','accompagnement','contact','mentions-legales','paroles-et-silences','programme-complet','reve-eveille-libre','seance-individuelle','si-les-arbres-pouvaient-parler'].includes(slug);
+// Les pages dynamiques sont servies par la route attrape-tout `(public)/[slug]`
+// — il n'existe pas de route `/pages/<slug>`, que la barre de titre affichait
+// pourtant comme préfixe d'URL.
 const getPagePath = (slug: string) => slug === 'home' ? '/' : `/${slug}`;
+
+/** Résumé d'une section dans la liste : son titre réel plutôt que sa description générique. */
+function sectionSummary(section: PageSection): string {
+  const d = section.data as unknown as Record<string, unknown>;
+  const raw = [d.title, d.quote, d.content, d.eyebrow, d.price].find(v => typeof v === 'string' && v.trim());
+  if (!raw) return '';
+  return String(raw).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
 
 function extractTextFromSections(sections: any[]): string {
   let text = '';
@@ -74,7 +89,12 @@ export default function PageBuilder() {
   const [errorMsg, setErrorMsg]       = useState('');
   const [preview, setPreview]         = useState(false);
   const [activeSection, setActiveSection] = useState<number | null>(null);
+  const [visibleSection, setVisibleSection] = useState<number | null>(null);
   const [addPanelOpen, setAddPanelOpen]   = useState(false);
+  const [addQuery, setAddQuery]           = useState('');
+  const [viewport, setViewport]           = useState<Viewport>('desktop');
+  const [dragIndex, setDragIndex]         = useState<number | null>(null);
+  const [dropIndex, setDropIndex]         = useState<number | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
@@ -88,8 +108,12 @@ export default function PageBuilder() {
   const [activeTab, setActiveTab] = useState<'content' | 'seo'>('content');
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [genMetaStatus, setGenMetaStatus] = useState<'idle' | 'generating' | 'error'>('idle');
+  // Empreinte des métadonnées telles qu'enregistrées, pour détecter les
+  // modifications non sauvegardées (titre, slug, options, SEO).
+  const [savedMeta, setSavedMeta] = useState('');
 
-  const { sections, setSections, move, remove, add, updateField } = usePageEditor([]);
+  const { sections, setSections, replaceAll, move, moveTo, remove, duplicate, add, updateField, undo, canUndo, dirty, markClean } =
+    usePageEditor([]);
 
   const selectSection = (i: number) => {
     setActiveSection(prev => prev === i ? null : i);
@@ -98,20 +122,53 @@ export default function PageBuilder() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  /** Clic dans l'aperçu en mode édition → sélectionne la section visée. */
+  const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const section = target.closest('[id^="section-"]');
+    if (!section) return;
+    const idx = parseInt(section.id.replace('section-', ''), 10);
+    if (isNaN(idx)) return;
+    // Neutralise les liens, boutons et accordéons de la page rendue.
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveSection(idx);
+    setAddPanelOpen(false);
+    sidebarRef.current
+      ?.querySelector(`[data-section-item="${idx}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  /**
+   * En prévisualisation, un clic sur un lien de la page quittait l'éditeur (et
+   * donc les modifications non enregistrées). On ouvre la cible dans un onglet.
+   */
+  const handlePreviewLinkClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const link = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
+    if (!link) return;
+    const href = link.getAttribute('href') || '';
+    if (href.startsWith('#')) return; // ancre interne : comportement normal
+    e.preventDefault();
+    window.open(link.href, '_blank', 'noopener');
+  };
+
+  /*
+   * Suivi de la section visible dans l'aperçu. Cet observateur écrasait
+   * auparavant `activeSection` : au moindre défilement il rouvrait un panneau de
+   * champs que l'on venait de refermer, et refermait celui que l'on éditait.
+   * Il ne pilote plus qu'un repère visuel dans la liste des sections.
+   */
   useEffect(() => {
     const container = previewRef.current;
     if (!container || sections.length === 0) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        const visible = entries.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
         if (!visible.length) return;
-        const id = visible[0].target.id;
-        const idx = parseInt(id.replace('section-', ''), 10);
-        if (!isNaN(idx)) {
-          setActiveSection(idx);
-          const item = sidebarRef.current?.querySelector(`[data-section-item="${idx}"]`) as HTMLElement | null;
-          item?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
+        const idx = parseInt(visible[0].target.id.replace('section-', ''), 10);
+        if (!isNaN(idx)) setVisibleSection(idx);
       },
       { root: container, threshold: 0.3 }
     );
@@ -120,7 +177,7 @@ export default function PageBuilder() {
       if (el) observer.observe(el);
     });
     return () => observer.disconnect();
-  }, [sections.length, previewRef.current]);
+  }, [sections]);
 
   useEffect(() => {
     if (!id) return;
@@ -130,33 +187,62 @@ export default function PageBuilder() {
       setShowHeader(page.show_header ?? true); setShowFooter(page.show_footer ?? true);
       
       const prefix = getSeoPrefix(page.slug);
-      if (prefix) {
-        supabase.from('settings').select('key, value').like('key', `${prefix}_%`).then(({ data }) => {
-          if (data) {
-            const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
-            setSeoTitle(map[`${prefix}_title`] || '');
-            setSeoDescription(map[`${prefix}_description`] || '');
-            setSeoOgTitle(map[`${prefix}_og_title`] || '');
-            setSeoOgDescription(map[`${prefix}_og_description`] || '');
-            setSeoOgImage(map[`${prefix}_og_image`] || '');
-            setSeoKeywords(map[`${prefix}_keywords`] || '');
-          }
-        });
-      }
+      const seo = {
+        title: '', description: '', og_title: '', og_description: '', og_image: '', keywords: '',
+      };
+      const applySeo = () => {
+        setSeoTitle(seo.title);
+        setSeoDescription(seo.description);
+        setSeoOgTitle(seo.og_title);
+        setSeoOgDescription(seo.og_description);
+        setSeoOgImage(seo.og_image);
+        setSeoKeywords(seo.keywords);
+        // Empreinte de référence : tout écart signalera « non enregistré ».
+        setSavedMeta(JSON.stringify([
+          page.title, page.slug, page.published, page.show_header ?? true, page.show_footer ?? true,
+          seo.title, seo.description, seo.og_title, seo.og_description, seo.og_image, seo.keywords,
+        ]));
+      };
+
+      if (!prefix) { applySeo(); return; }
+      supabase.from('settings').select('key, value').like('key', `${prefix}_%`).then(({ data }) => {
+        if (data) {
+          const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
+          seo.title = map[`${prefix}_title`] || '';
+          seo.description = map[`${prefix}_description`] || '';
+          seo.og_title = map[`${prefix}_og_title`] || '';
+          seo.og_description = map[`${prefix}_og_description`] || '';
+          seo.og_image = map[`${prefix}_og_image`] || '';
+          seo.keywords = map[`${prefix}_keywords`] || '';
+        }
+        applySeo();
+      });
     });
-  }, [id]);
+  }, [id, setSections]);
 
   const handleTitleChange = (v: string) => { setTitle(v); if (!isEditing) setSlug(generateSlug(v)); };
 
   const generate = async () => {
     if (!prompt.trim()) return;
+    if (sections.length > 0 && !window.confirm('La génération remplace toutes les sections existantes. Continuer ?')) return;
     setStatus('generating'); setErrorMsg('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/generate-page', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) }, body: JSON.stringify({ prompt }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erreur API');
-      setSections(json.sections); setActiveSection(null); setStatus('idle');
+      if (!Array.isArray(json.sections) || json.sections.length === 0) {
+        throw new Error("La réponse de l'IA ne contient aucune section exploitable.");
+      }
+      // Une section de type inconnu casse l'aperçu : on filtre avant d'injecter.
+      const known = json.sections.filter((s: PageSection) => s && WIREFRAME_REGISTRY[s.type]);
+      if (known.length === 0) throw new Error("Aucune des sections générées n'est reconnue.");
+      replaceAll(known);
+      setActiveSection(null);
+      setStatus('idle');
+      if (known.length < json.sections.length) {
+        setErrorMsg(`${json.sections.length - known.length} section(s) de type inconnu ignorée(s).`);
+      }
     } catch (e: unknown) { setErrorMsg(e instanceof Error ? e.message : 'Erreur inconnue'); setStatus('error'); }
   };
 
@@ -180,7 +266,9 @@ export default function PageBuilder() {
         await supabase.from('settings').upsert(upserts, { onConflict: 'key' });
       }
 
-      setStatus('success'); setTimeout(() => setStatus('idle'), 2500);
+      markClean();
+      setSavedMeta(metaSnapshot());
+      setStatus('success'); setTimeout(() => setStatus(s => s === 'success' ? 'idle' : s), 2500);
     } catch (e: unknown) { setErrorMsg(e instanceof Error ? e.message : 'Erreur inconnue'); setStatus('error'); }
   };
 
@@ -227,9 +315,80 @@ export default function PageBuilder() {
     }
   };
 
+  /** Insère après la section sélectionnée, sinon à la fin. */
   const handleAddSection = (type: SectionType) => {
-    add(type); setActiveSection(sections.length); setAddPanelOpen(false);
+    const at = activeSection !== null ? activeSection + 1 : sections.length;
+    add(type, at);
+    setActiveSection(at);
+    setAddPanelOpen(false);
+    setAddQuery('');
   };
+
+  const handleRemoveSection = (i: number) => {
+    const label = SECTION_LABELS[sections[i].type] ?? sections[i].type;
+    if (!window.confirm(`Supprimer la section « ${label} » ?`)) return;
+    remove(i);
+    setActiveSection(null);
+  };
+
+  // ── Réordonnancement par glisser-déposer ──
+  const handleDrop = (to: number) => {
+    if (dragIndex !== null && dragIndex !== to) {
+      moveTo(dragIndex, to);
+      setActiveSection(to);
+    }
+    setDragIndex(null);
+    setDropIndex(null);
+  };
+
+  const filteredCategories = React.useMemo(() => {
+    const q = addQuery.trim().toLowerCase();
+    if (!q) return SECTION_CATEGORIES;
+    return SECTION_CATEGORIES
+      .map(cat => ({
+        ...cat,
+        types: cat.types.filter(type =>
+          `${SECTION_LABELS[type] ?? ''} ${type} ${WIREFRAME_REGISTRY[type]?.description ?? ''}`
+            .toLowerCase()
+            .includes(q),
+        ),
+      }))
+      .filter(cat => cat.types.length > 0);
+  }, [addQuery]);
+
+  // ── Modifications non enregistrées ──
+  const metaSnapshot = () => JSON.stringify([
+    title, slug, published, showHeader, showFooter,
+    seoTitle, seoDescription, seoOgTitle, seoOgDescription, seoOgImage, seoKeywords,
+  ]);
+  const isDirty = dirty || (savedMeta !== '' && metaSnapshot() !== savedMeta);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isDirty]);
+
+  // ⌘/Ctrl+S enregistre, ⌘/Ctrl+Z annule la dernière modification de structure.
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey && !e.ctrlKey) return;
+      if (e.key === 's') {
+        e.preventDefault();
+        void saveRef.current();
+      } else if (e.key === 'z' && !e.shiftKey) {
+        const el = e.target as HTMLElement | null;
+        if (el && (el.isContentEditable || /^(INPUT|TEXTAREA)$/.test(el.tagName))) return;
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo]);
 
   return (
     <div className="flex flex-col h-screen bg-stone-50">
@@ -249,20 +408,38 @@ export default function PageBuilder() {
               onChange={e => handleTitleChange(e.target.value)}
             />
             <div className="flex items-center gap-0.5 mt-0.5">
-              <span className="text-stone-300 text-[11px]">{slug === 'home' ? '/' : (isLegacySlug(slug) ? '/' : '/pages/')}</span>
+              <span className="text-stone-300 text-[11px]">/</span>
               <input
                 placeholder="slug"
+                title="Adresse de la page (sans accent ni espace)"
                 className="text-stone-400 text-[11px] bg-transparent focus:outline-none border-b border-transparent focus:border-stone-300 transition-colors w-32 placeholder:text-stone-200"
                 value={slug}
-                onChange={e => setSlug(e.target.value)}
+                onChange={e => setSlug(generateSlug(e.target.value))}
               />
+              {slug === 'home' && <span className="text-stone-300 text-[10px] ml-1">(page d'accueil)</span>}
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {status === 'success' && <span className="flex items-center gap-1.5 text-green-600 text-xs font-medium"><CheckCircle2 size={13} /> Sauvegardé</span>}
-          {status === 'error' && <span className="flex items-center gap-1.5 text-red-500 text-xs font-medium max-w-48 truncate"><AlertCircle size={13} /> {errorMsg}</span>}
+          {status === 'error' && <span className="flex items-center gap-1.5 text-red-500 text-xs font-medium max-w-48 truncate" title={errorMsg}><AlertCircle size={13} /> {errorMsg}</span>}
+          {/* Avertissement non bloquant (ex. sections générées ignorées). */}
+          {status === 'idle' && errorMsg && (
+            <span className="flex items-center gap-1.5 text-amber-600 text-xs font-medium max-w-48 truncate" title={errorMsg}><AlertCircle size={13} /> {errorMsg}</span>
+          )}
+          {status !== 'success' && status !== 'error' && !errorMsg && isDirty && (
+            <span className="text-amber-600 text-xs font-medium">Modifications non enregistrées</span>
+          )}
+
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            title="Annuler la dernière modification (⌘/Ctrl + Z)"
+            className="p-2 text-stone-400 hover:text-stone-800 hover:bg-stone-100 rounded-lg disabled:opacity-25 transition-all cursor-pointer"
+          >
+            <Undo2 size={14} />
+          </button>
 
           <button
             onClick={() => setPublished(!published)}
@@ -381,30 +558,53 @@ export default function PageBuilder() {
                   <div className="px-3 pb-3 space-y-1.5">
                     {sections.map((section, i) => {
                       const isActive = activeSection === i;
+                      const isVisible = visibleSection === i;
                       return (
-                        <div key={i} data-section-item={i} className="rounded-xl overflow-hidden">
-                          {/* Section header */}
+                        <div
+                          key={i}
+                          data-section-item={i}
+                          className={`rounded-xl overflow-hidden transition-all ${
+                            dropIndex === i && dragIndex !== i ? 'ring-2 ring-sage ring-offset-1' : ''
+                          } ${dragIndex === i ? 'opacity-40' : ''}`}
+                          onDragOver={e => { e.preventDefault(); setDropIndex(i); }}
+                          onDragLeave={() => setDropIndex(prev => (prev === i ? null : prev))}
+                          onDrop={e => { e.preventDefault(); handleDrop(i); }}
+                          onDragEnd={() => { setDragIndex(null); setDropIndex(null); }}
+                        >
+                          {/* Section header — seule poignée de glisser-déposer,
+                              pour ne pas gêner la saisie dans les champs. */}
                           <div
+                            draggable
+                            onDragStart={() => setDragIndex(i)}
                             onClick={() => selectSection(i)}
-                            className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer transition-all group/item ${isActive ? 'bg-sage/8 border border-sage/20' : 'bg-stone-50 border border-stone-100 hover:border-stone-200 hover:bg-stone-100/60'} rounded-xl`}
+                            className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer transition-all group/item ${isActive ? 'bg-sage/8 border border-sage/20' : isVisible ? 'bg-stone-100/80 border border-stone-200' : 'bg-stone-50 border border-stone-100 hover:border-stone-200 hover:bg-stone-100/60'} rounded-xl`}
                           >
-                            <GripVertical size={13} className="text-stone-300 shrink-0" />
+                            <span title="Glisser pour réordonner" className="shrink-0 cursor-grab active:cursor-grabbing">
+                              <GripVertical size={13} className="text-stone-300" />
+                            </span>
                             <div className="flex-1 min-w-0">
-                              <p className={`text-xs font-semibold truncate ${isActive ? 'text-sage' : 'text-stone-600'}`}>{SECTION_LABELS[section.type] ?? section.type}</p>
+                              <p className={`text-xs font-semibold truncate ${isActive ? 'text-sage' : 'text-stone-600'}`}>
+                                <span className="text-stone-300 font-mono mr-1">{i + 1}</span>
+                                {SECTION_LABELS[section.type] ?? section.type}
+                              </p>
                               <p className="text-[10px] text-stone-400 truncate leading-tight mt-0.5">
-                                {WIREFRAME_REGISTRY[section.type]?.description}
+                                {sectionSummary(section) || WIREFRAME_REGISTRY[section.type]?.description}
                               </p>
                             </div>
                             <div className="flex items-center gap-0.5 shrink-0">
-                              <button type="button" onClick={e => { e.stopPropagation(); move(i, -1); }} disabled={i === 0}
+                              <button type="button" title="Monter" onClick={e => { e.stopPropagation(); move(i, -1); }} disabled={i === 0}
                                 className="p-1 text-stone-300 hover:text-stone-700 hover:bg-white rounded-md disabled:opacity-20 transition-all cursor-pointer">
                                 <ChevronUp size={12} />
                               </button>
-                              <button type="button" onClick={e => { e.stopPropagation(); move(i, 1); }} disabled={i === sections.length - 1}
+                              <button type="button" title="Descendre" onClick={e => { e.stopPropagation(); move(i, 1); }} disabled={i === sections.length - 1}
                                 className="p-1 text-stone-300 hover:text-stone-700 hover:bg-white rounded-md disabled:opacity-20 transition-all cursor-pointer">
                                 <ChevronDown size={12} />
                               </button>
-                              <button type="button" onClick={e => { e.stopPropagation(); remove(i); setActiveSection(null); }}
+                              <button type="button" title="Dupliquer" onClick={e => { e.stopPropagation(); duplicate(i); setActiveSection(i + 1); }}
+                                className="p-1 text-stone-300 hover:text-sage hover:bg-white rounded-md transition-all cursor-pointer">
+                                <Copy size={11} />
+                              </button>
+                              <button type="button" title="Supprimer" onClick={e => { e.stopPropagation(); handleRemoveSection(i); }}
                                 className="p-1 text-stone-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all cursor-pointer">
                                 <Trash2 size={11} />
                               </button>
@@ -432,14 +632,25 @@ export default function PageBuilder() {
                   className="w-full flex items-center justify-between px-4 py-3 text-sm text-stone-500 hover:text-stone-800 hover:bg-stone-50 transition-all cursor-pointer"
                 >
                   <span className="flex items-center gap-2 text-xs font-semibold">
-                    <Plus size={13} className="text-sage" /> Ajouter une section
+                    <Plus size={13} className="text-sage" />
+                    {activeSection !== null ? `Insérer après la section ${activeSection + 1}` : 'Ajouter une section'}
                   </span>
                   <ChevronRight size={13} className={`text-stone-300 transition-transform duration-200 ${addPanelOpen ? 'rotate-90' : ''}`} />
                 </button>
 
                 {addPanelOpen && (
                   <div className="px-3 pb-3 space-y-4 border-t border-stone-100 pt-3 max-h-[28rem] overflow-y-auto">
-                    {SECTION_CATEGORIES.map(cat => (
+                    <input
+                      autoFocus
+                      value={addQuery}
+                      onChange={e => setAddQuery(e.target.value)}
+                      placeholder="Rechercher un type de section…"
+                      className="w-full border border-stone-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-sage/30 focus:border-sage/40 placeholder:text-stone-300"
+                    />
+                    {filteredCategories.length === 0 && (
+                      <p className="text-xs text-stone-400 text-center py-4">Aucun type de section ne correspond.</p>
+                    )}
+                    {filteredCategories.map(cat => (
                       <div key={cat.label}>
                         <p className="text-[9px] font-bold uppercase tracking-widest text-stone-400 px-1 mb-1.5">{cat.label}</p>
                         <div className="grid grid-cols-2 gap-2">
@@ -619,14 +830,44 @@ export default function PageBuilder() {
                 <p className={`text-xs font-medium ${preview ? 'text-emerald-700' : 'text-amber-600'}`}>
                   {preview ? 'Mode prévisualisation — interactions actives' : 'Mode édition — cliquez sur une section pour la modifier'}
                 </p>
-                <button
-                  onClick={() => setPreview(v => !v)}
-                  className={`flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${preview ? 'text-emerald-700 hover:text-emerald-900' : 'text-amber-600 hover:text-amber-800'}`}
-                >
-                  {preview ? <><EyeOff size={11} /> Édition</> : <><Eye size={11} /> Prévisualiser</>}
-                </button>
+                <div className="flex items-center gap-4">
+                  {/* Largeurs d'aperçu : vérifier le rendu mobile sans quitter l'éditeur. */}
+                  {!preview && (
+                    <div className="flex items-center gap-1">
+                      {(['mobile', 'tablet', 'desktop'] as const).map(v => (
+                        <button
+                          key={v}
+                          onClick={() => setViewport(v)}
+                          title={VIEWPORTS[v].label}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer ${
+                            viewport === v ? 'bg-amber-200/70 text-amber-800' : 'text-amber-500 hover:bg-amber-100'
+                          }`}
+                        >
+                          {VIEWPORTS[v].short}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setPreview(v => !v)}
+                    className={`flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${preview ? 'text-emerald-700 hover:text-emerald-900' : 'text-amber-600 hover:text-amber-800'}`}
+                  >
+                    {preview ? <><EyeOff size={11} /> Édition</> : <><Eye size={11} /> Prévisualiser</>}
+                  </button>
+                </div>
               </div>
-              <div className={preview ? '' : 'pointer-events-none'}>
+              {/*
+                En mode édition, la bannière invite à cliquer sur une section :
+                l'aperçu était pourtant en `pointer-events-none`, donc rien
+                n'était cliquable. On intercepte désormais le clic (les liens et
+                boutons de la page restent neutralisés) pour sélectionner la
+                section correspondante dans le panneau.
+              */}
+              <div
+                className="mx-auto transition-all duration-300"
+                style={{ maxWidth: preview ? undefined : VIEWPORTS[viewport].width }}
+                onClickCapture={preview ? handlePreviewLinkClick : handlePreviewClick}
+              >
                 <DynamicPageRenderer sections={sections} />
               </div>
             </>

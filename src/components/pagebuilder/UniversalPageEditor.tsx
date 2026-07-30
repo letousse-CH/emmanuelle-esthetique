@@ -48,6 +48,17 @@ export default function UniversalPageEditor() {
   const [targetImageEl, setTargetImageEl] = useState<HTMLElement | null>(null);
   const [defaults, setDefaults] = useState<any>({});
 
+  // Une page rendue par le page builder embarque son propre éditeur en ligne :
+  // on s'effface pour ne pas empiler deux éditeurs sur les mêmes textes.
+  const [inlineEditorActive, setInlineEditorActive] = useState(false);
+  useEffect(() => {
+    const check = () => setInlineEditorActive(document.body.dataset.pageEditor === 'inline');
+    check();
+    const t = setTimeout(check, 600);
+    return () => clearTimeout(t);
+  }, [pathname]);
+  const disabled = editorHidden || inlineEditorActive;
+
   // Fetch meta tags defaults dynamically from the DOM on pathname changes
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -150,20 +161,23 @@ export default function UniversalPageEditor() {
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
       } else {
-        console.warn("Supabase save failed, utilizing local storage override fallback:", error.message);
-        setSaveStatus('saved'); // Display saved because it is successfully saved locally!
-        setTimeout(() => setSaveStatus('idle'), 2000);
+        // L'ancien code affichait « Enregistré » dès que le repli localStorage
+        // avait fonctionné : la modification semblait publiée alors qu'elle
+        // n'existait que dans ce navigateur. On signale désormais l'échec.
+        console.error('Enregistrement en base refusé :', error.message);
+        setSaveStatus('error');
+        setTimeout(() => setSaveStatus('idle'), 5000);
       }
     } catch (err) {
-      console.warn("Supabase error, using local storage override:", err);
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      console.error('Enregistrement en base impossible :', err);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 5000);
     }
   };
 
   // 2. Scan and Apply Overrides periodically to handle client updates
   useEffect(() => {
-    if (editorHidden) return;
+    if (disabled) return;
 
     const scanAndApply = () => {
       const elements: HTMLElement[] = [];
@@ -281,15 +295,27 @@ export default function UniversalPageEditor() {
       });
     };
 
+    /*
+     * Le balayage complet du DOM (avec getComputedStyle sur chaque nœud)
+     * tournait toutes les 1,5 s en permanence — y compris pour les visiteurs
+     * non connectés, sur toutes les pages publiques. On applique désormais les
+     * overrides en quelques passes après le rendu (le temps que les sections
+     * animées apparaissent), et on ne boucle que pour un admin en mode édition,
+     * où de nouvelles cibles peuvent apparaître à tout moment.
+     */
     scanAndApply();
-    const interval = setInterval(scanAndApply, 1500);
+    const timeouts = [300, 1000, 2500].map((d) => setTimeout(scanAndApply, d));
+    const interval = isAdmin && isEditMode ? setInterval(scanAndApply, 1500) : null;
 
-    return () => clearInterval(interval);
-  }, [pathname, editorHidden, overrides, editingEl]);
+    return () => {
+      timeouts.forEach(clearTimeout);
+      if (interval) clearInterval(interval);
+    };
+  }, [pathname, disabled, overrides, editingEl, isAdmin, isEditMode]);
 
   // 3. Admin Click & Hover Listeners
   useEffect(() => {
-    if (!isAdmin || !isEditMode) {
+    if (!isAdmin || !isEditMode || disabled) {
       setHoveredEl(null);
       setOverlayRect(null);
       return;
@@ -366,7 +392,7 @@ export default function UniversalPageEditor() {
       window.removeEventListener('click', handleClick, true);
       window.removeEventListener('scroll', handleScroll, true);
     };
-  }, [isAdmin, isEditMode, hoveredEl, overrides]);
+  }, [isAdmin, isEditMode, hoveredEl, overrides, disabled]);
 
   const handleImageSelect = async (url: string) => {
     if (!targetImageEl) return;
@@ -386,7 +412,7 @@ export default function UniversalPageEditor() {
     setTargetImageEl(null);
   };
 
-  if (!isAdmin || editorHidden) return null;
+  if (!isAdmin || disabled) return null;
 
   return (
     <div className="admin-exclude">
@@ -397,7 +423,7 @@ export default function UniversalPageEditor() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
           </span>
-          <span className="text-xs font-black uppercase tracking-widest text-white/90">Webflow Edit</span>
+          <span className="text-xs font-black uppercase tracking-widest text-white/90">Édition en ligne</span>
         </div>
 
         <div className="h-4 w-px bg-white/10" />
@@ -445,7 +471,9 @@ export default function UniversalPageEditor() {
                 </>
               )}
               {saveStatus === 'error' && (
-                <span className="text-red-400 font-bold">Erreur</span>
+                <span className="text-red-400 font-bold" title="La modification n'a pas pu être enregistrée en base : elle n'est visible que dans ce navigateur.">
+                  Non enregistré
+                </span>
               )}
             </div>
           </>

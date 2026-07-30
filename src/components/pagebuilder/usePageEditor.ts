@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { PageSection, SectionType } from './wireframes.config';
+import { useCallback, useRef, useState } from 'react';
+import type { PageSection, SectionData, SectionType } from './wireframes.config';
 
 export const SECTION_DEFAULTS: Record<SectionType, Record<string, unknown>> = {
   hero_1:        { title: 'Nouveau titre', description: 'Description…' },
@@ -26,42 +26,185 @@ export const SECTION_DEFAULTS: Record<SectionType, Record<string, unknown>> = {
   logos_1: { eyebrow: 'Ils en parlent', cards: Array.from({ length: 4 }, () => ({ image: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='40'><rect width='120' height='40' rx='6' fill='%23d6d3d1'/><text x='60' y='25' font-family='sans-serif' font-size='12' fill='%2378716c' text-anchor='middle'>LOGO</text></svg>", alt: 'Logo' })) },
 };
 
-export function usePageEditor(initial: PageSection[]) {
-  const [sections, setSections] = useState<PageSection[]>(initial);
+/**
+ * Découpe un chemin de champ en segments. Accepte indifféremment la notation
+ * pointée et la notation crochets — les deux coexistent dans `sections.tsx`
+ * (`cards.0.title`, `plans[0].badge`, `cards[1].items.2`).
+ */
+export function parseFieldPath(path: string): (string | number)[] {
+  return path
+    .replace(/\[(\d+)\]/g, '.$1')
+    .split('.')
+    .filter((s) => s !== '')
+    .map((s) => (/^\d+$/.test(s) ? Number(s) : s));
+}
 
-  const move = (i: number, dir: -1 | 1) => {
-    setSections((prev) => {
+/**
+ * Écrit `value` à `segs` en ne clonant que la branche traversée (le reste de
+ * l'objet garde son identité, ce qui évite de recréer tout l'arbre React).
+ */
+function setAtPath<T>(source: T, segs: (string | number)[], value: unknown): T {
+  if (segs.length === 0) return value as T;
+  const [seg, ...rest] = segs;
+
+  if (typeof seg === 'number') {
+    const arr = Array.isArray(source) ? [...(source as unknown[])] : [];
+    arr[seg] = setAtPath(arr[seg], rest, value);
+    return arr as unknown as T;
+  }
+
+  const obj: Record<string, unknown> = { ...((source ?? {}) as Record<string, unknown>) };
+  obj[seg] = setAtPath(obj[seg], rest, value);
+  return obj as unknown as T;
+}
+
+const HISTORY_LIMIT = 50;
+/** Deux frappes sur le même champ à moins de 700 ms ne créent qu'un point d'annulation. */
+const COALESCE_MS = 700;
+
+export function usePageEditor(initial: PageSection[]) {
+  const [sections, setSectionsState] = useState<PageSection[]>(initial);
+  const [dirty, setDirty] = useState(false);
+  // L'historique vit dans une ref (lue et écrite de façon synchrone) ; seule sa
+  // longueur est un état, pour que `canUndo` déclenche un rendu.
+  const historyRef = useRef<PageSection[][]>([]);
+  const [historyLen, setHistoryLen] = useState(0);
+  const setHistory = useCallback((next: PageSection[][]) => {
+    historyRef.current = next;
+    setHistoryLen(next.length);
+  }, []);
+
+  // Miroir synchrone de l'état : `commit` doit rester une fonction pure (pas
+  // d'effet dans un updater `setState`, React le rejoue en mode strict).
+  const sectionsRef = useRef<PageSection[]>(initial);
+  // Coalescence des points d'annulation : évite un « undo » par caractère tapé.
+  const lastEdit = useRef<{ key: string; at: number }>({ key: '', at: 0 });
+
+  const commit = useCallback((updater: (prev: PageSection[]) => PageSection[], coalesceKey?: string) => {
+    const prev = sectionsRef.current;
+    const next = updater(prev);
+    if (next === prev) return;
+
+    const now = Date.now();
+    const shouldCoalesce =
+      !!coalesceKey &&
+      coalesceKey === lastEdit.current.key &&
+      now - lastEdit.current.at < COALESCE_MS;
+    lastEdit.current = { key: coalesceKey ?? '', at: now };
+
+    sectionsRef.current = next;
+    setSectionsState(next);
+    if (!shouldCoalesce) {
+      setHistory([...historyRef.current.slice(-(HISTORY_LIMIT - 1)), prev]);
+    }
+    setDirty(true);
+  }, [setHistory]);
+
+  /** Remplace le contenu sans polluer l'historique (chargement d'une page). */
+  const reset = useCallback((next: PageSection[]) => {
+    sectionsRef.current = next;
+    setSectionsState(next);
+    setHistory([]);
+    setDirty(false);
+    lastEdit.current = { key: '', at: 0 };
+  }, [setHistory]);
+
+  /** Remplace le contenu comme une action utilisateur annulable (génération IA). */
+  const replaceAll = useCallback((next: PageSection[]) => {
+    commit(() => next);
+  }, [commit]);
+
+  const move = useCallback((i: number, dir: -1 | 1) => {
+    commit((prev) => {
+      const j = i + dir;
+      if (i < 0 || j < 0 || i >= prev.length || j >= prev.length) return prev;
       const next = [...prev];
-      [next[i], next[i + dir]] = [next[i + dir], next[i]];
+      [next[i], next[j]] = [next[j], next[i]];
       return next;
     });
-  };
+  }, [commit]);
 
-  const remove = (i: number) => {
-    setSections((prev) => prev.filter((_, idx) => idx !== i));
-  };
+  /** Déplacement libre (glisser-déposer) : sort l'élément puis l'insère à `to`. */
+  const moveTo = useCallback((from: number, to: number) => {
+    commit((prev) => {
+      if (from === to || from < 0 || from >= prev.length || to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  }, [commit]);
 
-  const add = (type: SectionType) => {
-    setSections((prev) => [...prev, { type, data: (SECTION_DEFAULTS[type] ?? {}) as unknown as import('./wireframes.config').SectionData }]);
-  };
+  const remove = useCallback((i: number) => {
+    commit((prev) => prev.filter((_, idx) => idx !== i));
+  }, [commit]);
 
-  const updateField = (i: number, key: string, value: unknown) => {
-    setSections((prev) =>
-      prev.map((s, idx) => {
-        if (idx !== i) return s;
-        if (key.includes('[')) {
-          const newData = JSON.parse(JSON.stringify(s.data)) as unknown as Record<string, unknown>;
-          const match = key.match(/^(\w+)\[(\d+)\]\.(.+)$/);
-          if (match) {
-            const [, arr, idxStr, field] = match;
-            (newData[arr] as Record<string, unknown>[])[Number(idxStr)][field] = value;
-          }
-          return { ...s, data: newData as unknown as import('./wireframes.config').SectionData };
-        }
-        return { ...s, data: { ...(s.data as unknown as Record<string, unknown>), [key]: value } as unknown as import('./wireframes.config').SectionData };
-      })
+  const duplicate = useCallback((i: number) => {
+    commit((prev) => {
+      if (!prev[i]) return prev;
+      const copy = JSON.parse(JSON.stringify(prev[i])) as PageSection;
+      return [...prev.slice(0, i + 1), copy, ...prev.slice(i + 1)];
+    });
+  }, [commit]);
+
+  const add = useCallback((type: SectionType, at?: number) => {
+    commit((prev) => {
+      const section: PageSection = {
+        type,
+        data: JSON.parse(JSON.stringify(SECTION_DEFAULTS[type] ?? {})) as SectionData,
+      };
+      if (at === undefined || at < 0 || at > prev.length) return [...prev, section];
+      return [...prev.slice(0, at), section, ...prev.slice(at)];
+    });
+  }, [commit]);
+
+  /**
+   * Met à jour un champ d'une section. `key` accepte un chemin complet :
+   * `title`, `cards.0.title`, `cards[0].items.2`, `plans[1].price`.
+   * L'ancienne implémentation ne gérait que `arr[0].champ` et écrivait une clé
+   * plate (`data["cards.0.title"]`) pour tout le reste — les modifications en
+   * ligne des cartes et des listes étaient donc silencieusement perdues.
+   */
+  const updateField = useCallback((i: number, key: string, value: unknown) => {
+    const segs = parseFieldPath(key);
+    if (segs.length === 0) return;
+    commit(
+      (prev) =>
+        prev.map((s, idx) =>
+          idx === i ? { ...s, data: setAtPath(s.data, segs, value) } : s,
+        ),
+      `${i}:${key}`,
     );
-  };
+  }, [commit]);
 
-  return { sections, setSections, move, remove, add, updateField };
+  const undo = useCallback(() => {
+    const h = historyRef.current;
+    if (h.length === 0) return;
+    const previous = h[h.length - 1];
+    historyRef.current = h.slice(0, -1);
+    sectionsRef.current = previous;
+    setSectionsState(previous);
+    setHistory(historyRef.current);
+    setDirty(true);
+    lastEdit.current = { key: '', at: 0 };
+  }, [setHistory]);
+
+  const markClean = useCallback(() => setDirty(false), []);
+
+  return {
+    sections,
+    /** Chargement initial / externe — ne crée pas de point d'annulation. */
+    setSections: reset,
+    replaceAll,
+    move,
+    moveTo,
+    remove,
+    duplicate,
+    add,
+    updateField,
+    undo,
+    canUndo: historyLen > 0,
+    dirty,
+    markClean,
+  };
 }
