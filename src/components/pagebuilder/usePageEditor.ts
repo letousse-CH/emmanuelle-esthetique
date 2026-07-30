@@ -4,6 +4,9 @@ import type { PageSection, SectionData, SectionType } from './wireframes.config'
 export const SECTION_DEFAULTS: Record<SectionType, Record<string, unknown>> = {
   hero_1:        { title: 'Nouveau titre', description: 'Description…' },
   hero_2:        { title: 'Nouveau titre' },
+  hero_3:        { title: 'Prendre soin de vous', title_italic: 'chez vous', description: 'Une parenthèse de bien-être, à domicile.', items: ['Soins du visage', 'Head Spa', 'Massages'], cta_primary_text: 'Réserver', cta_primary_href: '/contact', image_url: '' },
+  hero_4:        { title: 'Le bien-être', title_italic: 'à votre porte', description: 'Soins du visage, Head Spa et massages relaxants à domicile.', card_title: 'Sur rendez-vous', card_text: 'Palézieux et environs, du lundi au samedi.', cta_text: 'Prendre rendez-vous', cta_href: '/contact', image_url: '' },
+  hero_5:        { eyebrow: 'Nos soins', title: 'Titre de la page', description: 'Une phrase d\'introduction courte.', align: 'center' },
   intro_1:       { quote: 'Citation…', text: 'Texte de présentation…' },
   features_1:    { title: 'Points clés', items: ['Point 1', 'Point 2'] },
   features_2:    { title: 'Nos atouts', cards: [{ title: 'Atout 1', description: '…' }, { title: 'Atout 2', description: '…' }, { title: 'Atout 3', description: '…' }] },

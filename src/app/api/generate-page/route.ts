@@ -4,7 +4,7 @@ import { callClaude } from '../../../utils/ai';
 import { getSettingsServer } from '../../../services/settingsServer';
 
 const AVAILABLE_TYPES = [
-  'hero_1', 'hero_2', 'intro_1',
+  'hero_1', 'hero_2', 'hero_3', 'hero_4', 'hero_5', 'intro_1',
   'features_1', 'features_2', 'features_3',
   'cta_1', 'testimonial_1', 'text_1',
   'gallery_grid', 'gallery_carousel', 'gallery_masonry',
@@ -20,23 +20,26 @@ AUCUN texte avant ou après le JSON. Pas de markdown. Juste le tableau JSON brut
 Sections disponibles et leur schéma attendu :
 1. hero_1 : { eyebrow?, title, title_italic?, description?, cta_primary_text?, cta_primary_href?, cta_secondary_text?, cta_secondary_href?, image_url?, image_opacity?, button_style?, theme? }
 2. hero_2 : { eyebrow?, title, description?, cta_text?, cta_href?, button_style?, theme?, bg_image?, bg_image_opacity? }
-3. intro_1 : { eyebrow?, quote, text, cta_text?, cta_href?, image_url?, image_position?, theme?, bg_image?, bg_image_opacity? }
-4. features_1 : { eyebrow?, title, description?, quote?, items?: string[], cta_text?, cta_href?, theme?, bg_image?, bg_image_opacity? }
-5. features_2 : { eyebrow?, title, description?, cards: [{ title, description, icon? }], theme?, bg_image?, bg_image_opacity? }
-6. features_3 : { eyebrow?, title, description?, cards: [{ title, description, items?: string[], cta_text?, cta_href?, badge? }], button_style?, theme?, bg_image?, bg_image_opacity? }
-7. cta_1 : { eyebrow?, title, description?, cta_text, cta_href?, button_style?, theme?, bg_image?, bg_image_opacity? }
-8. testimonial_1 : { quote, author?, role?, theme?, bg_image?, bg_image_opacity? }
-9. text_1 : { eyebrow?, title?, content, theme?, bg_image?, bg_image_opacity? }
-10. gallery_grid : { eyebrow?, title?, description?, cards: [{ title?, description?, image, link? }], columns?: '2' | '3' | '4', theme?, bg_image?, bg_image_opacity? }
-11. gallery_carousel : { eyebrow?, title?, description?, cards: [{ title?, description?, image, link? }], theme?, bg_image?, bg_image_opacity? }
-12. gallery_masonry : { eyebrow?, title?, description?, cards: [{ title?, description?, image, link? }], theme?, bg_image?, bg_image_opacity? }
-13. faq_1 : { eyebrow?, title, description?, cards: [{ question, answer }], theme?, bg_image?, bg_image_opacity? }
-14. stats_1 : { eyebrow?, title?, cards: [{ value, label }] } (3 à 4 chiffres clés, ex: value "500+", label "Personnes accompagnées")
-15. timeline_1 : { eyebrow?, title?, description?, cards: [{ title, description? }] } (3 à 4 étapes d'un processus)
-16. logos_1 : { eyebrow?, cards: [{ image, alt? }] } (ne génère cette section QUE si le prompt mentionne explicitement des logos/partenaires/presse, sinon ne l'utilise pas)
+3. hero_3 : { eyebrow?, title, title_italic?, description?, items?: string[], cta_primary_text?, cta_primary_href?, cta_secondary_text?, cta_secondary_href?, image_url?, button_style?, theme? } (titre centré puis portrait en arche ; items = 2 à 4 mots-clés courts affichés en pastilles)
+4. hero_4 : { eyebrow?, title, title_italic?, description?, image_url?, image_opacity?, card_title?, card_text?, cta_text?, cta_href?, button_style?, theme? } (photo plein cadre, titre en bas, petite carte d'informations pratiques)
+5. hero_5 : { eyebrow?, title, description?, align?: 'center' | 'left', cta_text?, cta_href?, image_url?, min_height?, theme? } (bandeau compact de page intérieure, à préférer aux autres hero pour une page secondaire)
+6. intro_1 : { eyebrow?, quote, text, cta_text?, cta_href?, image_url?, image_position?, theme?, bg_image?, bg_image_opacity? }
+7. features_1 : { eyebrow?, title, description?, quote?, items?: string[], cta_text?, cta_href?, theme?, bg_image?, bg_image_opacity? }
+8. features_2 : { eyebrow?, title, description?, cards: [{ title, description, icon? }], theme?, bg_image?, bg_image_opacity? }
+9. features_3 : { eyebrow?, title, description?, cards: [{ title, description, items?: string[], cta_text?, cta_href?, badge? }], button_style?, theme?, bg_image?, bg_image_opacity? }
+10. cta_1 : { eyebrow?, title, description?, cta_text, cta_href?, button_style?, theme?, bg_image?, bg_image_opacity? }
+11. testimonial_1 : { quote, author?, role?, theme?, bg_image?, bg_image_opacity? }
+12. text_1 : { eyebrow?, title?, content, theme?, bg_image?, bg_image_opacity? }
+13. gallery_grid : { eyebrow?, title?, description?, cards: [{ title?, description?, image, link? }], columns?: '2' | '3' | '4', theme?, bg_image?, bg_image_opacity? }
+14. gallery_carousel : { eyebrow?, title?, description?, cards: [{ title?, description?, image, link? }], theme?, bg_image?, bg_image_opacity? }
+15. gallery_masonry : { eyebrow?, title?, description?, cards: [{ title?, description?, image, link? }], theme?, bg_image?, bg_image_opacity? }
+16. faq_1 : { eyebrow?, title, description?, cards: [{ question, answer }], theme?, bg_image?, bg_image_opacity? }
+17. stats_1 : { eyebrow?, title?, cards: [{ value, label }] } (3 à 4 chiffres clés, ex: value "500+", label "Personnes accompagnées")
+18. timeline_1 : { eyebrow?, title?, description?, cards: [{ title, description? }] } (3 à 4 étapes d'un processus)
+19. logos_1 : { eyebrow?, cards: [{ image, alt? }] } (ne génère cette section QUE si le prompt mentionne explicitement des logos/partenaires/presse, sinon ne l'utilise pas)
 
 Règles :
-- Commence toujours par hero_1 ou hero_2
+- Commence toujours par une section hero (hero_1 à hero_5) : hero_5 pour une page intérieure, hero_1, hero_3 ou hero_4 quand une photo est pertinente, hero_2 sans image
 - Termine toujours par cta_1
 - Utilise 4 à 7 sections au total
 - Pour les href/links, utilise "#" (ou "/contact" pour les boutons d'appel à l'action principaux)

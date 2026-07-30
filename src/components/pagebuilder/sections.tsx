@@ -428,6 +428,340 @@ export function Hero2({ data, sectionIndex }: { data: Hero2Data, sectionIndex?: 
   );
 }
 
+// ─── hero_3 ───────────────────────────────────────────────────────────────────
+export interface Hero3Data {
+  theme?: 'light' | 'dark';
+  bg_color?: string;
+  bg_image?: string;
+  bg_image_opacity?: number;
+  bg_image_position?: string;
+  eyebrow?: string;
+  title: string;
+  title_italic?: string;
+  description?: string;
+  items?: string[];
+  cta_primary_text?: string;
+  cta_primary_href?: string;
+  cta_secondary_text?: string;
+  cta_secondary_href?: string;
+  button_style?: 'green' | 'white';
+  image_url?: string;
+  image_alt?: string;
+  image_url_pos?: string;
+}
+
+/** Titre centré puis portrait en arche — esprit institut / spa. */
+export function Hero3({ data, sectionIndex }: { data: Hero3Data, sectionIndex?: number }) {
+  const dark = data.theme === 'dark';
+
+  return (
+    <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 overflow-hidden">
+      <div className={`max-w-3xl mx-auto pt-36 pb-24 lg:pt-40 lg:pb-28 text-center ${dark ? 'text-white' : ''}`}>
+        <motion.div initial="hidden" animate="visible" variants={stagger}>
+          <motion.div variants={fadeUp} className="flex justify-center">
+            <Eyebrow text={data.eyebrow} dark={dark} sectionIndex={sectionIndex} fieldPath="eyebrow" />
+          </motion.div>
+
+          <motion.h1
+            variants={fadeUp}
+            className={`font-serif text-4xl md:text-6xl font-bold leading-[1.08] tracking-tight ${t(dark, 'text-stone-900', 'text-white')}`}
+          >
+            <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} as="span" />
+            {data.title_italic && (
+              <span className="block italic font-light text-sage mt-2">
+                <EditableText sectionIndex={sectionIndex} fieldPath="title_italic" value={data.title_italic} as="span" />
+              </span>
+            )}
+          </motion.h1>
+
+          <motion.div variants={fadeUp} className="h-px w-12 bg-sage/70 mx-auto my-8" />
+
+          {data.description && (
+            <motion.p variants={fadeUp} className={`text-lg font-light leading-relaxed max-w-xl mx-auto ${t(dark, 'text-stone-500', '')}`}>
+              <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
+            </motion.p>
+          )}
+
+          {data.items && data.items.length > 0 && (
+            <motion.ul variants={fadeUp} className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mt-9">
+              {data.items.map((item, i) => (
+                <li
+                  key={i}
+                  className={`inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest px-3.5 py-1.5 rounded-full border ${t(dark, 'border-stone-200 text-stone-500', 'border-white/15 text-stone-300')}`}
+                >
+                  <span className="w-1 h-1 rounded-full bg-sage shrink-0" />
+                  <EditableText sectionIndex={sectionIndex} fieldPath={`items.${i}`} value={item} as="span" />
+                </li>
+              ))}
+            </motion.ul>
+          )}
+
+          {(data.cta_primary_text || data.cta_secondary_text) && (
+            <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-11">
+              {data.cta_primary_text && (
+                <a
+                  href={data.cta_primary_href ?? '#'}
+                  className={`group inline-flex items-center gap-3 px-9 py-4 rounded-full font-bold shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer ${data.button_style === 'white' ? 'bg-white text-stone-900 hover:bg-stone-100' : 'bg-sage text-white hover:shadow-sage/30'}`}
+                >
+                  <EditableText sectionIndex={sectionIndex} fieldPath="cta_primary_text" value={data.cta_primary_text} as="span" />
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </a>
+              )}
+              {data.cta_secondary_text && (
+                <a
+                  href={data.cta_secondary_href ?? '#'}
+                  className={`inline-flex items-center gap-3 px-9 py-4 rounded-full font-bold transition-all duration-300 cursor-pointer border ${t(dark, 'border-stone-200 text-stone-700 hover:border-stone-400', 'border-white/20 text-white hover:border-white/40 hover:bg-white/8')}`}
+                >
+                  <EditableText sectionIndex={sectionIndex} fieldPath="cta_secondary_text" value={data.cta_secondary_text} as="span" />
+                </a>
+              )}
+            </motion.div>
+          )}
+        </motion.div>
+
+        {data.image_url && (
+          <motion.div
+            initial={{ opacity: 0, y: 44 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, ease: EASE, delay: 0.3 }}
+            className="relative z-10 mx-auto mt-16 w-full max-w-sm"
+          >
+            <div className={`relative overflow-hidden rounded-t-[13rem] rounded-b-3xl aspect-[3/4] shadow-2xl ring-1 ${t(dark, 'ring-stone-200', 'ring-white/10')}`}>
+              <EditableImage
+                sectionIndex={sectionIndex}
+                fieldPath="image_url"
+                src={data.image_url}
+                alt={data.image_alt || data.title}
+                className="w-full h-full object-cover"
+                initialPosition={data.image_url_pos}
+                loading="lazy"
+              />
+            </div>
+          </motion.div>
+        )}
+      </div>
+    </SectionWrapper>
+  );
+}
+
+// ─── hero_4 ───────────────────────────────────────────────────────────────────
+export interface Hero4Data {
+  theme?: 'light' | 'dark';
+  bg_color?: string;
+  bg_image?: string;
+  bg_image_opacity?: number;
+  bg_image_position?: string;
+  eyebrow?: string;
+  title: string;
+  title_italic?: string;
+  description?: string;
+  image_url?: string;
+  image_alt?: string;
+  image_url_pos?: string;
+  image_opacity?: number;
+  card_title?: string;
+  card_text?: string;
+  cta_text?: string;
+  cta_href?: string;
+  button_style?: 'green' | 'white';
+  min_height?: number;
+}
+
+/** Photo plein cadre, titre ancré en bas et carte d'informations flottante. */
+export function Hero4({ data, sectionIndex }: { data: Hero4Data, sectionIndex?: number }) {
+  const dark = data.theme === 'dark';
+  // Même règle que hero_1 : l'image de fond de section prend le pas sur la photo.
+  const hasImage = !!(data.image_url && !data.bg_image);
+  // Texte clair dès qu'il repose sur une photo, sinon selon le thème.
+  const onDark = hasImage || dark;
+  const hasCard = !!(data.card_title || data.card_text || data.cta_text);
+
+  return (
+    <SectionWrapper data={data} sectionIndex={sectionIndex} className="overflow-hidden">
+      <div
+        style={{ minHeight: data.min_height ? `${data.min_height}px` : '100svh' }}
+        className="relative flex items-end"
+      >
+        {hasImage && (
+          <>
+            <EditableImage
+              sectionIndex={sectionIndex}
+              fieldPath="image_url"
+              src={data.image_url!}
+              alt={data.image_alt || data.title}
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ opacity: (data.image_opacity ?? 100) / 100 }}
+              initialPosition={data.image_url_pos}
+            />
+            {/* Voile assez dense pour que le texte reste lisible quelle que soit
+                la photo (les zones claires rendaient la description illisible). */}
+            <div className="absolute inset-0 bg-gradient-to-t from-stone-900/90 via-stone-900/55 to-stone-900/20 pointer-events-none" />
+          </>
+        )}
+
+        <div className="relative z-10 w-full max-w-7xl mx-auto px-8 lg:px-14 pt-40 pb-16 lg:pb-20 grid lg:grid-cols-[1fr_auto] items-end gap-10 lg:gap-16">
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={stagger}
+            /* `text-white` doit être posé ici et non sur le <p> : GlobalStyles
+               impose `body, p { color: … }` hors @layer, ce qui bat les classes
+               Tailwind ; seul `.text-white p { color: inherit !important }`
+               laisse le paragraphe hériter. */
+            className={`max-w-2xl ${onDark ? 'text-white' : ''} ${hasImage ? '[text-shadow:0_2px_18px_rgb(0_0_0_/_0.45)]' : ''}`}
+          >
+            <motion.div variants={fadeUp}>
+              <Eyebrow text={data.eyebrow} dark={onDark} sectionIndex={sectionIndex} fieldPath="eyebrow" />
+            </motion.div>
+
+            <motion.h1
+              variants={fadeUp}
+              className={`font-serif text-4xl md:text-6xl lg:text-7xl font-bold leading-[1.02] tracking-tight ${onDark ? 'text-white' : 'text-stone-900'}`}
+            >
+              <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} as="span" />
+              {data.title_italic && (
+                <span className={`block italic font-light mt-2 ${onDark ? 'text-white/70' : 'text-sage'}`}>
+                  <EditableText sectionIndex={sectionIndex} fieldPath="title_italic" value={data.title_italic} as="span" />
+                </span>
+              )}
+            </motion.h1>
+
+            {data.description && (
+              <motion.p
+                variants={fadeUp}
+                className={`text-lg font-light leading-relaxed mt-7 max-w-lg ${onDark ? '' : 'text-stone-500'}`}
+              >
+                <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
+              </motion.p>
+            )}
+          </motion.div>
+
+          {hasCard && (
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.9, ease: EASE, delay: 0.35 }}
+              className={`w-full lg:w-80 rounded-3xl p-7 shadow-2xl backdrop-blur-md ${dark ? 'bg-stone-900/85 text-white ring-1 ring-white/10' : 'bg-white/95'}`}
+            >
+              {data.card_title && (
+                <p className={`font-serif text-xl font-bold leading-snug ${dark ? 'text-white' : 'text-stone-900'}`}>
+                  <EditableText sectionIndex={sectionIndex} fieldPath="card_title" value={data.card_title} as="span" />
+                </p>
+              )}
+              {data.card_text && (
+                <p className={`text-sm font-light leading-relaxed mt-3 ${dark ? 'opacity-80' : 'text-stone-500'}`}>
+                  <EditableText sectionIndex={sectionIndex} fieldPath="card_text" value={data.card_text} />
+                </p>
+              )}
+              {data.cta_text && (
+                <a
+                  href={data.cta_href ?? '#'}
+                  className={`group mt-6 flex items-center justify-center gap-2.5 w-full px-6 py-3.5 rounded-full font-bold transition-all duration-300 cursor-pointer ${data.button_style === 'white' ? 'bg-stone-900 text-white hover:bg-stone-800' : 'bg-sage text-white hover:shadow-lg hover:shadow-sage/30'}`}
+                >
+                  <EditableText sectionIndex={sectionIndex} fieldPath="cta_text" value={data.cta_text} as="span" />
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </a>
+              )}
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </SectionWrapper>
+  );
+}
+
+// ─── hero_5 ───────────────────────────────────────────────────────────────────
+export interface Hero5Data {
+  theme?: 'light' | 'dark';
+  bg_color?: string;
+  bg_image?: string;
+  bg_image_opacity?: number;
+  bg_image_position?: string;
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  align?: 'left' | 'center';
+  cta_text?: string;
+  cta_href?: string;
+  image_url?: string;
+  image_alt?: string;
+  image_url_pos?: string;
+  image_opacity?: number;
+  min_height?: number;
+}
+
+/** Bandeau compact pour les pages intérieures — hauteur mesurée, pas de plein écran. */
+export function Hero5({ data, sectionIndex }: { data: Hero5Data, sectionIndex?: number }) {
+  const dark = data.theme === 'dark';
+  const hasImage = !!(data.image_url && !data.bg_image);
+  const onDark = hasImage || dark;
+  const centered = (data.align ?? 'center') === 'center';
+
+  return (
+    <SectionWrapper data={data} sectionIndex={sectionIndex} className="overflow-hidden">
+      <div
+        style={{ minHeight: data.min_height ? `${data.min_height}px` : '420px' }}
+        className="relative flex items-center px-6"
+      >
+        {hasImage && (
+          <>
+            <EditableImage
+              sectionIndex={sectionIndex}
+              fieldPath="image_url"
+              src={data.image_url!}
+              alt={data.image_alt || data.title}
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ opacity: (data.image_opacity ?? 100) / 100 }}
+              initialPosition={data.image_url_pos}
+            />
+            <div className="absolute inset-0 bg-stone-900/65 pointer-events-none" />
+          </>
+        )}
+
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={stagger}
+          className={`relative z-10 w-full max-w-4xl pt-28 pb-14 ${centered ? 'mx-auto text-center' : 'mr-auto lg:pl-8'} ${onDark ? 'text-white' : ''} ${hasImage ? '[text-shadow:0_2px_18px_rgb(0_0_0_/_0.45)]' : ''}`}
+        >
+          <motion.div variants={fadeUp} className={centered ? 'flex justify-center' : ''}>
+            <Eyebrow text={data.eyebrow} dark={onDark} sectionIndex={sectionIndex} fieldPath="eyebrow" />
+          </motion.div>
+
+          <motion.h1
+            variants={fadeUp}
+            className={`font-serif text-3xl md:text-5xl font-bold leading-[1.1] tracking-tight ${onDark ? 'text-white' : 'text-stone-900'}`}
+          >
+            <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} as="span" />
+          </motion.h1>
+
+          <motion.div variants={fadeUp} className={`h-px w-10 bg-sage my-6 ${centered ? 'mx-auto' : ''}`} />
+
+          {data.description && (
+            <motion.p
+              variants={fadeUp}
+              className={`text-base md:text-lg font-light leading-relaxed max-w-2xl ${centered ? 'mx-auto' : ''} ${onDark ? '' : 'text-stone-500'}`}
+            >
+              <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
+            </motion.p>
+          )}
+
+          {data.cta_text && (
+            <motion.a
+              variants={fadeUp}
+              href={data.cta_href ?? '#'}
+              className={`group inline-flex items-center gap-2 mt-8 text-sm font-bold uppercase tracking-widest border-b pb-1 transition-colors cursor-pointer ${onDark ? 'text-white border-white/40 hover:border-white' : 'text-sage border-sage/40 hover:border-sage'}`}
+            >
+              <EditableText sectionIndex={sectionIndex} fieldPath="cta_text" value={data.cta_text} as="span" />
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            </motion.a>
+          )}
+        </motion.div>
+      </div>
+    </SectionWrapper>
+  );
+}
+
 // ─── intro_1 ──────────────────────────────────────────────────────────────────
 export interface Intro1Data {
   theme?: 'light' | 'dark';

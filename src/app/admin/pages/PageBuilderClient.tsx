@@ -30,7 +30,7 @@ const VIEWPORTS: Record<Viewport, { label: string; short: string; width?: number
 };
 
 const SECTION_CATEGORIES: { label: string; types: SectionType[] }[] = [
-  { label: 'Hero', types: ['hero_1', 'hero_2'] },
+  { label: 'Hero', types: ['hero_1', 'hero_2', 'hero_3', 'hero_4', 'hero_5'] },
   { label: 'Contenu', types: ['intro_1', 'text_1', 'text_image_1', 'features_1', 'features_2', 'features_3', 'timeline_1'] },
   { label: 'Preuve sociale', types: ['testimonial_1', 'reviews_1', 'faq_1', 'stats_1', 'logos_1'] },
   { label: 'Médias', types: ['gallery_grid', 'gallery_carousel', 'gallery_masonry'] },

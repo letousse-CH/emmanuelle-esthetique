@@ -187,6 +187,9 @@ const FIELD_LABELS: Record<string, string> = {
   guarantee: 'Garantie',
   theme: 'Thème',
   cards_theme: 'Thème des cartes',
+  align: 'Alignement du texte',
+  card_title: 'Carte — titre',
+  card_text: 'Carte — texte',
   // Champs de cartes
   icon: 'Icône (emoji)',
   link: 'Lien',
@@ -217,6 +220,9 @@ const ENUM_LABELS: Record<string, string> = {
   slow: 'Lente',
   normal: 'Normale',
   fast: 'Rapide',
+  left: 'Gauche',
+  center: 'Centré',
+  right: 'Droite',
 };
 
 /** Extrait les valeurs d'une union littérale du schéma : "'2' | '3' | '4'". */
@@ -472,7 +478,7 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
               <div className="flex justify-between items-center mb-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{labelFor(key)}</label>
                 <span className="text-[10px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">
-                  {heightVal > 0 ? `${heightVal}px` : 'Auto (100vh)'}
+                  {heightVal > 0 ? `${heightVal}px` : 'Auto'}
                 </span>
               </div>
               <input

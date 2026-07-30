@@ -2,6 +2,9 @@ import type { ComponentType } from 'react';
 import {
   Hero1, type Hero1Data,
   Hero2, type Hero2Data,
+  Hero3, type Hero3Data,
+  Hero4, type Hero4Data,
+  Hero5, type Hero5Data,
   Intro1, type Intro1Data,
   Features1, type Features1Data,
   Features2, type Features2Data,
@@ -25,6 +28,9 @@ import {
 export type SectionType =
   | 'hero_1'
   | 'hero_2'
+  | 'hero_3'
+  | 'hero_4'
+  | 'hero_5'
   | 'intro_1'
   | 'features_1'
   | 'features_2'
@@ -47,6 +53,9 @@ export type SectionType =
 export type SectionData =
   | Hero1Data
   | Hero2Data
+  | Hero3Data
+  | Hero4Data
+  | Hero5Data
   | Intro1Data
   | Features1Data
   | Features2Data
@@ -110,6 +119,71 @@ export const WIREFRAME_REGISTRY: Record<SectionType, WireframeEntry> = {
       cta_text: 'string (optionnel)',
       cta_href: 'string (optionnel)',
       button_style: "'green' | 'white' (optionnel)",
+      min_height: 'height (optionnel)',
+      theme: "'light' | 'dark' (optionnel)",
+      bg_image: 'image (optionnel)',
+      bg_image_opacity: 'opacity (optionnel)',
+      bg_image_position: 'position (optionnel)',
+    },
+  },
+  hero_3: {
+    component: Hero3,
+    description: 'Hero centré avec portrait en arche sous le titre, mots-clés en pastilles et 2 boutons',
+    dataSchema: {
+      eyebrow: 'string (optionnel)',
+      title: 'string',
+      title_italic: 'string (optionnel)',
+      description: 'string (optionnel)',
+      items: 'string[] (pastilles, optionnel)',
+      cta_primary_text: 'string (optionnel)',
+      cta_primary_href: 'string (optionnel)',
+      cta_secondary_text: 'string (optionnel)',
+      cta_secondary_href: 'string (optionnel)',
+      button_style: "'green' | 'white' (optionnel)",
+      image_url: 'image (optionnel)',
+      image_alt: 'string (optionnel)',
+      theme: "'light' | 'dark' (optionnel)",
+      bg_image: 'image (optionnel)',
+      bg_image_opacity: 'opacity (optionnel)',
+      bg_image_position: 'position (optionnel)',
+    },
+  },
+  hero_4: {
+    component: Hero4,
+    description: 'Hero éditorial : photo plein cadre, titre ancré en bas et carte d\'informations flottante',
+    dataSchema: {
+      eyebrow: 'string (optionnel)',
+      title: 'string',
+      title_italic: 'string (optionnel)',
+      description: 'string (optionnel)',
+      image_url: 'image (optionnel)',
+      image_alt: 'string (optionnel)',
+      image_opacity: 'opacity (optionnel)',
+      card_title: 'string (optionnel)',
+      card_text: 'string (optionnel)',
+      cta_text: 'string (optionnel)',
+      cta_href: 'string (optionnel)',
+      button_style: "'green' | 'white' (optionnel)",
+      min_height: 'height (optionnel)',
+      theme: "'light' | 'dark' (optionnel)",
+      bg_image: 'image (optionnel)',
+      bg_image_opacity: 'opacity (optionnel)',
+      bg_image_position: 'position (optionnel)',
+    },
+  },
+  hero_5: {
+    component: Hero5,
+    description: 'Bandeau de page compact (hauteur réduite) pour les pages intérieures, avec lien discret',
+    dataSchema: {
+      eyebrow: 'string (optionnel)',
+      title: 'string',
+      description: 'string (optionnel)',
+      align: "'center' | 'left' (optionnel)",
+      cta_text: 'string (optionnel)',
+      cta_href: 'string (optionnel)',
+      image_url: 'image (optionnel)',
+      image_alt: 'string (optionnel)',
+      image_opacity: 'opacity (optionnel)',
       min_height: 'height (optionnel)',
       theme: "'light' | 'dark' (optionnel)",
       bg_image: 'image (optionnel)',

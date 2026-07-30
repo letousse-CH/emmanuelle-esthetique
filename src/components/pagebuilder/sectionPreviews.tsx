@@ -8,6 +8,9 @@ import type { SectionType } from './wireframes.config';
 export const SECTION_LABELS: Record<SectionType, string> = {
   hero_1: 'Hero plein écran',
   hero_2: 'Hero centré',
+  hero_3: 'Hero portrait en arche',
+  hero_4: 'Hero éditorial photo',
+  hero_5: 'Bandeau de page',
   intro_1: 'Intro : image + citation',
   features_1: 'Liste de points clés',
   features_2: 'Grille de 3 atouts',
@@ -75,6 +78,49 @@ export function SectionPreview({ type }: { type: SectionType }) {
           {L(45, 48, 70, 7, 'fill-stone-700')}
           {L(42, 62, 76, 4, 'fill-stone-300')}
           {Pill(65, 74, 30)}
+        </Frame>
+      );
+    case 'hero_3':
+      return (
+        <Frame>
+          {L(70, 12, 20, 3, 'fill-sage')}
+          {L(38, 20, 84, 6, 'fill-stone-700')}
+          {L(55, 30, 50, 4, 'fill-sage/60')}
+          <rect x="34" y="38" width="18" height="6" rx="3" className="fill-stone-200" />
+          <rect x="56" y="38" width="22" height="6" rx="3" className="fill-stone-200" />
+          <rect x="82" y="38" width="18" height="6" rx="3" className="fill-stone-200" />
+          {Pill(52, 48, 26)}
+          {/* portrait en arche */}
+          <path d="M 62 100 L 62 76 A 18 18 0 0 1 98 76 L 98 100 Z" className="fill-stone-200" />
+          <circle cx="72" cy="78" r="3" className="fill-stone-300" />
+        </Frame>
+      );
+    case 'hero_4':
+      return (
+        <Frame>
+          <rect x="0" y="0" width="160" height="100" rx="6" className="fill-stone-300" />
+          <rect x="0" y="44" width="160" height="56" className="fill-stone-900/55" />
+          {L(10, 56, 16, 3, 'fill-sage')}
+          {L(10, 64, 66, 7, 'fill-white')}
+          {L(10, 76, 44, 5, 'fill-white/60')}
+          {L(10, 87, 54, 3, 'fill-white/40')}
+          {/* carte flottante */}
+          <rect x="98" y="56" width="52" height="36" rx="5" className="fill-white" />
+          {L(104, 62, 30, 4, 'fill-stone-700')}
+          {L(104, 70, 38, 3, 'fill-stone-300')}
+          {Pill(104, 78, 40)}
+        </Frame>
+      );
+    case 'hero_5':
+      return (
+        <Frame>
+          <rect x="0" y="24" width="160" height="52" className="fill-stone-300" />
+          <rect x="0" y="24" width="160" height="52" className="fill-stone-900/45" />
+          {L(70, 34, 20, 3, 'fill-sage')}
+          {L(44, 42, 72, 6, 'fill-white')}
+          {L(66, 53, 28, 2, 'fill-sage')}
+          {L(50, 59, 60, 3, 'fill-white/60')}
+          {L(66, 68, 28, 3, 'fill-white/80')}
         </Frame>
       );
     case 'intro_1':
