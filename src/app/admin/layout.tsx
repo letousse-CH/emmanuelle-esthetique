@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useModuleFlags } from '../../hooks/useModuleFlags';
+import { useAppMode } from '../../hooks/useAppMode';
 import { LayoutDashboard, FileText, Settings, LogOut, Image as ImageIcon, Mail, Send, BarChart2, CalendarDays, Layers, Menu, ChevronRight, ExternalLink, HelpCircle, Share2, CreditCard, Users, BookOpenCheck, Sparkles } from 'lucide-react';
 import { SITE_CONFIG } from '../../config/site';
 
@@ -14,6 +15,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const { user, loading } = useAuth();
   const moduleFlags = useModuleFlags();
+  // Web app Caisse installée sur l'écran d'accueil : on efface la coque du
+  // back-office (barre latérale, topbar) pour laisser tout l'écran à la caisse.
+  // La navigation passe alors par la barre d'onglets basse de /admin/caisse.
+  const appMode = useAppMode();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [aiStatus, setAiStatus] = useState<any>(null);
@@ -137,6 +142,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   if (!user) return null;
+
+  if (appMode) {
+    return (
+      <div className="min-h-screen bg-stone-50 text-stone-800">
+        <main id="admin-main-content" className="p-4 pt-[calc(1rem+env(safe-area-inset-top))]">
+          {children}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-50 flex text-stone-800">

@@ -156,6 +156,22 @@ produit la convention suisse `CHF 1'234.50` (point décimal). `fr-CH` écrirait
 `1'234,50 CHF`, avec une virgule qu'aucune fiduciaire n'attend. Les dates, elles,
 restent en `fr-CH`. Voir `formatCHF` dans `src/types/caisse.ts`.
 
+**Web app (PWA).** La caisse s'installe sur l'écran d'accueil du téléphone :
+manifeste servi par `src/app/admin/caisse/manifest/route.ts`, déclaré **par le
+seul** `src/app/admin/caisse/layout.tsx`. Le site public ne référence aucun
+manifeste et ne proposera donc jamais d'être installé — c'est ce qui garde les
+deux mondes séparés ; ne pas remonter cette déclaration dans `app/layout.tsx`.
+
+Le `scope` du manifeste s'écrit `/admin/caisse` **sans slash final** : la
+correspondance se fait par préfixe de chaîne, et `/admin/caisse/` exclurait
+`start_url` lui-même, ce qui rouvrirait l'app dans un onglet ordinaire.
+
+Lancée depuis le raccourci, `useAppMode()` (`src/hooks/useAppMode.ts`) détecte
+le mode autonome et `admin/layout.tsx` efface alors la barre latérale et la
+topbar ; la navigation passe par `CaisseTabBar`. Icônes générées dans
+`public/icons/` (monogramme sauge, plus une variante `maskable` réduite pour le
+rognage Android).
+
 **Export fiducie.** Journal filtrable par mois ou par année, exporté en CSV
 (séparateur `;`, BOM UTF-8 — double-clic et ça s'ouvre dans Excel), une ligne
 par prestation. Les factures annulées y figurent avec des montants à 0.00 :

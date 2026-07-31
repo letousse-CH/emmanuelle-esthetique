@@ -37,6 +37,7 @@ export default function CaisseClient() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Transaction | null>(null);
+  const paymentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -120,7 +121,7 @@ export default function CaisseClient() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className={`max-w-6xl mx-auto space-y-6 ${lines.length > 0 ? 'pb-24 lg:pb-0' : ''}`}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Caisse</p>
@@ -221,7 +222,7 @@ export default function CaisseClient() {
             </div>
           </div>
 
-          <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-5 space-y-4">
+          <div ref={paymentRef} className="bg-white border border-stone-100 rounded-2xl shadow-sm p-5 space-y-4 scroll-mt-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-stone-400 mb-2.5">Mode de paiement</p>
               <div className="grid grid-cols-2 gap-2">
@@ -279,6 +280,30 @@ export default function CaisseClient() {
           </div>
         </div>
       </div>
+
+      {/* Récapitulatif flottant — téléphone uniquement. Il ne valide pas
+          l'encaissement : il amène au choix du mode de paiement. Valider d'ici
+          enregistrerait le mode par défaut, donc une ligne fausse dans le livre
+          de caisse pour un simple pouce mal placé. */}
+      {lines.length > 0 && (
+        <div
+          className="lg:hidden fixed inset-x-0 z-30 px-4 pb-3"
+          style={{ bottom: 'calc(var(--caisse-tabbar-h, 0px) + env(safe-area-inset-bottom))' }}
+        >
+          <button
+            onClick={() => paymentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            className="w-full flex items-center justify-between gap-3 bg-stone-900 text-white pl-5 pr-4 py-3.5 rounded-xl shadow-lg active:bg-sage transition-colors cursor-pointer"
+          >
+            <span className="text-xs text-white/60">
+              {lines.length} ligne{lines.length !== 1 ? 's' : ''}
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="text-base font-semibold tabular-nums">{formatCHF(totals.ttc)}</span>
+              <span className="text-xs uppercase tracking-widest text-white/70">Paiement →</span>
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
