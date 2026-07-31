@@ -1,15 +1,15 @@
 import { supabase } from '../services/supabase';
 
 /**
- * Télécharge la quittance PDF d'un encaissement.
+ * Télécharge un PDF de caisse (quittance ou bon cadeau).
  *
- * La route est protégée par le token Supabase, qu'un `<a href>` ne peut pas
+ * Les routes sont protégées par le token Supabase, qu'un `<a href>` ne peut pas
  * porter : on récupère donc le PDF en fetch puis on déclenche le téléchargement
  * depuis un blob (même approche que les exports CSV de l'admin).
  */
-export async function downloadFacture(transactionId: string, numero: string): Promise<void> {
+async function downloadPdf(url: string, filename: string): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
-  const res = await fetch(`/api/caisse/facture/${transactionId}`, {
+  const res = await fetch(url, {
     headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
   });
 
@@ -19,10 +19,18 @@ export async function downloadFacture(transactionId: string, numero: string): Pr
   }
 
   const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
+  const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = `${numero}.pdf`;
+  a.href = objectUrl;
+  a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(objectUrl);
+}
+
+export function downloadFacture(transactionId: string, numero: string): Promise<void> {
+  return downloadPdf(`/api/caisse/facture/${transactionId}`, `${numero}.pdf`);
+}
+
+export function downloadBonCadeau(giftCardId: string, code: string): Promise<void> {
+  return downloadPdf(`/api/caisse/bon/${giftCardId}`, `${code}.pdf`);
 }

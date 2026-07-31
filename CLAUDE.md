@@ -156,6 +156,39 @@ produit la convention suisse `CHF 1'234.50` (point décimal). `fr-CH` écrirait
 `1'234,50 CHF`, avec une virgule qu'aucune fiduciaire n'attend. Les dates, elles,
 restent en `fr-CH`. Voir `formatCHF` dans `src/types/caisse.ts`.
 
+**Bons cadeaux.** Vendus soit à un montant libre, soit contre un ou plusieurs
+soins de la carte, puis présentés en paiement par leur code `BON-2026-0001`.
+Migration : `supabase/migrations/20260801_caisse_bons_cadeaux.sql` — à appliquer
+**après** celle de la caisse, dont elle remplace `caisse_create_transaction`.
+
+⚠️ **Un bon ne produit de recette qu'une fois : à sa vente.** Le jour où la
+cliente l'utilise, aucun argent n'entre. D'où `transactions.montant_bon`, et la
+règle qui gouverne tout le module :
+
+```
+recette encaissée = total_ttc - montant_bon      (0 si la facture est annulée)
+```
+
+C'est `recetteEncaissee()` dans `src/types/caisse.ts`. **Ne jamais sommer
+`total_ttc` pour calculer un CA** — journal, tableau de bord, graphiques et
+export passent tous par cette fonction. Le modèle couvre aussi le bon partiel :
+bon de CHF 150 sur un soin à CHF 200 → `montant_bon` = 150, mode = twint pour
+les 50 restants.
+
+Vendre un bon n'est pas une prestation : en TVA suisse l'impôt est dû à
+l'utilisation, pas à la vente, donc la ligne est toujours à 0 %. L'échéance est
+figée sur chaque bon à l'émission — changer `caisse_bon_validite_mois` (60 mois
+par défaut) n'affecte jamais un bon déjà vendu. Aucune durée minimale n'existe
+en droit suisse : un bon est une créance ordinaire, prescrite par 10 ans
+(CO art. 127) à défaut d'accord contraire.
+
+**Corriger une erreur de caisse.** Bouton « Corriger » du journal : la facture
+fautive est annulée (elle reste au journal avec son numéro), et l'écran de
+caisse rouvre avec son panier pré-rempli via `src/utils/caissePrefill.ts`. La
+nouvelle facture porte `corrige_transaction_id` vers l'ancienne. C'est la seule
+correction légale — le CO interdit de réécrire une écriture, il exige que
+l'erreur *et* sa correction restent visibles.
+
 **Web app (PWA).** La caisse s'installe sur l'écran d'accueil du téléphone :
 manifeste servi par `src/app/admin/caisse/manifest/route.ts`, déclaré **par le
 seul** `src/app/admin/caisse/layout.tsx`. Le site public ne référence aucun

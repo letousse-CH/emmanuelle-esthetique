@@ -135,6 +135,8 @@ export default function Settings() {
   const [caisseTvaNumero, setCaisseTvaNumero]         = useState('');
   const [caisseIban, setCaisseIban]                   = useState('');
   const [caisseMentions, setCaisseMentions]           = useState('');
+  const [caisseBonValidite, setCaisseBonValidite]     = useState('60');
+  const [caisseBonMentions, setCaisseBonMentions]     = useState('');
   const [caisseLoading, setCaisseLoading]             = useState(false);
   const [caisseFetching, setCaisseFetching]           = useState(true);
   const [caisseMessage, setCaisseMessage]             = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -441,6 +443,8 @@ export default function Settings() {
     'caisse_tva_numero',
     'caisse_iban',
     'caisse_facture_mentions',
+    'caisse_bon_validite_mois',
+    'caisse_bon_mentions',
   ];
 
   const loadCaisse = async () => {
@@ -452,6 +456,8 @@ export default function Settings() {
     setCaisseTvaNumero(map.caisse_tva_numero ?? SETTINGS_DEFAULTS.caisse_tva_numero);
     setCaisseIban(map.caisse_iban ?? SETTINGS_DEFAULTS.caisse_iban);
     setCaisseMentions(map.caisse_facture_mentions ?? SETTINGS_DEFAULTS.caisse_facture_mentions);
+    setCaisseBonValidite(map.caisse_bon_validite_mois ?? SETTINGS_DEFAULTS.caisse_bon_validite_mois);
+    setCaisseBonMentions(map.caisse_bon_mentions ?? SETTINGS_DEFAULTS.caisse_bon_mentions);
     setCaisseFetching(false);
   };
 
@@ -467,6 +473,10 @@ export default function Settings() {
       { key: 'caisse_tva_numero',       value: caisseTvaNumero.trim() },
       { key: 'caisse_iban',             value: caisseIban.trim() },
       { key: 'caisse_facture_mentions', value: caisseMentions.trim() },
+      // Plancher à 12 mois : un bon de quelques semaines serait contesté, et
+      // une valeur vide ou nulle produirait des bons déjà échus à l'émission.
+      { key: 'caisse_bon_validite_mois', value: String(Math.max(12, Number(caisseBonValidite) || 60)) },
+      { key: 'caisse_bon_mentions',      value: caisseBonMentions.trim() },
     ];
     const { error } = await supabase.from('settings').upsert(rows, { onConflict: 'key' });
     if (error) {
@@ -2342,6 +2352,55 @@ export default function Settings() {
                     onChange={e => setCaisseMentions(e.target.value)}
                     className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
                   />
+                </div>
+
+                <div className="pt-2 border-t border-stone-100">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-4">Bons cadeaux</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label htmlFor="caisse-bon-validite" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                        Durée de validité
+                      </label>
+                      <select
+                        id="caisse-bon-validite"
+                        value={caisseBonValidite}
+                        onChange={e => setCaisseBonValidite(e.target.value)}
+                        className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all cursor-pointer"
+                      >
+                        <option value="12">1 an</option>
+                        <option value="24">2 ans</option>
+                        <option value="36">3 ans</option>
+                        <option value="60">5 ans (recommandé)</option>
+                        <option value="120">10 ans (durée légale)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-stone-100 bg-stone-50/60 px-5 py-4 text-xs text-stone-500 leading-relaxed">
+                    Le droit suisse ne fixe <strong>aucune durée minimale</strong>. Un bon cadeau est une
+                    créance ordinaire : à défaut d&apos;accord contraire, il se prescrit par 10 ans
+                    (CO art. 127). Une validité courte reste possible si elle est annoncée à l&apos;achat,
+                    mais les organisations de consommateurs la contestent régulièrement — d&apos;où le
+                    réglage à 5 ans par défaut, usuel dans la branche. En cas de doute, demande à ta
+                    fiduciaire.
+                    <br /><br />
+                    L&apos;échéance est <strong>figée sur chaque bon à son émission</strong> : modifier ce
+                    réglage n&apos;affecte que les bons vendus ensuite, jamais ceux déjà remis à une cliente.
+                  </div>
+
+                  <div className="mt-4">
+                    <label htmlFor="caisse-bon-mentions" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                      Conditions imprimées sur le bon
+                    </label>
+                    <textarea
+                      id="caisse-bon-mentions"
+                      rows={3}
+                      value={caisseBonMentions}
+                      onChange={e => setCaisseBonMentions(e.target.value)}
+                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
+                    />
+                  </div>
                 </div>
 
                 <div className="rounded-xl border border-stone-100 bg-stone-50/60 px-5 py-4 text-xs text-stone-500 leading-relaxed">

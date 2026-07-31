@@ -23,6 +23,17 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   // Mention libre en pied de facture (conditions, remerciement…).
   caisse_facture_mentions: 'Merci de votre confiance et à bientôt.',
 
+  // Durée de validité des bons cadeaux, en mois. Aucun minimum n'est fixé par
+  // le droit suisse : un bon est une créance ordinaire, donc prescrite par
+  // 10 ans (CO art. 127) à défaut d'accord contraire. Les organisations de
+  // consommateurs contestent les validités très courtes ; 60 mois (5 ans) est
+  // un compromis usuel dans la branche. La date d'échéance est figée sur chaque
+  // bon à l'émission — modifier ce réglage n'affecte jamais un bon déjà vendu.
+  caisse_bon_validite_mois: '60',
+  // Conditions imprimées au dos du bon cadeau.
+  caisse_bon_mentions:
+    "Ce bon est nominatif, non remboursable et non échangeable contre des espèces. Il peut être utilisé en une ou plusieurs fois jusqu'à la date d'échéance indiquée.",
+
   // ── IA & Budget (admin > Paramètres > IA & Budget) ──────
   // Modèle Claude utilisé par toutes les générations ; voir src/constants/aiModels.ts.
   ai_model:                 'claude-opus-5',

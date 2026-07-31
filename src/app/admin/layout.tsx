@@ -7,7 +7,7 @@ import { supabase } from '../../services/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useModuleFlags } from '../../hooks/useModuleFlags';
 import { useAppMode } from '../../hooks/useAppMode';
-import { LayoutDashboard, FileText, Settings, LogOut, Image as ImageIcon, Mail, Send, BarChart2, CalendarDays, Layers, Menu, ChevronRight, ExternalLink, HelpCircle, Share2, CreditCard, Users, BookOpenCheck, Sparkles } from 'lucide-react';
+import { LayoutDashboard, FileText, Settings, LogOut, Image as ImageIcon, Mail, Send, BarChart2, CalendarDays, Layers, Menu, ChevronRight, ExternalLink, HelpCircle, Share2, CreditCard, Users, BookOpenCheck, Sparkles, Gift } from 'lucide-react';
 import { SITE_CONFIG } from '../../config/site';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -116,6 +116,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         // sous-pages (journal, clientes, prestations).
         { name: 'Encaissement', path: '/admin/caisse', icon: CreditCard, exact: true },
         { name: 'Journal & CA', path: '/admin/caisse/journal', icon: BookOpenCheck },
+        { name: 'Bons cadeaux', path: '/admin/caisse/bons', icon: Gift },
         { name: 'Clientes', path: '/admin/caisse/clients', icon: Users },
         { name: 'Prestations', path: '/admin/caisse/prestations', icon: Sparkles },
       ],

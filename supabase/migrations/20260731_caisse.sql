@@ -17,6 +17,11 @@
 -- Les montants sont en francs, `numeric(10,2)` : les centimes comptent dès que
 -- la TVA est activée (8.1 % de CHF 120.00 = CHF 9.72), donc pas d'entier CHF
 -- comme dans le module Événements.
+--
+-- ⚠️ À appliquer AVANT `20260801_caisse_bons_cadeaux.sql`, qui remplace
+-- `caisse_create_transaction` par une version étendue. Rejouer ce fichier seul
+-- après le second recréerait l'ancienne signature à 5 arguments, et PostgREST
+-- ne saurait plus laquelle des deux appeler.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ── Clientèle ────────────────────────────────────────────────────────────────

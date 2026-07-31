@@ -20,6 +20,12 @@ export interface FactureSettings {
   mentions: string;
 }
 
+/** Bons émis par cette vente, et bon éventuellement présenté en paiement. */
+export interface FactureGiftCards {
+  emis: { code: string; libelle: string; montant: number; expireLe: string }[];
+  utilise: { code: string; montant: number; restant: number } | null;
+}
+
 const SAGE = '#8A9A7B';
 const INK = '#3A3730';
 const MUTED = '#8C877D';
@@ -83,6 +89,12 @@ const styles = StyleSheet.create({
 
   note: { marginTop: 16, fontSize: 8.5, color: MUTED },
 
+  giftBox: {
+    marginTop: 18, padding: 10,
+    borderWidth: 0.5, borderColor: SAGE, borderStyle: 'solid', borderRadius: 3,
+  },
+  giftLine: { fontSize: 9, marginTop: 1 },
+
   footer: {
     position: 'absolute', bottom: 30, left: 48, right: 48,
     paddingTop: 10, borderTopWidth: 0.5, borderTopColor: LINE, borderTopStyle: 'solid',
@@ -98,6 +110,12 @@ function chf(value: number | string | null | undefined): string {
   });
 }
 
+function dateCH(value: string): string {
+  return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString('fr-CH', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  });
+}
+
 function dateTimeCH(iso: string): string {
   const d = new Date(iso);
   const date = d.toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Zurich' });
@@ -105,10 +123,11 @@ function dateTimeCH(iso: string): string {
   return `${date} à ${time}`;
 }
 
-export default function FactureDocument({ transaction, business, settings }: {
+export default function FactureDocument({ transaction, business, settings, giftCards }: {
   transaction: TransactionWithItems;
   business: BusinessInfo;
   settings: FactureSettings;
+  giftCards?: FactureGiftCards;
 }) {
   const cancelled = transaction.status === 'annulee';
   const showTva = settings.tvaAssujetti || Number(transaction.total_tva) > 0;
@@ -205,10 +224,32 @@ export default function FactureDocument({ transaction, business, settings }: {
               </View>
             )}
 
-          <View style={styles.grandRow}>
-            <Text style={styles.grandLabel}>Total TTC</Text>
-            <Text style={styles.grandValue}>CHF {chf(transaction.total_ttc)}</Text>
-          </View>
+          {giftCards?.utilise ? (
+            <>
+              <View style={styles.grandRow}>
+                <Text style={styles.grandLabel}>Total TTC</Text>
+                <Text style={styles.grandValue}>CHF {chf(transaction.total_ttc)}</Text>
+              </View>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Bon {giftCards.utilise.code}</Text>
+                {/* Trait d'union ASCII, pas le signe « moins » U+2212 : les
+                    polices standard du PDF sont encodées en WinAnsi, où ce
+                    caractère n'existe pas — il disparaîtrait sans un bruit. */}
+                <Text style={styles.totalValue}>- CHF {chf(giftCards.utilise.montant)}</Text>
+              </View>
+              <View style={styles.grandRow}>
+                <Text style={styles.grandLabel}>Montant encaissé</Text>
+                <Text style={styles.grandValue}>
+                  CHF {chf(Number(transaction.total_ttc) - Number(giftCards.utilise.montant))}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <View style={styles.grandRow}>
+              <Text style={styles.grandLabel}>Total TTC</Text>
+              <Text style={styles.grandValue}>CHF {chf(transaction.total_ttc)}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.payment}>
@@ -223,6 +264,26 @@ export default function FactureDocument({ transaction, business, settings }: {
             </Text>
           </View>
         </View>
+
+        {giftCards && giftCards.emis.length > 0 ? (
+          <View style={styles.giftBox}>
+            <Text style={styles.sectionLabel}>
+              BON{giftCards.emis.length > 1 ? 'S' : ''} CADEAU{giftCards.emis.length > 1 ? 'X' : ''} ÉMIS
+            </Text>
+            {giftCards.emis.map(g => (
+              <Text key={g.code} style={styles.giftLine}>
+                {g.code} — {g.libelle}, CHF {chf(g.montant)}, valable jusqu&apos;au {dateCH(g.expireLe)}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
+        {giftCards?.utilise ? (
+          <Text style={styles.note}>
+            Bon {giftCards.utilise.code} — solde restant après cette visite :
+            CHF {chf(giftCards.utilise.restant)}.
+          </Text>
+        ) : null}
 
         {transaction.mode_paiement === 'virement' && settings.iban ? (
           <Text style={styles.note}>IBAN : {settings.iban}</Text>

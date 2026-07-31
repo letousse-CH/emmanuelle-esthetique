@@ -3,9 +3,11 @@
  * Postgres, `number` ici) — jamais des centimes entiers.
  */
 
-export type ModePaiement = 'especes' | 'carte' | 'twint' | 'virement';
+export type ModePaiement = 'especes' | 'carte' | 'twint' | 'virement' | 'bon_cadeau';
 export type TransactionStatus = 'payee' | 'annulee';
 
+/** Modes proposés à l'écran. `bon_cadeau` n'y figure pas : il se déduit du bon
+ *  attaché à la vente quand celui-ci couvre la totalité du montant. */
 export const MODES_PAIEMENT: { value: ModePaiement; label: string }[] = [
   { value: 'especes',  label: 'Espèces'  },
   { value: 'carte',    label: 'Carte'    },
@@ -13,8 +15,13 @@ export const MODES_PAIEMENT: { value: ModePaiement; label: string }[] = [
   { value: 'virement', label: 'Virement' },
 ];
 
-export const MODE_PAIEMENT_LABELS: Record<ModePaiement, string> =
-  Object.fromEntries(MODES_PAIEMENT.map(m => [m.value, m.label])) as Record<ModePaiement, string>;
+export const MODE_PAIEMENT_LABELS: Record<ModePaiement, string> = {
+  especes: 'Espèces',
+  carte: 'Carte',
+  twint: 'TWINT',
+  virement: 'Virement',
+  bon_cadeau: 'Bon cadeau',
+};
 
 /**
  * Taux TVA suisses au 1ᵉʳ janvier 2024. `0` reste le défaut : l'activité n'est
@@ -54,10 +61,55 @@ export interface Service {
   updated_at: string;
 }
 
+export type GiftCardStatus = 'active' | 'epuise' | 'annule';
+
+export interface GiftCard {
+  id: string;
+  annee: number;
+  number_seq: number;
+  code: string;
+  libelle: string;
+  montant_initial: number;
+  montant_restant: number;
+  beneficiaire: string | null;
+  acheteur_client_id: string | null;
+  acheteur_label: string;
+  sale_transaction_id: string | null;
+  emis_le: string;
+  expire_le: string;
+  status: GiftCardStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Un bon est utilisable s'il n'est ni épuisé, ni annulé, ni échu. L'expiration
+ * n'est pas un statut stocké — elle se calcule à la lecture, pour qu'un bon ne
+ * puisse jamais paraître valable faute d'une tâche planifiée qui aurait dû
+ * tourner.
+ */
+export function isGiftCardExpired(card: Pick<GiftCard, 'expire_le'>): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(`${card.expire_le}T00:00:00`) < today;
+}
+
+export function isGiftCardUsable(card: GiftCard): boolean {
+  return card.status === 'active' && Number(card.montant_restant) > 0 && !isGiftCardExpired(card);
+}
+
+export function giftCardStatusLabel(card: GiftCard): string {
+  if (card.status === 'annule') return 'Annulé';
+  if (card.status === 'epuise') return 'Utilisé';
+  if (isGiftCardExpired(card)) return 'Échu';
+  return 'Valable';
+}
+
 export interface TransactionItem {
   id: string;
   transaction_id: string;
   service_id: string | null;
+  gift_card_id: string | null;
   description: string;
   prix_unitaire_ttc: number;
   quantite: number;
@@ -79,6 +131,11 @@ export interface Transaction {
   mode_paiement: ModePaiement;
   status: TransactionStatus;
   note: string | null;
+  /** Bon présenté en paiement, et part de la facture qu'il a réglée. */
+  gift_card_id: string | null;
+  montant_bon: number;
+  /** Facture que celle-ci corrige (l'ancienne reste annulée au journal). */
+  corrige_transaction_id: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
   created_at: string;
@@ -87,6 +144,24 @@ export interface Transaction {
 
 export interface TransactionWithItems extends Transaction {
   transaction_items: TransactionItem[];
+}
+
+/**
+ * Recette réellement encaissée. **C'est la seule définition correcte du CA.**
+ *
+ * La part réglée par bon cadeau a déjà été encaissée le jour où le bon a été
+ * vendu : la recompter ici doublerait le chiffre d'affaires. Ne jamais sommer
+ * `total_ttc` directement pour calculer un CA.
+ */
+export function recetteEncaissee(t: Pick<Transaction, 'status' | 'total_ttc' | 'montant_bon'>): number {
+  if (t.status === 'annulee') return 0;
+  return round2(Number(t.total_ttc) - Number(t.montant_bon ?? 0));
+}
+
+/** Détail d'un bon cadeau à émettre, porté par une ligne du panier. */
+export interface GiftCardDraft {
+  beneficiaire: string;
+  validiteMois: number;
 }
 
 /** Ligne du panier d'encaissement, avant validation. */
@@ -98,6 +173,8 @@ export interface CartLine {
   prix_unitaire_ttc: number;
   quantite: number;
   taux_tva: number;
+  /** Présent si la ligne vend un bon cadeau, qui sera émis à la validation. */
+  gift_card?: GiftCardDraft;
 }
 
 export const CLIENT_DE_PASSAGE = 'Client de passage';

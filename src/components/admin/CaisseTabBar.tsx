@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CreditCard, BookOpenCheck, Users, Sparkles } from 'lucide-react';
+import { CreditCard, BookOpenCheck, Users, Gift } from 'lucide-react';
 
 /**
  * Navigation basse de la web app Caisse — l'équivalent téléphone de la barre
@@ -15,11 +15,14 @@ import { CreditCard, BookOpenCheck, Users, Sparkles } from 'lucide-react';
  * La hauteur est publiée dans `--caisse-tabbar-h` (voir le layout) pour que la
  * barre d'encaissement de la caisse sache où se poser.
  */
+// Quatre onglets au maximum : au-delà, les libellés deviennent illisibles sur
+// un écran de téléphone. « Prestations » reste accessible depuis le catalogue
+// de l'écran de caisse.
 const TABS = [
-  { name: 'Caisse',      path: '/admin/caisse',              icon: CreditCard,    exact: true },
-  { name: 'Journal',     path: '/admin/caisse/journal',      icon: BookOpenCheck },
-  { name: 'Clientes',    path: '/admin/caisse/clients',      icon: Users },
-  { name: 'Prestations', path: '/admin/caisse/prestations',  icon: Sparkles },
+  { name: 'Caisse',   path: '/admin/caisse',          icon: CreditCard, exact: true },
+  { name: 'Journal',  path: '/admin/caisse/journal',  icon: BookOpenCheck },
+  { name: 'Bons',     path: '/admin/caisse/bons',     icon: Gift },
+  { name: 'Clientes', path: '/admin/caisse/clients',  icon: Users },
 ];
 
 export default function CaisseTabBar() {

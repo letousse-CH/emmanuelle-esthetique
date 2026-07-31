@@ -2,14 +2,16 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   BookOpenCheck, Download, RefreshCw, AlertCircle, Loader2, FileText, Ban,
-  ChevronDown, ChevronRight, TrendingUp, X, Check,
+  ChevronDown, ChevronRight, TrendingUp, X, Check, PenLine, Ticket,
 } from 'lucide-react';
 import { cancelTransaction, listTransactions } from '../../../../services/caisse';
 import { downloadFacture } from '../../../../utils/factureDownload';
+import { setCaisseCorrection } from '../../../../utils/caissePrefill';
 import {
-  MODES_PAIEMENT, MODE_PAIEMENT_LABELS, formatAmount, formatCHF,
+  MODES_PAIEMENT, MODE_PAIEMENT_LABELS, formatAmount, formatCHF, recetteEncaissee,
 } from '../../../../types/caisse';
 import type { ModePaiement, TransactionWithItems } from '../../../../types/caisse';
 
@@ -51,7 +53,8 @@ export default function JournalClient() {
   const [error, setError]     = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState<string | null>(null);
-  const [cancelTarget, setCancelTarget] = useState<TransactionWithItems | null>(null);
+  const [dialog, setDialog] = useState<{ tx: TransactionWithItems; intent: 'cancel' | 'correct' } | null>(null);
+  const router = useRouter();
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -79,6 +82,8 @@ export default function JournalClient() {
   useEffect(() => { load(); }, [load]);
 
   // ── Indicateurs « à l'instant T », indépendants de la période affichée ─────
+  // Tous les cumuls passent par `recetteEncaissee` : la part réglée en bon
+  // cadeau a déjà été encaissée à la vente du bon, la recompter doublerait le CA.
   const kpis = useMemo(() => {
     const paid = yearRows.filter(t => t.status === 'payee');
     const today = startOfDay(new Date()).getTime();
@@ -86,24 +91,32 @@ export default function JournalClient() {
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
     const sum = (since: number) => paid
       .filter(t => new Date(t.created_at).getTime() >= since)
-      .reduce((acc, t) => acc + Number(t.total_ttc), 0);
+      .reduce((acc, t) => acc + recetteEncaissee(t), 0);
     return {
       jour: sum(today),
       semaine: sum(week),
       mois: sum(monthStart),
-      annee: paid.reduce((acc, t) => acc + Number(t.total_ttc), 0),
+      annee: paid.reduce((acc, t) => acc + recetteEncaissee(t), 0),
     };
   }, [yearRows]);
 
   const paidRows = useMemo(() => rows.filter(t => t.status === 'payee'), [rows]);
 
   const totals = useMemo(() => paidRows.reduce(
-    (acc, t) => ({
-      ht: acc.ht + Number(t.total_ht),
-      tva: acc.tva + Number(t.total_tva),
-      ttc: acc.ttc + Number(t.total_ttc),
-    }),
-    { ht: 0, tva: 0, ttc: 0 },
+    (acc, t) => {
+      const recette = recetteEncaissee(t);
+      const part = Number(t.total_ttc) > 0 ? recette / Number(t.total_ttc) : 0;
+      return {
+        // HT et TVA sont ramenés au prorata de la part réellement encaissée :
+        // sans ça, une prestation réglée par bon gonflerait la base TVA d'une
+        // période où rien n'est entré en caisse.
+        ht: acc.ht + Number(t.total_ht) * part,
+        tva: acc.tva + Number(t.total_tva) * part,
+        ttc: acc.ttc + recette,
+        bons: acc.bons + Number(t.montant_bon ?? 0),
+      };
+    },
+    { ht: 0, tva: 0, ttc: 0, bons: 0 },
   ), [paidRows]);
 
   // ── Ventilation par mode de paiement ──────────────────────────────────────
@@ -111,8 +124,10 @@ export default function JournalClient() {
     const map = new Map<ModePaiement, { total: number; count: number }>();
     for (const m of MODES_PAIEMENT) map.set(m.value, { total: 0, count: 0 });
     for (const t of paidRows) {
+      const recette = recetteEncaissee(t);
+      if (recette <= 0) continue; // soldé par bon : aucun encaissement
       const entry = map.get(t.mode_paiement) ?? { total: 0, count: 0 };
-      entry.total += Number(t.total_ttc);
+      entry.total += recette;
       entry.count += 1;
       map.set(t.mode_paiement, entry);
     }
@@ -124,11 +139,11 @@ export default function JournalClient() {
     if (mode === 'mois') {
       const days = new Date(year, month + 1, 0).getDate();
       const buckets = Array.from({ length: days }, (_, i) => ({ label: String(i + 1), value: 0 }));
-      for (const t of paidRows) buckets[new Date(t.created_at).getDate() - 1].value += Number(t.total_ttc);
+      for (const t of paidRows) buckets[new Date(t.created_at).getDate() - 1].value += recetteEncaissee(t);
       return buckets;
     }
     const buckets = MONTH_NAMES.map(m => ({ label: m.slice(0, 3), value: 0 }));
-    for (const t of paidRows) buckets[new Date(t.created_at).getMonth()].value += Number(t.total_ttc);
+    for (const t of paidRows) buckets[new Date(t.created_at).getMonth()].value += recetteEncaissee(t);
     return buckets;
   }, [paidRows, mode, year, month]);
 
@@ -171,7 +186,8 @@ export default function JournalClient() {
     const header = [
       'Date', 'Heure', 'N° Facture', 'Client', 'Prestation', 'Quantité',
       'Mode de paiement', 'Taux TVA (%)', 'Montant HT (CHF)', 'Montant TVA (CHF)',
-      'Montant TTC (CHF)', 'Statut', 'Note',
+      'Montant encaissé TTC (CHF)', 'Dont bon cadeau (CHF)', 'Valeur prestation (CHF)',
+      'Statut', 'Note',
     ];
 
     const ordered = [...rows].sort((a, b) =>
@@ -181,13 +197,27 @@ export default function JournalClient() {
     for (const t of ordered) {
       const d = new Date(t.created_at);
       const cancelled = t.status === 'annulee';
+      const total = Number(t.total_ttc);
+      // Part encaissée de la facture : 1 si tout est payé en argent, 0 si tout
+      // est réglé par bon. Chaque ligne est ventilée dans la même proportion,
+      // pour que la colonne « encaissé » se somme exactement au CA de la période.
+      const partEncaissee = cancelled || total <= 0 ? 0 : recetteEncaissee(t) / total;
+
       const statut = cancelled
         ? `Annulée le ${t.cancelled_at ? new Date(t.cancelled_at).toLocaleDateString('fr-CH') : '—'}${t.cancel_reason ? ` — ${t.cancel_reason}` : ''}`
-        : 'Payée';
+        : Number(t.montant_bon) > 0
+          ? (partEncaissee === 0 ? 'Réglée par bon cadeau' : 'Payée — bon cadeau partiel')
+          : 'Payée';
+
+      const note = [
+        t.note ?? '',
+        t.corrige_transaction_id ? 'Rectifie une facture annulée' : '',
+      ].filter(Boolean).join(' — ');
 
       for (const item of t.transaction_items) {
-        const ttc = Number(item.total_ttc);
-        const ht = Math.round((ttc / (1 + Number(item.taux_tva) / 100)) * 100) / 100;
+        const valeur = Number(item.total_ttc);
+        const encaisse = Math.round(valeur * partEncaissee * 100) / 100;
+        const ht = Math.round((encaisse / (1 + Number(item.taux_tva) / 100)) * 100) / 100;
         lines.push([
           d.toLocaleDateString('fr-CH'),
           d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' }),
@@ -197,19 +227,27 @@ export default function JournalClient() {
           String(Number(item.quantite)),
           MODE_PAIEMENT_LABELS[t.mode_paiement],
           String(Number(item.taux_tva)),
-          (cancelled ? 0 : ht).toFixed(2),
-          (cancelled ? 0 : ttc - ht).toFixed(2),
-          (cancelled ? 0 : ttc).toFixed(2),
+          ht.toFixed(2),
+          (encaisse - ht).toFixed(2),
+          encaisse.toFixed(2),
+          (Math.round((valeur - encaisse) * 100) / 100).toFixed(2),
+          valeur.toFixed(2),
           statut,
-          t.note ?? '',
+          note,
         ]);
       }
     }
 
     lines.push([]);
     lines.push([
-      `Total ${periodLabel}`, '', '', '', '', '', '', '',
-      totals.ht.toFixed(2), totals.tva.toFixed(2), totals.ttc.toFixed(2), '', '',
+      `Total encaissé ${periodLabel}`, '', '', '', '', '', '', '',
+      totals.ht.toFixed(2), totals.tva.toFixed(2), totals.ttc.toFixed(2),
+      totals.bons.toFixed(2), '', '', '',
+    ]);
+    lines.push([
+      'Note pour la fiducie', '', '', '', '', '', '', '', '', '', '', '', '',
+      "La colonne « Montant encaissé TTC » est la recette de la période : elle exclut les prestations réglées par un bon cadeau, dont l'encaissement a eu lieu le jour de la vente du bon. La colonne « Dont bon cadeau » est donnée pour information et ne doit pas être ajoutée au chiffre d'affaires.",
+      '',
     ]);
 
     const csv = [header, ...lines]
@@ -364,8 +402,23 @@ export default function JournalClient() {
           <dl className="mt-6 pt-4 border-t border-stone-100 space-y-1.5">
             <div className="flex justify-between text-xs"><dt className="text-stone-400">Total HT</dt><dd className="text-stone-600 tabular-nums">{formatCHF(totals.ht)}</dd></div>
             <div className="flex justify-between text-xs"><dt className="text-stone-400">TVA</dt><dd className="text-stone-600 tabular-nums">{formatCHF(totals.tva)}</dd></div>
-            <div className="flex justify-between text-sm pt-1.5 border-t border-stone-50"><dt className="text-stone-700 font-medium">Total TTC</dt><dd className="text-stone-900 font-semibold tabular-nums">{formatCHF(totals.ttc)}</dd></div>
+            <div className="flex justify-between text-sm pt-1.5 border-t border-stone-50"><dt className="text-stone-700 font-medium">Recettes encaissées</dt><dd className="text-stone-900 font-semibold tabular-nums">{formatCHF(totals.ttc)}</dd></div>
           </dl>
+
+          {totals.bons > 0 && (
+            <div className="mt-3 rounded-lg bg-sage/5 border border-sage/20 px-3.5 py-2.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-stone-500 flex items-center gap-1.5">
+                  <Ticket size={11} className="text-sage" /> Prestations réglées par bon
+                </span>
+                <span className="text-stone-600 tabular-nums">{formatCHF(totals.bons)}</span>
+              </div>
+              <p className="text-[10px] text-stone-400 mt-1.5 leading-relaxed">
+                Hors recettes : cet argent est entré en caisse le jour où les bons
+                ont été vendus. L&apos;ajouter ici doublerait le chiffre d&apos;affaires.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -395,18 +448,41 @@ export default function JournalClient() {
                 downloading={downloading === t.id}
                 onToggle={() => toggle(t.id)}
                 onDownload={() => handleDownload(t)}
-                onCancel={() => setCancelTarget(t)}
+                onCancel={() => setDialog({ tx: t, intent: 'cancel' })}
+                onCorrect={() => setDialog({ tx: t, intent: 'correct' })}
               />
             ))}
           </ul>
         )}
       </div>
 
-      {cancelTarget && (
+      {dialog && (
         <CancelDialog
-          tx={cancelTarget}
-          onClose={() => setCancelTarget(null)}
-          onDone={() => { setCancelTarget(null); load(); }}
+          tx={dialog.tx}
+          intent={dialog.intent}
+          onClose={() => setDialog(null)}
+          onDone={() => { setDialog(null); load(); }}
+          onCorrected={(tx) => {
+            // La facture fautive vient d'être annulée : on repart sur la caisse
+            // avec son contenu pré-rempli, et le lien vers l'ancienne.
+            setCaisseCorrection({
+              corrigeTransactionId: tx.id,
+              numero: tx.numero,
+              clientId: tx.client_id,
+              clientLabel: tx.client_label,
+              modePaiement: tx.mode_paiement,
+              note: tx.note ?? '',
+              lines: tx.transaction_items.map(item => ({
+                key: item.id,
+                service_id: item.service_id,
+                description: item.description,
+                prix_unitaire_ttc: Number(item.prix_unitaire_ttc),
+                quantite: Number(item.quantite),
+                taux_tva: Number(item.taux_tva),
+              })),
+            });
+            router.push('/admin/caisse');
+          }}
         />
       )}
     </div>
@@ -471,16 +547,19 @@ function SeriesChart({ data, loading }: { data: { label: string; value: number }
   );
 }
 
-function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel }: {
+function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onCorrect }: {
   tx: TransactionWithItems;
   open: boolean;
   downloading: boolean;
   onToggle: () => void;
   onDownload: () => void;
   onCancel: () => void;
+  onCorrect: () => void;
 }) {
   const d = new Date(tx.created_at);
   const cancelled = tx.status === 'annulee';
+  const bon = Number(tx.montant_bon ?? 0);
+  const recette = recetteEncaissee(tx);
 
   return (
     <li className={cancelled ? 'opacity-55' : ''}>
@@ -504,15 +583,32 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel }: {
             {tx.client_label}
             {cancelled && <span className="ml-2 text-[10px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Annulée</span>}
           </p>
-          <p className="text-[11px] text-stone-400 tabular-nums">
-            {tx.numero} · {MODE_PAIEMENT_LABELS[tx.mode_paiement]}
-            <span className="sm:hidden"> · {d.toLocaleDateString('fr-CH')}</span>
+          <p className="text-[11px] text-stone-400 tabular-nums flex items-center gap-1.5 flex-wrap">
+            <span>{tx.numero} · {MODE_PAIEMENT_LABELS[tx.mode_paiement]}</span>
+            {bon > 0 && (
+              <span className="inline-flex items-center gap-1 text-sage">
+                <Ticket size={10} /> {formatCHF(bon)}
+              </span>
+            )}
+            {tx.corrige_transaction_id && (
+              <span className="inline-flex items-center gap-1 text-amber-600">
+                <PenLine size={10} /> rectificative
+              </span>
+            )}
+            <span className="sm:hidden">· {d.toLocaleDateString('fr-CH')}</span>
           </p>
         </div>
 
-        <span className={`text-sm font-medium tabular-nums shrink-0 ${cancelled ? 'text-stone-400 line-through' : 'text-stone-900'}`}>
-          {formatCHF(tx.total_ttc)}
-        </span>
+        <div className="shrink-0 text-right">
+          <span className={`block text-sm font-medium tabular-nums ${cancelled ? 'text-stone-400 line-through' : 'text-stone-900'}`}>
+            {formatCHF(recette)}
+          </span>
+          {bon > 0 && !cancelled && (
+            <span className="block text-[10px] text-stone-400 tabular-nums">
+              sur {formatCHF(tx.total_ttc)}
+            </span>
+          )}
+        </div>
 
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -524,13 +620,22 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel }: {
             {downloading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
           </button>
           {!cancelled && (
-            <button
-              onClick={onCancel}
-              aria-label={`Annuler la facture ${tx.numero}`} title="Annuler cette écriture"
-              className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer"
-            >
-              <Ban size={14} />
-            </button>
+            <>
+              <button
+                onClick={onCorrect}
+                aria-label={`Corriger la facture ${tx.numero}`} title="Corriger cette écriture"
+                className="p-1.5 text-stone-300 hover:text-amber-600 rounded-md hover:bg-amber-50 transition-all cursor-pointer"
+              >
+                <PenLine size={14} />
+              </button>
+              <button
+                onClick={onCancel}
+                aria-label={`Annuler la facture ${tx.numero}`} title="Annuler cette écriture"
+                className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+              >
+                <Ban size={14} />
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -551,6 +656,17 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel }: {
             <span className="text-stone-400">HT {formatCHF(tx.total_ht)} · TVA {formatCHF(tx.total_tva)}</span>
             <span className="text-stone-700 font-medium tabular-nums">{formatCHF(tx.total_ttc)}</span>
           </div>
+          {bon > 0 && (
+            <div className="flex items-center justify-between text-xs text-sage">
+              <span className="flex items-center gap-1.5"><Ticket size={11} /> Réglé par bon cadeau</span>
+              <span className="tabular-nums">− {formatCHF(bon)}</span>
+            </div>
+          )}
+          {tx.corrige_transaction_id && (
+            <p className="text-xs text-amber-600 pt-1">
+              Cette facture rectifie une écriture annulée.
+            </p>
+          )}
           {tx.note && <p className="text-xs text-stone-400 italic pt-1">Note : {tx.note}</p>}
           {tx.cancel_reason && <p className="text-xs text-red-500 pt-1">Motif d&apos;annulation : {tx.cancel_reason}</p>}
         </div>
@@ -559,10 +675,24 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel }: {
   );
 }
 
-function CancelDialog({ tx, onClose, onDone }: {
-  tx: TransactionWithItems; onClose: () => void; onDone: () => void;
+/**
+ * Annulation, et correction d'erreur de caisse.
+ *
+ * Les deux passent par la même mécanique, parce que c'est la seule légale : on
+ * n'efface ni ne réécrit jamais une écriture (CO art. 957a). Corriger, c'est
+ * annuler la facture fautive — qui reste au journal avec son numéro — puis en
+ * émettre une nouvelle, rattachée à l'ancienne. Le contrôleur voit l'erreur ET
+ * sa correction, ce qui est exactement le but de la règle.
+ */
+function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
+  tx: TransactionWithItems;
+  intent: 'cancel' | 'correct';
+  onClose: () => void;
+  onDone: () => void;
+  onCorrected: (tx: TransactionWithItems) => void;
 }) {
-  const [reason, setReason] = useState('');
+  const isCorrection = intent === 'correct';
+  const [reason, setReason] = useState(isCorrection ? 'Erreur de saisie' : '');
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
 
@@ -572,9 +702,10 @@ function CancelDialog({ tx, onClose, onDone }: {
     setSaving(true); setError(null);
     try {
       await cancelTransaction(tx.id, reason.trim());
-      onDone();
+      if (isCorrection) onCorrected(tx);
+      else onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Annulation impossible.');
+      setError(err instanceof Error ? err.message : 'Opération impossible.');
       setSaving(false);
     }
   };
@@ -582,22 +713,47 @@ function CancelDialog({ tx, onClose, onDone }: {
   return (
     <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        role="dialog" aria-modal="true" aria-label={`Annuler la facture ${tx.numero}`}
+        role="dialog" aria-modal="true"
+        aria-label={`${isCorrection ? 'Corriger' : 'Annuler'} la facture ${tx.numero}`}
         onClick={e => e.stopPropagation()}
         className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-stone-900">Annuler {tx.numero}</h3>
+          <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
+            {isCorrection
+              ? <><PenLine size={15} className="text-amber-600" /> Corriger {tx.numero}</>
+              : <><Ban size={15} className="text-red-500" /> Annuler {tx.numero}</>}
+          </h3>
           <button onClick={onClose} aria-label="Fermer" className="p-1 text-stone-400 hover:text-stone-700 cursor-pointer">
             <X size={16} />
           </button>
         </div>
 
-        <p className="text-sm text-stone-500 leading-relaxed">
-          L&apos;écriture de <strong className="text-stone-700">{formatCHF(tx.total_ttc)}</strong> restera dans le
-          journal avec son numéro — c&apos;est ce qu&apos;exige la traçabilité comptable. Elle sera simplement
-          exclue du chiffre d&apos;affaires.
-        </p>
+        {isCorrection ? (
+          <div className="space-y-2 text-sm text-stone-500 leading-relaxed">
+            <p>
+              Mauvais mode de paiement, mauvais soin, mauvais montant : tu vas repartir
+              de cette facture sur l&apos;écran de caisse, avec le panier déjà rempli.
+            </p>
+            <p className="text-xs bg-stone-50 border border-stone-100 rounded-lg px-3.5 py-2.5">
+              La facture <strong className="text-stone-700">{tx.numero}</strong> ne disparaît pas :
+              elle reste au journal, annulée, et la nouvelle y sera rattachée. C&apos;est ce qu&apos;exige
+              le Code des obligations — une écriture ne se réécrit pas, elle se corrige au vu de tous.
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-stone-500 leading-relaxed">
+            L&apos;écriture de <strong className="text-stone-700">{formatCHF(tx.total_ttc)}</strong> restera dans le
+            journal avec son numéro — c&apos;est ce qu&apos;exige la traçabilité comptable. Elle sera simplement
+            exclue du chiffre d&apos;affaires.
+          </p>
+        )}
+
+        {Number(tx.montant_bon ?? 0) > 0 && (
+          <p className="text-xs text-sage bg-sage/5 border border-sage/20 rounded-lg px-3.5 py-2.5">
+            Les {formatCHF(tx.montant_bon)} réglés par bon cadeau seront recrédités sur le bon.
+          </p>
+        )}
 
         <form onSubmit={submit} className="space-y-3">
           <div>
@@ -620,10 +776,14 @@ function CancelDialog({ tx, onClose, onDone }: {
             </button>
             <button
               type="submit" disabled={saving || !reason.trim()}
-              className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white py-2.5 rounded-lg text-sm hover:bg-red-700 transition-colors disabled:opacity-40 cursor-pointer"
+              className={`flex-1 flex items-center justify-center gap-2 text-white py-2.5 rounded-lg text-sm transition-colors disabled:opacity-40 cursor-pointer ${
+                isCorrection ? 'bg-stone-900 hover:bg-sage' : 'bg-red-600 hover:bg-red-700'
+              }`}
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-              {saving ? 'Annulation…' : "Confirmer l'annulation"}
+              {saving
+                ? 'En cours…'
+                : isCorrection ? 'Corriger sur la caisse' : "Confirmer l'annulation"}
             </button>
           </div>
         </form>

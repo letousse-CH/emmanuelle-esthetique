@@ -46,7 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     transaction.transaction_items = [...(transaction.transaction_items ?? [])]
       .sort((a, b) => a.ordre - b.ordre);
 
-    const [business, s] = await Promise.all([
+    const [business, s, emisRes, utiliseRes] = await Promise.all([
       getBusinessInfoServer(),
       getSettingsServer([
         'caisse_tva_assujetti',
@@ -54,7 +54,40 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         'caisse_iban',
         'caisse_facture_mentions',
       ]),
+      // Bons vendus par cette facture : leur code doit y figurer, c'est la
+      // preuve remise à l'acheteuse.
+      supabase
+        .from('gift_cards')
+        .select('code, libelle, montant_initial, expire_le')
+        .eq('sale_transaction_id', id)
+        .order('number_seq', { ascending: true }),
+      // Bon présenté en paiement, s'il y en a un.
+      transaction.gift_card_id
+        ? supabase
+            .from('gift_cards')
+            .select('code, montant_restant')
+            .eq('id', transaction.gift_card_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
+
+    const giftCards = {
+      emis: (emisRes.data ?? []).map((g: {
+        code: string; libelle: string; montant_initial: number; expire_le: string;
+      }) => ({
+        code: g.code,
+        libelle: g.libelle,
+        montant: Number(g.montant_initial),
+        expireLe: g.expire_le,
+      })),
+      utilise: utiliseRes.data
+        ? {
+            code: (utiliseRes.data as { code: string }).code,
+            montant: Number(transaction.montant_bon),
+            restant: Number((utiliseRes.data as { montant_restant: number }).montant_restant),
+          }
+        : null,
+    };
 
     // `renderToBuffer` exige un élément <Document> à la racine : on appelle
     // donc `FactureDocument` comme une simple fonction pour récupérer ce
@@ -70,6 +103,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           iban: s.caisse_iban,
           mentions: s.caisse_facture_mentions,
         },
+        giftCards,
       }),
     );
 

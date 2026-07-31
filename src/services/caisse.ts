@@ -9,7 +9,7 @@
  */
 import { supabase } from './supabase';
 import type {
-  CartLine, Client, ModePaiement, Service, Transaction, TransactionWithItems,
+  CartLine, Client, GiftCard, ModePaiement, Service, Transaction, TransactionWithItems,
 } from '../types/caisse';
 
 // ── Clientèle ───────────────────────────────────────────────────────────────
@@ -135,9 +135,29 @@ export interface CreateTransactionInput {
   modePaiement: ModePaiement;
   note: string;
   lines: CartLine[];
+  /** Bon présenté en paiement, et montant prélevé dessus. */
+  giftCardCode?: string | null;
+  montantBon?: number;
+  /** Facture que cet encaissement corrige. */
+  corrigeTransactionId?: string | null;
 }
 
 export async function createTransaction(input: CreateTransactionInput): Promise<Transaction> {
+  // `ordre` fait le lien entre une ligne du panier et le bon qu'elle émet :
+  // c'est l'indice de la ligne, que Postgres retrouve pour imprimer le code du
+  // bon sur la quittance. Rapprocher par montant se tromperait dès que deux
+  // bons de même valeur sont vendus ensemble.
+  const emissions = input.lines
+    .map((l, ordre) => ({ line: l, ordre }))
+    .filter(({ line }) => line.gift_card)
+    .map(({ line, ordre }) => ({
+      ordre,
+      montant: line.prix_unitaire_ttc * line.quantite,
+      libelle: line.description,
+      beneficiaire: line.gift_card!.beneficiaire || null,
+      validite_mois: line.gift_card!.validiteMois,
+    }));
+
   const { data, error } = await supabase.rpc('caisse_create_transaction', {
     p_client_id: input.clientId,
     p_client_label: input.clientLabel,
@@ -150,9 +170,60 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       quantite: l.quantite,
       taux_tva: l.taux_tva,
     })),
+    p_gift_card_code: input.giftCardCode ?? null,
+    p_montant_bon: input.montantBon ?? 0,
+    p_emissions: emissions.length > 0 ? emissions : null,
+    p_corrige_transaction_id: input.corrigeTransactionId ?? null,
   });
   if (error) throw new Error(error.message);
   return data as Transaction;
+}
+
+// ── Bons cadeaux ────────────────────────────────────────────────────────────
+
+export async function listGiftCards(): Promise<GiftCard[]> {
+  const { data, error } = await supabase
+    .from('gift_cards')
+    .select('*')
+    .order('emis_le', { ascending: false })
+    .limit(2000);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GiftCard[];
+}
+
+/** Recherche par code exact, pour le champ « présenter un bon » de la caisse. */
+export async function findGiftCardByCode(code: string): Promise<GiftCard | null> {
+  const trimmed = code.trim();
+  if (!trimmed) return null;
+  const { data, error } = await supabase
+    .from('gift_cards')
+    .select('*')
+    .ilike('code', trimmed)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as GiftCard) ?? null;
+}
+
+/** Bons émis par une vente — pour afficher leur code juste après l'encaissement. */
+export async function listGiftCardsForSale(transactionId: string): Promise<GiftCard[]> {
+  const { data, error } = await supabase
+    .from('gift_cards')
+    .select('*')
+    .eq('sale_transaction_id', transactionId)
+    .order('number_seq', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GiftCard[];
+}
+
+/** Encaissements ayant consommé ce bon — l'historique d'utilisation. */
+export async function listGiftCardUsages(giftCardId: string): Promise<Transaction[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('gift_card_id', giftCardId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Transaction[];
 }
 
 export async function cancelTransaction(id: string, reason: string): Promise<Transaction> {
