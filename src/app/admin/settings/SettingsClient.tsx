@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../services/supabase';
-import { Save, Lock, Tag, Image, X, Check, Sun, Moon, Palette, Type, Sliders, Eye, RefreshCw, Share2, Puzzle, Building2, Sparkles, AlertTriangle, BookOpen } from 'lucide-react';
+import { Save, Lock, Tag, Image, X, Check, Sun, Moon, Palette, Type, Sliders, Eye, RefreshCw, Share2, Puzzle, Building2, Sparkles, AlertTriangle, BookOpen, CreditCard } from 'lucide-react';
 import { settingsCache } from '../../../hooks/useSettings';
 import { SETTINGS_DEFAULTS } from '../../../constants/settings';
 import { AI_EFFORT_LEVELS, AI_MODELS, AiEffort, AiModelSpec, DEFAULT_AI_EFFORT, DEFAULT_AI_MODEL } from '../../../constants/aiModels';
@@ -124,9 +124,20 @@ export default function Settings() {
   const [moduleEventsEnabled, setModuleEventsEnabled]       = useState(true);
   const [moduleNewsletterEnabled, setModuleNewsletterEnabled] = useState(true);
   const [moduleSocialEnabled, setModuleSocialEnabled]       = useState(true);
+  const [moduleCaisseEnabled, setModuleCaisseEnabled]       = useState(true);
   const [modulesLoading, setModulesLoading]                 = useState(false);
   const [modulesFetching, setModulesFetching]               = useState(true);
   const [modulesMessage, setModulesMessage]                 = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // ── Caisse & facturation ──────────────────────────────────
+  const [caisseTvaAssujetti, setCaisseTvaAssujetti]   = useState(false);
+  const [caisseTvaTaux, setCaisseTvaTaux]             = useState('0');
+  const [caisseTvaNumero, setCaisseTvaNumero]         = useState('');
+  const [caisseIban, setCaisseIban]                   = useState('');
+  const [caisseMentions, setCaisseMentions]           = useState('');
+  const [caisseLoading, setCaisseLoading]             = useState(false);
+  const [caisseFetching, setCaisseFetching]           = useState(true);
+  const [caisseMessage, setCaisseMessage]             = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // ── Entreprise ────────────────────────────────────────────
   const [bizName, setBizName]                     = useState('');
@@ -166,7 +177,7 @@ export default function Settings() {
   const [editorialFetching, setEditorialFetching]     = useState(true);
   const [editorialMessage, setEditorialMessage]       = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  const [activeTab, setActiveTab]                     = useState<'general' | 'business' | 'editorial' | 'modules' | 'ai' | 'style' | 'security'>('general');
+  const [activeTab, setActiveTab]                     = useState<'general' | 'business' | 'editorial' | 'modules' | 'caisse' | 'ai' | 'style' | 'security'>('general');
 
   // Preview button hovers
   const [darkBtnHover, setDarkBtnHover]               = useState(false);
@@ -204,6 +215,7 @@ export default function Settings() {
     loadAuthor();
     loadHeaderRegisterLink();
     loadModules();
+    loadCaisse();
     loadBusiness();
     loadEditorial();
     loadAi();
@@ -410,7 +422,7 @@ export default function Settings() {
     const { data } = await supabase
       .from('settings')
       .select('key, value')
-      .in('key', ['module_blog_enabled', 'module_ai_generation_enabled', 'module_events_enabled', 'module_newsletter_enabled', 'module_social_enabled']);
+      .in('key', ['module_blog_enabled', 'module_ai_generation_enabled', 'module_events_enabled', 'module_newsletter_enabled', 'module_social_enabled', 'module_caisse_enabled']);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.module_blog_enabled !== undefined)          setModuleBlogEnabled(map.module_blog_enabled !== 'false');
@@ -418,8 +430,52 @@ export default function Settings() {
       if (map.module_events_enabled !== undefined)        setModuleEventsEnabled(map.module_events_enabled !== 'false');
       if (map.module_newsletter_enabled !== undefined)    setModuleNewsletterEnabled(map.module_newsletter_enabled !== 'false');
       if (map.module_social_enabled !== undefined)        setModuleSocialEnabled(map.module_social_enabled !== 'false');
+      if (map.module_caisse_enabled !== undefined)        setModuleCaisseEnabled(map.module_caisse_enabled !== 'false');
     }
     setModulesFetching(false);
+  };
+
+  const CAISSE_KEYS = [
+    'caisse_tva_assujetti',
+    'caisse_tva_taux_defaut',
+    'caisse_tva_numero',
+    'caisse_iban',
+    'caisse_facture_mentions',
+  ];
+
+  const loadCaisse = async () => {
+    setCaisseFetching(true);
+    const { data } = await supabase.from('settings').select('key, value').in('key', CAISSE_KEYS);
+    const map = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value]));
+    setCaisseTvaAssujetti((map.caisse_tva_assujetti ?? SETTINGS_DEFAULTS.caisse_tva_assujetti) === 'true');
+    setCaisseTvaTaux(map.caisse_tva_taux_defaut ?? SETTINGS_DEFAULTS.caisse_tva_taux_defaut);
+    setCaisseTvaNumero(map.caisse_tva_numero ?? SETTINGS_DEFAULTS.caisse_tva_numero);
+    setCaisseIban(map.caisse_iban ?? SETTINGS_DEFAULTS.caisse_iban);
+    setCaisseMentions(map.caisse_facture_mentions ?? SETTINGS_DEFAULTS.caisse_facture_mentions);
+    setCaisseFetching(false);
+  };
+
+  const handleSaveCaisse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCaisseMessage(null);
+    setCaisseLoading(true);
+    const rows = [
+      { key: 'caisse_tva_assujetti',    value: String(caisseTvaAssujetti) },
+      // Un prestataire non assujetti facture forcément à 0 % : on force le taux
+      // plutôt que de laisser une valeur orpheline apparaître sur les factures.
+      { key: 'caisse_tva_taux_defaut',  value: caisseTvaAssujetti ? caisseTvaTaux : '0' },
+      { key: 'caisse_tva_numero',       value: caisseTvaNumero.trim() },
+      { key: 'caisse_iban',             value: caisseIban.trim() },
+      { key: 'caisse_facture_mentions', value: caisseMentions.trim() },
+    ];
+    const { error } = await supabase.from('settings').upsert(rows, { onConflict: 'key' });
+    if (error) {
+      setCaisseMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
+    } else {
+      rows.forEach(r => settingsCache.set(r.key, r.value));
+      setCaisseMessage({ type: 'success', text: 'Réglages de caisse enregistrés. Les prochaines factures en tiennent compte.' });
+    }
+    setCaisseLoading(false);
   };
 
   const handleSaveModules = async (e: React.FormEvent) => {
@@ -434,6 +490,7 @@ export default function Settings() {
         { key: 'module_events_enabled',         value: String(moduleEventsEnabled) },
         { key: 'module_newsletter_enabled',     value: String(moduleNewsletterEnabled) },
         { key: 'module_social_enabled',         value: String(moduleSocialEnabled) },
+        { key: 'module_caisse_enabled',         value: String(moduleCaisseEnabled) },
       ], { onConflict: 'key' });
     if (error) {
       setModulesMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
@@ -444,6 +501,7 @@ export default function Settings() {
       settingsCache.set('module_events_enabled', String(moduleEventsEnabled));
       settingsCache.set('module_newsletter_enabled', String(moduleNewsletterEnabled));
       settingsCache.set('module_social_enabled', String(moduleSocialEnabled));
+      settingsCache.set('module_caisse_enabled', String(moduleCaisseEnabled));
     }
     setModulesLoading(false);
   };
@@ -965,6 +1023,14 @@ export default function Settings() {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'modules' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
           >
             <Puzzle size={14} /> Modules
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'caisse'}
+            onClick={() => setActiveTab('caisse')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'caisse' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
+          >
+            <CreditCard size={14} /> Caisse
           </button>
           <button
             role="tab"
@@ -2130,6 +2196,7 @@ export default function Settings() {
                   { label: 'Événements / Ateliers', desc: 'Pages /ateliers, admin Événements et inscriptions/paiement.', value: moduleEventsEnabled, setter: setModuleEventsEnabled },
                   { label: 'Newsletter', desc: "Admin Newsletter (envoi d'e-mails), formulaires d'inscription et bannière sur le site.", value: moduleNewsletterEnabled, setter: setModuleNewsletterEnabled },
                   { label: 'Réseaux Sociaux', desc: "Génération de contenu Instagram/LinkedIn/Facebook (articles, flux RSS, suggestions), calendrier et automatisation.", value: moduleSocialEnabled, setter: setModuleSocialEnabled },
+                  { label: 'Caisse & facturation', desc: "Encaissement, fichier clientes, quittances PDF, journal des recettes et export pour la fiducie. Module interne : rien n'apparaît sur le site public.", value: moduleCaisseEnabled, setter: setModuleCaisseEnabled },
                 ].map((mod) => (
                   <div key={mod.label} className="flex items-start gap-4 py-3 border-b border-stone-50 last:border-0">
                     <button
@@ -2157,6 +2224,143 @@ export default function Settings() {
                   >
                     <Save size={16} />
                     {modulesLoading ? 'Enregistrement…' : 'Enregistrer les modules'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* ── Onglet Caisse & facturation ─────────────────────────── */}
+        {activeTab === 'caisse' && (
+          <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8 animate-fadein">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-2 flex items-center gap-2">
+              <CreditCard size={16} /> Caisse &amp; facturation
+            </h2>
+            <p className="text-stone-500 text-sm mb-6">
+              TVA, coordonnées bancaires et mentions imprimées sur les quittances.
+              Les coordonnées de l&apos;institut affichées en tête de facture viennent de l&apos;onglet <strong>Entreprise</strong>.
+            </p>
+
+            {caisseFetching ? (
+              <p className="text-stone-400 text-sm italic">Chargement…</p>
+            ) : (
+              <form onSubmit={handleSaveCaisse} className="space-y-6">
+                {caisseMessage && (
+                  <div className={`p-4 text-sm ${caisseMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                    {caisseMessage.text}
+                  </div>
+                )}
+
+                <div className="flex items-start gap-4 py-3 border-b border-stone-50">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={caisseTvaAssujetti}
+                    aria-label={`${caisseTvaAssujetti ? 'Désactiver' : 'Activer'} l'assujettissement à la TVA`}
+                    onClick={() => setCaisseTvaAssujetti(!caisseTvaAssujetti)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-0.5 cursor-pointer ${caisseTvaAssujetti ? 'bg-sage' : 'bg-stone-200'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${caisseTvaAssujetti ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                  <span>
+                    <span className="block text-sm font-medium text-stone-800">Activité assujettie à la TVA</span>
+                    <span className="block text-xs text-stone-400 leading-relaxed">
+                      À laisser désactivé tant que le chiffre d&apos;affaires annuel reste sous CHF 100&apos;000 (LTVA art. 10) :
+                      les factures portent alors la mention « TVA non applicable » et un taux de 0 %.
+                      Activer ce réglage fait apparaître le choix du taux à la caisse.
+                      Les factures déjà émises gardent leur propre taux — elles ne sont jamais recalculées.
+                    </span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label htmlFor="caisse-taux" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                      Taux par défaut
+                    </label>
+                    <select
+                      id="caisse-taux"
+                      value={caisseTvaTaux}
+                      onChange={e => setCaisseTvaTaux(e.target.value)}
+                      disabled={!caisseTvaAssujetti}
+                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all disabled:bg-stone-50 disabled:text-stone-400 cursor-pointer"
+                    >
+                      <option value="0">0 % — non assujettie</option>
+                      <option value="8.1">8.1 % — taux normal</option>
+                      <option value="3.8">3.8 % — hébergement</option>
+                      <option value="2.6">2.6 % — taux réduit</option>
+                    </select>
+                    <p className="text-[11px] text-stone-400 mt-1.5">
+                      Appliqué aux nouvelles prestations du catalogue. Chaque prestation peut avoir le sien.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="caisse-tva-numero" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                      N° TVA
+                    </label>
+                    <input
+                      id="caisse-tva-numero"
+                      type="text"
+                      value={caisseTvaNumero}
+                      onChange={e => setCaisseTvaNumero(e.target.value)}
+                      placeholder="CHE-123.456.789 TVA"
+                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+                    />
+                    <p className="text-[11px] text-stone-400 mt-1.5">
+                      Obligatoire sur les factures dès l&apos;assujettissement (OTVA art. 26).
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="caisse-iban" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                    IBAN
+                  </label>
+                  <input
+                    id="caisse-iban"
+                    type="text"
+                    value={caisseIban}
+                    onChange={e => setCaisseIban(e.target.value)}
+                    placeholder="CH00 0000 0000 0000 0000 0"
+                    className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+                  />
+                  <p className="text-[11px] text-stone-400 mt-1.5">
+                    Imprimé sur la quittance uniquement quand le paiement est un virement.
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="caisse-mentions" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                    Mentions en pied de facture
+                  </label>
+                  <textarea
+                    id="caisse-mentions"
+                    rows={3}
+                    value={caisseMentions}
+                    onChange={e => setCaisseMentions(e.target.value)}
+                    className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
+                  />
+                </div>
+
+                <div className="rounded-xl border border-stone-100 bg-stone-50/60 px-5 py-4 text-xs text-stone-500 leading-relaxed">
+                  <strong className="block text-stone-700 mb-1 font-semibold">Numérotation et conservation</strong>
+                  Les factures sont numérotées <code className="px-1 bg-white rounded border border-stone-200">FAC-{new Date().getFullYear()}-0001</code>,
+                  en continu et par année civile. Une écriture encaissée ne peut être ni supprimée ni recalculée :
+                  une erreur se corrige par une annulation depuis le journal, qui laisse la trace exigée par
+                  le Code des obligations (art. 957a). Pense à exporter le livre de caisse pour ta fiducie
+                  et à conserver les fichiers 10 ans (art. 958f).
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={caisseLoading}
+                    className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                  >
+                    <Save size={16} />
+                    {caisseLoading ? 'Enregistrement…' : 'Enregistrer les réglages'}
                   </button>
                 </div>
               </form>

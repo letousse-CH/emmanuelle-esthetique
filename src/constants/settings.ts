@@ -5,6 +5,23 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   module_events_enabled:        'true',
   module_newsletter_enabled:    'true',
   module_social_enabled:        'true',
+  module_caisse_enabled:        'true',
+
+  // ── Caisse & facturation (admin > Paramètres > Caisse) ──
+  // Taux de TVA appliqué par défaut aux nouvelles prestations. '0' tant que
+  // l'activité n'est pas assujettie (LTVA art. 10 : seuil de CHF 100'000 de
+  // chiffre d'affaires annuel). Le jour du passage à 8.1 %, changer ce réglage
+  // suffit : le taux est stocké ligne par ligne, donc les factures déjà émises
+  // gardent le leur.
+  caisse_tva_assujetti:   'false',
+  caisse_tva_taux_defaut: '0',
+  // N° TVA suisse (format CHE-123.456.789 TVA) — obligatoire sur les factures
+  // dès l'assujettissement (OTVA art. 26).
+  caisse_tva_numero:      '',
+  // IBAN affiché sur la facture lorsque le paiement est un virement.
+  caisse_iban:            '',
+  // Mention libre en pied de facture (conditions, remerciement…).
+  caisse_facture_mentions: 'Merci de votre confiance et à bientôt.',
 
   // ── IA & Budget (admin > Paramètres > IA & Budget) ──────
   // Modèle Claude utilisé par toutes les générations ; voir src/constants/aiModels.ts.

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useModuleFlags } from '../../hooks/useModuleFlags';
-import { LayoutDashboard, FileText, Settings, LogOut, Image as ImageIcon, Mail, Send, BarChart2, CalendarDays, Layers, Menu, ChevronRight, ExternalLink, HelpCircle, Share2 } from 'lucide-react';
+import { LayoutDashboard, FileText, Settings, LogOut, Image as ImageIcon, Mail, Send, BarChart2, CalendarDays, Layers, Menu, ChevronRight, ExternalLink, HelpCircle, Share2, CreditCard, Users, BookOpenCheck, Sparkles } from 'lucide-react';
 import { SITE_CONFIG } from '../../config/site';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -104,6 +104,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         { name: 'SEO', path: '/admin/seo', icon: BarChart2 },
       ],
     },
+    ...(moduleFlags.caisse ? [{
+      label: 'Caisse',
+      items: [
+        // `exact` : sans lui, /admin/caisse resterait surligné sur ses
+        // sous-pages (journal, clientes, prestations).
+        { name: 'Encaissement', path: '/admin/caisse', icon: CreditCard, exact: true },
+        { name: 'Journal & CA', path: '/admin/caisse/journal', icon: BookOpenCheck },
+        { name: 'Clientes', path: '/admin/caisse/clients', icon: Users },
+        { name: 'Prestations', path: '/admin/caisse/prestations', icon: Sparkles },
+      ],
+    }] : []),
     {
       label: 'Site',
       items: [
@@ -174,8 +185,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <p className="px-2.5 mb-1 text-[9px] font-bold tracking-widest uppercase text-stone-400">{group.label}</p>
               )}
               <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const isActive = pathname === item.path || (item.path !== '/admin' && pathname.startsWith(item.path));
+                {group.items.map((item: { name: string; path: string; icon: React.ElementType; exact?: boolean }) => {
+                  const isActive = pathname === item.path
+                    || (!item.exact && item.path !== '/admin' && pathname.startsWith(item.path));
                   return (
                     <Link
                       key={item.path}

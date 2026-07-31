@@ -21,6 +21,7 @@ voir "Modules & template" ci-dessous).
 - Stripe (paiement des inscriptions événements)
 - Cloudflare R2 (stockage médias) + Resend (e-mails transactionnels)
 - Anthropic Claude / Google Gemini (génération IA d'article, SEO)
+- `@react-pdf/renderer` (quittances PDF du module Caisse, rendu serveur Node)
 - Déploiement Netlify (`@netlify/plugin-nextjs`)
 
 ## Commandes clés
@@ -71,9 +72,9 @@ stack Vite/Express conservée pour référence historique — pas utilisée par 
 
 Le site a un système de modules activables/désactivables depuis
 `/admin/settings` (onglet **Modules**) : Blog/Articles, Génération IA d'article,
-Événements/Ateliers, Newsletter, Réseaux sociaux. Un module désactivé disparaît
-des pages publiques, de la nav et du sitemap, mais reste modifiable dans
-l'admin. Voir `src/config/modules.ts`.
+Événements/Ateliers, Newsletter, Réseaux sociaux, Caisse & facturation. Un
+module désactivé disparaît des pages publiques, de la nav et du sitemap, mais
+reste modifiable dans l'admin. Voir `src/config/modules.ts`.
 
 Le modèle Claude utilisé par toutes les générations, le niveau de réflexion et
 le budget mensuel se règlent dans `/admin/settings` (onglet **IA & Budget**) —
@@ -116,6 +117,50 @@ Pour activer l'upload de fichiers, renseigner les cinq variables R2
 `/api/upload-media` répond `501` avec la liste des variables absentes au lieu
 d'une erreur S3 opaque. Le sous-domaine public `pub-xxxx.r2.dev` d'un bucket
 suffit : pas besoin de domaine personnalisé.
+
+## Caisse, clientèle & facturation
+
+Module **interne** (rien n'est exposé au rôle `anon`), sous `/admin/caisse` :
+encaissement, fichier clientes, catalogue de prestations, journal des recettes
+et export pour la fiducie. Migration : `supabase/migrations/20260731_caisse.sql`.
+
+Ce qui n'est **pas** négociable, parce que le Code des obligations suisse
+l'impose (art. 957a « intégralité, chronologie, traçabilité » et art. 958f
+« conservation 10 ans ») :
+
+- **Les montants ne se calculent jamais dans le navigateur.** Créer un
+  encaissement passe par la fonction Postgres `caisse_create_transaction`, qui
+  alloue le numéro de facture et calcule HT/TVA/TTC à partir des lignes. Le
+  client n'a ni policy INSERT ni GRANT INSERT sur `transactions`.
+- **Numérotation continue par année civile** (`FAC-2026-0001`), allouée par
+  `caisse_next_invoice_seq` avec un verrou de ligne — pas une séquence
+  Postgres, qui laisserait des trous en cas de rollback.
+- **Aucune écriture ne se supprime ni ne se recalcule.** Des triggers
+  (`caisse_transactions_guard`, `caisse_items_guard`) refusent le DELETE et
+  toute modification du numéro, de la date et des montants. Une erreur se
+  corrige par une annulation (`caisse_cancel_transaction`), qui laisse la trace.
+- **Les libellés sont figés au moment de la vente** : le nom de la cliente est
+  recopié sur la transaction, le libellé et le prix de la prestation sur la
+  ligne. Renommer une cliente ou retirer un soin du catalogue ne réécrit donc
+  aucune facture déjà émise. C'est aussi pourquoi une fiche cliente citée sur
+  une facture est *archivée* et non supprimée.
+
+**TVA.** 0 % par défaut : l'activité n'est pas assujettie tant que le chiffre
+d'affaires reste sous CHF 100'000/an (LTVA art. 10). La structure gère déjà un
+taux par ligne — le jour de l'assujettissement, il suffit d'activer la TVA et de
+choisir le taux (8.1 / 3.8 / 2.6 %) dans `/admin/settings` → onglet **Caisse**.
+Les factures antérieures gardent le leur, elles ne sont jamais recalculées.
+
+**Formatage des montants.** Toujours `de-CH`, jamais `fr-CH` : seul `de-CH`
+produit la convention suisse `CHF 1'234.50` (point décimal). `fr-CH` écrirait
+`1'234,50 CHF`, avec une virgule qu'aucune fiduciaire n'attend. Les dates, elles,
+restent en `fr-CH`. Voir `formatCHF` dans `src/types/caisse.ts`.
+
+**Export fiducie.** Journal filtrable par mois ou par année, exporté en CSV
+(séparateur `;`, BOM UTF-8 — double-clic et ça s'ouvre dans Excel), une ligne
+par prestation. Les factures annulées y figurent avec des montants à 0.00 :
+la somme de la colonne TTC donne le CA net, et la numérotation reste continue
+sous les yeux du comptable.
 
 ## E-mails & désinscription
 

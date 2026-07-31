@@ -1,6 +1,6 @@
 /**
  * Système de modules activables/désactivables (Blog, Génération IA d'article,
- * Événements, Newsletter, Réseaux sociaux). Les flags sont stockés dans la table Supabase `settings` comme
+ * Événements, Newsletter, Réseaux sociaux, Caisse). Les flags sont stockés dans la table Supabase `settings` comme
  * n'importe quel autre réglage, pour réutiliser la plomberie RLS/admin existante.
  *
  * Ce fichier ne doit importer que des dépendances "server-safe" (pas de hooks
@@ -9,7 +9,7 @@
  */
 import { getSettingsServer } from '../services/settingsServer';
 
-export type ModuleName = 'blog' | 'ai_generation' | 'events' | 'newsletter' | 'social';
+export type ModuleName = 'blog' | 'ai_generation' | 'events' | 'newsletter' | 'social' | 'caisse';
 
 export const MODULE_SETTING_KEYS = {
   blog: 'module_blog_enabled',
@@ -17,6 +17,7 @@ export const MODULE_SETTING_KEYS = {
   events: 'module_events_enabled',
   newsletter: 'module_newsletter_enabled',
   social: 'module_social_enabled',
+  caisse: 'module_caisse_enabled',
 } as const;
 
 export type ModuleFlags = Record<ModuleName, boolean>;
@@ -28,6 +29,7 @@ export function toModuleFlags(values: Record<string, string>): ModuleFlags {
     events: values[MODULE_SETTING_KEYS.events] !== 'false',
     newsletter: values[MODULE_SETTING_KEYS.newsletter] !== 'false',
     social: values[MODULE_SETTING_KEYS.social] !== 'false',
+    caisse: values[MODULE_SETTING_KEYS.caisse] !== 'false',
   };
 }
 
