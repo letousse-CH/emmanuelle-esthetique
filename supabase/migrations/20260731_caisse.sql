@@ -373,6 +373,17 @@ CREATE POLICY "transaction_items_select_admin" ON transaction_items FOR SELECT T
 -- `invoice_counters` n'a aucune policy : seules les fonctions SECURITY DEFINER
 -- y accèdent.
 
+-- Supabase accorde par défaut tous les privilèges sur les nouvelles tables du
+-- schéma `public` à `anon` et `authenticated` (ALTER DEFAULT PRIVILEGES posé à
+-- la création du projet). RLS suffit à bloquer les lectures, mais on ne veut
+-- pas que la protection du fichier clientes — des données personnelles —
+-- repose sur une seule ligne de défense : on retire le privilège lui-même.
+REVOKE ALL ON clients           FROM anon;
+REVOKE ALL ON services          FROM anon;
+REVOKE ALL ON transactions      FROM anon;
+REVOKE ALL ON transaction_items FROM anon;
+REVOKE ALL ON invoice_counters  FROM anon, authenticated;
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON clients  TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON services TO authenticated;
 GRANT SELECT, UPDATE                 ON transactions      TO authenticated;
