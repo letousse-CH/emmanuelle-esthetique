@@ -9,8 +9,8 @@
  */
 import { supabase } from './supabase';
 import type {
-  CartLine, Client, ForfaitItem, GiftCard, ModePaiement, Product, Service,
-  ServiceCategory, StockMovement, Transaction, TransactionWithItems,
+  CartLine, Client, ClientNote, ClientStats, ForfaitItem, GiftCard, ModePaiement,
+  Product, Service, ServiceCategory, StockMovement, Transaction, TransactionWithItems,
 } from '../types/caisse';
 
 // ── Clientèle ───────────────────────────────────────────────────────────────
@@ -28,9 +28,20 @@ export async function listClients(includeArchived = false): Promise<Client[]> {
   return (data ?? []) as Client[];
 }
 
-export type ClientInput = Pick<Client, 'nom' | 'prenom' | 'telephone' | 'email' | 'notes'>;
+export type ClientInput = Pick<
+  Client,
+  'nom' | 'prenom' | 'telephone' | 'email' | 'notes' | 'date_naissance' | 'allergies'
+  | 'consent_email' | 'consent_whatsapp' | 'consent_source'
+>;
 
-export async function createClient(input: ClientInput): Promise<Client> {
+// `consent_at` est absent volontairement : il est posé et effacé par le trigger
+// `clients_consent_stamp`, pour qu'une fiche ne puisse jamais garder la date
+// d'un accord qu'elle n'a plus.
+
+/** Partiel à dessein : la caisse crée une fiche minimale en pleine vente (nom
+ *  et téléphone), le reste garde ses valeurs par défaut — dont les deux
+ *  consentements à `false`, qui ne s'accordent jamais par omission. */
+export async function createClient(input: Partial<ClientInput> & Pick<Client, 'nom'>): Promise<Client> {
   const { data, error } = await supabase
     .from('clients')
     .insert({ ...input, updated_at: new Date().toISOString() })
@@ -84,6 +95,76 @@ export function matchClient(c: Client, term: string): boolean {
     (c.email ?? '').toLowerCase().includes(q) ||
     (qPhone.length >= 2 && phone.includes(qPhone))
   );
+}
+
+/**
+ * Agrégats par cliente (vue `client_stats`) : nombre de visites, dernière
+ * visite, total encaissé. Retourné en `Map` — tous les appelants (segments,
+ * fiche cliente, relances) cherchent par identifiant.
+ */
+export async function listClientStats(): Promise<Map<string, ClientStats>> {
+  const { data, error } = await supabase.from('client_stats').select('*').limit(5000);
+  if (error) throw new Error(error.message);
+  return new Map((data ?? []).map(r => [(r as ClientStats).client_id, r as ClientStats]));
+}
+
+/** Historique de passage d'une cliente — factures et leur détail. */
+export async function listClientTransactions(clientId: string): Promise<TransactionWithItems[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*, transaction_items(*)')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(t => ({
+    ...(t as TransactionWithItems),
+    transaction_items: [...((t as TransactionWithItems).transaction_items ?? [])]
+      .sort((a, b) => a.ordre - b.ordre),
+  }));
+}
+
+// ── Journal de suivi ────────────────────────────────────────────────────────
+
+export async function listClientNotes(clientId: string): Promise<ClientNote[]> {
+  const { data, error } = await supabase
+    .from('client_notes')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('date_soin', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ClientNote[];
+}
+
+export type ClientNoteInput = Pick<ClientNote, 'client_id' | 'transaction_id' | 'date_soin' | 'contenu'>;
+
+export async function createClientNote(input: ClientNoteInput): Promise<ClientNote> {
+  const { data, error } = await supabase
+    .from('client_notes')
+    .insert({ ...input, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as ClientNote;
+}
+
+export async function updateClientNote(id: string, input: Partial<ClientNoteInput>): Promise<ClientNote> {
+  const { data, error } = await supabase
+    .from('client_notes')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as ClientNote;
+}
+
+/** Une note de suivi n'est pas une pièce comptable : elle se supprime pour de
+ *  bon, contrairement à une écriture de caisse. */
+export async function deleteClientNote(id: string): Promise<void> {
+  const { error } = await supabase.from('client_notes').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 // ── Catalogue de prestations ────────────────────────────────────────────────

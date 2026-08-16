@@ -7,7 +7,7 @@ import { supabase } from '../../services/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useModuleFlags } from '../../hooks/useModuleFlags';
 import { useAppMode } from '../../hooks/useAppMode';
-import { LayoutDashboard, FileText, Settings, LogOut, Image as ImageIcon, Mail, Send, BarChart2, CalendarDays, Layers, Menu, ChevronRight, ExternalLink, HelpCircle, Share2, CreditCard, Users, BookOpenCheck, Sparkles, Gift, Package } from 'lucide-react';
+import { LayoutDashboard, FileText, Settings, LogOut, Image as ImageIcon, Mail, Send, BarChart2, CalendarDays, Layers, Menu, ChevronRight, ExternalLink, HelpCircle, Share2, CreditCard, Users, BookOpenCheck, Sparkles, Gift, Package, Megaphone } from 'lucide-react';
 import { SITE_CONFIG } from '../../config/site';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -105,6 +105,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       items: [
         { name: 'Abonnés', path: '/admin/subscribers', icon: Mail },
         ...(moduleFlags.newsletter ? [{ name: 'Newsletter', path: '/admin/newsletter', icon: Send }] : []),
+        // Les promotions puisent dans les deux fichiers : les fiches clientes de
+        // la caisse et les abonnés du site. Elles n'ont donc de sens que si la
+        // caisse est là — c'est elle qui apporte les numéros et l'historique.
+        ...(moduleFlags.caisse ? [{ name: 'Promotions', path: '/admin/promotions', icon: Megaphone }] : []),
         ...(moduleFlags.social ? [{ name: 'Réseaux Sociaux', path: '/admin/social', icon: Share2 }] : []),
         { name: 'SEO', path: '/admin/seo', icon: BarChart2 },
       ],

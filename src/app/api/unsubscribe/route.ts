@@ -63,10 +63,24 @@ export async function GET(req: NextRequest) {
 
   const client = createClient(supabaseUrl, serviceRoleKey);
 
-  const { error } = await client
-    .from('subscribers')
-    .update({ active: false })
-    .eq('email', email);
+  /*
+   * Deux fichiers portent la même adresse : les abonnés du site (`subscribers`)
+   * et les fiches clientes de la caisse (`clients.consent_email`). Un lien de
+   * désinscription qui n'en traiterait qu'un laisserait la personne continuer à
+   * recevoir des promotions après avoir explicitement refusé — c'est exactement
+   * ce que la LCD (art. 3 al. 1 let. o) interdit en exigeant un refus effectif.
+   *
+   * Aucune des deux mises à jour n'échoue quand l'adresse est absente de la
+   * table : PostgREST renvoie simplement zéro ligne touchée.
+   */
+  const [subRes, clientRes] = await Promise.all([
+    client.from('subscribers').update({ active: false }).eq('email', email),
+    client.from('clients')
+      .update({ consent_email: false, consent_whatsapp: false })
+      .ilike('email', email),
+  ]);
+
+  const error = subRes.error || clientRes.error;
 
   if (error) {
     return new NextResponse(
@@ -87,7 +101,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(
     renderHtmlPage(
       'Désinscription confirmée',
-      `L'adresse <strong>${safeEmail}</strong> a bien été retirée de la newsletter.<br/>Vous ne recevrez plus aucun email de notre part.`
+      `L'adresse <strong>${safeEmail}</strong> a bien été retirée de nos envois.<br/>Vous ne recevrez plus ni newsletter ni offres de notre part.`
     ),
     {
       status: 200,

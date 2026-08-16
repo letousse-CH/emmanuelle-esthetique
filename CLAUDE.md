@@ -269,6 +269,70 @@ et « Marge » ne sont renseignées que sur les lignes de marchandise ; la marge
 n'entre pas dans le chiffre d'affaires. En modifiant l'export, vérifier que les
 lignes de synthèse gardent le bon nombre de colonnes — elles sont positionnelles.
 
+## CRM : fiche cliente, suivi, promotions
+
+Migration : `supabase/migrations/20260803_crm_clients_promotions.sql`, après
+celle des catégories et du stock.
+
+**La fiche cliente** (`/admin/caisse/clients`, clic sur le nom) ouvre un
+panneau : allergies en évidence, date de naissance, repères (visites, dernière
+venue, encaissé — vue `client_stats`, qui applique `total_ttc - montant_bon`
+comme partout ailleurs), accords publicitaires, journal de suivi et historique
+des passages reconstruit depuis les factures.
+
+Deux natures de notes, à ne pas confondre :
+
+- `clients.allergies` — champ à part, jamais noyé dans les notes. C'est la
+  seule information de la fiche qui peut faire mal si on l'oublie avant un
+  soin, donc elle est affichée en ambre sur la fiche et signalée dans la liste.
+- `client_notes` — le journal de suivi : ce que la facture ne dit pas (produits
+  utilisés en cabine, réaction de la peau, réglages). Corrigeable et
+  supprimable, contrairement aux écritures de caisse : ce n'est pas une pièce
+  comptable. Allergies et suivi touchent à la santé — données sensibles au sens
+  de la LPD révisée, d'où le maintien de l'isolement total du module.
+
+**Les promotions** (`/admin/promotions`) fusionnent deux fichiers en une seule
+audience dédoublonnée par e-mail : les fiches clientes de la caisse et les
+abonnés `subscribers` du site. La fiche cliente l'emporte sur l'abonné — elle
+porte un nom, un numéro et un historique.
+
+> **Encaisser quelqu'un n'est pas un consentement publicitaire.**
+
+La LCD (art. 3 al. 1 let. o) exige un accord préalable, l'identification de
+l'expéditeur et un refus gratuit et facile. D'où `clients.consent_email` et
+`consent_whatsapp`, horodatés et sourcés par le trigger `clients_consent_stamp`
+— qui efface la date dès qu'un accord est retiré, pour qu'une fiche ne garde
+jamais la trace d'un opt-in qu'elle n'a plus. **Toute audience passe par
+`buildAudience()`** (`src/types/promotions.ts`), jamais par un `listClients()`
+brut. Un abonné actif du site a consenti en s'inscrivant : sa présence dans
+`subscribers` vaut opt-in e-mail même sans case cochée sur la fiche.
+
+`/api/unsubscribe` coupe **les deux** fichiers à la fois — un lien de refus qui
+n'en traiterait qu'un laisserait la personne continuer à recevoir des offres.
+
+Trois mécanismes à ne pas défaire :
+
+- **WhatsApp n'envoie rien tout seul.** Un clic ouvre `wa.me` avec le message
+  déjà rédigé ; c'est l'utilisatrice qui appuie sur envoyer. L'app ne peut donc
+  consigner que l'ouverture de la conversation — d'où le bouton « annuler » sur
+  chaque ligne. Le modèle est prêt pour l'API Meta Cloud, seul le connecteur
+  manque.
+- **L'envoi e-mail se fait par paquets de 12**, la route rendant la main avec
+  `remaining` que le navigateur relance. Une fonction Netlify s'arrête à dix
+  secondes ; sans découpage, une campagne de trente adresses serait coupée en
+  plein milieu. C'est sans danger parce que `promotion_sends` a une contrainte
+  `UNIQUE (promotion_id, canal, destinataire)` : personne ne reçoit deux fois,
+  même si un appel meurt après l'envoi et avant la réponse.
+- **Un échec est journalisé comme un envoi** (`status = 'echec'`), donc pas
+  réessayé automatiquement — sinon la boucle s'acharnerait sur une adresse
+  invalide. La reprise est explicite : bouton « Réessayer » de l'éditeur, qui
+  efface les lignes en échec.
+
+La route serveur recalcule l'audience à partir du segment enregistré et
+n'accepte **jamais** une liste de destinataires venue du navigateur : une page
+restée ouverte enverrait à une audience périmée, et rien n'empêcherait d'écrire
+une liste à la main.
+
 ## E-mails & désinscription
 
 Tous les liens de désinscription sont signés en HMAC-SHA256 avec `UNSUB_SECRET`

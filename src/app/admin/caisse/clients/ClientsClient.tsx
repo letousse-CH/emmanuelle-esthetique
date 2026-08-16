@@ -3,15 +3,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Users, Search, UserPlus, Trash2, Pencil, X, Check, Loader2, AlertCircle, Archive, Download,
+  TriangleAlert, Mail, MessageCircle, Cake,
 } from 'lucide-react';
 import {
-  createClient, deleteOrArchiveClient, listClients, matchClient, updateClient,
+  createClient, deleteOrArchiveClient, listClientStats, listClients, matchClient, updateClient,
 } from '../../../../services/caisse';
 import type { ClientInput } from '../../../../services/caisse';
-import { clientFullName } from '../../../../types/caisse';
-import type { Client } from '../../../../types/caisse';
+import { clientFullName, formatCHF } from '../../../../types/caisse';
+import type { Client, ClientStats } from '../../../../types/caisse';
+import { toWhatsAppNumber } from '../../../../types/promotions';
+import ClientDetail from './ClientDetail';
 
-const EMPTY: ClientInput = { nom: '', prenom: '', telephone: '', email: '', notes: '' };
+const EMPTY: ClientInput = {
+  nom: '', prenom: '', telephone: '', email: '', notes: '',
+  date_naissance: null, allergies: '',
+  // Jamais `true` par défaut : un consentement qui s'accorde par omission n'en
+  // est pas un (LCD art. 3 al. 1 let. o).
+  consent_email: false, consent_whatsapp: false, consent_source: null,
+};
+
+const dateCH = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleDateString('fr-CH') : '—';
 
 export default function ClientsClient() {
   const [clients, setClients]     = useState<Client[]>([]);
@@ -20,6 +32,8 @@ export default function ClientsClient() {
   const [search, setSearch]       = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing]     = useState<Client | 'new' | null>(null);
+  const [detail, setDetail]       = useState<Client | null>(null);
+  const [stats, setStats]         = useState<Map<string, ClientStats>>(new Map());
   const [busyId, setBusyId]       = useState<string | null>(null);
   const [flash, setFlash]         = useState<string | null>(null);
 
@@ -29,6 +43,9 @@ export default function ClientsClient() {
     setLoading(true); setError(null);
     try {
       setClients(await listClients(showArchived));
+      // Les agrégats sont un confort d'affichage : leur absence — vue
+      // `client_stats` pas encore créée — ne doit pas priver du fichier clientes.
+      setStats(await listClientStats().catch(() => new Map<string, ClientStats>()));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Chargement impossible.');
     } finally {
@@ -70,12 +87,25 @@ export default function ClientsClient() {
 
   const exportCSV = () => {
     const rows = [
-      ['Nom', 'Prénom', 'Téléphone', 'E-mail', 'Notes', 'Créée le'],
-      ...filtered.map(c => [
-        c.nom, c.prenom, c.telephone ?? '', c.email ?? '',
-        (c.notes ?? '').replace(/[\r\n]+/g, ' '),
-        new Date(c.created_at).toLocaleDateString('fr-CH'),
-      ]),
+      [
+        'Nom', 'Prénom', 'Téléphone', 'E-mail', 'Date de naissance', 'Allergies', 'Notes',
+        'Accord e-mail', 'Accord WhatsApp', 'Visites', 'Dernière visite', 'Encaissé (CHF)', 'Créée le',
+      ],
+      ...filtered.map(c => {
+        const st = stats.get(c.id);
+        return [
+          c.nom, c.prenom, c.telephone ?? '', c.email ?? '',
+          c.date_naissance ? dateCH(`${c.date_naissance}T00:00:00`) : '',
+          (c.allergies ?? '').replace(/[\r\n]+/g, ' '),
+          (c.notes ?? '').replace(/[\r\n]+/g, ' '),
+          c.consent_email ? 'oui' : 'non',
+          c.consent_whatsapp ? 'oui' : 'non',
+          String(st?.nb_visites ?? 0),
+          st?.derniere_visite ? dateCH(st.derniere_visite) : '',
+          Number(st?.total_encaisse ?? 0).toFixed(2),
+          new Date(c.created_at).toLocaleDateString('fr-CH'),
+        ];
+      }),
     ];
     const csv = rows
       .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'))
@@ -168,7 +198,7 @@ export default function ClientsClient() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-stone-100 bg-stone-50/50">
-                    {['Cliente', 'Téléphone', 'E-mail', 'Notes'].map(h => (
+                    {['Cliente', 'Contact', 'Dernière visite', 'Accords'].map(h => (
                       <th key={h} className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 text-left">{h}</th>
                     ))}
                     <th className="px-6 py-3.5" />
@@ -178,12 +208,40 @@ export default function ClientsClient() {
                   {filtered.map(c => (
                     <tr key={c.id} className={`border-b border-stone-50 hover:bg-stone-50/50 transition-colors group ${c.archived ? 'opacity-50' : ''}`}>
                       <td className="px-6 py-4 font-medium text-stone-900">
-                        {clientFullName(c)}
+                        <button
+                          onClick={() => setDetail(c)}
+                          className="text-left hover:text-sage transition-colors cursor-pointer"
+                        >
+                          {clientFullName(c)}
+                        </button>
+                        {c.allergies?.trim() && (
+                          <TriangleAlert
+                            size={13}
+                            className="inline ml-1.5 -mt-0.5 text-amber-500"
+                            aria-label="Allergies signalées"
+                          />
+                        )}
                         {c.archived && <span className="ml-2 text-[10px] font-semibold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full">Archivée</span>}
                       </td>
-                      <td className="px-6 py-4 text-stone-500 whitespace-nowrap">{c.telephone || <span className="text-stone-300">—</span>}</td>
-                      <td className="px-6 py-4 text-stone-500 truncate max-w-[14rem]">{c.email || <span className="text-stone-300">—</span>}</td>
-                      <td className="px-6 py-4 text-stone-400 text-xs truncate max-w-[16rem]">{c.notes || <span className="text-stone-300">—</span>}</td>
+                      <td className="px-6 py-4 text-stone-500 text-xs">
+                        {c.telephone && <span className="block whitespace-nowrap">{c.telephone}</span>}
+                        {c.email && <span className="block truncate max-w-[13rem]">{c.email}</span>}
+                        {!c.telephone && !c.email && <span className="text-stone-300">—</span>}
+                      </td>
+                      <td className="px-6 py-4 text-stone-500 text-xs whitespace-nowrap tabular-nums">
+                        {stats.get(c.id)?.derniere_visite
+                          ? <>
+                              {dateCH(stats.get(c.id)!.derniere_visite)}
+                              <span className="block text-stone-300">
+                                {stats.get(c.id)!.nb_visites} visite{Number(stats.get(c.id)!.nb_visites) > 1 ? 's' : ''}
+                                {' · '}{formatCHF(stats.get(c.id)!.total_encaisse)}
+                              </span>
+                            </>
+                          : <span className="text-stone-300">Jamais venue</span>}
+                      </td>
+                      <td className="px-6 py-4">
+                        <ConsentBadges client={c} />
+                      </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         <RowActions
                           client={c} busy={busyId === c.id}
@@ -202,7 +260,13 @@ export default function ClientsClient() {
               {filtered.map(c => (
                 <div key={c.id} className={`p-4 space-y-2 ${c.archived ? 'opacity-60' : ''}`}>
                   <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium text-stone-900 text-sm">{clientFullName(c)}</p>
+                    <button
+                      onClick={() => setDetail(c)}
+                      className="font-medium text-stone-900 text-sm text-left flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {clientFullName(c)}
+                      {c.allergies?.trim() && <TriangleAlert size={13} className="text-amber-500 shrink-0" aria-label="Allergies signalées" />}
+                    </button>
                     <RowActions
                       client={c} busy={busyId === c.id}
                       onEdit={() => setEditing(c)}
@@ -213,7 +277,12 @@ export default function ClientsClient() {
                   <p className="text-xs text-stone-400">
                     {[c.telephone, c.email].filter(Boolean).join(' · ') || 'Aucun contact'}
                   </p>
-                  {c.notes && <p className="text-xs text-stone-400 italic">{c.notes}</p>}
+                  <div className="flex items-center gap-2">
+                    <ConsentBadges client={c} />
+                    <span className="text-[11px] text-stone-300 tabular-nums">
+                      {stats.get(c.id)?.derniere_visite ? dateCH(stats.get(c.id)!.derniere_visite) : 'Jamais venue'}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -228,7 +297,47 @@ export default function ClientsClient() {
           onSaved={() => { setEditing(null); load(); }}
         />
       )}
+
+      {detail && (
+        <ClientDetail
+          client={detail}
+          stats={stats.get(detail.id)}
+          onClose={() => { setDetail(null); load(); }}
+          onChanged={c => {
+            setDetail(c);
+            setClients(prev => prev.map(x => (x.id === c.id ? c : x)));
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Accords publicitaires en un coup d'œil — c'est ce qui décide si une cliente
+ *  entre ou non dans une audience de promotion. */
+function ConsentBadges({ client }: { client: Client }) {
+  if (!client.consent_email && !client.consent_whatsapp) {
+    return <span className="text-[11px] text-stone-300">Aucun</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      {client.consent_email && (
+        <span
+          className="inline-flex items-center gap-1 text-[10px] font-medium text-sage bg-sage/10 px-1.5 py-0.5 rounded"
+          title="Accepte les offres par e-mail"
+        >
+          <Mail size={9} /> E-mail
+        </span>
+      )}
+      {client.consent_whatsapp && (
+        <span
+          className="inline-flex items-center gap-1 text-[10px] font-medium text-sage bg-sage/10 px-1.5 py-0.5 rounded"
+          title="Accepte les offres par WhatsApp"
+        >
+          <MessageCircle size={9} /> WhatsApp
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -274,23 +383,42 @@ function ClientDialog({ client, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const [form, setForm]     = useState<ClientInput>(client
-    ? { nom: client.nom, prenom: client.prenom, telephone: client.telephone ?? '', email: client.email ?? '', notes: client.notes ?? '' }
+    ? {
+        nom: client.nom, prenom: client.prenom,
+        telephone: client.telephone ?? '', email: client.email ?? '',
+        notes: client.notes ?? '', allergies: client.allergies ?? '',
+        date_naissance: client.date_naissance ?? null,
+        consent_email: client.consent_email,
+        consent_whatsapp: client.consent_whatsapp,
+        consent_source: client.consent_source,
+      }
     : EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
 
   const set = (k: keyof ClientInput) => (v: string) => setForm(f => ({ ...f, [k]: v }));
+  const waNumber = toWhatsAppNumber(form.telephone);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nom?.trim()) return;
     setSaving(true); setError(null);
+    const email = (form.email ?? '').trim() || null;
     const payload: ClientInput = {
       nom: form.nom.trim(),
       prenom: (form.prenom ?? '').trim(),
       telephone: (form.telephone ?? '').trim() || null,
-      email: (form.email ?? '').trim() || null,
+      email,
       notes: (form.notes ?? '').trim() || null,
+      allergies: (form.allergies ?? '').trim() || null,
+      date_naissance: form.date_naissance || null,
+      // Un accord sans moyen de l'honorer n'a pas de sens : retirer l'adresse
+      // ou le numéro retire le consentement correspondant.
+      consent_email: Boolean(form.consent_email && email),
+      consent_whatsapp: Boolean(form.consent_whatsapp && waNumber),
+      consent_source: (form.consent_email || form.consent_whatsapp)
+        ? (form.consent_source ?? 'Fiche cliente')
+        : null,
     };
     try {
       if (client) await updateClient(client.id, payload);
@@ -325,16 +453,75 @@ function ClientDialog({ client, onClose, onSaved }: {
             <Input label="Téléphone" value={form.telephone ?? ''} onChange={set('telephone')} type="tel" />
             <Input label="E-mail" value={form.email ?? ''} onChange={set('email')} type="email" />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="client-naissance" className="block text-[11px] font-medium text-stone-500 mb-1 flex items-center gap-1.5">
+                <Cake size={11} className="text-stone-300" /> Date de naissance
+              </label>
+              <input
+                id="client-naissance" type="date" value={form.date_naissance ?? ''}
+                onChange={e => setForm(f => ({ ...f, date_naissance: e.target.value || null }))}
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+              />
+              <p className="text-[10px] text-stone-400 mt-1">Sert au segment « anniversaires du mois ».</p>
+            </div>
+          </div>
+
+          {/* Champ à part, jamais noyé dans les notes : c'est la seule
+              information de la fiche qui peut faire mal si on l'oublie. */}
           <div>
-            <label htmlFor="client-notes" className="block text-[11px] font-medium text-stone-500 mb-1">
-              Notes <span className="text-stone-300">(allergies, préférences, produits utilisés…)</span>
+            <label htmlFor="client-allergies" className="block text-[11px] font-medium text-amber-700 mb-1 flex items-center gap-1.5">
+              <TriangleAlert size={11} /> Allergies &amp; contre-indications
             </label>
             <textarea
-              id="client-notes" rows={4} value={form.notes ?? ''}
+              id="client-allergies" rows={2} value={form.allergies ?? ''}
+              onChange={e => set('allergies')(e.target.value)}
+              placeholder="Huiles essentielles, latex, peau réactive…"
+              className="w-full px-3 py-2 border border-amber-200 bg-amber-50/40 rounded-lg text-sm text-stone-700 placeholder:text-amber-300 focus:border-amber-400 focus:ring-1 focus:ring-amber-200 outline-none transition-all resize-y"
+            />
+            <p className="text-[10px] text-stone-400 mt-1">
+              Signalé en évidence sur la fiche et dans la liste.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="client-notes" className="block text-[11px] font-medium text-stone-500 mb-1">
+              Notes générales <span className="text-stone-300">(préférences, habitudes…)</span>
+            </label>
+            <textarea
+              id="client-notes" rows={3} value={form.notes ?? ''}
               onChange={e => set('notes')(e.target.value)}
               className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
             />
+            <p className="text-[10px] text-stone-400 mt-1">
+              Ce qui se passe pendant un soin se note dans le journal de suivi, sur la fiche.
+            </p>
           </div>
+
+          {/* ── Accords publicitaires ─────────────────────────────────── */}
+          <fieldset className="rounded-xl border border-stone-200 p-3.5 space-y-2.5">
+            <legend className="text-[11px] font-medium text-stone-500 px-1">Accords publicitaires</legend>
+            <p className="text-[10px] text-stone-400 leading-relaxed">
+              À cocher seulement si elle l&apos;a dit. Encaisser quelqu&apos;un ne vaut pas accord
+              (LCD art. 3 al. 1 let. o) : sans ces cases, elle ne recevra aucune promotion.
+            </p>
+            <Consent
+              id="consent-email" icon={Mail} label="Offres par e-mail"
+              detail={(form.email ?? '').trim() || 'Renseigne une adresse pour l’activer'}
+              checked={Boolean(form.consent_email)}
+              disabled={!(form.email ?? '').trim()}
+              onToggle={() => setForm(f => ({ ...f, consent_email: !f.consent_email }))}
+            />
+            <Consent
+              id="consent-wa" icon={MessageCircle} label="Offres par WhatsApp"
+              detail={waNumber
+                ? `+${waNumber}`
+                : (form.telephone ?? '').trim() ? 'Numéro non exploitable' : 'Renseigne un numéro pour l’activer'}
+              checked={Boolean(form.consent_whatsapp)}
+              disabled={!waNumber}
+              onToggle={() => setForm(f => ({ ...f, consent_whatsapp: !f.consent_whatsapp }))}
+            />
+          </fieldset>
 
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
@@ -372,6 +559,33 @@ function Input({ label, value, onChange, type = 'text', required, autoFocus }: {
         onChange={e => onChange(e.target.value)}
         className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
       />
+    </div>
+  );
+}
+
+function Consent({ id, icon: Icon, label, detail, checked, disabled, onToggle }: {
+  id: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string; detail: string; checked: boolean; disabled: boolean; onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start gap-2.5 min-w-0">
+        <Icon size={13} className="text-stone-300 shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <label htmlFor={id} className="text-sm text-stone-700 cursor-pointer">{label}</label>
+          <p className="text-[11px] text-stone-400 truncate">{detail}</p>
+        </div>
+      </div>
+      <button
+        id={id} type="button" role="switch" aria-checked={checked} aria-label={label}
+        onClick={onToggle} disabled={disabled}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+          checked ? 'bg-sage' : 'bg-stone-200'
+        }`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      </button>
     </div>
   );
 }
