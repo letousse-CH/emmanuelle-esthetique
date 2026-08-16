@@ -2,30 +2,27 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  X, Cake, TriangleAlert, Receipt, NotebookPen, Plus, Pencil, Trash2, Check,
-  Loader2, Mail, MessageCircle, Package, Sparkles, AlertCircle,
+  X, Cake, Receipt, Loader2, Mail, MessageCircle, Package, Sparkles, AlertCircle,
 } from 'lucide-react';
-import {
-  createClientNote, deleteClientNote, listClientNotes, listClientTransactions,
-  updateClient, updateClientNote,
-} from '../../../../services/caisse';
+import { listClientTransactions, updateClient } from '../../../../services/caisse';
 import {
   findSubscriberByEmail, subscribeEmail, unsubscribeEmail,
 } from '../../../../services/promotions';
 import {
   clientAge, clientFullName, formatCHF, moisDepuis, recetteEncaissee,
 } from '../../../../types/caisse';
-import type { Client, ClientNote, ClientStats, TransactionWithItems } from '../../../../types/caisse';
+import type { Client, ClientStats, TransactionWithItems } from '../../../../types/caisse';
 import type { Subscriber } from '../../../../types/promotions';
 import { toWhatsAppNumber } from '../../../../types/promotions';
 
+/*
+ * Aucune donnée de santé n'apparaît sur cette fiche : ni allergies, ni
+ * observation après soin. Décision de l'exploitante, appliquée en base par
+ * `20260804_retrait_donnees_sante.sql`. Ne pas en réintroduire sans elle.
+ */
+
 const dateCH = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString('fr-CH') : '—';
-
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 
 export default function ClientDetail({ client, stats, onClose, onChanged }: {
   client: Client;
@@ -33,25 +30,18 @@ export default function ClientDetail({ client, stats, onClose, onChanged }: {
   onClose: () => void;
   onChanged: (c: Client) => void;
 }) {
-  const [tab, setTab] = useState<'suivi' | 'historique'>('suivi');
   const [transactions, setTransactions] = useState<TransactionWithItems[]>([]);
-  const [notes, setNotes] = useState<ClientNote[]>([]);
   const [subscriber, setSubscriber] = useState<Subscriber | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editingNote, setEditingNote] = useState<ClientNote | 'new' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [tx, n] = await Promise.all([
-        listClientTransactions(client.id),
-        listClientNotes(client.id),
-      ]);
-      setTransactions(tx); setNotes(n);
+      setTransactions(await listClientTransactions(client.id));
       // Le statut newsletter est un confort : son absence ne doit pas priver
-      // la fiche de son historique de soins.
+      // la fiche de son historique.
       if (client.email) {
         setSubscriber(await findSubscriberByEmail(client.email).catch(() => null));
       } else {
@@ -78,7 +68,8 @@ export default function ClientDetail({ client, stats, onClose, onChanged }: {
   const waNumber = toWhatsAppNumber(client.telephone);
   const moisInactif = moisDepuis(stats?.derniere_visite ?? null);
 
-  /** Produits achetés, tous passages confondus — la mémoire d'un institut. */
+  /** Produits emportés, tous passages confondus — la mémoire commerciale de
+   *  l'institut, reconstruite depuis les factures. */
   const produitsAchetes = useMemo(() => {
     const map = new Map<string, { nom: string; quantite: number; dernier: string }>();
     for (const t of transactions) {
@@ -128,19 +119,6 @@ export default function ClientDetail({ client, stats, onClose, onChanged }: {
     }
   };
 
-  const removeNote = async (n: ClientNote) => {
-    if (!confirm('Supprimer cette note de suivi ?')) return;
-    setBusy(true);
-    try {
-      await deleteClientNote(n.id);
-      setNotes(prev => prev.filter(x => x.id !== n.id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Suppression impossible.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-stone-900/40" onClick={onClose}>
       <aside
@@ -148,7 +126,6 @@ export default function ClientDetail({ client, stats, onClose, onChanged }: {
         onClick={e => e.stopPropagation()}
         className="bg-stone-50 w-full sm:max-w-xl h-full overflow-y-auto shadow-2xl"
       >
-        {/* ── En-tête ────────────────────────────────────────────────── */}
         <header className="sticky top-0 z-10 bg-white border-b border-stone-100 px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -172,18 +149,6 @@ export default function ClientDetail({ client, stats, onClose, onChanged }: {
             </div>
           )}
 
-          {/* ── Allergies : d'abord, en couleur, parce que c'est la seule
-                information de la fiche qui peut faire mal si on l'oublie. ── */}
-          {client.allergies?.trim() && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700 flex items-center gap-1.5 mb-1">
-                <TriangleAlert size={12} /> Allergies &amp; contre-indications
-              </p>
-              <p className="text-sm text-amber-900 whitespace-pre-line leading-relaxed">{client.allergies}</p>
-            </div>
-          )}
-
-          {/* ── Repères ─────────────────────────────────────────────────── */}
           <div className="grid grid-cols-3 gap-2.5">
             <Metric label="Visites" value={String(stats?.nb_visites ?? 0)} />
             <Metric
@@ -261,75 +226,15 @@ export default function ClientDetail({ client, stats, onClose, onChanged }: {
             )}
           </section>
 
-          {/* ── Onglets ─────────────────────────────────────────────────── */}
-          <div className="flex gap-1.5">
-            {([
-              { id: 'suivi' as const, label: 'Journal de suivi', icon: NotebookPen },
-              { id: 'historique' as const, label: 'Passages', icon: Receipt },
-            ]).map(t => (
-              <button
-                key={t.id} onClick={() => setTab(t.id)} aria-pressed={tab === t.id}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-                  tab === t.id ? 'border-sage bg-sage/8 text-sage' : 'border-stone-200 bg-white text-stone-500 hover:border-stone-300'
-                }`}
-              >
-                <t.icon size={13} /> {t.label}
-              </button>
-            ))}
-          </div>
+          {/* ── Historique ──────────────────────────────────────────────── */}
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 flex items-center gap-1.5 pt-1">
+            <Receipt size={12} /> Passages
+          </p>
 
           {loading ? (
             <div className="bg-white border border-stone-100 rounded-2xl p-8 flex items-center justify-center gap-2 text-stone-400 text-sm">
               <Loader2 size={15} className="animate-spin" /> Chargement…
             </div>
-          ) : tab === 'suivi' ? (
-            <section className="space-y-2.5">
-              <button
-                onClick={() => setEditingNote('new')}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-stone-300 bg-white text-stone-500 hover:border-sage hover:text-sage text-sm transition-all cursor-pointer"
-              >
-                <Plus size={14} /> Ajouter une note de soin
-              </button>
-
-              {notes.length === 0 ? (
-                <div className="bg-white border border-stone-100 rounded-2xl p-6 text-center">
-                  <p className="text-stone-400 text-sm italic">Aucune note de suivi.</p>
-                  <p className="text-stone-400 text-xs mt-1.5 leading-relaxed">
-                    Ce que la facture ne dit pas : produits utilisés en cabine, réaction de
-                    la peau, réglages, ce qu&apos;il faudra refaire la prochaine fois.
-                  </p>
-                </div>
-              ) : (
-                <ul className="space-y-2.5">
-                  {notes.map(n => (
-                    <li key={n.id} className="bg-white border border-stone-100 rounded-2xl p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-[11px] font-semibold text-stone-400 tabular-nums">
-                          {new Date(`${n.date_soin}T00:00:00`).toLocaleDateString('fr-CH', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                        <span className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={() => setEditingNote(n)} disabled={busy}
-                            aria-label="Modifier la note"
-                            className="p-1 text-stone-300 hover:text-sage rounded cursor-pointer"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            onClick={() => removeNote(n)} disabled={busy}
-                            aria-label="Supprimer la note"
-                            className="p-1 text-stone-300 hover:text-red-500 rounded cursor-pointer"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </span>
-                      </div>
-                      <p className="text-sm text-stone-700 whitespace-pre-line leading-relaxed mt-1.5">{n.contenu}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
           ) : (
             <section className="space-y-3">
               {produitsAchetes.length > 0 && (
@@ -359,7 +264,7 @@ export default function ClientDetail({ client, stats, onClose, onChanged }: {
                   {transactions.map(t => (
                     <li
                       key={t.id}
-                      className={`bg-white border rounded-2xl p-4 ${t.status === 'annulee' ? 'border-stone-100 opacity-60' : 'border-stone-100'}`}
+                      className={`bg-white border border-stone-100 rounded-2xl p-4 ${t.status === 'annulee' ? 'opacity-60' : ''}`}
                     >
                       <div className="flex items-baseline justify-between gap-3">
                         <p className="text-sm font-medium text-stone-800">
@@ -392,23 +297,6 @@ export default function ClientDetail({ client, stats, onClose, onChanged }: {
             </section>
           )}
         </div>
-
-        {editingNote && (
-          <NoteDialog
-            note={editingNote === 'new' ? null : editingNote}
-            clientId={client.id}
-            onClose={() => setEditingNote(null)}
-            onSaved={saved => {
-              setNotes(prev => {
-                const next = prev.some(n => n.id === saved.id)
-                  ? prev.map(n => (n.id === saved.id ? saved : n))
-                  : [saved, ...prev];
-                return next.sort((a, b) => b.date_soin.localeCompare(a.date_soin));
-              });
-              setEditingNote(null);
-            }}
-          />
-        )}
       </aside>
     </div>
   );
@@ -448,89 +336,6 @@ function ConsentRow({ icon: Icon, label, detail, checked, disabled, onToggle }: 
       >
         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
       </button>
-    </div>
-  );
-}
-
-function NoteDialog({ note, clientId, onClose, onSaved }: {
-  note: ClientNote | null;
-  clientId: string;
-  onClose: () => void;
-  onSaved: (n: ClientNote) => void;
-}) {
-  const [date, setDate] = useState(note?.date_soin ?? today());
-  const [contenu, setContenu] = useState(note?.contenu ?? '');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contenu.trim()) return;
-    setSaving(true); setError(null);
-    try {
-      onSaved(note
-        ? await updateClientNote(note.id, { date_soin: date, contenu: contenu.trim() })
-        : await createClientNote({
-            client_id: clientId, transaction_id: null, date_soin: date, contenu: contenu.trim(),
-          }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Enregistrement impossible.');
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] bg-stone-900/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div
-        role="dialog" aria-modal="true" aria-label={note ? 'Modifier la note' : 'Nouvelle note de soin'}
-        onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-            <NotebookPen size={14} className="text-sage" /> {note ? 'Modifier la note' : 'Nouvelle note de soin'}
-          </h3>
-          <button onClick={onClose} aria-label="Fermer" className="p-1 text-stone-400 hover:text-stone-700 cursor-pointer">
-            <X size={16} />
-          </button>
-        </div>
-
-        <form onSubmit={submit} className="space-y-3">
-          <div>
-            <label htmlFor="note-date" className="block text-[11px] font-medium text-stone-500 mb-1">Date du soin</label>
-            <input
-              id="note-date" type="date" value={date} onChange={e => setDate(e.target.value)} required
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
-            />
-          </div>
-          <div>
-            <label htmlFor="note-contenu" className="block text-[11px] font-medium text-stone-500 mb-1">Observation *</label>
-            <textarea
-              id="note-contenu" rows={6} value={contenu} onChange={e => setContenu(e.target.value)} required autoFocus
-              placeholder="Produits utilisés, réaction de la peau, réglages, ce qu'il faudra refaire…"
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
-            />
-          </div>
-
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-
-          <div className="flex gap-2">
-            <button
-              type="button" onClick={onClose}
-              className="flex-1 py-2.5 rounded-lg border border-stone-200 text-stone-600 text-sm hover:border-stone-300 transition-all cursor-pointer"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit" disabled={saving || !contenu.trim()}
-              className="flex-1 flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-sage transition-colors disabled:opacity-40 cursor-pointer"
-            >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-              Enregistrer
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

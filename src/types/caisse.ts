@@ -45,9 +45,6 @@ export interface Client {
   email: string | null;
   notes: string | null;
   date_naissance: string | null;
-  /** Champ à part, jamais noyé dans les notes : c'est la seule information de
-   *  la fiche qui peut faire mal si on l'oublie avant un soin. */
-  allergies: string | null;
   /** Consentement publicitaire par canal. Encaisser quelqu'un n'en est pas un
    *  (LCD art. 3 al. 1 let. o) : aucune audience ne doit ignorer ces colonnes. */
   consent_email: boolean;
@@ -59,21 +56,12 @@ export interface Client {
   updated_at: string;
 }
 
-/**
- * Note de suivi — ce que la facture ne dit pas : produits utilisés en cabine,
- * réaction de la peau, réglages, ce qu'il faudra refaire la prochaine fois.
- * Corrigeable et supprimable, contrairement aux écritures de caisse : ce n'est
- * pas une pièce comptable, et une observation fausse doit pouvoir disparaître.
+/*
+ * Il n'y a volontairement AUCUN champ de santé sur la fiche cliente : ni
+ * allergies, ni journal d'observation après soin. C'est une décision de
+ * l'exploitante, appliquée par la migration
+ * `20260804_retrait_donnees_sante.sql`. Ne pas en réintroduire sans elle.
  */
-export interface ClientNote {
-  id: string;
-  client_id: string;
-  transaction_id: string | null;
-  date_soin: string;
-  contenu: string;
-  created_at: string;
-  updated_at: string;
-}
 
 /** Agrégats de la vue `client_stats`. `total_encaisse` applique la règle du
  *  module (`total_ttc - montant_bon`), jamais la somme brute des TTC. */

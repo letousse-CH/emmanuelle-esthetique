@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Users, Search, UserPlus, Trash2, Pencil, X, Check, Loader2, AlertCircle, Archive, Download,
-  TriangleAlert, Mail, MessageCircle, Cake,
+  Mail, MessageCircle, Cake,
 } from 'lucide-react';
 import {
   createClient, deleteOrArchiveClient, listClientStats, listClients, matchClient, updateClient,
@@ -16,7 +16,7 @@ import ClientDetail from './ClientDetail';
 
 const EMPTY: ClientInput = {
   nom: '', prenom: '', telephone: '', email: '', notes: '',
-  date_naissance: null, allergies: '',
+  date_naissance: null,
   // Jamais `true` par défaut : un consentement qui s'accorde par omission n'en
   // est pas un (LCD art. 3 al. 1 let. o).
   consent_email: false, consent_whatsapp: false, consent_source: null,
@@ -88,7 +88,7 @@ export default function ClientsClient() {
   const exportCSV = () => {
     const rows = [
       [
-        'Nom', 'Prénom', 'Téléphone', 'E-mail', 'Date de naissance', 'Allergies', 'Notes',
+        'Nom', 'Prénom', 'Téléphone', 'E-mail', 'Date de naissance', 'Notes',
         'Accord e-mail', 'Accord WhatsApp', 'Visites', 'Dernière visite', 'Encaissé (CHF)', 'Créée le',
       ],
       ...filtered.map(c => {
@@ -96,7 +96,6 @@ export default function ClientsClient() {
         return [
           c.nom, c.prenom, c.telephone ?? '', c.email ?? '',
           c.date_naissance ? dateCH(`${c.date_naissance}T00:00:00`) : '',
-          (c.allergies ?? '').replace(/[\r\n]+/g, ' '),
           (c.notes ?? '').replace(/[\r\n]+/g, ' '),
           c.consent_email ? 'oui' : 'non',
           c.consent_whatsapp ? 'oui' : 'non',
@@ -214,13 +213,6 @@ export default function ClientsClient() {
                         >
                           {clientFullName(c)}
                         </button>
-                        {c.allergies?.trim() && (
-                          <TriangleAlert
-                            size={13}
-                            className="inline ml-1.5 -mt-0.5 text-amber-500"
-                            aria-label="Allergies signalées"
-                          />
-                        )}
                         {c.archived && <span className="ml-2 text-[10px] font-semibold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full">Archivée</span>}
                       </td>
                       <td className="px-6 py-4 text-stone-500 text-xs">
@@ -265,7 +257,6 @@ export default function ClientsClient() {
                       className="font-medium text-stone-900 text-sm text-left flex items-center gap-1.5 cursor-pointer"
                     >
                       {clientFullName(c)}
-                      {c.allergies?.trim() && <TriangleAlert size={13} className="text-amber-500 shrink-0" aria-label="Allergies signalées" />}
                     </button>
                     <RowActions
                       client={c} busy={busyId === c.id}
@@ -386,7 +377,7 @@ function ClientDialog({ client, onClose, onSaved }: {
     ? {
         nom: client.nom, prenom: client.prenom,
         telephone: client.telephone ?? '', email: client.email ?? '',
-        notes: client.notes ?? '', allergies: client.allergies ?? '',
+        notes: client.notes ?? '',
         date_naissance: client.date_naissance ?? null,
         consent_email: client.consent_email,
         consent_whatsapp: client.consent_whatsapp,
@@ -410,7 +401,6 @@ function ClientDialog({ client, onClose, onSaved }: {
       telephone: (form.telephone ?? '').trim() || null,
       email,
       notes: (form.notes ?? '').trim() || null,
-      allergies: (form.allergies ?? '').trim() || null,
       date_naissance: form.date_naissance || null,
       // Un accord sans moyen de l'honorer n'a pas de sens : retirer l'adresse
       // ou le numéro retire le consentement correspondant.
@@ -467,22 +457,6 @@ function ClientDialog({ client, onClose, onSaved }: {
             </div>
           </div>
 
-          {/* Champ à part, jamais noyé dans les notes : c'est la seule
-              information de la fiche qui peut faire mal si on l'oublie. */}
-          <div>
-            <label htmlFor="client-allergies" className="text-[11px] font-medium text-amber-700 mb-1 flex items-center gap-1.5">
-              <TriangleAlert size={11} /> Allergies &amp; contre-indications
-            </label>
-            <textarea
-              id="client-allergies" rows={2} value={form.allergies ?? ''}
-              onChange={e => set('allergies')(e.target.value)}
-              placeholder="Huiles essentielles, latex, peau réactive…"
-              className="w-full px-3 py-2 border border-amber-200 bg-amber-50/40 rounded-lg text-sm text-stone-700 placeholder:text-amber-300 focus:border-amber-400 focus:ring-1 focus:ring-amber-200 outline-none transition-all resize-y"
-            />
-            <p className="text-[10px] text-stone-400 mt-1">
-              Signalé en évidence sur la fiche et dans la liste.
-            </p>
-          </div>
 
           <div>
             <label htmlFor="client-notes" className="block text-[11px] font-medium text-stone-500 mb-1">
@@ -494,7 +468,7 @@ function ClientDialog({ client, onClose, onSaved }: {
               className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
             />
             <p className="text-[10px] text-stone-400 mt-1">
-              Ce qui se passe pendant un soin se note dans le journal de suivi, sur la fiche.
+              Préférences et habitudes seulement — aucune donnée de santé n&apos;est conservée.
             </p>
           </div>
 

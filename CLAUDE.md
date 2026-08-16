@@ -275,21 +275,18 @@ Migration : `supabase/migrations/20260803_crm_clients_promotions.sql`, après
 celle des catégories et du stock.
 
 **La fiche cliente** (`/admin/caisse/clients`, clic sur le nom) ouvre un
-panneau : allergies en évidence, date de naissance, repères (visites, dernière
-venue, encaissé — vue `client_stats`, qui applique `total_ttc - montant_bon`
-comme partout ailleurs), accords publicitaires, journal de suivi et historique
-des passages reconstruit depuis les factures.
+panneau : date de naissance, notes générales, repères (visites, dernière venue,
+encaissé — vue `client_stats`, qui applique `total_ttc - montant_bon` comme
+partout ailleurs), accords publicitaires et historique des passages reconstruit
+depuis les factures, produits emportés compris.
 
-Deux natures de notes, à ne pas confondre :
-
-- `clients.allergies` — champ à part, jamais noyé dans les notes. C'est la
-  seule information de la fiche qui peut faire mal si on l'oublie avant un
-  soin, donc elle est affichée en ambre sur la fiche et signalée dans la liste.
-- `client_notes` — le journal de suivi : ce que la facture ne dit pas (produits
-  utilisés en cabine, réaction de la peau, réglages). Corrigeable et
-  supprimable, contrairement aux écritures de caisse : ce n'est pas une pièce
-  comptable. Allergies et suivi touchent à la santé — données sensibles au sens
-  de la LPD révisée, d'où le maintien de l'isolement total du module.
+**Aucune donnée de santé n'est conservée.** Ni allergies, ni observation après
+soin : `clients.allergies` et la table `client_notes`, introduites par
+`20260803`, sont supprimées par `20260804_retrait_donnees_sante.sql`. C'est une
+décision de l'exploitante — le droit suisse ne l'interdit pas, il les classe
+comme données sensibles (LPD art. 5 let. c) soumises à consentement explicite et
+à des mesures renforcées. Ne pas réintroduire de champ de santé sans elle. Le
+champ `clients.notes` qui subsiste est destiné aux préférences et aux habitudes.
 
 **Les promotions** (`/admin/promotions`) fusionnent deux fichiers en une seule
 audience dédoublonnée par e-mail : les fiches clientes de la caisse et les

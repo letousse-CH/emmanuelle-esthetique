@@ -9,7 +9,7 @@
  */
 import { supabase } from './supabase';
 import type {
-  CartLine, Client, ClientNote, ClientStats, ForfaitItem, GiftCard, ModePaiement,
+  CartLine, Client, ClientStats, ForfaitItem, GiftCard, ModePaiement,
   Product, Service, ServiceCategory, StockMovement, Transaction, TransactionWithItems,
 } from '../types/caisse';
 
@@ -30,7 +30,7 @@ export async function listClients(includeArchived = false): Promise<Client[]> {
 
 export type ClientInput = Pick<
   Client,
-  'nom' | 'prenom' | 'telephone' | 'email' | 'notes' | 'date_naissance' | 'allergies'
+  'nom' | 'prenom' | 'telephone' | 'email' | 'notes' | 'date_naissance'
   | 'consent_email' | 'consent_whatsapp' | 'consent_source'
 >;
 
@@ -122,49 +122,6 @@ export async function listClientTransactions(clientId: string): Promise<Transact
     transaction_items: [...((t as TransactionWithItems).transaction_items ?? [])]
       .sort((a, b) => a.ordre - b.ordre),
   }));
-}
-
-// ── Journal de suivi ────────────────────────────────────────────────────────
-
-export async function listClientNotes(clientId: string): Promise<ClientNote[]> {
-  const { data, error } = await supabase
-    .from('client_notes')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('date_soin', { ascending: false })
-    .order('created_at', { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as ClientNote[];
-}
-
-export type ClientNoteInput = Pick<ClientNote, 'client_id' | 'transaction_id' | 'date_soin' | 'contenu'>;
-
-export async function createClientNote(input: ClientNoteInput): Promise<ClientNote> {
-  const { data, error } = await supabase
-    .from('client_notes')
-    .insert({ ...input, updated_at: new Date().toISOString() })
-    .select()
-    .single();
-  if (error) throw new Error(error.message);
-  return data as ClientNote;
-}
-
-export async function updateClientNote(id: string, input: Partial<ClientNoteInput>): Promise<ClientNote> {
-  const { data, error } = await supabase
-    .from('client_notes')
-    .update({ ...input, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw new Error(error.message);
-  return data as ClientNote;
-}
-
-/** Une note de suivi n'est pas une pièce comptable : elle se supprime pour de
- *  bon, contrairement à une écriture de caisse. */
-export async function deleteClientNote(id: string): Promise<void> {
-  const { error } = await supabase.from('client_notes').delete().eq('id', id);
-  if (error) throw new Error(error.message);
 }
 
 // ── Catalogue de prestations ────────────────────────────────────────────────

@@ -3,6 +3,13 @@
 --
 -- À appliquer APRÈS `20260802_caisse_categories_forfaits_stock.sql`.
 --
+-- ⚠️ OBSOLÈTE EN PARTIE — `20260804_retrait_donnees_sante.sql` supprime ensuite
+-- `clients.allergies` et la table `client_notes` créées ici : l'exploitante a
+-- décidé de ne conserver aucune donnée de santé. Ce fichier n'est pas réécrit
+-- parce qu'une migration déjà appliquée quelque part ne se modifie plus — elle
+-- cesserait de décrire ce que la base a réellement vécu. Le code applicatif ne
+-- lit plus ni l'une ni l'autre.
+--
 -- ┌─ LA RÈGLE QUI GOUVERNE LES PROMOTIONS ─────────────────────────────────┐
 -- │ Encaisser une cliente n'est PAS un consentement publicitaire.          │
 -- │                                                                        │
