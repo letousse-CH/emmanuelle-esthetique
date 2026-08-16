@@ -4,21 +4,21 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import {
   CreditCard, Search, UserPlus, X, Plus, Minus, Trash2, Check, Download,
-  Receipt, AlertCircle, Loader2, Pencil, Gift, Ticket, PenLine,
+  Receipt, AlertCircle, Loader2, Pencil, Gift, Ticket, PenLine, Layers, Package,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
 import {
   createClient, createTransaction, findGiftCardByCode, listClients, listGiftCardsForSale,
-  listServices, matchClient,
+  listProducts, listServiceCategories, listServices, matchClient,
 } from '../../../services/caisse';
 import { downloadBonCadeau, downloadFacture } from '../../../utils/factureDownload';
 import { takeCaisseCorrection } from '../../../utils/caissePrefill';
 import {
   CLIENT_DE_PASSAGE, MODES_PAIEMENT, TAUX_TVA_CH, cartTotals, clientFullName, formatCHF,
-  giftCardStatusLabel, isGiftCardUsable,
+  giftCardStatusLabel, isGiftCardUsable, stockLevel,
 } from '../../../types/caisse';
 import type {
-  CartLine, Client, GiftCard, ModePaiement, Service, Transaction,
+  CartLine, Client, GiftCard, ModePaiement, Product, Service, ServiceCategory, Transaction,
 } from '../../../types/caisse';
 
 const newKey = () =>
@@ -34,6 +34,8 @@ export default function CaisseClient() {
 
   const [clients, setClients]   = useState<Client[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading]   = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -82,8 +84,20 @@ export default function CaisseClient() {
   const load = async () => {
     setLoading(true); setLoadError(null);
     try {
+      // Clientes et prestations sont vitales : sans elles, pas d'encaissement.
+      // Catégories et produits ne le sont pas — ils ne font qu'organiser et
+      // enrichir le catalogue. Tant que la migration
+      // `20260802_caisse_categories_forfaits_stock.sql` n'est pas appliquée,
+      // leurs tables n'existent pas : on encaisse quand même, sans onglets ni
+      // marchandise, plutôt que de bloquer la caisse sur un confort d'affichage.
       const [c, s] = await Promise.all([listClients(), listServices(false)]);
       setClients(c); setServices(s);
+
+      const [cats, prod] = await Promise.all([
+        listServiceCategories().catch(() => [] as ServiceCategory[]),
+        listProducts(false).catch(() => [] as Product[]),
+      ]);
+      setCategories(cats); setProducts(prod);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Chargement impossible.');
     } finally {
@@ -92,6 +106,18 @@ export default function CaisseClient() {
   };
 
   const totals = useMemo(() => cartTotals(lines), [lines]);
+
+  // Quantité de chaque article déjà dans le panier : le catalogue affiche le
+  // stock qu'il RESTERA une fois la vente validée, pas le stock en base. C'est
+  // le chiffre utile quand on ajoute le troisième flacon d'affilée.
+  const cartQtyByProduct = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const l of lines) {
+      if (!l.product_id) continue;
+      map.set(l.product_id, (map.get(l.product_id) ?? 0) + Number(l.quantite || 0));
+    }
+    return map;
+  }, [lines]);
 
   // Le bon règle autant qu'il peut, sans jamais dépasser la facture : le solde
   // éventuel reste sur le bon pour une prochaine visite.
@@ -122,6 +148,31 @@ export default function CaisseClient() {
         prix_unitaire_ttc: Number(s.prix_chf),
         quantite: 1,
         taux_tva: Number(s.taux_tva_defaut ?? tauxDefaut),
+      }];
+    });
+  };
+
+  /**
+   * Ajoute de la marchandise au panier. La ligne porte `product_id` : c'est lui
+   * qui déclenchera, à la validation, la sortie de stock et le figeage du coût
+   * d'achat sur la facture.
+   */
+  const addProduct = (p: Product) => {
+    setLines(prev => {
+      const existing = prev.findIndex(l => l.product_id === p.id && l.prix_unitaire_ttc === Number(p.prix_vente_chf));
+      if (existing >= 0) {
+        const next = [...prev];
+        next[existing] = { ...next[existing], quantite: next[existing].quantite + 1 };
+        return next;
+      }
+      return [...prev, {
+        key: newKey(),
+        service_id: null,
+        product_id: p.id,
+        description: p.nom,
+        prix_unitaire_ttc: Number(p.prix_vente_chf),
+        quantite: 1,
+        taux_tva: Number(p.taux_tva_defaut ?? tauxDefaut),
       }];
     });
   };
@@ -255,8 +306,12 @@ export default function CaisseClient() {
           />
           <ServiceCatalog
             services={services}
+            categories={categories}
+            products={products}
+            cartQtyByProduct={cartQtyByProduct}
             loading={loading}
             onPick={addService}
+            onPickProduct={addProduct}
             onCustom={addCustomLine}
             onSellGiftCard={() => setShowGiftSale(true)}
           />
@@ -917,19 +972,69 @@ function Field({ label, value, onChange, type = 'text', required, autoFocus }: {
 
 // ── Catalogue ───────────────────────────────────────────────────────────────
 
-function ServiceCatalog({ services, loading, onPick, onCustom, onSellGiftCard }: {
+/**
+ * Catalogue de l'écran d'encaissement.
+ *
+ * Les catégories deviennent des onglets — c'est tout leur intérêt côté caisse :
+ * atteindre « Épilation aisselles » sans faire défiler les soins du visage. Un
+ * onglet « Produits » referme la marchandise, dont la vignette affiche le stock
+ * qu'il RESTERA après la vente en cours.
+ */
+function ServiceCatalog({
+  services, categories, products, cartQtyByProduct, loading,
+  onPick, onPickProduct, onCustom, onSellGiftCard,
+}: {
   services: Service[];
+  categories: ServiceCategory[];
+  products: Product[];
+  cartQtyByProduct: Map<string, number>;
   loading: boolean;
   onPick: (s: Service) => void;
+  onPickProduct: (p: Product) => void;
   onCustom: (description: string, prix: number) => void;
   onSellGiftCard: () => void;
 }) {
+  const [tab, setTab] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [customLabel, setCustomLabel] = useState('');
   const [customAmount, setCustomAmount] = useState('');
 
-  const filtered = services.filter(s =>
-    s.nom.toLowerCase().includes(search.trim().toLowerCase()));
+  // Seules les catégories qui ont quelque chose à montrer deviennent un onglet :
+  // une rangée d'onglets vides ferait perdre plus de temps qu'elle n'en gagne.
+  const tabs = useMemo(() => {
+    const list: { id: string; label: string }[] = [{ id: 'all', label: 'Tout' }];
+    for (const c of categories) {
+      if (services.some(s => s.category_id === c.id)) list.push({ id: c.id, label: c.nom });
+    }
+    if (services.some(s => !s.category_id || !categories.some(c => c.id === s.category_id))) {
+      list.push({ id: 'none', label: 'Divers' });
+    }
+    if (products.length > 0) list.push({ id: 'produits', label: 'Produits' });
+    return list;
+  }, [categories, services, products]);
+
+  // L'onglet actif peut disparaître (catégorie vidée pendant la session) :
+  // on retombe alors sur « Tout » plutôt que d'afficher une grille vide.
+  const activeTab = tabs.some(t => t.id === tab) ? tab : 'all';
+  const term = search.trim().toLowerCase();
+
+  const filteredServices = useMemo(() => services.filter(s => {
+    if (!s.nom.toLowerCase().includes(term)) return false;
+    if (activeTab === 'all') return true;
+    if (activeTab === 'none') return !s.category_id || !categories.some(c => c.id === s.category_id);
+    return s.category_id === activeTab;
+  }), [services, categories, activeTab, term]);
+
+  const filteredProducts = useMemo(
+    () => products.filter(p => `${p.nom} ${p.marque ?? ''}`.toLowerCase().includes(term)),
+    [products, term],
+  );
+
+  // « Tout » veut dire tout, marchandise comprise : vendre un flacon seul ne
+  // doit pas coûter un changement d'onglet. Les produits gardent leur sous-titre
+  // pour rester distincts des soins dans la grille.
+  const showProducts = (activeTab === 'produits' || activeTab === 'all') && filteredProducts.length > 0;
+  const showServices = activeTab !== 'produits' && filteredServices.length > 0;
 
   const submitCustom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -943,7 +1048,7 @@ function ServiceCatalog({ services, loading, onPick, onCustom, onSellGiftCard }:
     <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-5 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-400 flex items-center gap-2">
-          Prestations
+          Catalogue
           {/* Seul accès au catalogue en mode app : la barre d'onglets n'a que
               quatre places, et la barre latérale de l'admin y est masquée. */}
           <Link href="/admin/caisse/prestations" className="normal-case tracking-normal font-normal text-[11px] text-stone-300 hover:text-sage transition-colors">
@@ -956,10 +1061,10 @@ function ServiceCatalog({ services, loading, onPick, onCustom, onSellGiftCard }:
         >
           <Gift size={12} /> Vendre un bon cadeau
         </button>
-        {services.length > 6 && (
+        {(services.length + products.length > 6) && (
           <div className="relative sm:w-56">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-300" />
-            <label htmlFor="caisse-service-search" className="sr-only">Filtrer les prestations</label>
+            <label htmlFor="caisse-service-search" className="sr-only">Filtrer le catalogue</label>
             <input
               id="caisse-service-search"
               type="text" value={search} onChange={e => setSearch(e.target.value)}
@@ -970,33 +1075,106 @@ function ServiceCatalog({ services, loading, onPick, onCustom, onSellGiftCard }:
         )}
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-[68px] bg-stone-100 rounded-xl animate-pulse" />)}
-        </div>
-      ) : services.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-stone-200 px-5 py-6 text-center">
-          <p className="text-stone-400 text-sm italic mb-2">Aucune prestation dans le catalogue.</p>
-          <Link href="/admin/caisse/prestations" className="text-sage text-sm font-medium hover:underline">
-            Créer le catalogue →
-          </Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {filtered.map(s => (
+      {tabs.length > 2 && (
+        <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+          {tabs.map(t => (
             <button
-              key={s.id}
-              onClick={() => onPick(s)}
-              className="text-left px-3.5 py-3 rounded-xl border border-stone-200 hover:border-sage hover:bg-sage/5 transition-all cursor-pointer group"
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              aria-pressed={activeTab === t.id}
+              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                activeTab === t.id
+                  ? 'border-sage bg-sage/8 text-sage'
+                  : 'border-stone-200 text-stone-500 hover:border-stone-300 hover:text-stone-700'
+              }`}
             >
-              <span className="block text-sm text-stone-800 font-medium leading-snug line-clamp-2 group-hover:text-sage">{s.nom}</span>
-              <span className="block text-xs text-stone-400 mt-1 tabular-nums">{formatCHF(s.prix_chf)}</span>
+              {t.id === 'produits' && <Package size={11} className="inline mr-1 -mt-0.5" />}
+              {t.label}
             </button>
           ))}
         </div>
       )}
 
-      {/* Montant libre — bon cadeau, produit revendu, forfait négocié… */}
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          {[...Array(6)].map((_, i) => <div key={i} className="h-[68px] bg-stone-100 rounded-xl animate-pulse" />)}
+        </div>
+      ) : services.length === 0 && products.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-stone-200 px-5 py-6 text-center">
+          <p className="text-stone-400 text-sm italic mb-2">Le catalogue est vide.</p>
+          <Link href="/admin/caisse/prestations" className="text-sage text-sm font-medium hover:underline">
+            Créer le catalogue →
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {showServices && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {filteredServices.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => onPick(s)}
+                  className="text-left px-3.5 py-3 rounded-xl border border-stone-200 hover:border-sage hover:bg-sage/5 transition-all cursor-pointer group"
+                >
+                  <span className="block text-sm text-stone-800 font-medium leading-snug line-clamp-2 group-hover:text-sage">{s.nom}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-stone-400 mt-1 tabular-nums">
+                    {s.type === 'forfait' && <Layers size={10} className="text-sage shrink-0" />}
+                    {formatCHF(s.prix_chf)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {showProducts && (
+            <div className="space-y-2">
+              {activeTab === 'all' && (
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-300">Produits</p>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {filteredProducts.map(p => {
+                  // Le stock affiché tient compte du panier en cours. Il peut
+                  // devenir négatif : on le signale sans jamais bloquer la
+                  // vente — la cliente tient le produit en main, c'est
+                  // l'inventaire qui a tort, pas elle.
+                  const restant = Number(p.stock) - (cartQtyByProduct.get(p.id) ?? 0);
+                  const niveau = stockLevel({ stock: restant, seuil_alerte: p.seuil_alerte });
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => onPickProduct(p)}
+                      className="text-left px-3.5 py-3 rounded-xl border border-stone-200 hover:border-sage hover:bg-sage/5 transition-all cursor-pointer group"
+                    >
+                      <span className="block text-sm text-stone-800 font-medium leading-snug line-clamp-2 group-hover:text-sage">{p.nom}</span>
+                      <span className="flex items-center justify-between gap-2 mt-1">
+                        <span className="text-xs text-stone-400 tabular-nums">{formatCHF(p.prix_vente_chf)}</span>
+                        <span
+                          className={`text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded ${
+                            niveau === 'rupture' ? 'bg-red-50 text-red-600'
+                            : niveau === 'bas' ? 'bg-amber-50 text-amber-700'
+                            : 'bg-stone-100 text-stone-500'
+                          }`}
+                          title={niveau === 'rupture' ? 'Stock épuisé — la vente reste possible' : 'Stock restant'}
+                        >
+                          {Math.round(restant * 100) / 100}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!showServices && !showProducts && (
+            <p className="rounded-xl border border-dashed border-stone-200 px-5 py-6 text-center text-stone-400 text-sm italic">
+              Rien ne correspond{term ? ' à ce filtre' : ' dans cette catégorie'}.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Montant libre — geste commercial, article hors catalogue, forfait négocié… */}
       <form onSubmit={submitCustom} className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-stone-50">
         <label htmlFor="caisse-custom-label" className="sr-only">Libellé du montant libre</label>
         <input

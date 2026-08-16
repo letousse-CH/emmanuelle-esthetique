@@ -9,7 +9,8 @@
  */
 import { supabase } from './supabase';
 import type {
-  CartLine, Client, GiftCard, ModePaiement, Service, Transaction, TransactionWithItems,
+  CartLine, Client, ForfaitItem, GiftCard, ModePaiement, Product, Service,
+  ServiceCategory, StockMovement, Transaction, TransactionWithItems,
 } from '../types/caisse';
 
 // ── Clientèle ───────────────────────────────────────────────────────────────
@@ -99,7 +100,10 @@ export async function listServices(includeInactive = true): Promise<Service[]> {
   return (data ?? []) as Service[];
 }
 
-export type ServiceInput = Pick<Service, 'nom' | 'description' | 'prix_chf' | 'taux_tva_defaut' | 'active' | 'ordre'>;
+export type ServiceInput = Pick<
+  Service,
+  'nom' | 'description' | 'prix_chf' | 'taux_tva_defaut' | 'active' | 'ordre' | 'category_id' | 'type'
+>;
 
 export async function createService(input: ServiceInput): Promise<Service> {
   const { data, error } = await supabase
@@ -122,9 +126,237 @@ export async function updateService(id: string, input: Partial<ServiceInput>): P
   return data as Service;
 }
 
+/**
+ * Supprime une prestation du catalogue.
+ *
+ * Refuse si elle compose encore un forfait : la laisser partir viderait ce
+ * forfait en silence, et son prix groupé ne correspondrait plus à rien. La base
+ * l'interdit déjà (`ON DELETE RESTRICT`), mais elle répondrait par une erreur
+ * de clé étrangère — on préfère nommer le forfait fautif.
+ */
 export async function deleteService(id: string): Promise<void> {
+  const { data: used, error: usedError } = await supabase
+    .from('service_forfait_items')
+    .select('forfait_id')
+    .eq('service_id', id);
+  if (usedError) throw new Error(usedError.message);
+
+  if ((used ?? []).length > 0) {
+    const ids = [...new Set((used as { forfait_id: string }[]).map(u => u.forfait_id))];
+    const { data: forfaits } = await supabase.from('services').select('nom').in('id', ids);
+    const noms = (forfaits ?? []).map(f => `« ${(f as { nom: string }).nom} »`).join(', ');
+    throw new Error(
+      `Cette prestation compose ${ids.length > 1 ? 'les forfaits' : 'le forfait'} ${noms || 'un forfait'}. `
+      + 'Retire-la d\'abord de sa composition, ou masque-la au lieu de la supprimer.',
+    );
+  }
+
   const { error } = await supabase.from('services').delete().eq('id', id);
   if (error) throw new Error(error.message);
+}
+
+// ── Catégories de prestations ───────────────────────────────────────────────
+
+export async function listServiceCategories(): Promise<ServiceCategory[]> {
+  const { data, error } = await supabase
+    .from('service_categories')
+    .select('*')
+    .order('ordre', { ascending: true })
+    .order('nom', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ServiceCategory[];
+}
+
+export type ServiceCategoryInput = Pick<ServiceCategory, 'nom' | 'ordre' | 'active'>;
+
+export async function createServiceCategory(input: ServiceCategoryInput): Promise<ServiceCategory> {
+  const { data, error } = await supabase
+    .from('service_categories')
+    .insert({ ...input, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as ServiceCategory;
+}
+
+export async function updateServiceCategory(id: string, input: Partial<ServiceCategoryInput>): Promise<ServiceCategory> {
+  const { data, error } = await supabase
+    .from('service_categories')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as ServiceCategory;
+}
+
+/** Supprimer une catégorie ne supprime rien d'autre : ses prestations
+ *  retombent en « Sans catégorie » (`ON DELETE SET NULL`). */
+export async function deleteServiceCategory(id: string): Promise<void> {
+  const { error } = await supabase.from('service_categories').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ── Composition des forfaits ────────────────────────────────────────────────
+
+/**
+ * Toutes les compositions en une requête — la page catalogue en a besoin pour
+ * afficher l'économie de chaque forfait. Le rapprochement avec les fiches
+ * prestations se fait côté client, qui les a déjà toutes chargées : deux
+ * clés étrangères pointent ici vers `services`, et demander la jointure à
+ * PostgREST obligerait à la désambiguïser par le nom de la contrainte.
+ */
+export async function listAllForfaitItems(): Promise<ForfaitItem[]> {
+  const { data, error } = await supabase
+    .from('service_forfait_items')
+    .select('*')
+    .order('ordre', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ForfaitItem[];
+}
+
+/**
+ * Réécrit la composition d'un forfait. On vide puis on réinsère : la table est
+ * purement descriptive (aucune facture n'en dépend), donc un état intermédiaire
+ * vide ne peut rien casser — contrairement à ce qui vaut pour les écritures.
+ */
+export async function setForfaitItems(
+  forfaitId: string,
+  entries: { service_id: string; quantite: number }[],
+): Promise<void> {
+  const { error: delError } = await supabase
+    .from('service_forfait_items')
+    .delete()
+    .eq('forfait_id', forfaitId);
+  if (delError) throw new Error(delError.message);
+
+  if (entries.length === 0) return;
+
+  const { error } = await supabase.from('service_forfait_items').insert(
+    entries.map((e, ordre) => ({
+      forfait_id: forfaitId,
+      service_id: e.service_id,
+      quantite: e.quantite,
+      ordre,
+    })),
+  );
+  if (error) throw new Error(error.message);
+}
+
+// ── Produits revendus ───────────────────────────────────────────────────────
+
+export async function listProducts(includeInactive = true): Promise<Product[]> {
+  let query = supabase
+    .from('products')
+    .select('*')
+    .order('ordre', { ascending: true })
+    .order('nom', { ascending: true });
+  if (!includeInactive) query = query.eq('active', true);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Product[];
+}
+
+/** `stock` est absent : la colonne n'est pas accordée en écriture au navigateur.
+ *  Elle se déduit du journal des mouvements, via `stockMovement` / `stockInventaire`. */
+export type ProductInput = Pick<
+  Product,
+  'nom' | 'marque' | 'reference' | 'description' | 'prix_achat_chf' | 'prix_vente_chf'
+  | 'taux_tva_defaut' | 'seuil_alerte' | 'active' | 'ordre'
+>;
+
+export async function createProduct(input: ProductInput): Promise<Product> {
+  const { data, error } = await supabase
+    .from('products')
+    .insert({ ...input, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as Product;
+}
+
+export async function updateProduct(id: string, input: Partial<ProductInput>): Promise<Product> {
+  const { data, error } = await supabase
+    .from('products')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as Product;
+}
+
+/**
+ * Supprime un produit, ou le désactive s'il a une histoire.
+ *
+ * Un article qui a bougé — reçu, vendu, inventorié — laisse un journal de
+ * mouvements qui ne s'efface pas, et peut figurer sur des factures conservées
+ * dix ans. Il se retire donc du catalogue en étant désactivé, jamais détruit.
+ * Seule une fiche créée par erreur, encore vierge, part vraiment.
+ */
+export async function deleteOrArchiveProduct(id: string): Promise<'deleted' | 'archived'> {
+  const { count, error: countError } = await supabase
+    .from('stock_movements')
+    .select('id', { count: 'exact', head: true })
+    .eq('product_id', id);
+  if (countError) throw new Error(countError.message);
+
+  if ((count ?? 0) > 0) {
+    await updateProduct(id, { active: false });
+    return 'archived';
+  }
+  const { error } = await supabase.from('products').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+  return 'deleted';
+}
+
+// ── Journal de stock ────────────────────────────────────────────────────────
+
+export async function listStockMovements(productId?: string, limit = 200): Promise<StockMovement[]> {
+  let query = supabase
+    .from('stock_movements')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (productId) query = query.eq('product_id', productId);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as StockMovement[];
+}
+
+/**
+ * Entrée ou sortie saisie à la main. `quantite` est toujours POSITIVE : c'est
+ * le type qui décide du sens, côté Postgres. Le navigateur n'a aucun privilège
+ * d'écriture sur `stock_movements` — tout passe par cette fonction.
+ */
+export async function stockMovement(input: {
+  productId: string;
+  type: 'reception' | 'retour' | 'perte';
+  quantite: number;
+  prixAchatUnitaire?: number | null;
+  motif?: string | null;
+}): Promise<Product> {
+  const { data, error } = await supabase.rpc('caisse_stock_movement', {
+    p_product_id: input.productId,
+    p_type: input.type,
+    p_quantite: input.quantite,
+    p_prix_achat_unitaire: input.prixAchatUnitaire ?? null,
+    p_motif: input.motif ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return data as Product;
+}
+
+/** Inventaire : on transmet ce qui a été COMPTÉ, Postgres en déduit l'écart et
+ *  l'archive avec son motif. Le compteur n'est jamais écrasé. */
+export async function stockInventaire(productId: string, stockReel: number, motif?: string): Promise<Product> {
+  const { data, error } = await supabase.rpc('caisse_stock_inventaire', {
+    p_product_id: productId,
+    p_stock_reel: stockReel,
+    p_motif: motif ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return data as Product;
 }
 
 // ── Encaissements ───────────────────────────────────────────────────────────
@@ -165,6 +397,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     p_note: input.note,
     p_items: input.lines.map(l => ({
       service_id: l.service_id,
+      product_id: l.product_id ?? null,
       description: l.description,
       prix_unitaire_ttc: l.prix_unitaire_ttc,
       quantite: l.quantite,

@@ -122,7 +122,13 @@ suffit : pas besoin de domaine personnalisé.
 
 Module **interne** (rien n'est exposé au rôle `anon`), sous `/admin/caisse` :
 encaissement, fichier clientes, catalogue de prestations, journal des recettes
-et export pour la fiducie. Migration : `supabase/migrations/20260731_caisse.sql`.
+et export pour la fiducie. Migrations : `supabase/migrations/20260731_caisse.sql`, puis
+`20260801_caisse_bons_cadeaux.sql`, puis
+`20260802_caisse_categories_forfaits_stock.sql` — **dans cet ordre**, chacune
+remplaçant le corps de `caisse_create_transaction` et `caisse_cancel_transaction`
+laissé par la précédente. Rejouer une migration antérieure après une plus
+récente ferait perdre les décomptes de stock, voire recréerait une signature de
+fonction obsolète que PostgREST ne saurait plus départager.
 
 Ce qui n'est **pas** négociable, parce que le Code des obligations suisse
 l'impose (art. 957a « intégralité, chronologie, traçabilité » et art. 958f
@@ -205,11 +211,63 @@ topbar ; la navigation passe par `CaisseTabBar`. Icônes générées dans
 `public/icons/` (monogramme sauge, plus une variante `maskable` réduite pour le
 rognage Android).
 
+**Catalogue : catégories, prestations, forfaits.** Le catalogue vit dans
+`services`, rangé par `service_categories` (Épilation, Soins du visage, Soins du
+corps, Maquillage, Divers — modifiables depuis `/admin/caisse/prestations`). Les
+catégories deviennent les onglets de l'écran d'encaissement ; elles ne figurent
+sur **aucune** facture — une ligne ne cite jamais qu'un libellé figé.
+
+Un **forfait** est une prestation à part entière (`services.type = 'forfait'`)
+avec son propre prix groupé. Sa composition (`service_forfait_items`) sert
+uniquement à le monter dans l'admin et à afficher l'économie offerte : il tombe
+dans le panier en **une seule ligne** au prix du forfait. Ne jamais ventiler ce
+prix sur ses composantes après coup — le prix groupé n'est pas la somme de ses
+parties, et la ventilation inventerait des montants que personne n'a encaissés.
+Un forfait ne peut pas en contenir un autre (trigger `caisse_forfait_items_guard`) :
+l'imbrication ouvrirait la porte aux cycles.
+
+**Produits & stock.** La marchandise revendue vit dans `products`, distincte des
+prestations parce qu'elle a un coût, une marge et un stock.
+`/admin/caisse/produits`. La règle qui gouverne cette partie :
+
+> **Le stock ne se saisit pas, il se déduit du journal des mouvements.**
+
+`products.stock` est maintenu par trigger depuis `stock_movements`, append-only
+comme le journal des recettes (réception, vente, retour, inventaire, perte ;
+quantité signée). La colonne `stock` n'est **pas accordée en UPDATE** au rôle
+`authenticated` — un privilège colonne par colonne, pour que la règle ne repose
+pas sur la seule discipline du code. Un écart se corrige par
+`caisse_stock_inventaire` (on saisit ce qu'on a compté, Postgres archive
+l'écart), jamais en réécrivant le compteur : c'est ce qui rend l'écart
+explicable devant la fiducie.
+
+Trois conséquences à ne pas défaire :
+
+- **Le coût d'achat est figé sur la ligne de facture** à la vente
+  (`transaction_items.prix_achat_unitaire`), au même titre que le libellé et le
+  prix. Renégocier un tarif fournisseur ne réécrit jamais une marge passée. La
+  marge se calcule avec `ligneMarge()` (`src/types/caisse.ts`), jamais avec le
+  `prix_achat_chf` courant de la fiche.
+- **Le stock peut passer sous zéro, délibérément.** Refuser une vente parce que
+  le compteur dit 0 bloquerait une cliente qui tient le produit en main. La
+  caisse affiche l'alerte, l'inventaire rattrape l'écart — la vente passe.
+- **La marge n'est pas un chiffre d'affaires** et ne s'ajoute pas au CA. Elle
+  porte sur la marchandise *sortie du stock* sur la période, sans la
+  proratisation « bon cadeau » appliquée aux recettes : un produit remis contre
+  un bon a bien quitté le rayon ce mois-ci.
+
+Comme les clientes, un produit qui a une histoire en stock est **désactivé** et
+non supprimé (`deleteOrArchiveProduct`). Une prestation citée dans un forfait
+refuse d'être supprimée tant qu'elle n'en est pas retirée.
+
 **Export fiducie.** Journal filtrable par mois ou par année, exporté en CSV
 (séparateur `;`, BOM UTF-8 — double-clic et ça s'ouvre dans Excel), une ligne
 par prestation. Les factures annulées y figurent avec des montants à 0.00 :
 la somme de la colonne TTC donne le CA net, et la numérotation reste continue
-sous les yeux du comptable.
+sous les yeux du comptable. Les colonnes « Nature », « Prix d'achat unitaire »
+et « Marge » ne sont renseignées que sur les lignes de marchandise ; la marge
+n'entre pas dans le chiffre d'affaires. En modifiant l'export, vérifier que les
+lignes de synthèse gardent le bon nombre de colonnes — elles sont positionnelles.
 
 ## E-mails & désinscription
 

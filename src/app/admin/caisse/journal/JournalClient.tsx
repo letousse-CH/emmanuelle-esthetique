@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   BookOpenCheck, Download, RefreshCw, AlertCircle, Loader2, FileText, Ban,
-  ChevronDown, ChevronRight, TrendingUp, X, Check, PenLine, Ticket,
+  ChevronDown, ChevronRight, TrendingUp, X, Check, PenLine, Ticket, Package,
 } from 'lucide-react';
 import { cancelTransaction, listTransactions } from '../../../../services/caisse';
 import { downloadFacture } from '../../../../utils/factureDownload';
 import { setCaisseCorrection } from '../../../../utils/caissePrefill';
 import {
-  MODES_PAIEMENT, MODE_PAIEMENT_LABELS, formatAmount, formatCHF, recetteEncaissee,
+  MODES_PAIEMENT, MODE_PAIEMENT_LABELS, formatAmount, formatCHF, ligneMarge, recetteEncaissee,
 } from '../../../../types/caisse';
 import type { ModePaiement, TransactionWithItems } from '../../../../types/caisse';
 
@@ -32,6 +32,11 @@ function periodBounds(mode: PeriodMode, year: number, month: number) {
 }
 
 function startOfDay(d: Date) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+
+/** Quantités d'articles : entières la plupart du temps, donc sans centimes forcés. */
+function qteLabel(n: number): string {
+  return Number.isInteger(n) ? String(n) : formatAmount(n);
+}
 
 /** Lundi de la semaine en cours — convention suisse. */
 function startOfWeek(d: Date) {
@@ -119,6 +124,35 @@ export default function JournalClient() {
     { ht: 0, tva: 0, ttc: 0, bons: 0 },
   ), [paidRows]);
 
+  /**
+   * Marge commerciale sur la marchandise sortie du stock pendant la période.
+   *
+   * Volontairement calculée sur les articles VENDUS, sans la proratisation
+   * appliquée au CA : un produit remis contre un bon cadeau a bien quitté le
+   * rayon ce mois-ci, même si l'argent était entré le jour de la vente du bon.
+   * Ce n'est donc pas un chiffre d'affaires et il ne s'additionne pas au CA —
+   * c'est ce que les articles ont rapporté au-delà de ce qu'ils ont coûté.
+   *
+   * Le coût vient de `prix_achat_unitaire`, figé sur la ligne à la vente :
+   * renégocier un tarif fournisseur ne réécrit jamais une marge passée.
+   */
+  const margeProduits = useMemo(() => {
+    let marge = 0;
+    let ventes = 0;
+    let articles = 0;
+    let sansCout = 0;
+    for (const t of paidRows) {
+      for (const item of t.transaction_items) {
+        if (!item.product_id) continue;
+        articles += Number(item.quantite);
+        ventes += Number(item.total_ttc);
+        const m = ligneMarge(item);
+        if (m === null) sansCout += 1; else marge += m;
+      }
+    }
+    return { marge, ventes, articles, sansCout };
+  }, [paidRows]);
+
   // ── Ventilation par mode de paiement ──────────────────────────────────────
   const byPayment = useMemo(() => {
     const map = new Map<ModePaiement, { total: number; count: number }>();
@@ -187,6 +221,7 @@ export default function JournalClient() {
       'Date', 'Heure', 'N° Facture', 'Client', 'Prestation', 'Quantité',
       'Mode de paiement', 'Taux TVA (%)', 'Montant HT (CHF)', 'Montant TVA (CHF)',
       'Montant encaissé TTC (CHF)', 'Dont bon cadeau (CHF)', 'Valeur prestation (CHF)',
+      'Nature', 'Prix d\'achat unitaire (CHF)', 'Marge (CHF)',
       'Statut', 'Note',
     ];
 
@@ -218,6 +253,9 @@ export default function JournalClient() {
         const valeur = Number(item.total_ttc);
         const encaisse = Math.round(valeur * partEncaissee * 100) / 100;
         const ht = Math.round((encaisse / (1 + Number(item.taux_tva) / 100)) * 100) / 100;
+        // La marchandise se distingue de la prestation : elle a un coût d'achat,
+        // donc une marge, et elle entre dans la valeur du stock au bilan.
+        const marge = cancelled ? null : ligneMarge(item);
         lines.push([
           d.toLocaleDateString('fr-CH'),
           d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' }),
@@ -232,6 +270,11 @@ export default function JournalClient() {
           encaisse.toFixed(2),
           (Math.round((valeur - encaisse) * 100) / 100).toFixed(2),
           valeur.toFixed(2),
+          item.product_id ? 'Marchandise' : 'Prestation',
+          item.prix_achat_unitaire === null || item.prix_achat_unitaire === undefined
+            ? ''
+            : Number(item.prix_achat_unitaire).toFixed(2),
+          marge === null ? '' : marge.toFixed(2),
           statut,
           note,
         ]);
@@ -242,11 +285,11 @@ export default function JournalClient() {
     lines.push([
       `Total encaissé ${periodLabel}`, '', '', '', '', '', '', '',
       totals.ht.toFixed(2), totals.tva.toFixed(2), totals.ttc.toFixed(2),
-      totals.bons.toFixed(2), '', '', '',
+      totals.bons.toFixed(2), '', '', '', margeProduits.marge.toFixed(2), '', '',
     ]);
     lines.push([
-      'Note pour la fiducie', '', '', '', '', '', '', '', '', '', '', '', '',
-      "La colonne « Montant encaissé TTC » est la recette de la période : elle exclut les prestations réglées par un bon cadeau, dont l'encaissement a eu lieu le jour de la vente du bon. La colonne « Dont bon cadeau » est donnée pour information et ne doit pas être ajoutée au chiffre d'affaires.",
+      'Note pour la fiducie', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+      "La colonne « Montant encaissé TTC » est la recette de la période : elle exclut les prestations réglées par un bon cadeau, dont l'encaissement a eu lieu le jour de la vente du bon. La colonne « Dont bon cadeau » est donnée pour information et ne doit pas être ajoutée au chiffre d'affaires. La colonne « Marge » ne concerne que les lignes de nature « Marchandise » : c'est la vente hors taxe diminuée du prix d'achat figé au moment de la vente. Elle n'entre pas dans le chiffre d'affaires.",
       '',
     ]);
 
@@ -357,6 +400,43 @@ export default function JournalClient() {
           <span className="text-lg font-semibold text-stone-900 tabular-nums">{formatCHF(totals.ttc)}</span>
         </div>
       </div>
+
+      {/* Marge sur marchandises — délibérément séparée du CA, qu'elle ne
+          complète pas : c'est un indicateur de rentabilité, pas de recette. */}
+      {margeProduits.articles > 0 && (
+        <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="w-9 h-9 rounded-xl bg-sage/10 flex items-center justify-center shrink-0">
+                <Package size={16} className="text-sage" />
+              </span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-stone-400">
+                  Marge sur produits — {periodLabel}
+                </p>
+                <p className="text-[11px] text-stone-400 mt-0.5">
+                  {qteLabel(margeProduits.articles)} article{margeProduits.articles > 1 ? 's' : ''} vendu
+                  {margeProduits.articles > 1 ? 's' : ''} pour {formatCHF(margeProduits.ventes)}
+                </p>
+              </div>
+            </div>
+            <p className={`text-2xl font-semibold tabular-nums ${margeProduits.marge >= 0 ? 'text-stone-900' : 'text-red-600'}`}>
+              {formatCHF(margeProduits.marge)}
+            </p>
+          </div>
+          <p className="text-[10px] text-stone-400 leading-relaxed mt-3 pt-3 border-t border-stone-50">
+            Vente hors taxe moins le prix d&apos;achat figé au moment de chaque vente. Ce montant
+            n&apos;est pas une recette et ne s&apos;ajoute pas au chiffre d&apos;affaires : il dit ce
+            que la marchandise a rapporté au-delà de ce qu&apos;elle a coûté.
+            {margeProduits.sansCout > 0 && (
+              <span className="text-amber-600">
+                {' '}{margeProduits.sansCout} ligne{margeProduits.sansCout > 1 ? 's' : ''} sans prix
+                d&apos;achat enregistré {margeProduits.sansCout > 1 ? 'sont exclues' : 'est exclue'} du calcul.
+              </span>
+            )}
+          </p>
+        </div>
+      )}
 
       {/* Graphiques */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -475,6 +555,9 @@ export default function JournalClient() {
               lines: tx.transaction_items.map(item => ({
                 key: item.id,
                 service_id: item.service_id,
+                // Sans lui, la facture rectifiée ne ressortirait pas la
+                // marchandise du stock que l'annulation vient d'y remettre.
+                product_id: item.product_id,
                 description: item.description,
                 prix_unitaire_ttc: Number(item.prix_unitaire_ttc),
                 quantite: Number(item.quantite),

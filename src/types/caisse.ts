@@ -49,6 +49,22 @@ export interface Client {
   updated_at: string;
 }
 
+export interface ServiceCategory {
+  id: string;
+  nom: string;
+  ordre: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Un forfait est une prestation à part entière, avec son propre prix groupé.
+ * Sa composition (`ForfaitItem[]`) ne sert qu'à le monter dans l'admin et à
+ * afficher l'économie réalisée : elle n'entre jamais dans un calcul de facture.
+ */
+export type ServiceType = 'prestation' | 'forfait';
+
 export interface Service {
   id: string;
   nom: string;
@@ -57,8 +73,129 @@ export interface Service {
   taux_tva_defaut: number;
   active: boolean;
   ordre: number;
+  category_id: string | null;
+  type: ServiceType;
   created_at: string;
   updated_at: string;
+}
+
+/** Une prestation composant un forfait, jointe à sa fiche pour l'affichage. */
+export interface ForfaitItem {
+  id: string;
+  forfait_id: string;
+  service_id: string;
+  quantite: number;
+  ordre: number;
+  created_at: string;
+  /** Renseigné par la jointure de `listForfaitItems`. */
+  service?: Pick<Service, 'id' | 'nom' | 'prix_chf'> | null;
+}
+
+/** Valeur du forfait s'il était vendu prestation par prestation. */
+export function forfaitValeurCumulee(items: ForfaitItem[]): number {
+  return round2(items.reduce(
+    (acc, it) => acc + Number(it.service?.prix_chf ?? 0) * Number(it.quantite || 0),
+    0,
+  ));
+}
+
+/** Économie offerte à la cliente. Négative si le forfait coûte plus cher que
+ *  ses parties — l'admin le signale plutôt que de le masquer. */
+export function forfaitEconomie(prixForfait: number, items: ForfaitItem[]): number {
+  return round2(forfaitValeurCumulee(items) - Number(prixForfait || 0));
+}
+
+// ── Produits revendus & stock ───────────────────────────────────────────────
+
+export interface Product {
+  id: string;
+  nom: string;
+  marque: string | null;
+  reference: string | null;
+  description: string | null;
+  prix_achat_chf: number;
+  prix_vente_chf: number;
+  taux_tva_defaut: number;
+  /** Somme du journal des mouvements. Jamais écrit depuis le navigateur : la
+   *  colonne n'est même pas accordée en UPDATE au rôle `authenticated`. */
+  stock: number;
+  seuil_alerte: number;
+  active: boolean;
+  ordre: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StockMovementType = 'reception' | 'vente' | 'retour' | 'inventaire' | 'perte';
+
+export const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {
+  reception:  'Réception',
+  vente:      'Vente',
+  retour:     'Retour',
+  inventaire: 'Inventaire',
+  perte:      'Perte',
+};
+
+/** Mouvements saisissables à la main — la vente naît de la caisse, l'écart
+ *  d'inventaire de l'écran d'inventaire. */
+export const STOCK_MOVEMENTS_MANUELS: { value: 'reception' | 'retour' | 'perte'; label: string; help: string }[] = [
+  { value: 'reception', label: 'Réception', help: 'Livraison du fournisseur' },
+  { value: 'retour',    label: 'Retour',    help: 'La cliente rapporte un article' },
+  { value: 'perte',     label: 'Perte',     help: 'Casse, péremption, usage en cabine' },
+];
+
+export interface StockMovement {
+  id: string;
+  product_id: string;
+  type: StockMovementType;
+  /** Signée : positive à l'entrée, négative à la sortie. */
+  quantite: number;
+  prix_achat_unitaire: number | null;
+  transaction_id: string | null;
+  motif: string | null;
+  created_at: string;
+}
+
+export type StockLevel = 'rupture' | 'bas' | 'ok';
+
+export function stockLevel(p: Pick<Product, 'stock' | 'seuil_alerte'>): StockLevel {
+  const stock = Number(p.stock);
+  if (stock <= 0) return 'rupture';
+  if (stock <= Number(p.seuil_alerte)) return 'bas';
+  return 'ok';
+}
+
+/**
+ * Marge sur un article, en francs.
+ *
+ * Le prix de vente est saisi TTC (usage en institut) alors que le prix d'achat
+ * est un coût : on compare donc la vente **hors taxe** au coût d'achat. Tant
+ * que l'activité n'est pas assujettie le taux vaut 0 et les deux se confondent,
+ * mais le jour de l'assujettissement le calcul reste juste — à condition de
+ * saisir alors des prix d'achat HT, l'impôt préalable devenant récupérable.
+ */
+export function margeCHF(prixVenteTTC: number, tauxTva: number, prixAchat: number): number {
+  const ht = Number(prixVenteTTC || 0) / (1 + Number(tauxTva || 0) / 100);
+  return round2(ht - Number(prixAchat || 0));
+}
+
+/** Taux de marge en % du prix de vente HT. `null` si la vente est gratuite. */
+export function margePct(prixVenteTTC: number, tauxTva: number, prixAchat: number): number | null {
+  const ht = Number(prixVenteTTC || 0) / (1 + Number(tauxTva || 0) / 100);
+  if (ht <= 0) return null;
+  return Math.round((margeCHF(prixVenteTTC, tauxTva, prixAchat) / ht) * 1000) / 10;
+}
+
+/**
+ * Marge dégagée par une ligne de facture. `null` dès que la ligne ne vend pas
+ * de marchandise, ou qu'aucun coût n'a été figé à la vente (produit ajouté au
+ * catalogue sans prix d'achat) — c'est différent d'une marge nulle, et le
+ * journal doit pouvoir le dire.
+ */
+export function ligneMarge(item: Pick<TransactionItem, 'product_id' | 'prix_achat_unitaire' | 'total_ttc' | 'taux_tva' | 'quantite'>): number | null {
+  if (!item.product_id || item.prix_achat_unitaire === null || item.prix_achat_unitaire === undefined) return null;
+  const ht = Number(item.total_ttc || 0) / (1 + Number(item.taux_tva || 0) / 100);
+  return round2(ht - Number(item.prix_achat_unitaire) * Number(item.quantite || 0));
 }
 
 export type GiftCardStatus = 'active' | 'epuise' | 'annule';
@@ -110,6 +247,9 @@ export interface TransactionItem {
   transaction_id: string;
   service_id: string | null;
   gift_card_id: string | null;
+  product_id: string | null;
+  /** Coût d'achat figé à la vente — jamais le prix d'achat courant de la fiche. */
+  prix_achat_unitaire: number | null;
   description: string;
   prix_unitaire_ttc: number;
   quantite: number;
@@ -169,6 +309,9 @@ export interface CartLine {
   /** Clé locale, uniquement pour le rendu React. */
   key: string;
   service_id: string | null;
+  /** Renseigné quand la ligne vend de la marchandise : la validation sortira
+   *  la quantité du stock et figera le coût d'achat sur la facture. */
+  product_id?: string | null;
   description: string;
   prix_unitaire_ttc: number;
   quantite: number;
