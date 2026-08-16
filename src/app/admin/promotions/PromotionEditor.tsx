@@ -324,10 +324,39 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
             {loading ? (
               <p className="text-xs text-stone-300 italic">Calcul de l&apos;audience…</p>
             ) : (
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Chip icon={Users} label={`${audience.length} destinataire${audience.length > 1 ? 's' : ''}`} />
-                {utiliseEmail && <Chip icon={Mail} label={`${parEmail.length} par e-mail`} />}
-                {utiliseWa && <Chip icon={MessageCircle} label={`${parWa.length} par WhatsApp`} />}
+              <div className="space-y-2 pt-1">
+                {/* Les deux compteurs s'affichent quel que soit le canal choisi :
+                    masquer « 12 par WhatsApp » parce que la promotion est réglée
+                    sur e-mail donnait l'impression qu'aucune cliente n'était
+                    joignable, alors qu'il suffisait de changer de canal. */}
+                <div className="flex flex-wrap gap-2">
+                  <Chip icon={Users} label={`${audience.length} destinataire${audience.length > 1 ? 's' : ''}`} />
+                  <Chip icon={Mail} label={`${parEmail.length} par e-mail`} muted={!utiliseEmail} />
+                  <Chip icon={MessageCircle} label={`${parWa.length} par WhatsApp`} muted={!utiliseWa} />
+                </div>
+                {!utiliseWa && parWa.length > 0 && (
+                  <p className="text-[11px] text-stone-500">
+                    {parWa.length} cliente{parWa.length > 1 ? 's sont joignables' : ' est joignable'} par
+                    WhatsApp mais ne recevr{parWa.length > 1 ? 'ont' : 'a'} rien :
+                    {' '}<button
+                      onClick={() => mark(setCanal)(utiliseEmail ? 'les_deux' : 'whatsapp')}
+                      className="font-semibold text-sage hover:underline cursor-pointer"
+                    >
+                      ajouter le canal WhatsApp
+                    </button>.
+                  </p>
+                )}
+                {!utiliseEmail && parEmail.length > 0 && (
+                  <p className="text-[11px] text-stone-500">
+                    {parEmail.length} adresse{parEmail.length > 1 ? 's' : ''} e-mail dans cette audience —
+                    {' '}<button
+                      onClick={() => mark(setCanal)('les_deux')}
+                      className="font-semibold text-sage hover:underline cursor-pointer"
+                    >
+                      ajouter le canal e-mail
+                    </button>.
+                  </p>
+                )}
               </div>
             )}
 
@@ -488,12 +517,21 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
   );
 }
 
-function Chip({ icon: Icon, label }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>; label: string;
+function Chip({ icon: Icon, label, muted }: {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  /** Canal non retenu par la promotion : le chiffre reste lisible, mais en
+   *  retrait — il informe sans laisser croire que l'envoi partira. */
+  muted?: boolean;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-stone-600 bg-stone-100 px-2.5 py-1 rounded-lg">
-      <Icon size={11} className="text-stone-400" /> {label}
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-lg ${
+        muted ? 'text-stone-400 bg-stone-50 border border-dashed border-stone-200' : 'text-stone-600 bg-stone-100'
+      }`}
+      title={muted ? 'Canal non sélectionné pour cette promotion' : undefined}
+    >
+      <Icon size={11} className={muted ? 'text-stone-300' : 'text-stone-400'} /> {label}
     </span>
   );
 }
