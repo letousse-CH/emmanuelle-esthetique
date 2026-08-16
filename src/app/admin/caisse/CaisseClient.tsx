@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   CreditCard, Search, UserPlus, X, Plus, Minus, Trash2, Check, Download,
   Receipt, AlertCircle, Loader2, Pencil, Gift, Ticket, PenLine, Layers, Package,
+  Cake, Mail, MessageCircle,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
 import {
@@ -17,6 +18,7 @@ import {
   CLIENT_DE_PASSAGE, MODES_PAIEMENT, TAUX_TVA_CH, cartTotals, clientFullName, formatCHF,
   giftCardStatusLabel, isGiftCardUsable, stockLevel,
 } from '../../../types/caisse';
+import { toWhatsAppNumber } from '../../../types/promotions';
 import type {
   CartLine, Client, GiftCard, ModePaiement, Product, Service, ServiceCategory, Transaction,
 } from '../../../types/caisse';
@@ -889,16 +891,34 @@ function ClientPicker({ clients, selected, onSelect, onCreated }: {
   );
 }
 
+/**
+ * Création d'une fiche depuis l'écran d'encaissement.
+ *
+ * Mêmes champs que la fiche complète de `/admin/caisse/clients` : une cliente
+ * qu'on inscrit pendant qu'elle est devant soi est le seul moment où l'on a
+ * vraiment ses informations sous la main — la renvoyer vers un autre écran
+ * pour finir la saisie, c'est se garantir qu'elle ne sera jamais finie.
+ *
+ * Les accords publicitaires ne se cochent que si elle l'a dit : un opt-in
+ * accordé par omission n'en est pas un (LCD art. 3 al. 1 let. o).
+ */
 function QuickClientDialog({ onClose, onCreated }: {
   onClose: () => void;
   onCreated: (c: Client) => void;
 }) {
-  const [nom, setNom]             = useState('');
-  const [prenom, setPrenom]       = useState('');
-  const [telephone, setTelephone] = useState('');
-  const [email, setEmail]         = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState<string | null>(null);
+  const [nom, setNom]                 = useState('');
+  const [prenom, setPrenom]           = useState('');
+  const [telephone, setTelephone]     = useState('');
+  const [email, setEmail]             = useState('');
+  const [dateNaissance, setDateNaissance] = useState('');
+  const [notes, setNotes]             = useState('');
+  const [consentEmail, setConsentEmail]   = useState(false);
+  const [consentWa, setConsentWa]         = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+
+  const waNumber = toWhatsAppNumber(telephone);
+  const emailClean = email.trim();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -906,8 +926,17 @@ function QuickClientDialog({ onClose, onCreated }: {
     setSaving(true); setError(null);
     try {
       const c = await createClient({
-        nom: nom.trim(), prenom: prenom.trim(),
-        telephone: telephone.trim() || null, email: email.trim() || null, notes: null,
+        nom: nom.trim(),
+        prenom: prenom.trim(),
+        telephone: telephone.trim() || null,
+        email: emailClean || null,
+        notes: notes.trim() || null,
+        date_naissance: dateNaissance || null,
+        // Un accord sans moyen de l'honorer n'a pas de sens : pas d'adresse,
+        // pas d'accord e-mail ; numéro inexploitable, pas d'accord WhatsApp.
+        consent_email: Boolean(consentEmail && emailClean),
+        consent_whatsapp: Boolean(consentWa && waNumber),
+        consent_source: (consentEmail || consentWa) ? 'Caisse' : null,
       });
       onCreated(c);
     } catch (err) {
@@ -917,13 +946,16 @@ function QuickClientDialog({ onClose, onCreated }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Nouvelle fiche cliente"
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4 my-8"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-stone-900">Nouvelle cliente</h3>
@@ -931,14 +963,62 @@ function QuickClientDialog({ onClose, onCreated }: {
             <X size={16} />
           </button>
         </div>
+
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Prénom" value={prenom} onChange={setPrenom} />
             <Field label="Nom *" value={nom} onChange={setNom} required autoFocus />
           </div>
-          <Field label="Téléphone" value={telephone} onChange={setTelephone} type="tel" />
-          <Field label="E-mail" value={email} onChange={setEmail} type="email" />
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Téléphone" value={telephone} onChange={setTelephone} type="tel" />
+            <Field label="E-mail" value={email} onChange={setEmail} type="email" />
+          </div>
+
+          <div>
+            <label htmlFor="qc-naissance" className="text-[11px] font-medium text-stone-500 mb-1 flex items-center gap-1.5">
+              <Cake size={11} className="text-stone-300" /> Date de naissance
+            </label>
+            <input
+              id="qc-naissance" type="date" value={dateNaissance}
+              onChange={e => setDateNaissance(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="qc-notes" className="block text-[11px] font-medium text-stone-500 mb-1">
+              Notes <span className="text-stone-300">(préférences, habitudes…)</span>
+            </label>
+            <textarea
+              id="qc-notes" rows={2} value={notes} onChange={e => setNotes(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
+            />
+          </div>
+
+          <fieldset className="rounded-xl border border-stone-200 p-3.5 space-y-2.5">
+            <legend className="text-[11px] font-medium text-stone-500 px-1">Accords publicitaires</legend>
+            <p className="text-[10px] text-stone-400 leading-relaxed">
+              À cocher seulement si elle vient de le dire. Sans ces cases, elle ne recevra
+              aucune promotion.
+            </p>
+            <QuickConsent
+              id="qc-consent-email" icon={Mail} label="Offres par e-mail"
+              detail={emailClean || 'Renseigne une adresse pour l’activer'}
+              checked={consentEmail} disabled={!emailClean}
+              onToggle={() => setConsentEmail(v => !v)}
+            />
+            <QuickConsent
+              id="qc-consent-wa" icon={MessageCircle} label="Offres par WhatsApp"
+              detail={waNumber
+                ? `+${waNumber}`
+                : telephone.trim() ? 'Numéro non exploitable' : 'Renseigne un numéro pour l’activer'}
+              checked={consentWa} disabled={!waNumber}
+              onToggle={() => setConsentWa(v => !v)}
+            />
+          </fieldset>
+
+          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+
           <button
             type="submit"
             disabled={saving || !nom.trim()}
@@ -949,6 +1029,33 @@ function QuickClientDialog({ onClose, onCreated }: {
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+function QuickConsent({ id, icon: Icon, label, detail, checked, disabled, onToggle }: {
+  id: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string; detail: string; checked: boolean; disabled: boolean; onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start gap-2.5 min-w-0">
+        <Icon size={13} className="text-stone-300 shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <label htmlFor={id} className="text-sm text-stone-700 cursor-pointer">{label}</label>
+          <p className="text-[11px] text-stone-400 truncate">{detail}</p>
+        </div>
+      </div>
+      <button
+        id={id} type="button" role="switch" aria-checked={checked} aria-label={label}
+        onClick={onToggle} disabled={disabled}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+          checked ? 'bg-sage' : 'bg-stone-200'
+        }`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      </button>
     </div>
   );
 }
