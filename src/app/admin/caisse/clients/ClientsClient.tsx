@@ -455,7 +455,7 @@ function ClientDialog({ client, onClose, onSaved }: {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="client-naissance" className="block text-[11px] font-medium text-stone-500 mb-1 flex items-center gap-1.5">
+              <label htmlFor="client-naissance" className="text-[11px] font-medium text-stone-500 mb-1 flex items-center gap-1.5">
                 <Cake size={11} className="text-stone-300" /> Date de naissance
               </label>
               <input
@@ -470,7 +470,7 @@ function ClientDialog({ client, onClose, onSaved }: {
           {/* Champ à part, jamais noyé dans les notes : c'est la seule
               information de la fiche qui peut faire mal si on l'oublie. */}
           <div>
-            <label htmlFor="client-allergies" className="block text-[11px] font-medium text-amber-700 mb-1 flex items-center gap-1.5">
+            <label htmlFor="client-allergies" className="text-[11px] font-medium text-amber-700 mb-1 flex items-center gap-1.5">
               <TriangleAlert size={11} /> Allergies &amp; contre-indications
             </label>
             <textarea
