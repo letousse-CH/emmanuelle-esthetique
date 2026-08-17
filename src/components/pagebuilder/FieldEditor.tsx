@@ -193,6 +193,7 @@ const FIELD_LABELS: Record<string, string> = {
   // Champs de cartes
   icon: 'Icône (emoji)',
   icon_image: 'Icône (image)',
+  icon_image_bleed: "Coller l'image aux bords de la carte",
   link: 'Lien',
   link_text: 'Lien — libellé',
   link_href: 'Lien — URL',
@@ -305,7 +306,7 @@ function ColorField({
   );
 }
 const CARD_FIELDS_BY_TYPE: Record<string, string[]> = {
-  features_2: ['title', 'description', 'icon', 'icon_image', 'link_text', 'link_href', 'theme'],
+  features_2: ['title', 'description', 'icon', 'icon_image', 'icon_image_bleed', 'link_text', 'link_href', 'theme'],
   features_3: ['title', 'description', 'items', 'cta_text', 'cta_href', 'badge', 'theme'],
   gallery_grid: ['image', 'title', 'description', 'link'],
   gallery_carousel: ['image', 'title', 'description', 'link'],
@@ -316,6 +317,8 @@ const CARD_FIELDS_BY_TYPE: Record<string, string[]> = {
   timeline_1: ['title', 'description'],
   logos_1: ['image', 'alt', 'link'],
 };
+/** Champs de carte à rendre en case à cocher plutôt qu'en input texte. */
+const CARD_BOOLEAN_FIELDS = new Set(['icon_image_bleed']);
 
 import { WIREFRAME_REGISTRY } from './wireframes.config';
 import type { PageSection } from './wireframes.config';
@@ -837,9 +840,28 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
                 </div>
               </div>
               {(CARD_FIELDS_BY_TYPE[section.type] || Object.keys(card)).map((field) => {
-                const isCardImage = field === 'image' || field.includes('image');
+                const isCardImage = field !== 'icon_image_bleed' && (field === 'image' || field.includes('image'));
                 const isLongCardField = ['description', 'answer'].includes(field);
                 const val = card[field] ?? (field === 'items' ? [] : undefined);
+                if (CARD_BOOLEAN_FIELDS.has(field)) {
+                  return (
+                    <div key={field} className="flex items-center gap-2 py-1">
+                      <input
+                        type="checkbox"
+                        id={`card-${i}-${j}-${field}`}
+                        checked={!!val}
+                        onChange={(e) => onUpdate(i, `cards[${j}].${field}`, e.target.checked)}
+                        className="w-4 h-4 cursor-pointer accent-sage rounded border-stone-300 focus:ring-sage"
+                      />
+                      <label
+                        htmlFor={`card-${i}-${j}-${field}`}
+                        className="text-xs font-bold text-stone-700 cursor-pointer select-none"
+                      >
+                        {labelFor(field)}
+                      </label>
+                    </div>
+                  );
+                }
                 return (
                   <div key={field}>
                     <label className="text-[10px] text-stone-400 uppercase tracking-widest block mb-0.5">{labelFor(field)}</label>

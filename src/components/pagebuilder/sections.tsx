@@ -943,6 +943,7 @@ export interface Features2Card {
   description: string;
   icon?: string;
   icon_image?: string;
+  icon_image_bleed?: boolean;
   link_text?: string;
   link_href?: string;
   theme?: 'light' | 'dark';
@@ -985,42 +986,47 @@ export function Features2({ data, sectionIndex }: { data: Features2Data, section
             initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }} transition={{ duration: 0.8, delay: i * 0.1, ease: EASE }}
             whileHover={{ y: -4 }}
-            className={`group relative p-8 rounded-3xl border transition-all duration-400 cursor-default ${cardDark ? 'bg-stone-800 border-stone-700 text-white hover:border-sage/40' : 'bg-white border-stone-100 text-stone-900 hover:border-sage/25 hover:shadow-lg'}`}
+            className={`group relative rounded-3xl border overflow-hidden transition-all duration-400 cursor-default ${cardDark ? 'bg-stone-800 border-stone-700 text-white hover:border-sage/40' : 'bg-white border-stone-100 text-stone-900 hover:border-sage/25 hover:shadow-lg'}`}
           >
-            {/* Number badge */}
-            <span className={`absolute top-6 right-7 font-serif text-xs font-bold tabular-nums ${cardDark ? 'text-stone-600' : 'text-stone-200'}`}>
-              {String(i + 1).padStart(2, '0')}
-            </span>
-            {card.icon_image ? (
-              <div className="w-14 h-14 mb-5 rounded-2xl overflow-hidden">
+            {/* Number badge — masqué si une image de carte est présente (contraste imprévisible) */}
+            {!card.icon_image && (
+              <span className={`absolute top-6 right-7 font-serif text-xs font-bold tabular-nums ${cardDark ? 'text-stone-600' : 'text-stone-200'}`}>
+                {String(i + 1).padStart(2, '0')}
+              </span>
+            )}
+            {card.icon_image && (
+              <div className={card.icon_image_bleed ? 'w-full aspect-[16/10]' : 'w-full aspect-[16/10] px-5 pt-5'}>
                 <EditableImage
                   sectionIndex={sectionIndex}
                   fieldPath={`cards.${i}.icon_image`}
                   src={card.icon_image}
                   alt={card.title || ''}
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full object-cover ${card.icon_image_bleed ? '' : 'rounded-2xl'}`}
                   loading="lazy" decoding="async"
                 />
               </div>
-            ) : card.icon && (
-              <div className="text-3xl mb-5 leading-none">
-                <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.icon`} value={card.icon} as="span" />
-              </div>
             )}
-            <h3 className="font-serif text-xl font-bold mb-3">
-              <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.title`} value={card.title} as="span" />
-            </h3>
-            <p className={`text-sm font-light leading-relaxed ${cardDark ? 'text-stone-400' : 'text-stone-500'}`}>
-              <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.description`} value={card.description} />
-            </p>
-            {card.link_text && (
-              <div className="mt-5">
-                <a href={card.link_href || '#'} className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-sage group-hover:gap-2.5 transition-all duration-300 cursor-pointer">
-                  <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.link_text`} value={card.link_text} as="span" />
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </a>
-              </div>
-            )}
+            <div className="p-8">
+              {!card.icon_image && card.icon && (
+                <div className="text-3xl mb-5 leading-none">
+                  <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.icon`} value={card.icon} as="span" />
+                </div>
+              )}
+              <h3 className="font-serif text-xl font-bold mb-3">
+                <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.title`} value={card.title} as="span" />
+              </h3>
+              <p className={`text-sm font-light leading-relaxed ${cardDark ? 'text-stone-400' : 'text-stone-500'}`}>
+                <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.description`} value={card.description} />
+              </p>
+              {card.link_text && (
+                <div className="mt-5">
+                  <a href={card.link_href || '#'} className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-sage group-hover:gap-2.5 transition-all duration-300 cursor-pointer">
+                    <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.link_text`} value={card.link_text} as="span" />
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+            </div>
           </motion.div>
         );
       })}
