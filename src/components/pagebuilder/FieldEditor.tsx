@@ -192,6 +192,7 @@ const FIELD_LABELS: Record<string, string> = {
   card_text: 'Carte — texte',
   // Champs de cartes
   icon: 'Icône (emoji)',
+  icon_image: 'Icône (image)',
   link: 'Lien',
   link_text: 'Lien — libellé',
   link_href: 'Lien — URL',
@@ -304,7 +305,7 @@ function ColorField({
   );
 }
 const CARD_FIELDS_BY_TYPE: Record<string, string[]> = {
-  features_2: ['title', 'description', 'icon', 'link_text', 'link_href', 'theme'],
+  features_2: ['title', 'description', 'icon', 'icon_image', 'link_text', 'link_href', 'theme'],
   features_3: ['title', 'description', 'items', 'cta_text', 'cta_href', 'badge', 'theme'],
   gallery_grid: ['image', 'title', 'description', 'link'],
   gallery_carousel: ['image', 'title', 'description', 'link'],

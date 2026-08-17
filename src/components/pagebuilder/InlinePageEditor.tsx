@@ -139,7 +139,7 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
       )}
 
       {/* Panneau latéral droit */}
-      <div className={`fixed top-16 right-0 bg-white border-l border-stone-200 shadow-2xl z-40 flex flex-col transition-transform duration-300 w-80`} style={{ bottom: 0, transform: open ? 'translateX(0)' : 'translateX(100%)' }}>
+      <div className={`fixed top-16 right-0 bg-white border-l border-stone-200 shadow-2xl z-[60] flex flex-col transition-transform duration-300 w-80`} style={{ bottom: 0, transform: open ? 'translateX(0)' : 'translateX(100%)' }}>
 
         {/* Header */}
         <div className="px-4 py-3 border-b border-stone-200 shrink-0 space-y-2">

@@ -942,6 +942,7 @@ export interface Features2Card {
   title: string;
   description: string;
   icon?: string;
+  icon_image?: string;
   link_text?: string;
   link_href?: string;
   theme?: 'light' | 'dark';
@@ -990,7 +991,18 @@ export function Features2({ data, sectionIndex }: { data: Features2Data, section
             <span className={`absolute top-6 right-7 font-serif text-xs font-bold tabular-nums ${cardDark ? 'text-stone-600' : 'text-stone-200'}`}>
               {String(i + 1).padStart(2, '0')}
             </span>
-            {card.icon && (
+            {card.icon_image ? (
+              <div className="w-14 h-14 mb-5 rounded-2xl overflow-hidden">
+                <EditableImage
+                  sectionIndex={sectionIndex}
+                  fieldPath={`cards.${i}.icon_image`}
+                  src={card.icon_image}
+                  alt={card.title || ''}
+                  className="w-full h-full object-cover"
+                  loading="lazy" decoding="async"
+                />
+              </div>
+            ) : card.icon && (
               <div className="text-3xl mb-5 leading-none">
                 <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.icon`} value={card.icon} as="span" />
               </div>

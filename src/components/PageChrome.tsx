@@ -1,25 +1,17 @@
-"use client";
-
-import { useEffect } from 'react';
-
 interface PageChromeProps {
   showHeader: boolean;
   showFooter: boolean;
 }
 
+// Composant serveur : injecte le CSS de masquage avant l'hydratation pour
+// éviter le flash du header/footer qu'un useEffect ne peut pas éviter.
 export default function PageChrome({ showHeader, showFooter }: PageChromeProps) {
-  useEffect(() => {
-    const nav = document.querySelector('header, nav[data-main-nav]') as HTMLElement | null;
-    const footer = document.querySelector('footer') as HTMLElement | null;
+  const rules = [
+    !showHeader && 'nav[data-main-nav]{display:none!important}',
+    !showFooter && 'footer{display:none!important}',
+  ].filter(Boolean).join('');
 
-    if (nav) nav.style.display = showHeader ? '' : 'none';
-    if (footer) footer.style.display = showFooter ? '' : 'none';
+  if (!rules) return null;
 
-    return () => {
-      if (nav) nav.style.display = '';
-      if (footer) footer.style.display = '';
-    };
-  }, [showHeader, showFooter]);
-
-  return null;
+  return <style dangerouslySetInnerHTML={{ __html: rules }} />;
 }

@@ -241,6 +241,7 @@ export const WIREFRAME_REGISTRY: Record<SectionType, WireframeEntry> = {
       'cards[].title': 'string',
       'cards[].description': 'string',
       'cards[].icon': 'string emoji (optionnel)',
+      'cards[].icon_image': 'image (optionnel)',
       'cards[].link_text': 'string (optionnel)',
       'cards[].link_href': 'string (optionnel)',
       show_image: 'boolean (optionnel)',
