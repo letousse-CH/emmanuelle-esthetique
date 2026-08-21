@@ -1,5 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Image as ImageIcon, X, RotateCcw, Bold, Italic, Link as LinkIcon } from 'lucide-react';
+import {
+  Image as ImageIcon,
+  X,
+  RotateCcw,
+  Bold,
+  Italic,
+  Link as LinkIcon,
+  Moon,
+  Pipette,
+  Sun,
+} from 'lucide-react';
+
+import { useThemePalette } from './useThemePalette';
+import PaletteColorInput from '../admin/PaletteColorInput';
+import {
+  BUTTON_VARIANT_OPTIONS, buttonVariantOf,
+  HERO_IMAGE_SIDE_OPTIONS, HERO_IMAGE_WIDTH_OPTIONS, HERO_TEXT_OVERLAP_OPTIONS,
+  HERO_TEXT_WIDTH_OPTIONS, SECTION_PATTERN_OPTIONS,
+  SECTION_PATTERN_SCALE_OPTIONS, SECTION_PATTERN_REPEAT_OPTIONS,
+} from './sectionLayout';
 
 function AutoTextarea({
   value,
@@ -21,7 +40,9 @@ function AutoTextarea({
     el.style.height = el.scrollHeight + 'px';
   };
 
-  useEffect(() => { resize(); }, [value]);
+  useEffect(() => {
+    resize();
+  }, [value]);
 
   return (
     <textarea
@@ -30,7 +51,10 @@ function AutoTextarea({
       className={`${className} overflow-hidden`}
       style={{ resize: 'none' }}
       value={value}
-      onChange={(e) => { onChange(e.target.value); resize(); }}
+      onChange={(e) => {
+        onChange(e.target.value);
+        resize();
+      }}
     />
   );
 }
@@ -55,7 +79,9 @@ function RichTextarea({
     el.style.height = el.scrollHeight + 'px';
   };
 
-  useEffect(() => { resize(); }, [value]);
+  useEffect(() => {
+    resize();
+  }, [value]);
 
   const wrap = (open: string, close: string) => {
     const el = ref.current;
@@ -84,7 +110,9 @@ function RichTextarea({
     // Le contenu est réinjecté via dangerouslySetInnerHTML côté page publique :
     // on refuse les schémas exécutables (javascript:, data:).
     if (/^\s*(javascript|data|vbscript):/i.test(url)) {
-      window.alert('URL refusée : seuls les liens http(s), mailto:, tel: et les chemins internes (/…) sont acceptés.');
+      window.alert(
+        'URL refusée : seuls les liens http(s), mailto:, tel: et les chemins internes (/…) sont acceptés.',
+      );
       return;
     }
     const label = value.slice(start, end) || 'texte du lien';
@@ -97,22 +125,87 @@ function RichTextarea({
     }, 0);
   };
 
-  const btn = 'px-1.5 py-0.5 border border-stone-200 rounded text-[10px] font-bold text-stone-600 hover:bg-stone-100 transition-colors';
+  const btn =
+    'px-1.5 py-0.5 border border-stone-200 rounded text-[10px] font-bold text-stone-600 hover:bg-stone-100 transition-colors';
 
   return (
     <div>
       <div className="flex flex-wrap gap-1 mb-1">
-        <button type="button" title="Gras" onMouseDown={(e) => { e.preventDefault(); wrapTag('strong'); }} className={btn}>
+        <button
+          type="button"
+          title="Gras"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            wrapTag('strong');
+          }}
+          className={btn}
+        >
           <Bold size={11} />
         </button>
-        <button type="button" title="Italique" onMouseDown={(e) => { e.preventDefault(); wrapTag('em'); }} className={`${btn} italic`}>
+        <button
+          type="button"
+          title="Italique"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            wrapTag('em');
+          }}
+          className={`${btn} italic`}
+        >
           <Italic size={11} />
         </button>
-        <button type="button" title="Titre H2" onMouseDown={(e) => { e.preventDefault(); wrapTag('h2'); }} className={btn}>H2</button>
-        <button type="button" title="Titre H3" onMouseDown={(e) => { e.preventDefault(); wrapTag('h3'); }} className={btn}>H3</button>
-        <button type="button" title="Paragraphe" onMouseDown={(e) => { e.preventDefault(); wrapTag('p'); }} className={btn}>¶</button>
-        <button type="button" title="Liste à puces" onMouseDown={(e) => { e.preventDefault(); wrap('<ul>\n  <li>', '</li>\n</ul>'); }} className={btn}>• Liste</button>
-        <button type="button" title="Insérer un lien" onMouseDown={(e) => { e.preventDefault(); insertLink(); }} className={btn}>
+        <button
+          type="button"
+          title="Titre H2"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            wrapTag('h2');
+          }}
+          className={btn}
+        >
+          H2
+        </button>
+        <button
+          type="button"
+          title="Titre H3"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            wrapTag('h3');
+          }}
+          className={btn}
+        >
+          H3
+        </button>
+        <button
+          type="button"
+          title="Paragraphe"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            wrapTag('p');
+          }}
+          className={btn}
+        >
+          ¶
+        </button>
+        <button
+          type="button"
+          title="Liste à puces"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            wrap('<ul>\n  <li>', '</li>\n</ul>');
+          }}
+          className={btn}
+        >
+          • Liste
+        </button>
+        <button
+          type="button"
+          title="Insérer un lien"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            insertLink();
+          }}
+          className={btn}
+        >
           <LinkIcon size={11} />
         </button>
       </div>
@@ -122,19 +215,23 @@ function RichTextarea({
         className={`${className} overflow-hidden`}
         style={{ resize: 'none' }}
         value={value}
-        onChange={(e) => { onChange(e.target.value); resize(); }}
+        onChange={(e) => {
+          onChange(e.target.value);
+          resize();
+        }}
       />
     </div>
   );
 }
 
-const BG_PRESETS = [
-  { name: 'Crème', value: '#FAF7F2' },
+/**
+ * Repli quand aucune palette n'est encore définie dans « Design & Style ».
+ * Deux neutres seulement : proposer des teintes de marque inventées reviendrait
+ * à imposer un goût, ce que le reste du template s'interdit.
+ */
+const NEUTRAL_PRESETS = [
   { name: 'Blanc', value: '#FFFFFF' },
-  { name: 'Lin', value: '#F1EAE0' },
-  { name: 'Sauge profond', value: '#5E6B52' },
-  { name: 'Taupe', value: '#3A3730' },
-  { name: 'Terracotta', value: '#C08768' },
+  { name: 'Noir', value: '#1C1917' },
 ];
 
 /**
@@ -166,6 +263,7 @@ const FIELD_LABELS: Record<string, string> = {
   image_opacity: "Opacité de l'image",
   image_position: "Position de l'image",
   image_width: "Taille de l'image",
+  text_box_width: 'Largeur du bloc de texte',
   show_image: "Afficher l'image",
   stretch_image: "Étirer l'image en hauteur",
   ratio: 'Proportion image / texte',
@@ -206,6 +304,21 @@ const FIELD_LABELS: Record<string, string> = {
   rating: 'Note',
   value: 'Valeur',
   label: 'Légende',
+  video_poster: 'Image d’aperçu vidéo',
+  video_url: 'Lien vidéo (YouTube / Vimeo)',
+  trust_text: 'Texte de réassurance / preuve',
+  yearly_discount_badge: 'Badge de réduction annuelle (ex: -20%)',
+  price_monthly: 'Prix mensuel',
+  price_yearly: 'Prix annuel',
+  period: 'Période (ex: /mois)',
+  popular: 'Mettre en avant cette formule',
+  highlight: 'Mettre en avant cette carte (fond sage)',
+  privacy_note: 'Note de confidentialité (ex: Pas de spam)',
+  placeholder: 'Texte d’invite du champ',
+  button_text: 'Libellé du bouton',
+  metric: 'Chiffre / Statistique',
+  sublabel: 'Sous-titre / Légende',
+  tag: 'Tag / Badge de carte',
 };
 
 function labelFor(key: string): string {
@@ -215,7 +328,7 @@ function labelFor(key: string): string {
 }
 
 /** Les champs `*_href`, `*_url` et libellés courts tiennent sur une seule ligne. */
-const SINGLE_LINE_RE = /(_href|_url|_alt|^slug$|^icon$|^separator$)/;
+const SINGLE_LINE_RE = /(_href|_url|_alt|^slug$|^icon$|^separator$|^video_url$|^video_poster$)/;
 
 /** Libellés des valeurs d'énumération affichées en boutons segmentés. */
 const ENUM_LABELS: Record<string, string> = {
@@ -242,71 +355,247 @@ function moveInArray<T>(arr: T[], from: number, to: number): T[] {
   return next;
 }
 
-function ColorField({
+/**
+ * Choix d'une couleur dans la charte du site.
+ *
+ * Les pastilles viennent des jetons enregistrés dans « Design & Style » ; la
+ * mécanique est celle de `PaletteColorInput`, partagée avec le panneau de
+ * style pour que le geste soit le même des deux côtés.
+ */
+function ThemeColorField({
   label,
+  hint,
   value,
   onChange,
-  presets = BG_PRESETS,
-  fallback = '#ffffff',
 }: {
   label: string;
+  hint?: string;
   value: string;
   onChange: (v: string) => void;
-  presets?: { name: string; value: string }[];
   fallback?: string;
 }) {
+  const { swatches } = useThemePalette();
+  // Tant qu'aucune palette n'est définie, deux neutres valent mieux que rien :
+  // proposer des teintes inventées reviendrait à imposer un goût.
+  const palette = swatches.length > 0
+    ? swatches
+    : NEUTRAL_PRESETS.map((p) => ({ key: p.value, label: p.name, value: p.value }));
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{label}</label>
-        {value && (
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            className="text-[10px] text-stone-400 hover:text-red-500 flex items-center gap-0.5 transition-colors cursor-pointer"
-          >
-            <RotateCcw size={9} /> Réinitialiser
-          </button>
-        )}
+    <div className="space-y-2">
+      <div>
+        <p className="text-[13px] font-medium text-stone-800">{label}</p>
+        {hint && <p className="mt-0.5 text-[12.5px] leading-snug text-stone-600">{hint}</p>}
       </div>
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {presets.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            onClick={() => onChange(p.value)}
-            style={{ backgroundColor: p.value }}
-            title={p.name}
-            aria-label={p.name}
-            className={`w-6 h-6 rounded-full border transition-all cursor-pointer shrink-0 ${
-              value?.toLowerCase() === p.value.toLowerCase()
-                ? 'border-sage ring-2 ring-sage/40 scale-110 shadow'
-                : 'border-stone-300 hover:scale-110'
-            }`}
-          />
-        ))}
-        <div className="relative w-6 h-6 rounded-full border border-stone-300 overflow-hidden shrink-0">
-          <input
-            type="color"
-            value={value || fallback}
-            onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 w-[150%] h-[150%] -translate-x-[15%] -translate-y-[15%] cursor-pointer border-none p-0"
-            title="Couleur personnalisée"
-          />
-        </div>
-        <input
-          type="text"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Auto"
-          className="flex-1 min-w-0 border border-stone-200 rounded px-2 py-1 text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-sage text-stone-700"
-        />
+      <PaletteColorInput
+        value={value}
+        onChange={onChange}
+        swatches={palette}
+        ariaLabel={label}
+        autoHint="Suivre le thème clair ou foncé de la section."
+      />
+    </div>
+  );
+}
+
+/**
+ * Clair ou foncé, montré avec les vraies couleurs du site.
+ *
+ * Les deux boutons portaient un émoji et un aplat gris fixe : on choisissait
+ * sans voir ce que ça allait donner.
+ */
+function ThemeChoice({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { swatches } = useThemePalette();
+  const light = swatches.find((s) => s.key === 'style_color_bg')?.value || '#FFFFFF';
+  const dark = swatches.find((s) => s.key === 'style_color_text')?.value || '#1C1917';
+  const surface = swatches.find((s) => s.key === 'style_color_surface')?.value || '#F5F5F4';
+  const primary = swatches.find((s) => s.key === 'style_color_primary')?.value || '#000000';
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <p className="text-[13px] font-medium text-stone-800">{label}</p>
+        {hint && <p className="mt-0.5 text-[12.5px] leading-snug text-stone-600">{hint}</p>}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { key: 'light', label: 'Clair', bg: light, fg: dark, icon: <Sun size={14} /> },
+          { key: 'dark', label: 'Foncé', bg: dark, fg: light, icon: <Moon size={14} /> },
+          { key: 'surface', label: 'Surface', bg: surface, fg: dark, icon: <Sun size={14} /> },
+          { key: 'primary', label: 'Primaire', bg: primary, fg: '#FFFFFF', icon: <Sun size={14} /> },
+        ].map((option) => {
+          const active = (value || 'light') === option.key;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(option.key)}
+              className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-colors cursor-pointer
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
+                  active
+                    ? 'border-stone-900 ring-1 ring-stone-900'
+                    : 'border-stone-300 hover:border-stone-400'
+                }`}
+            >
+              <span
+                className="grid size-6 shrink-0 place-items-center rounded-md border border-stone-300 shadow-xs"
+                style={{ backgroundColor: option.bg, color: option.fg }}
+              >
+                {option.icon}
+              </span>
+              <span className="text-[12px] font-medium text-stone-800">{option.label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
+
+function PatternChoice({
+  pattern,
+  scale,
+  repeat,
+  opacity,
+  onChangePattern,
+  onChangeScale,
+  onChangeRepeat,
+  onChangeOpacity,
+}: {
+  pattern: string;
+  scale: string;
+  repeat: string;
+  opacity: number;
+  onChangePattern: (v: string) => void;
+  onChangeScale: (v: string) => void;
+  onChangeRepeat: (v: string) => void;
+  onChangeOpacity: (v: number) => void;
+}) {
+  return (
+    <div className="space-y-3 pt-2">
+      <div>
+        <p className="text-[13px] font-medium text-stone-800">Motif de fond (SVG vectoriel)</p>
+        <p className="mt-0.5 text-[12.5px] leading-snug text-stone-600">
+          Texture géométrique pour habiller l'arrière-plan avec répétition et taille réglables.
+        </p>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-3">
+        {SECTION_PATTERN_OPTIONS.map((opt) => {
+          const active = (pattern || 'none') === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChangePattern(opt.value)}
+              className={`rounded-lg border px-2.5 py-1.5 text-left transition-colors cursor-pointer ${
+                active
+                  ? 'border-stone-900 bg-stone-900 text-white'
+                  : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
+              }`}
+            >
+              <div className="text-[11.5px] font-bold">{opt.label}</div>
+              <div className={`text-[9.5px] truncate ${active ? 'text-stone-300' : 'text-stone-500'}`}>
+                {opt.hint}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {pattern && pattern !== 'none' && (
+        <div className="rounded-xl border border-stone-200 bg-stone-50/80 p-3 space-y-3 mt-2">
+          {/* Échelle / Taille */}
+          <div className="space-y-1">
+            <label className="text-[11.5px] font-medium text-stone-700">Taille du motif (Échelle)</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+              {SECTION_PATTERN_SCALE_OPTIONS.map((opt) => {
+                const active = (scale || 'normal') === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onChangeScale(opt.value)}
+                    className={`rounded-md border px-2 py-1 text-center text-[10.5px] font-semibold transition-colors cursor-pointer ${
+                      active
+                        ? 'border-stone-900 bg-stone-900 text-white'
+                        : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-100'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Répétition */}
+          <div className="space-y-1">
+            <label className="text-[11.5px] font-medium text-stone-700">Mode de répétition (Tiling)</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+              {SECTION_PATTERN_REPEAT_OPTIONS.map((opt) => {
+                const active = (repeat || 'repeat') === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onChangeRepeat(opt.value)}
+                    className={`rounded-md border px-2 py-1 text-center text-[10.5px] font-semibold transition-colors cursor-pointer ${
+                      active
+                        ? 'border-stone-900 bg-stone-900 text-white'
+                        : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-100'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Opacité */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[11.5px] font-medium text-stone-700">Opacité du motif</label>
+              <span className="text-[11px] font-bold text-stone-800">{opacity}%</span>
+            </div>
+            <input
+              type="range"
+              min="5"
+              max="50"
+              step="5"
+              value={opacity}
+              onChange={(e) => onChangeOpacity(Number(e.target.value))}
+              className="w-full accent-stone-900 cursor-pointer"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CARD_FIELDS_BY_TYPE: Record<string, string[]> = {
-  features_2: ['title', 'description', 'icon', 'icon_image', 'icon_image_bleed', 'link_text', 'link_href', 'theme'],
+  features_2: [
+    'title',
+    'description',
+    'icon',
+    'icon_image',
+    'icon_image_bleed',
+    'link_text',
+    'link_href',
+    'theme',
+  ],
   features_3: ['title', 'description', 'items', 'cta_text', 'cta_href', 'badge', 'theme'],
   gallery_grid: ['image', 'title', 'description', 'link'],
   gallery_carousel: ['image', 'title', 'description', 'link'],
@@ -316,9 +605,76 @@ const CARD_FIELDS_BY_TYPE: Record<string, string[]> = {
   stats_1: ['value', 'label'],
   timeline_1: ['title', 'description'],
   logos_1: ['image', 'alt', 'link'],
+  pricing_2: ['name', 'price_monthly', 'price_yearly', 'period', 'description', 'badge', 'popular', 'features', 'cta_text', 'cta_href'],
+  stats_3: ['metric', 'label', 'sublabel', 'highlight'],
+  bento_grid_1: ['title', 'description', 'tag', 'image_url', 'metric'],
 };
+/**
+ * Regroupement des champs de l'onglet « Contenu ».
+ *
+ * Ils s'affichaient à la file, dans l'ordre du schéma : le surtitre, le titre,
+ * l'adresse d'un bouton et l'opacité d'une image de fond se suivaient sans
+ * rien pour les distinguer. On les range par rôle, dans l'ordre où on les
+ * remplit — ce qu'on écrit d'abord, l'action ensuite, le décor en dernier.
+ */
+const FIELD_GROUPS: { id: string; title: string; hint: string; match: (key: string) => boolean }[] = [
+  {
+    id: 'texte',
+    title: 'Texte',
+    hint: 'Ce que le visiteur lit en premier.',
+    match: (k) => ['eyebrow', 'title', 'title_italic', 'subtitle', 'description', 'content', 'text', 'quote',
+      'author', 'role', 'card_title', 'card_text', 'price', 'price_note', 'items', 'separator',
+      'trust_text', 'privacy_note', 'yearly_discount_badge', 'placeholder', 'button_text',
+].includes(k),
+  },
+  {
+    id: 'action',
+    title: 'Appel à l’action',
+    hint: 'Le bouton et sa destination.',
+    match: (k) => k.startsWith('cta_') || k === 'button_style' || k === 'link_text' || k === 'link_href',
+  },
+  {
+    id: 'image',
+    title: 'Images & Médias',
+    hint: 'Visuel principal ou vidéo de la section.',
+    match: (k) =>
+      (k.startsWith('image') && !k.startsWith('image_bg')) || k === 'logo' || k === 'avatar' || k.startsWith('video_')
+      // La rencontre du texte et de l'image et la largeur du bloc de texte se
+      // règlent en regardant l'image : elles restent à côté d'elle.
+      || k === 'text_overlap' || k === 'text_box_width',
+  },
+  {
+    id: 'fond',
+    title: 'Arrière-plan',
+    hint: 'Ce qui passe derrière le contenu.',
+    match: (k) => k.startsWith('bg_') || k === 'text_color',
+  },
+  {
+    id: 'cartes',
+    title: 'Habillage des cartes',
+    hint: 'Leur fond et leur ambiance. Leur contenu se règle dans l’onglet « Contenu ».',
+    // La taille du texte des cartes relève du contenu : elle reste dans
+    // l'onglet « Contenu », avec le reste de ce qu'on écrit.
+    match: (k) => k.startsWith('cards_') && k !== 'cards_text_scale',
+  },
+  {
+    id: 'mise_en_forme',
+    title: 'Mise en forme',
+    hint: 'Colonnes, hauteur, défilement.',
+    match: (k) => ['columns', 'min_height', 'speed', 'italic', 'stretch_image'].includes(k),
+  },
+];
+
+/** Groupes présentés dans l'onglet « Fond » de la modale du constructeur. */
+const BACKGROUND_GROUPS = ['fond', 'cartes'];
+
+/** Groupe d'un champ ; tout ce qui n'entre nulle part atterrit dans « Réglages ». */
+function groupOf(key: string): string {
+  return FIELD_GROUPS.find((g) => g.match(key))?.id ?? 'autres';
+}
+
 /** Champs de carte à rendre en case à cocher plutôt qu'en input texte. */
-const CARD_BOOLEAN_FIELDS = new Set(['icon_image_bleed']);
+const CARD_BOOLEAN_FIELDS = new Set(['icon_image_bleed', 'popular', 'highlight']);
 
 import { WIREFRAME_REGISTRY } from './wireframes.config';
 import type { PageSection } from './wireframes.config';
@@ -331,462 +687,638 @@ interface Props {
   compact?: boolean;
 }
 
-export default function FieldEditor({ section, sectionIndex: i, onUpdate, compact = false }: Props) {
+export default function FieldEditor({
+  section,
+  sectionIndex: i,
+  onUpdate,
+  compact = false,
+  contentOnly = false,
+  scope = 'all',
+}: Props & { contentOnly?: boolean; scope?: 'all' | 'content' | 'background' }) {
   const data = section.data as unknown as Record<string, unknown>;
   const schema = WIREFRAME_REGISTRY[section.type]?.dataSchema ?? {};
   const [mediaPickerKey, setMediaPickerKey] = useState<string | null>(null);
 
   const px = compact ? 'px-2 py-1' : 'px-3 py-2';
   const sz = compact ? 'text-xs' : 'text-sm';
-  const inputCls = `w-full border border-stone-200 rounded-lg ${px} ${sz} focus:outline-none focus:ring-1 focus:ring-sage`;
+  const inputCls = `w-full border border-stone-200 rounded-lg ${px} ${sz} focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900`;
 
-  const cards = Array.isArray(data.cards) ? (data.cards as Record<string, unknown>[]) : null;
+  const cardsKey = Array.isArray(data.plans) ? 'plans' : 'cards';
+  const cards = Array.isArray(data[cardsKey]) ? (data[cardsKey] as Record<string, unknown>[]) : null;
 
-  return (
-    <div className="space-y-3">
-      {/* ── Couleur de fond — toujours visible (toutes les sections la gèrent) ── */}
-      <ColorField
-        label={labelFor('bg_color')}
-        value={(data.bg_color as string | undefined) || ''}
-        onChange={(v) => onUpdate(i, 'bg_color', v)}
-      />
+  /*
+    Rendu d'un champ. Extrait de la boucle pour pouvoir ranger les champs par
+    groupe : ils défilaient jusqu'ici dans l'ordre brut du schéma, surtitre et
+    opacité d'image de fond à la suite, sans rien pour séparer ce qu'on écrit
+    de ce qui décore.
+  */
+  const renderScalarField = (key: string, typeHint: string) => {
+    if (key.includes('[]')) return null;
+    if (key === 'cards') return null;
+    // Ces trois-là se règlent dans l'onglet « Apparence ».
+    if (key === 'cards_text_size' || key === 'cards_title_size' || key === 'text_scale') return null;
+    if (key === 'theme') return null; // affiché ci-dessus
+    if (key === 'bg_color') return null; // idem — évitait un doublon sur marquee_1 / pricing_1
 
-      {/* ── Thème ☀️ / 🌙 — uniquement pour les sections qui le gèrent ── */}
-      {'theme' in schema && (
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">Thème</label>
-          <div className="flex gap-2">
-            {(['light', 'dark'] as const).map((opt) => {
-              const current = (data.theme as string | undefined) ?? (section.type === 'cta_1' ? 'dark' : 'light');
+    const val = data[key];
+    const hint = typeHint as string;
+    const isImage = hint === 'image (optionnel)' || hint.startsWith('image');
+    const isArray = hint.startsWith('string[]') || hint.startsWith('array');
+
+    // ── Couleur (autre que bg_color, ex. text_color du bandeau défilant) ──
+    if (key.endsWith('_color') || hint.includes('couleur')) {
+      return (
+        <ThemeColorField
+          key={key}
+          label={labelFor(key)}
+          value={String(val ?? '')}
+          onChange={(v) => onUpdate(i, key, v)}
+          fallback="#000000"
+        />
+      );
+    }
+
+    /*
+      Réglages à choix fermé. Sans traitement explicite, ils tombaient dans le
+      champ texte générique : on devait taper « twoThirds » à la main pour
+      élargir l'image d'un hero.
+    */
+    const SEGMENTED: Record<string, { label: string; hint?: string; options: readonly { value: string; label: string }[] }> = {
+      image_width: { label: "Largeur de l'image", hint: 'Sur grand écran. En dessous, image et texte s’empilent.', options: HERO_IMAGE_WIDTH_OPTIONS },
+      image_side: { label: "Côté de l'image", options: HERO_IMAGE_SIDE_OPTIONS },
+      text_overlap: { label: 'Rencontre du texte et de l’image', hint: 'Le texte peut rester à côté, déborder légèrement, ou passer par-dessus.', options: HERO_TEXT_OVERLAP_OPTIONS },
+      text_box_width: { label: 'Largeur du bloc de texte', hint: 'Le texte grandit avec la colonne. Quand il passe par-dessus l’image, c’est cette largeur qui règle le recouvrement.', options: HERO_TEXT_WIDTH_OPTIONS },
+    };
+
+    if (key in SEGMENTED) {
+      const spec = SEGMENTED[key];
+      const current = String(val ?? spec.options[0].value);
+      return (
+        <div key={key} className="space-y-2">
+          <div>
+            <p className="text-[13px] font-medium text-stone-800">{spec.label}</p>
+            {spec.hint && <p className="mt-0.5 text-[12.5px] leading-snug text-stone-600">{spec.hint}</p>}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {spec.options.map((option) => {
+              const active = current === option.value;
               return (
                 <button
-                  key={opt}
+                  key={option.value}
                   type="button"
-                  onClick={() => onUpdate(i, 'theme', opt)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                    current === opt
-                      ? opt === 'dark'
-                        ? 'bg-stone-900 text-white border-stone-900'
-                        : 'bg-stone-50 text-stone-900 border-stone-300 shadow'
-                      : 'border-stone-200 text-stone-400 hover:border-stone-400'
-                  }`}
+                  aria-pressed={active}
+                  onClick={() => onUpdate(i, key, option.value)}
+                  className={`rounded-lg border px-3 py-1.5 text-[13px] font-medium transition-colors cursor-pointer
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
+                      active
+                        ? 'border-stone-900 bg-stone-900 text-white'
+                        : 'border-stone-300 text-stone-700 hover:border-stone-400 hover:bg-stone-50'
+                    }`}
                 >
-                  {opt === 'light' ? '☀️ Clair' : '🌙 Sombre'}
+                  {option.label}
                 </button>
               );
             })}
           </div>
         </div>
-      )}
+      );
+    }
 
-      {/* ── Champs scalaires du schema (hors cards, theme, button_style) ── */}
-      {Object.entries(schema).map(([key, typeHint]) => {
-        if (key.includes('[]')) return null;
-        if (key === 'cards') return null;
-        if (key === 'theme') return null;   // affiché ci-dessus
-        if (key === 'bg_color') return null; // idem — évitait un doublon sur marquee_1 / pricing_1
+    // ── Ambiance des cartes (grilles d'atouts, tarifs, témoignages) ──
+    if (key === 'cards_theme') {
+      return (
+        <ThemeChoice
+          key={key}
+          label="Ambiance des cartes"
+          hint="Les cartes posées sur la section — atouts, offres, témoignages."
+          value={String(val ?? 'light')}
+          onChange={(v) => onUpdate(i, key, v)}
+        />
+      );
+    }
 
-        const val = data[key];
-        const hint = typeHint as string;
-        const isImage = hint === 'image (optionnel)' || hint.startsWith('image');
-        const isArray = hint.startsWith('string[]') || hint.startsWith('array');
+    // ── Fond des cartes, choisi dans la charte ──
+    if (key === 'cards_bg_color') {
+      return (
+        <ThemeColorField
+          key={key}
+          label="Fond des cartes"
+          hint="« Automatique » laisse les cartes suivre le thème de la section."
+          value={String(val ?? '')}
+          onChange={(v) => onUpdate(i, key, v)}
+        />
+      );
+    }
 
-        // ── Couleur (autre que bg_color, ex. text_color du bandeau défilant) ──
-        if (key.endsWith('_color') || hint.includes('couleur')) {
-          return (
-            <ColorField
-              key={key}
-              label={labelFor(key)}
-              value={String(val ?? '')}
-              onChange={(v) => onUpdate(i, key, v)}
-              fallback="#000000"
-            />
-          );
-        }
+    // ── boolean (checkbox) ──
+    if (hint.startsWith('boolean')) {
+      const checked = !!val;
+      return (
+        <div key={key} className="flex items-center gap-2 py-1">
+          <input
+            type="checkbox"
+            id={`field-${i}-${key}`}
+            checked={checked}
+            onChange={(e) => onUpdate(i, key, e.target.checked)}
+            className="w-4 h-4 cursor-pointer accent-stone-900 rounded border-stone-300 focus:ring-stone-900"
+          />
+          <label
+            htmlFor={`field-${i}-${key}`}
+            className="text-xs font-bold text-stone-700 cursor-pointer select-none"
+          >
+            {labelFor(key)}
+          </label>
+        </div>
+      );
+    }
 
-        // ── Thème des cartes ──
-        if (key === 'cards_theme') {
-          return (
-            <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
-              <div className="flex gap-2">
-                {(['light', 'dark'] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => onUpdate(i, key, opt)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      (val ?? 'light') === opt
-                        ? opt === 'dark'
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-stone-50 text-stone-900 border-stone-300 shadow'
-                        : 'border-stone-200 text-stone-400 hover:border-stone-400'
-                    }`}
-                  >
-                    {opt === 'light' ? '☀️ Clair' : '🌙 Sombre'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
+    // ── Opacité image ──
+    if (hint.startsWith('opacity')) {
+      const opacityVal = typeof val === 'number' ? val : parseInt(String(val ?? '70'), 10) || 70;
+      return (
+        <div key={key}>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-[12.5px] font-medium text-stone-700">{labelFor(key)}</label>
+            <span className="text-[12px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">
+              {opacityVal}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={opacityVal}
+            onChange={(e) => onUpdate(i, key, parseInt(e.target.value))}
+            className="w-full cursor-pointer accent-stone-900"
+          />
+        </div>
+      );
+    }
 
-        // ── boolean (checkbox) ──
-        if (hint.startsWith('boolean')) {
-          const checked = !!val;
-          return (
-            <div key={key} className="flex items-center gap-2 py-1">
-              <input
-                type="checkbox"
-                id={`field-${i}-${key}`}
-                checked={checked}
-                onChange={(e) => onUpdate(i, key, e.target.checked)}
-                className="w-4 h-4 cursor-pointer accent-sage rounded border-stone-300 focus:ring-sage"
-              />
-              <label
-                htmlFor={`field-${i}-${key}`}
-                className="text-xs font-bold text-stone-700 cursor-pointer select-none"
-              >
-                {labelFor(key)}
-              </label>
-            </div>
-          );
-        }
+    // ── Hauteur minimale ──
+    if (hint.startsWith('height')) {
+      const heightVal = typeof val === 'number' ? val : parseInt(String(val ?? '0'), 10) || 0;
+      return (
+        <div key={key}>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-[12.5px] font-medium text-stone-700">{labelFor(key)}</label>
+            <span className="text-[12px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">
+              {heightVal > 0 ? `${heightVal}px` : 'Auto'}
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="1200"
+            step="50"
+            value={heightVal}
+            onChange={(e) => onUpdate(i, key, parseInt(e.target.value))}
+            className="w-full cursor-pointer accent-stone-900"
+          />
+          <div className="flex justify-between text-[11.5px] text-stone-500 mt-0.5">
+            <span>Auto</span>
+            <span>600px</span>
+            <span>1200px</span>
+          </div>
+        </div>
+      );
+    }
 
-        // ── Opacité image ──
-        if (hint.startsWith('opacity')) {
-          const opacityVal = typeof val === 'number' ? val : parseInt(String(val ?? '70'), 10) || 70;
-          return (
-            <div key={key}>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{labelFor(key)}</label>
-                <span className="text-[10px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">{opacityVal}%</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={opacityVal}
-                onChange={(e) => onUpdate(i, key, parseInt(e.target.value))}
-                className="w-full cursor-pointer accent-stone-900"
-              />
-            </div>
-          );
-        }
-
-        // ── Hauteur minimale ──
-        if (hint.startsWith('height')) {
-          const heightVal = typeof val === 'number' ? val : parseInt(String(val ?? '0'), 10) || 0;
-          return (
-            <div key={key}>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{labelFor(key)}</label>
-                <span className="text-[10px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">
-                  {heightVal > 0 ? `${heightVal}px` : 'Auto'}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="1200"
-                step="50"
-                value={heightVal}
-                onChange={(e) => onUpdate(i, key, parseInt(e.target.value))}
-                className="w-full cursor-pointer accent-stone-900"
-              />
-              <div className="flex justify-between text-[9px] text-stone-400 mt-0.5">
-                <span>Auto</span>
-                <span>600px</span>
-                <span>1200px</span>
-              </div>
-            </div>
-          );
-        }
-
-        // ── Position de l'image de fond ──
-        if (hint.startsWith('position')) {
-          const positions = [
-            { label: 'Centre', value: 'center' },
-            { label: 'Haut', value: 'top' },
-            { label: 'Bas', value: 'bottom' },
-            { label: 'Gauche', value: 'left' },
-            { label: 'Droite', value: 'right' },
-            { label: 'H. gauche', value: 'top left' },
-            { label: 'H. droite', value: 'top right' },
-            { label: 'B. gauche', value: 'bottom left' },
-            { label: 'B. droite', value: 'bottom right' },
-          ];
-          const current = (val as string | undefined) || 'center';
-          return (
-            <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
-              <div className="grid grid-cols-3 gap-1">
-                {positions.map((p) => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    onClick={() => onUpdate(i, key, p.value)}
-                    className={`py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                      current === p.value
-                        ? 'bg-sage text-white border-sage'
-                        : 'border-stone-200 text-stone-400 hover:border-stone-400'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
-
-        // ── Proportion des colonnes (texte + image) ──
-        if (hint.startsWith('ratio')) {
-          const ratios = [
-            { label: '¼ / ¾', value: 'quarter' },
-            { label: '⅓ / ⅔', value: 'third' },
-            { label: '½ / ½', value: 'half' },
-          ];
-          const current = (val as string | undefined) || 'half';
-          return (
-            <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
-              <div className="flex gap-2">
-                {ratios.map((r) => (
-                  <button
-                    key={r.value}
-                    type="button"
-                    onClick={() => onUpdate(i, key, r.value)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      current === r.value
-                        ? 'bg-sage text-white border-sage'
-                        : 'border-stone-200 text-stone-400 hover:border-stone-400'
-                    }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
-
-        // ── Taille de l'image (% de la colonne) ──
-        if (hint.startsWith('width-percent')) {
-          const widthVal = typeof val === 'number' ? val : parseInt(String(val ?? '100'), 10) || 100;
-          return (
-            <div key={key}>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{labelFor(key)}</label>
-                <span className="text-[10px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">{widthVal}%</span>
-              </div>
-              <input
-                type="range"
-                min="30"
-                max="100"
-                step="5"
-                value={widthVal}
-                onChange={(e) => onUpdate(i, key, parseInt(e.target.value))}
-                className="w-full cursor-pointer accent-stone-900"
-              />
-            </div>
-          );
-        }
-
-        // ── Couleur bouton ──
-        if (key === 'button_style') {
-          return (
-            <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
-              <div className="flex gap-2">
-                {(['green', 'white'] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => onUpdate(i, key, opt)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                      (val ?? 'green') === opt
-                        ? opt === 'green' ? 'bg-sage text-white border-sage' : 'bg-white text-stone-900 border-stone-400 shadow'
-                        : 'border-stone-200 text-stone-400 hover:border-stone-400'
-                    }`}
-                  >
-                    {opt === 'green' ? '🟢 Vert' : '⚪ Blanc'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
-
-        // ── Position de l'image (split section intro_1) ──
-        if (key === 'image_position') {
-          return (
-            <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
-              <div className="flex gap-2">
-                {(['left', 'right'] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => onUpdate(i, key, opt)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                      (val ?? 'left') === opt
-                        ? 'bg-sage text-white border-sage'
-                        : 'border-stone-200 text-stone-400 hover:border-stone-400'
-                    }`}
-                  >
-                    {opt === 'left' ? '👈 Gauche' : '👉 Droite'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
-
-        // ── Champ image — picker bibliothèque ──
-        if (isImage) {
-          const imgUrl = String(val ?? '');
-          return (
-            <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
-              {imgUrl && (
-                <div className="relative mb-2 group">
-                  <img src={imgUrl} alt="" className="w-full h-24 object-cover rounded-lg border border-stone-200" />
-                  <button
-                    onClick={() => onUpdate(i, key, '')}
-                    className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X size={12} className="text-stone-600" />
-                  </button>
-                </div>
-              )}
+    // ── Position de l'image de fond ──
+    if (hint.startsWith('position')) {
+      const positions = [
+        { label: 'Centre', value: 'center' },
+        { label: 'Haut', value: 'top' },
+        { label: 'Bas', value: 'bottom' },
+        { label: 'Gauche', value: 'left' },
+        { label: 'Droite', value: 'right' },
+        { label: 'H. gauche', value: 'top left' },
+        { label: 'H. droite', value: 'top right' },
+        { label: 'B. gauche', value: 'bottom left' },
+        { label: 'B. droite', value: 'bottom right' },
+      ];
+      const current = (val as string | undefined) || 'center';
+      return (
+        <div key={key}>
+          <label className="block text-[12.5px] font-medium text-stone-700 mb-1">{labelFor(key)}</label>
+          <div className="grid grid-cols-3 gap-1">
+            {positions.map((p) => (
               <button
-                onClick={() => setMediaPickerKey(key)}
-                className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-stone-200 rounded-lg py-2 text-xs text-stone-500 hover:border-sage hover:text-sage transition-colors font-medium"
+                key={p.value}
+                type="button"
+                onClick={() => onUpdate(i, key, p.value)}
+                className={`py-1 rounded-lg text-[12px] font-bold border transition-all cursor-pointer ${
+                  current === p.value
+                    ? 'border-stone-900 bg-stone-900 text-white'
+                    : 'border-stone-300 text-stone-700 hover:border-stone-400'
+                }`}
               >
-                <ImageIcon size={14} />
-                {imgUrl ? 'Changer l\'image' : 'Choisir dans la bibliothèque'}
+                {p.label}
               </button>
-              {mediaPickerKey === key && (
-                <MediaLibrary
-                  onClose={() => setMediaPickerKey(null)}
-                  onSelect={(url) => {
-                    onUpdate(i, key, url);
-                    setMediaPickerKey(null);
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ── Proportion des colonnes (texte + image) ──
+    if (hint.startsWith('ratio')) {
+      const ratios = [
+        { label: '¼ / ¾', value: 'quarter' },
+        { label: '⅓ / ⅔', value: 'third' },
+        { label: '½ / ½', value: 'half' },
+      ];
+      const current = (val as string | undefined) || 'half';
+      return (
+        <div key={key}>
+          <label className="block text-[12.5px] font-medium text-stone-700 mb-1">{labelFor(key)}</label>
+          <div className="flex gap-2">
+            {ratios.map((r) => (
+              <button
+                key={r.value}
+                type="button"
+                onClick={() => onUpdate(i, key, r.value)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  current === r.value
+                    ? 'border-stone-900 bg-stone-900 text-white'
+                    : 'border-stone-300 text-stone-700 hover:border-stone-400'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ── Taille de l'image (% de la colonne) ──
+    if (hint.startsWith('width-percent')) {
+      const widthVal = typeof val === 'number' ? val : parseInt(String(val ?? '100'), 10) || 100;
+      return (
+        <div key={key}>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-[12.5px] font-medium text-stone-700">{labelFor(key)}</label>
+            <span className="text-[12px] font-mono font-bold bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">
+              {widthVal}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min="30"
+            max="100"
+            step="5"
+            value={widthVal}
+            onChange={(e) => onUpdate(i, key, parseInt(e.target.value))}
+            className="w-full cursor-pointer accent-stone-900"
+          />
+        </div>
+      );
+    }
+
+    /*
+    Variante de bouton.
+
+    Le réglage s'appelait « Couleur du bouton » et proposait « 🟢 Vert » ou
+    « ⚪ Blanc » : les deux teintes du site d'origine. Il ne décrivait plus
+    rien dès qu'un client réglait sa propre palette, et surtout il ne
+    pilotait pas les jetons de boutons de « Design & Style ». On choisit
+    désormais un **rôle** ; la couleur en découle.
+    */
+    if (key === 'button_style') {
+      const current = buttonVariantOf(val);
+      return (
+        <div key={key} className="space-y-2">
+          <div>
+            <p className="text-[13px] font-medium text-stone-800">Style du bouton</p>
+            <p className="mt-0.5 text-[12.5px] leading-snug text-stone-600">
+              Les couleurs viennent de Paramètres → Design &amp; style.
+            </p>
+          </div>
+          <div className="grid gap-1.5 sm:grid-cols-3">
+            {BUTTON_VARIANT_OPTIONS.map((option) => {
+              const active = current === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  title={option.hint}
+                  onClick={() => onUpdate(i, key, option.value)}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors cursor-pointer
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
+                    active
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-300 text-stone-700 hover:border-stone-400'
+                  }`}
+                >
+                  <span className="block text-[13px] font-medium">{option.label}</span>
+                  <span
+                    className={`mt-0.5 block text-[12px] leading-snug ${active ? 'text-stone-500' : 'text-stone-600'}`}
+                  >
+                    {option.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // ── Position de l'image (split section intro_1) ──
+    if (key === 'image_position') {
+      return (
+        <div key={key}>
+          <label className="block text-[12.5px] font-medium text-stone-700 mb-1">{labelFor(key)}</label>
+          <div className="flex gap-2">
+            {(['left', 'right'] as const).map((opt) => (
+              <button
+                key={opt}
+                onClick={() => onUpdate(i, key, opt)}
+                aria-pressed={(val ?? 'left') === opt}
+                className={`flex-1 rounded-lg border py-1.5 text-[13px] font-medium transition-colors cursor-pointer ${
+                  (val ?? 'left') === opt
+                    ? 'border-stone-900 bg-stone-900 text-white'
+                    : 'border-stone-300 text-stone-700 hover:border-stone-400 hover:bg-stone-50'
+                }`}
+              >
+                {opt === 'left' ? 'À gauche' : 'À droite'}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ── Champ image — picker bibliothèque ──
+    if (isImage) {
+      const imgUrl = String(val ?? '');
+      return (
+        <div key={key}>
+          <label className="block text-[12.5px] font-medium text-stone-700 mb-1">{labelFor(key)}</label>
+          {imgUrl && (
+            <div className="relative mb-2 group">
+              <img
+                src={imgUrl}
+                alt=""
+                className="w-full h-24 object-cover rounded-lg border border-stone-200"
+              />
+              <button
+                onClick={() => onUpdate(i, key, '')}
+                className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X size={12} className="text-stone-600" />
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setMediaPickerKey(key)}
+            className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-stone-200 rounded-lg py-2 text-xs text-stone-500 hover:border-stone-400 hover:text-stone-900 transition-colors font-medium"
+          >
+            <ImageIcon size={14} />
+            {imgUrl ? "Changer l'image" : 'Choisir dans la bibliothèque'}
+          </button>
+          {mediaPickerKey === key && (
+            <MediaLibrary
+              onClose={() => setMediaPickerKey(null)}
+              onSelect={(url) => {
+                onUpdate(i, key, url);
+                setMediaPickerKey(null);
+              }}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // ── string[] — liste réordonnable ──
+    if (isArray && Array.isArray(val)) {
+      const arr = val as string[];
+      const moveItem = (from: number, to: number) => {
+        if (to < 0 || to >= arr.length) return;
+        const n = [...arr];
+        const [it] = n.splice(from, 1);
+        n.splice(to, 0, it);
+        onUpdate(i, key, n);
+      };
+      return (
+        <div key={key}>
+          <label className="block text-[12.5px] font-medium text-stone-700 mb-1">{labelFor(key)}</label>
+          {arr.map((item, j) => (
+            <div key={j} className="flex gap-1.5 mb-2 items-start">
+              <div className="flex-1 min-w-0">
+                <RichTextarea
+                  className={inputCls}
+                  value={item}
+                  onChange={(v) => {
+                    const n = [...arr];
+                    n[j] = v;
+                    onUpdate(i, key, n);
                   }}
                 />
-              )}
-            </div>
-          );
-        }
-
-        // ── string[] — liste réordonnable ──
-        if (isArray && Array.isArray(val)) {
-          const arr = val as string[];
-          const moveItem = (from: number, to: number) => {
-            if (to < 0 || to >= arr.length) return;
-            const n = [...arr];
-            const [it] = n.splice(from, 1);
-            n.splice(to, 0, it);
-            onUpdate(i, key, n);
-          };
-          return (
-            <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
-              {arr.map((item, j) => (
-                <div key={j} className="flex gap-1.5 mb-2 items-start">
-                  <div className="flex-1 min-w-0">
-                    <RichTextarea className={inputCls} value={item}
-                      onChange={(v) => { const n = [...arr]; n[j] = v; onUpdate(i, key, n); }} />
-                  </div>
-                  <div className="flex flex-col gap-0.5 mt-6 shrink-0">
-                    <button type="button" title="Monter" onClick={() => moveItem(j, j - 1)} disabled={j === 0}
-                      className="text-stone-300 hover:text-stone-700 disabled:opacity-20 cursor-pointer leading-none text-[10px]">▲</button>
-                    <button type="button" title="Descendre" onClick={() => moveItem(j, j + 1)} disabled={j === arr.length - 1}
-                      className="text-stone-300 hover:text-stone-700 disabled:opacity-20 cursor-pointer leading-none text-[10px]">▼</button>
-                  </div>
-                  <button type="button" title="Supprimer cette ligne" onClick={() => onUpdate(i, key, arr.filter((_, k) => k !== j))}
-                    className="text-stone-400 hover:text-red-500 px-1 mt-6 shrink-0 cursor-pointer">✕</button>
-                </div>
-              ))}
-              <button type="button" onClick={() => onUpdate(i, key, [...arr, ''])} className="text-xs text-sage hover:underline mt-1 cursor-pointer">
-                + Ajouter une ligne
+              </div>
+              <div className="flex flex-col gap-0.5 mt-6 shrink-0">
+                <button
+                  type="button"
+                  title="Monter"
+                  onClick={() => moveItem(j, j - 1)}
+                  disabled={j === 0}
+                  className="text-stone-500 hover:text-stone-700 disabled:opacity-20 cursor-pointer leading-none text-[12px]"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  title="Descendre"
+                  onClick={() => moveItem(j, j + 1)}
+                  disabled={j === arr.length - 1}
+                  className="text-stone-500 hover:text-stone-700 disabled:opacity-20 cursor-pointer leading-none text-[12px]"
+                >
+                  ▼
+                </button>
+              </div>
+              <button
+                type="button"
+                title="Supprimer cette ligne"
+                onClick={() =>
+                  onUpdate(
+                    i,
+                    key,
+                    arr.filter((_, k) => k !== j),
+                  )
+                }
+                className="text-stone-500 hover:text-red-500 px-1 mt-6 shrink-0 cursor-pointer"
+              >
+                ✕
               </button>
             </div>
-          );
-        }
+          ))}
+          <button
+            type="button"
+            onClick={() => onUpdate(i, key, [...arr, ''])}
+            className="text-xs text-stone-900 hover:underline mt-1 cursor-pointer"
+          >
+            + Ajouter une ligne
+          </button>
+        </div>
+      );
+    }
 
-        // ── Union littérale du schéma (colonnes, séparateur, vitesse…) ──
-        const enumValues = parseEnumHint(hint);
-        if (enumValues && enumValues.length <= 8) {
-          const current = String(val ?? enumValues[0]);
-          return (
-            <div key={key}>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
-              <div className="flex gap-1.5 flex-wrap">
-                {enumValues.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => onUpdate(i, key, opt)}
-                    className={`flex-1 min-w-8 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      current === opt
-                        ? 'bg-sage text-white border-sage'
-                        : 'border-stone-200 text-stone-500 hover:border-stone-400'
-                    }`}
-                  >
-                    {ENUM_LABELS[opt] ?? opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
-
-        // ── scalar ──
-        const isLong = ['description', 'text', 'content', 'quote'].some((k) => key.includes(k));
-        const isSingleLine = SINGLE_LINE_RE.test(key);
-        return (
-          <div key={key}>
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1 block">{labelFor(key)}</label>
-            {isLong ? (
-              <RichTextarea
-                className={inputCls}
-                value={String(val ?? '')}
-                onChange={(v) => onUpdate(i, key, v)}
-                minRows={2}
-              />
-            ) : isSingleLine ? (
-              // Un lien ou une URL ne doit pas pouvoir contenir de retour ligne.
-              <input
-                type="text"
-                className={inputCls}
-                placeholder={key.endsWith('_href') ? '/contact ou https://…' : undefined}
-                value={String(val ?? '')}
-                onChange={(e) => onUpdate(i, key, e.target.value)}
-              />
-            ) : (
-              <AutoTextarea
-                className={inputCls}
-                value={String(val ?? '')}
-                onChange={(v) => onUpdate(i, key, v)}
-              />
-            )}
+    // ── Union littérale du schéma (colonnes, séparateur, vitesse…) ──
+    const enumValues = parseEnumHint(hint);
+    if (enumValues && enumValues.length <= 8) {
+      const current = String(val ?? enumValues[0]);
+      return (
+        <div key={key}>
+          <label className="block text-[12.5px] font-medium text-stone-700 mb-1">{labelFor(key)}</label>
+          <div className="flex gap-1.5 flex-wrap">
+            {enumValues.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => onUpdate(i, key, opt)}
+                className={`flex-1 min-w-8 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                  current === opt
+                    ? 'border-stone-900 bg-stone-900 text-white'
+                    : 'border-stone-200 text-stone-500 hover:border-stone-400'
+                }`}
+              >
+                {ENUM_LABELS[opt] ?? opt}
+              </button>
+            ))}
           </div>
-        );
-      })}
-      {cards && (
+        </div>
+      );
+    }
+
+    // ── scalar ──
+    const isLong = ['description', 'text', 'content', 'quote'].some((k) => key.includes(k));
+    const isSingleLine = SINGLE_LINE_RE.test(key);
+    return (
+      <div key={key}>
+        <label className="block text-[12.5px] font-medium text-stone-700 mb-1">{labelFor(key)}</label>
+        {isLong ? (
+          <RichTextarea
+            className={inputCls}
+            value={String(val ?? '')}
+            onChange={(v) => onUpdate(i, key, v)}
+            minRows={2}
+          />
+        ) : isSingleLine ? (
+          // Un lien ou une URL ne doit pas pouvoir contenir de retour ligne.
+          <input
+            type="text"
+            className={inputCls}
+            placeholder={key.endsWith('_href') ? '/contact ou https://…' : undefined}
+            value={String(val ?? '')}
+            onChange={(e) => onUpdate(i, key, e.target.value)}
+          />
+        ) : (
+          <AutoTextarea
+            className={inputCls}
+            value={String(val ?? '')}
+            onChange={(v) => onUpdate(i, key, v)}
+          />
+        )}
+      </div>
+    );
+  };
+
+  /** Champs pilotés ailleurs : cartes, ambiance et fond ont leur propre bloc. */
+  const scalarKeys = Object.keys(schema).filter(
+    (key) => !key.includes('[]') && key !== 'cards' && key !== 'theme' && key !== 'bg_color',
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* ── Couleur de fond ── (masquée en mode contenu : elle vit dans l'onglet Style) */}
+      {(scope === 'background' || (scope === 'all' && !contentOnly)) && (
+        <ThemeColorField
+          label="Fond de la section"
+          hint="« Automatique » suit le thème clair ou foncé choisi ci-dessous."
+          value={(data.bg_color as string | undefined) || ''}
+          onChange={(v) => onUpdate(i, 'bg_color', v)}
+        />
+      )}
+
+      {/* ── Clair / foncé / sauge / sable / ardoise — uniquement pour les sections qui le gèrent ── */}
+      {(scope === 'background' || (scope === 'all' && !contentOnly)) && 'theme' in schema && (
+        <ThemeChoice
+          label="Ambiance & Thème"
+          hint="Alterner clair, sauge, sable et foncé d'une section à l'autre découpe la page avec harmonie."
+          value={(data.theme as string | undefined) ?? (section.type === 'cta_1' ? 'dark' : 'light')}
+          onChange={(v) => onUpdate(i, 'theme', v)}
+        />
+      )}
+
+      {/* ── Motif de fond SVG ── */}
+      {(scope === 'background' || (scope === 'all' && !contentOnly)) && (
+        <PatternChoice
+          pattern={(data.bg_pattern as string | undefined) || 'none'}
+          scale={(data.bg_pattern_scale as string | undefined) || 'normal'}
+          repeat={(data.bg_pattern_repeat as string | undefined) || 'repeat'}
+          opacity={data.bg_pattern_opacity !== undefined ? Number(data.bg_pattern_opacity) : 12}
+          onChangePattern={(v) => onUpdate(i, 'bg_pattern', v)}
+          onChangeScale={(v) => onUpdate(i, 'bg_pattern_scale', v)}
+          onChangeRepeat={(v) => onUpdate(i, 'bg_pattern_repeat', v)}
+          onChangeOpacity={(v) => onUpdate(i, 'bg_pattern_opacity', v)}
+        />
+      )}
+
+      {/* ── Champs du schéma, rangés par rôle ── */}
+      {[...FIELD_GROUPS, { id: 'autres', title: 'Autres réglages', hint: '', match: () => false }]
+        // L'onglet « Fond » ne montre que l'arrière-plan ; « Contenu », tout le reste.
+        .filter((group) =>
+          scope === 'all'
+            ? true
+            : scope === 'background'
+              ? BACKGROUND_GROUPS.includes(group.id)
+              : !BACKGROUND_GROUPS.includes(group.id),
+        )
+        .map(
+        (group) => {
+          const keys = scalarKeys.filter((key) => groupOf(key) === group.id);
+          if (keys.length === 0) return null;
+          return (
+            <section
+              key={group.id}
+              className="space-y-3 border-t border-stone-200 pt-4 first:border-t-0 first:pt-0"
+            >
+              <div>
+                <h3 className="text-[13px] font-semibold text-stone-900">{group.title}</h3>
+                {group.hint && <p className="mt-0.5 text-[12.5px] text-stone-600">{group.hint}</p>}
+              </div>
+              <div className="space-y-3">
+                {keys.map((key) => renderScalarField(key, schema[key] as string))}
+              </div>
+            </section>
+          );
+        },
+      )}
+      {cards && scope !== 'background' && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Cartes ({cards.length})</p>
+            <p className="text-[12.5px] font-medium text-stone-700">
+              {cardsKey === 'plans' ? 'Formules' : 'Cartes'} ({cards.length})
+            </p>
             <button
               onClick={() => {
                 let tpl: any = { title: '', description: '', icon: '', link_text: '', link_href: '' };
-                if (section.type === 'features_3') {
+                const st = section.type as string;
+                if (st === 'pricing_2') {
+                  tpl = { name: 'Nouvelle formule', price_monthly: '49 €', price_yearly: '39 €', period: '/mois', description: '', popular: false, features: ['Avantage 1'], cta_text: 'Choisir', cta_href: '#' };
+                } else if (st === 'stats_3') {
+                  tpl = { metric: '100%', label: 'Indicateur', sublabel: '', highlight: false };
+                } else if (st === 'bento_grid_1') {
+                  tpl = { title: 'Nouvelle fonctionnalité', description: '', tag: 'Nouveau', metric: '', image_url: '' };
+                } else if (st === 'features_3') {
                   tpl = { title: '', description: '', items: [''], cta_text: '', cta_href: '#' };
-                } else if (section.type === 'faq_1') {
+                } else if (st === 'faq_1') {
                   tpl = { question: '', answer: '' };
-                } else if (section.type === 'reviews_1') {
+                } else if (st === 'reviews_1') {
                   tpl = { name: '', date: '', rating: 5, text: '' };
-                } else if (['gallery_grid', 'gallery_carousel', 'gallery_masonry'].includes(section.type)) {
+                } else if (['gallery_grid', 'gallery_carousel', 'gallery_masonry'].includes(st)) {
                   tpl = { title: '', description: '', image: '', link: '' };
                 } else if (section.type === 'stats_1') {
                   tpl = { value: '', label: '' };
@@ -795,54 +1327,73 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
                 } else if (section.type === 'logos_1') {
                   tpl = { image: '', alt: '', link: '' };
                 }
-                onUpdate(i, 'cards', [...cards, tpl]);
+                onUpdate(i, cardsKey, [...cards, tpl]);
               }}
-              className="text-xs text-sage hover:underline font-bold"
-            >+ Carte</button>
+              className="text-xs text-stone-900 hover:underline font-bold cursor-pointer"
+            >
+              + {cardsKey === 'plans' ? 'Formule' : 'Carte'}
+            </button>
           </div>
           {cards.map((card, j) => (
             <div key={j} className="bg-stone-50 rounded-xl p-3 mb-2 space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-stone-500 uppercase">Carte {j + 1}</p>
+                <p className="text-[12px] font-bold text-stone-500 uppercase">
+                  {cardsKey === 'plans' ? 'Formule' : 'Carte'} {j + 1}
+                </p>
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     title="Monter"
                     disabled={j === 0}
-                    onClick={() => onUpdate(i, 'cards', moveInArray(cards, j, j - 1))}
-                    className="text-[10px] text-stone-400 hover:text-stone-800 disabled:opacity-20 cursor-pointer"
-                  >▲</button>
+                    onClick={() => onUpdate(i, cardsKey, moveInArray(cards, j, j - 1))}
+                    className="text-[12px] text-stone-500 hover:text-stone-800 disabled:opacity-20 cursor-pointer"
+                  >
+                    ▲
+                  </button>
                   <button
                     type="button"
                     title="Descendre"
                     disabled={j === cards.length - 1}
-                    onClick={() => onUpdate(i, 'cards', moveInArray(cards, j, j + 1))}
-                    className="text-[10px] text-stone-400 hover:text-stone-800 disabled:opacity-20 cursor-pointer"
-                  >▼</button>
+                    onClick={() => onUpdate(i, cardsKey, moveInArray(cards, j, j + 1))}
+                    className="text-[12px] text-stone-500 hover:text-stone-800 disabled:opacity-20 cursor-pointer"
+                  >
+                    ▼
+                  </button>
                   <button
                     type="button"
-                    title="Dupliquer cette carte"
-                    onClick={() => onUpdate(i, 'cards', [
-                      ...cards.slice(0, j + 1),
-                      JSON.parse(JSON.stringify(card)),
-                      ...cards.slice(j + 1),
-                    ])}
-                    className="text-[10px] text-stone-400 hover:text-sage cursor-pointer"
-                  >⧉</button>
+                    title="Dupliquer cet élément"
+                    onClick={() =>
+                      onUpdate(i, cardsKey, [
+                        ...cards.slice(0, j + 1),
+                        JSON.parse(JSON.stringify(card)),
+                        ...cards.slice(j + 1),
+                      ])
+                    }
+                    className="text-[12px] text-stone-500 hover:text-stone-900 cursor-pointer"
+                  >
+                    ⧉
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
-                      if (!window.confirm(`Supprimer la carte ${j + 1} ?`)) return;
-                      onUpdate(i, 'cards', cards.filter((_: unknown, k: number) => k !== j));
+                      if (!window.confirm(`Supprimer ${cardsKey === 'plans' ? 'la formule' : 'la carte'} ${j + 1} ?`)) return;
+                      onUpdate(
+                        i,
+                        cardsKey,
+                        cards.filter((_: unknown, k: number) => k !== j),
+                      );
                     }}
-                    className="text-[10px] text-stone-400 hover:text-red-500 cursor-pointer"
-                  >✕ Supprimer</button>
+                    className="text-[12px] text-stone-500 hover:text-red-500 cursor-pointer"
+                  >
+                    ✕ Supprimer
+                  </button>
                 </div>
               </div>
               {(CARD_FIELDS_BY_TYPE[section.type] || Object.keys(card)).map((field) => {
-                const isCardImage = field !== 'icon_image_bleed' && (field === 'image' || field.includes('image'));
+                const isCardImage =
+                  field !== 'icon_image_bleed' && (field === 'image' || field.includes('image'));
                 const isLongCardField = ['description', 'answer'].includes(field);
-                const val = card[field] ?? (field === 'items' ? [] : undefined);
+                const val = card[field] ?? (field === 'features' || field === 'items' ? [] : undefined);
                 if (CARD_BOOLEAN_FIELDS.has(field)) {
                   return (
                     <div key={field} className="flex items-center gap-2 py-1">
@@ -850,8 +1401,8 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
                         type="checkbox"
                         id={`card-${i}-${j}-${field}`}
                         checked={!!val}
-                        onChange={(e) => onUpdate(i, `cards[${j}].${field}`, e.target.checked)}
-                        className="w-4 h-4 cursor-pointer accent-sage rounded border-stone-300 focus:ring-sage"
+                        onChange={(e) => onUpdate(i, `${cardsKey}[${j}].${field}`, e.target.checked)}
+                        className="w-4 h-4 cursor-pointer accent-stone-900 rounded border-stone-300 focus:ring-stone-900"
                       />
                       <label
                         htmlFor={`card-${i}-${j}-${field}`}
@@ -864,16 +1415,20 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
                 }
                 return (
                   <div key={field}>
-                    <label className="text-[10px] text-stone-400 uppercase tracking-widest block mb-0.5">{labelFor(field)}</label>
+                    <label className="text-[12px] text-stone-500 block mb-0.5">
+                      {labelFor(field)}
+                    </label>
                     {field === 'rating' ? (
                       <div className="flex gap-1">
                         {[1, 2, 3, 4, 5].map((s) => (
                           <button
                             key={s}
                             type="button"
-                            onClick={() => onUpdate(i, `cards[${j}].rating`, s)}
+                            onClick={() => onUpdate(i, `${cardsKey}[${j}].rating`, s)}
                             className={`text-lg transition-colors ${s <= (Number(val) || 5) ? 'text-yellow-400' : 'text-stone-200'}`}
-                          >★</button>
+                          >
+                            ★
+                          </button>
                         ))}
                       </div>
                     ) : field === 'theme' ? (
@@ -882,16 +1437,15 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
                           <button
                             key={opt || 'auto'}
                             type="button"
-                            onClick={() => onUpdate(i, `cards[${j}].theme`, opt || undefined)}
-                            className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                            onClick={() => onUpdate(i, `${cardsKey}[${j}].theme`, opt || undefined)}
+                            aria-pressed={(card.theme ?? '') === opt}
+                            className={`flex-1 rounded-lg border py-1 text-[12px] font-medium transition-colors cursor-pointer ${
                               (card.theme ?? '') === opt
-                                ? opt === 'dark' ? 'bg-stone-900 text-white border-stone-900'
-                                  : opt === 'light' ? 'bg-stone-50 text-stone-900 border-stone-300 shadow'
-                                  : 'bg-sage/10 text-sage border-sage'
-                                : 'border-stone-200 text-stone-400 hover:border-stone-400'
+                                ? 'border-stone-900 bg-stone-900 text-white'
+                                : 'border-stone-300 text-stone-700 hover:border-stone-400 hover:bg-stone-50'
                             }`}
                           >
-                            {opt === 'light' ? '☀️ Clair' : opt === 'dark' ? '🌙 Sombre' : '⚙️ Auto'}
+                            {opt === 'light' ? 'Clair' : opt === 'dark' ? 'Foncé' : 'Auto'}
                           </button>
                         ))}
                       </div>
@@ -901,43 +1455,61 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
                           <div key={k} className="flex gap-1 mb-1">
                             <div className="flex-1">
                               <RichTextarea
-                                className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-sage"
+                                className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900"
                                 value={item}
                                 onChange={(v) => {
                                   const next = [...(val as string[])];
                                   next[k] = v;
-                                  onUpdate(i, `cards[${j}].${field}`, next);
+                                  onUpdate(i, `${cardsKey}[${j}].${field}`, next);
                                 }}
                               />
                             </div>
-                            <button onClick={() => onUpdate(i, `cards[${j}].${field}`, (val as string[]).filter((_: unknown, m: number) => m !== k))}
-                              className="text-stone-400 hover:text-red-500 px-1 text-xs">✕</button>
+                            <button
+                              onClick={() =>
+                                onUpdate(
+                                  i,
+                                  `${cardsKey}[${j}].${field}`,
+                                  (val as string[]).filter((_: unknown, m: number) => m !== k),
+                                )
+                              }
+                              className="text-stone-500 hover:text-red-500 px-1 text-xs cursor-pointer"
+                            >
+                              ✕
+                            </button>
                           </div>
                         ))}
-                        <button onClick={() => onUpdate(i, `cards[${j}].${field}`, [...(val as string[]), ''])}
-                          className="text-xs text-sage hover:underline">+ Ajouter</button>
+                        <button
+                          onClick={() => onUpdate(i, `${cardsKey}[${j}].${field}`, [...(val as string[]), ''])}
+                          className="text-xs text-stone-900 hover:underline cursor-pointer font-semibold"
+                        >
+                          + Ajouter
+                        </button>
                       </div>
                     ) : isCardImage ? (
                       <div className="space-y-1.5">
                         {typeof val === 'string' && val ? (
                           <div className="relative group">
-                            <img src={val} alt="" className="w-full h-16 object-cover rounded-lg border border-stone-200" />
+                            <img
+                              src={val}
+                              alt=""
+                              className="w-full h-16 object-cover rounded-lg border border-stone-200"
+                            />
                             <button
-                              onClick={() => onUpdate(i, `cards[${j}].${field}`, '')}
-                              className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => onUpdate(i, `${cardsKey}[${j}].${field}`, '')}
+                              className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                             >
                               <X size={10} className="text-stone-600" />
                             </button>
                           </div>
                         ) : null}
                         <button
-                          onClick={() => setMediaPickerKey(`cards[${j}].${field}`)}
-                          className="w-full flex items-center justify-center gap-1 border-2 border-dashed border-stone-200 rounded-lg py-1.5 text-[10px] text-stone-500 hover:border-sage hover:text-sage transition-colors font-medium"
+                          onClick={() => setMediaPickerKey(`${cardsKey}[${j}].${field}`)}
+                          className="w-full flex items-center justify-center gap-1 border-2 border-dashed border-stone-200 rounded-lg py-1.5 text-[12px] text-stone-500 hover:border-stone-400 hover:text-stone-900 transition-colors font-medium cursor-pointer"
                         >
                           <ImageIcon size={12} />
-                          {val ? 'Changer l\'image' : 'Choisir une image'}
+                          {val ? "Changer l'image" : 'Choisir une image'}
                         </button>
-                        {mediaPickerKey === `cards[${j}].${field}` && (
+                        {mediaPickerKey === `${cardsKey}[${j}].${field}` && (
                           <MediaLibrary
                             onClose={() => setMediaPickerKey(null)}
                             onSelect={(url) => {
@@ -949,14 +1521,14 @@ export default function FieldEditor({ section, sectionIndex: i, onUpdate, compac
                       </div>
                     ) : isLongCardField ? (
                       <RichTextarea
-                        className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-sage"
+                        className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900"
                         minRows={2}
                         value={String(val ?? '')}
                         onChange={(v) => onUpdate(i, `cards[${j}].${field}`, v)}
                       />
                     ) : (
                       <input
-                        className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-sage"
+                        className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900"
                         value={String(val ?? '')}
                         onChange={(e) => onUpdate(i, `cards[${j}].${field}`, e.target.value)}
                       />

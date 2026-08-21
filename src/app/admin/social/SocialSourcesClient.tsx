@@ -117,10 +117,10 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
   return (
     <div className="space-y-6">
       {/* Génération automatique */}
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 space-y-4">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-4">
         <div>
           <h2 className="text-sm font-bold text-stone-900">Automatisation</h2>
-          <p className="text-xs text-stone-400 mt-1 leading-relaxed">
+          <p className="text-[12.5px] text-stone-500 mt-1 leading-relaxed">
             Une tâche planifiée détecte les nouveaux articles publiés, les nouvelles entrées des flux RSS actifs ci-dessous
             et les suggestions SEO sauvegardées, puis pré-génère du contenu prêt à relire dans le{' '}
             <span className="font-medium text-stone-600">Calendrier</span>. Vous pouvez aussi forcer un cycle immédiatement :
@@ -130,7 +130,7 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
           type="button"
           onClick={generateNow}
           disabled={generating}
-          className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+          className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm disabled:opacity-50 cursor-pointer"
         >
           {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
           Générer maintenant
@@ -163,7 +163,7 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
                   <button
                     type="button"
                     onClick={onGenerated}
-                    className="flex items-center gap-1.5 text-sage hover:text-sage/70 font-bold transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 text-sage hover:text-stone-900/70 font-bold transition-colors cursor-pointer"
                   >
                     <CalendarDays size={12} /> Voir dans le calendrier
                   </button>
@@ -181,10 +181,10 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
       </div>
 
       {/* Flux RSS */}
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 space-y-5">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-5">
         <div>
           <h2 className="text-sm font-bold text-stone-900 flex items-center gap-2"><Rss size={15} className="text-sage" /> Flux RSS</h2>
-          <p className="text-xs text-stone-400 mt-1">1 à 3 flux recommandés — chaque nouvelle entrée devient une source de contenu potentielle.</p>
+          <p className="text-[12.5px] text-stone-500 mt-1">1 à 3 flux recommandés — chaque nouvelle entrée devient une source de contenu potentielle.</p>
         </div>
 
         {loadError && (
@@ -194,10 +194,10 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
         )}
 
         {loading ? (
-          <p className="text-stone-400 text-sm italic">Chargement…</p>
+          <p className="text-sm text-stone-600">Chargement…</p>
         ) : (
           <div className="space-y-2">
-            {feeds.length === 0 && <p className="text-stone-400 text-sm italic">Aucun flux configuré.</p>}
+            {feeds.length === 0 && <p className="text-sm text-stone-600">Aucun flux configuré.</p>}
             {feeds.map((feed) => (
               <div key={feed.id} className="flex items-center gap-3 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3">
                 <button
@@ -212,9 +212,9 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
                 </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-stone-800 truncate">{feed.label || feed.url}</p>
-                  {feed.label && <p className="text-xs text-stone-400 truncate font-mono">{feed.url}</p>}
+                  {feed.label && <p className="truncate text-[12.5px] text-stone-500 font-mono">{feed.url}</p>}
                 </div>
-                <button onClick={() => deleteFeed(feed)} aria-label={`Supprimer le flux ${feed.label || feed.url}`} title="Supprimer" className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-colors cursor-pointer">
+                <button onClick={() => deleteFeed(feed)} aria-label={`Supprimer le flux ${feed.label || feed.url}`} title="Supprimer" className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -230,7 +230,7 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder="Libellé (facultatif)"
-            className="sm:w-48 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sage"
+            className="sm:w-48 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
           />
           <label htmlFor="rss-new-url" className="sr-only">URL du flux RSS</label>
           <input
@@ -240,12 +240,12 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
             onChange={(e) => setNewUrl(e.target.value)}
             placeholder="https://exemple.com/flux.xml"
             required
-            className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sage"
+            className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
           />
           <button
             type="submit"
             disabled={adding}
-            className="flex items-center justify-center gap-1.5 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-sage transition-colors disabled:opacity-50 cursor-pointer shrink-0"
+            className="flex items-center justify-center gap-1.5 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50 cursor-pointer shrink-0"
           >
             {adding ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
             Ajouter

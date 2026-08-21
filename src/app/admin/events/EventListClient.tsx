@@ -44,21 +44,21 @@ export default function EventList() {
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Contenu</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Contenu</p>
           <h1 className="text-2xl font-semibold text-stone-900">Événements</h1>
         </div>
-        <Link href="/admin/events/new" className="flex items-center gap-2 bg-sage text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-sage/80 transition-colors self-start">
+        <Link href="/admin/events/new" className="flex items-center gap-2 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors self-start">
           <Plus size={15} /> Nouvel événement
         </Link>
       </div>
 
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-12 text-stone-400 text-sm">
-            <div className="w-4 h-4 rounded-full border border-stone-200 border-t-sage animate-spin" /> Chargement…
+          <div className="flex items-center justify-center gap-2 py-12 text-stone-500 text-sm">
+            <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : events.length === 0 ? (
-          <p className="py-16 text-center text-stone-400 text-sm italic">
+          <p className="py-16 text-center text-sm text-stone-600">
             Aucun événement. <Link href="/admin/events/new" className="text-sage hover:underline">Créer le premier</Link>
           </p>
         ) : (
@@ -68,11 +68,11 @@ export default function EventList() {
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-stone-100 bg-stone-50/50">
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400">Événement</th>
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400">Date</th>
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400">Catégorie</th>
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 text-center">Inscrits</th>
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 text-center">Statut</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600">Événement</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600">Date</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600">Catégorie</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-center">Inscrits</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-center">Statut</th>
                     <th className="px-6 py-3.5" />
                   </tr>
                 </thead>
@@ -81,7 +81,7 @@ export default function EventList() {
                     <tr key={ev.id} className="border-b border-stone-50 hover:bg-stone-50/50 transition-colors group">
                       <td className="px-6 py-4 max-w-xs">
                         <p className="font-medium text-stone-900 truncate">{ev.title}</p>
-                        <p className="text-xs text-stone-400 mt-0.5">CHF {ev.price_chf}.-</p>
+                        <p className="text-[12.5px] text-stone-500 mt-0.5">CHF {ev.price_chf}.-</p>
                       </td>
                       <td className="px-6 py-4 text-stone-500 text-xs whitespace-nowrap">
                         <EventDate ev={ev} />
@@ -91,33 +91,33 @@ export default function EventList() {
                       </td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <Users size={11} className="text-stone-300" />
+                          <Users size={11} className="text-stone-500" />
                           <span className="text-stone-500 text-xs">{counts[ev.id] || 0}{ev.max_participants ? `/${ev.max_participants}` : ''}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold ${STATUS_STYLES[ev.status]}`}>
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-[12px] font-semibold ${STATUS_STYLES[ev.status]}`}>
                           {STATUS_LABELS[ev.status]}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1 justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
                           <a href={`/ateliers/${ev.slug}`} target="_blank" rel="noreferrer"
-                            className="p-1.5 text-stone-300 hover:text-stone-700 rounded-md hover:bg-stone-100 transition-colors" title="Voir" aria-label={`Voir l'événement « ${ev.title} »`}>
+                            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors" title="Voir" aria-label={`Voir l'événement « ${ev.title} »`}>
                             <Eye size={14} />
                           </a>
                           <button onClick={() => handleToggleStatus(ev)}
-                            className={`p-1.5 rounded-md transition-colors cursor-pointer ${ev.status === 'published' ? 'text-stone-300 hover:text-amber-500 hover:bg-amber-50' : 'text-stone-300 hover:text-green-500 hover:bg-green-50'}`}
+                            className={`p-1.5 rounded-md transition-colors cursor-pointer ${ev.status === 'published' ? 'text-stone-500 hover:text-amber-500 hover:bg-amber-50' : 'text-stone-500 hover:text-green-500 hover:bg-green-50'}`}
                             title={ev.status === 'published' ? 'Mettre en pause' : 'Publier'}
                             aria-label={ev.status === 'published' ? `Mettre en pause « ${ev.title} »` : `Publier « ${ev.title} »`}>
                             {ev.status === 'published' ? <PauseCircle size={14} /> : <EyeOff size={14} />}
                           </button>
                           <Link href={`/admin/events/edit/${ev.id}`}
-                            className="p-1.5 text-stone-300 hover:text-sage rounded-md hover:bg-sage/10 transition-colors" title="Modifier" aria-label={`Modifier « ${ev.title} »`}>
+                            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors" title="Modifier" aria-label={`Modifier « ${ev.title} »`}>
                             <Edit size={14} />
                           </Link>
                           <button onClick={() => handleDelete(ev.id)}
-                            className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-colors cursor-pointer" title="Supprimer" aria-label={`Supprimer « ${ev.title} »`}>
+                            className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer" title="Supprimer" aria-label={`Supprimer « ${ev.title} »`}>
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -135,16 +135,16 @@ export default function EventList() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-medium text-stone-900 leading-snug truncate">{ev.title}</p>
-                      <p className="text-xs text-stone-400 mt-0.5">CHF {ev.price_chf}.-</p>
+                      <p className="text-[12.5px] text-stone-500 mt-0.5">CHF {ev.price_chf}.-</p>
                     </div>
-                    <span className={`shrink-0 inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold ${STATUS_STYLES[ev.status]}`}>
+                    <span className={`shrink-0 inline-flex px-2.5 py-1 rounded-full text-[12px] font-semibold ${STATUS_STYLES[ev.status]}`}>
                       {STATUS_LABELS[ev.status]}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
                     <span className="flex items-center gap-1.5"><EventDate ev={ev} /></span>
                     <span>{CATEGORY_LABELS[ev.category as keyof typeof CATEGORY_LABELS] || ev.category}</span>
-                    <span className="flex items-center gap-1"><Users size={11} className="text-stone-300" /> {counts[ev.id] || 0}{ev.max_participants ? `/${ev.max_participants}` : ''}</span>
+                    <span className="flex items-center gap-1"><Users size={11} className="text-stone-500" /> {counts[ev.id] || 0}{ev.max_participants ? `/${ev.max_participants}` : ''}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <a href={`/ateliers/${ev.slug}`} target="_blank" rel="noreferrer" aria-label={`Voir l'événement « ${ev.title} »`}
@@ -170,7 +170,7 @@ export default function EventList() {
           </>
         )}
       </div>
-      <div className="flex gap-6 text-xs text-stone-400">
+      <div className="flex gap-6 text-[12.5px] text-stone-500">
         <span className="flex items-center gap-1.5"><PauseCircle size={11} className="text-amber-400" /> Mettre en pause</span>
         <span className="flex items-center gap-1.5"><Eye size={11} className="text-green-500" /> Publier</span>
       </div>
@@ -179,7 +179,7 @@ export default function EventList() {
 }
 
 function EventDate({ ev }: { ev: SdeEvent }) {
-  if (!ev.date_start) return <span className="text-stone-400 italic">À définir</span>;
+  if (!ev.date_start) return <span className="text-stone-600">À définir</span>;
   return (
     <span className="inline-flex items-center gap-1.5">
       <Calendar size={11} className="text-sage shrink-0" />

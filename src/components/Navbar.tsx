@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Menu, X, ChevronDown } from 'lucide-react';
 import { useSettings, settingsCache } from '../hooks/useSettings';
 import { useModuleFlags } from '../hooks/useModuleFlags';
+import type { HeaderVariant } from '../constants/chromeVariants';
 
 // Pas de logo par défaut : tant qu'aucun fichier n'est déposé dans
 // Paramètres > Design & Style, la navbar affiche le nom du site en toutes
@@ -27,15 +28,26 @@ function readHeroColor(): 'dark' | 'light' {
 }
 
 interface NavbarProps {
+  initialVariant?: string;
   initialLogoUrl?: string;
   initialNavigationMenu?: string;
   initialRegisterLink?: string;
+  /*
+    Le nom d'entreprise sert d'alternative textuelle au logo et de repli quand
+    il n'y a pas d'image. Il n'était pas transmis : le serveur le lisait dans
+    son cache de réglages, le premier rendu du navigateur partait d'un cache
+    vide, et React signalait une divergence d'hydratation sur l'attribut `alt`.
+  */
+  initialBusinessName?: string;
 }
 
-export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialRegisterLink }: NavbarProps) {
+export default function Navbar({ initialVariant, initialLogoUrl, initialNavigationMenu, initialRegisterLink, initialBusinessName }: NavbarProps) {
   // Seed le cache avec les réglages lus côté serveur pour que le premier rendu
   // (SSR + hydratation) affiche déjà le vrai menu, sans flash de l'ancien menu
   // par défaut (SETTINGS_DEFAULTS) le temps que le fetch client se termine.
+  if (initialVariant && !settingsCache.has('header_variant')) {
+    settingsCache.set('header_variant', initialVariant);
+  }
   if (initialLogoUrl && !settingsCache.has('global_logo')) {
     settingsCache.set('global_logo', initialLogoUrl);
   }
@@ -45,9 +57,20 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
   if (initialRegisterLink && !settingsCache.has('header_register_link')) {
     settingsCache.set('header_register_link', initialRegisterLink);
   }
-  const settings = useSettings(['global_logo', 'navigation_menu', 'header_register_link']);
+  if (initialBusinessName && !settingsCache.has('business_name')) {
+    settingsCache.set('business_name', initialBusinessName);
+  }
+  const settings = useSettings(['global_logo', 'navigation_menu', 'header_register_link', 'business_name', 'header_variant']);
+  /*
+    Modèle d'en-tête. Voir `constants/chromeVariants`. La barre n'avait qu'une
+    forme possible — logo à gauche, liens à droite — et il fallait toucher au
+    code pour en changer.
+  */
+  const variant = (settings.header_variant || 'classique') as HeaderVariant;
   const moduleFlags = useModuleFlags();
   const logoUrl = settings.global_logo;
+  // Nom affiché en repli du logo — saisi dans Paramètres > Entreprise.
+  const businessName = settings.business_name || '';
   const registerLink = settings.header_register_link || '/contact';
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -90,7 +113,10 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
 
   // Les liens de la navbar s'affichent en blanc (lightMode = true) uniquement
   // si la navbar est transparente (non scrollée) et que la hero section est sombre.
-  const lightMode = !scrolled && heroColor === 'dark';
+  // Le bandeau plein ne dépend pas du défilement : il est opaque dès le départ,
+  // donc jamais en mode clair.
+  const solid = variant === 'plein' || scrolled;
+  const lightMode = !solid && heroColor === 'dark';
 
   let menuItems: any[] = [];
   try {
@@ -101,16 +127,13 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
     console.error("Failed to parse navigation_menu setting:", err);
   }
 
-  if (!menuItems || menuItems.length === 0) {
-    menuItems = [
-      { name: "Accueil", path: "/" },
-      { name: "À propos", path: "/a-propos" },
-      { name: "Soins", path: "/soins" },
-      { name: "Ateliers", path: "/ateliers" },
-      { name: "Bon cadeau", path: "/bon-cadeau" },
-      { name: "Contact", path: "/contact" }
-    ];
-  }
+  /*
+    Aucun menu de repli. Un jeu de liens codé en dur pointerait vers des pages
+    qui n'existent pas sur ce site-ci et servirait des 404 dès la première
+    visite. Tant que rien n'est défini dans Paramètres > Menu, la navigation
+    reste vide — le logo ramène à l'accueil, ce qui suffit.
+  */
+  if (!Array.isArray(menuItems)) menuItems = [];
 
   // Défense en profondeur : même un menu personnalisé (JSON en settings) ne
   // doit pas exposer de lien vers un module désactivé.
@@ -126,33 +149,47 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
     );
 
   return (
-    <nav data-main-nav className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-6'}`} data-light={lightMode ? 'true' : undefined}>
-        <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
+    <nav
+      data-main-nav
+      className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
+        solid ? 'bg-white/95 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-6'
+      }`}
+      data-light={lightMode ? 'true' : undefined}
+    >
+        <div
+          className={`max-w-7xl mx-auto px-6 items-center ${
+            variant === 'centre'
+              ? 'flex flex-col gap-3 xl:gap-4'
+              : 'flex justify-between'
+          }`}
+        >
         <Link href="/" className="flex items-center gap-3 group">
           <div className={`transition-all duration-500 bg-transparent shrink-0 flex items-center ${scrolled ? 'h-[80px] w-[225px]' : 'h-[88px] w-[250px]'}`}>
             {logoUrl && !logoBroken ? (
               <img
                 src={logoUrl}
                 onError={() => setLogoBroken(true)}
-                alt="Emmanuelle Esthétique — retour à l'accueil"
+                alt={businessName ? `${businessName} — retour à l'accueil` : "Retour à l'accueil"}
                 className="w-full h-full object-contain"
                 referrerPolicy="no-referrer"
                 width={250}
                 height={88}
               />
             ) : (
+              /* Repli tant qu'aucun logo n'est chargé : le nom saisi dans
+                 Paramètres > Entreprise, jamais une valeur codée en dur. */
               <span className="font-serif text-2xl leading-tight tracking-wide">
-                Emmanuelle
-                <span className="block text-xs tracking-[0.25em] uppercase opacity-70">
-                  Esthétique
-                </span>
+                {businessName}
               </span>
             )}
           </div>
         </Link>
 
-        {/* Desktop Nav */}
-        <div className="hidden xl:flex items-center gap-10">
+        {/*
+          Liens de navigation. La variante « épuré » ne les montre jamais en
+          ligne : le menu déroulant sert à tous les formats d'écran.
+        */}
+        <div className={`${variant === 'minimal' ? 'hidden' : 'hidden xl:flex'} items-center gap-10 ${variant === 'centre' ? 'xl:justify-center' : ''}`}>
           {menuItems.map((item, idx) => {
             const isDropdown = item.type === 'dropdown' || (Array.isArray(item.children) && item.children.length > 0);
             
@@ -218,8 +255,9 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
           })}
 
           <Link
+            data-btn="primary"
             href={registerLink}
-            className={`px-8 py-3 text-xs uppercase tracking-widest font-bold transition-all duration-300 ${
+            className={`shrink-0 px-8 py-3 text-xs uppercase tracking-widest font-bold transition-all duration-300 ${
               lightMode
                 ? 'bg-white/15 backdrop-blur-sm text-white border border-white/30 hover:bg-white/25'
                 : 'bg-stone-deep text-paper hover:bg-stone-deep/90'
@@ -231,7 +269,9 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
 
         {/* Mobile Toggle */}
         <button
-          className={`xl:hidden p-2 transition-colors duration-300 ${lightMode ? 'text-white' : 'text-stone-deep'}`}
+          className={`${variant === 'minimal' ? '' : 'xl:hidden'} p-2 transition-colors duration-300 ${
+            variant === 'centre' ? 'absolute right-6 top-6' : ''
+          } ${lightMode ? 'text-white' : 'text-stone-deep'}`}
           onClick={() => setIsOpen(!isOpen)}
           aria-label={isOpen ? "Fermer le menu" : "Ouvrir le menu"}
           aria-expanded={isOpen}
@@ -247,7 +287,7 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="xl:hidden bg-white border-t border-stone-100 overflow-hidden"
+            className={`${variant === 'minimal' ? '' : 'xl:hidden'} bg-white border-t border-stone-100 overflow-hidden`}
           >
             <div className="flex flex-col p-6 gap-6">
               {menuItems.map((item, idx) => {
@@ -283,6 +323,7 @@ export default function Navbar({ initialLogoUrl, initialNavigationMenu, initialR
               })}
 
               <Link 
+                data-btn="primary"
                 href={registerLink} 
                 className="bg-sage text-white py-4 text-center font-bold uppercase tracking-widest"
               >

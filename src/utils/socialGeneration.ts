@@ -7,6 +7,7 @@
  */
 import { callClaude, extractJson } from './ai';
 import { getSettingsServer } from '../services/settingsServer';
+import { getAnthropicKey } from '../services/secrets';
 
 export interface SocialSlide { number: number; text: string; highlight?: string; }
 export interface SocialCaption { hook: string; body: string; cta: string; hashtags: string; }
@@ -103,7 +104,7 @@ export interface SocialGenerationInput {
  * Lève une erreur si la clé API est absente ou si la réponse IA est incomplète.
  */
 export async function generateSocialContent(input: SocialGenerationInput): Promise<SocialGenerationResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = await getAnthropicKey();
   if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') {
     throw new Error('not_configured');
   }

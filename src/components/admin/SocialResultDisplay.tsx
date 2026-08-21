@@ -41,7 +41,7 @@ export function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={copy}
-      className={`text-xs px-3 py-1.5 rounded-lg font-bold uppercase tracking-widest transition-all cursor-pointer ${
+      className={`inline-flex h-8 items-center rounded-lg border px-3 text-[13px] font-medium transition-colors cursor-pointer ${
         copied ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
       }`}
     >
@@ -86,7 +86,7 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
             type="button"
             onClick={() => setPlatform(p.id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-t-xl transition-all cursor-pointer ${
-              platform === p.id ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-500' : 'text-stone-400 hover:text-stone-700'
+              platform === p.id ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-500' : 'text-stone-500 hover:text-stone-700'
             }`}
           >
             <p.icon size={14} /> {p.label}
@@ -99,14 +99,14 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
         <div className="space-y-6">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+              <p className="text-[13px] font-medium text-stone-800">
                 Visuels du carrousel ({result.instagram.slides.length} slides)
               </p>
               <button
                 type="button"
                 onClick={downloadAllSlides}
                 disabled={downloadingAll}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold uppercase tracking-widest bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors disabled:opacity-50 cursor-pointer"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[13px] font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
               >
                 {downloadingAll ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
                 Tout télécharger
@@ -128,24 +128,24 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
 
           <div>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">Légende Instagram</p>
+              <p className="text-[13px] font-medium text-stone-800">Légende Instagram</p>
               <CopyButton text={`${result.instagram.caption.hook}\n\n${result.instagram.caption.body}\n\n${result.instagram.caption.cta}\n\n${result.instagram.caption.hashtags}`} />
             </div>
             <div className="bg-stone-50 rounded-xl border border-stone-100 divide-y divide-stone-100">
               <div className="p-4">
-                <span className="text-xs font-bold text-purple-600 uppercase tracking-widest block mb-1.5">Hook</span>
+                <span className="block text-[13px] font-medium text-purple-800 mb-1.5">Hook</span>
                 <p className="text-stone-900 font-medium text-sm">{result.instagram.caption.hook}</p>
               </div>
               <div className="p-4">
-                <span className="text-xs font-bold text-stone-400 uppercase tracking-widest block mb-1.5">Corps</span>
+                <span className="block text-[12.5px] font-medium text-stone-700 mb-1.5">Corps</span>
                 <p className="text-stone-700 text-sm leading-relaxed whitespace-pre-line">{result.instagram.caption.body}</p>
               </div>
               <div className="p-4">
-                <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest block mb-1.5">Call-to-action</span>
+                <span className="block text-[13px] font-medium text-indigo-800 mb-1.5">Call-to-action</span>
                 <p className="text-stone-700 text-sm">{result.instagram.caption.cta}</p>
               </div>
               <div className="p-4">
-                <span className="text-xs font-bold text-stone-400 uppercase tracking-widest block mb-1.5"># Hashtags</span>
+                <span className="block text-[12.5px] font-medium text-stone-700 mb-1.5"># Hashtags</span>
                 <p className="text-indigo-600 text-sm font-mono leading-relaxed">{result.instagram.caption.hashtags}</p>
               </div>
             </div>
@@ -164,11 +164,11 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
           />
 
           <div>
-            <p className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3">Variantes d'accroche (1ère ligne)</p>
+            <p className="text-[13px] font-medium text-stone-800 mb-3">Variantes d'accroche (1ère ligne)</p>
             <div className="space-y-2">
               {result.linkedin.hook_variants.map((hook, i) => (
                 <div key={i} className="flex items-start gap-3 bg-stone-50 rounded-xl border border-stone-100 p-3">
-                  <span className="text-xs font-bold text-stone-300 mt-0.5">{i + 1}</span>
+                  <span className="text-xs font-bold text-stone-500 mt-0.5">{i + 1}</span>
                   <p className="flex-1 text-sm text-stone-700">{hook}</p>
                   <CopyButton text={hook} />
                 </div>
@@ -178,7 +178,7 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
 
           <div>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">Post complet</p>
+              <p className="text-[13px] font-medium text-stone-800">Post complet</p>
               <CopyButton text={result.linkedin.hashtags ? `${result.linkedin.post}\n\n${result.linkedin.hashtags}` : result.linkedin.post} />
             </div>
             <div className="bg-stone-50 rounded-xl border border-stone-100 p-5">
@@ -205,7 +205,7 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
 
           <div>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">Post Facebook</p>
+              <p className="text-[13px] font-medium text-stone-800">Post Facebook</p>
               <CopyButton text={result.facebook.post} />
             </div>
             <div className="bg-stone-50 rounded-xl border border-stone-100 p-5">
@@ -221,7 +221,7 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
         <button
           type="button"
           onClick={onRegenerate}
-          className="text-xs text-stone-400 hover:text-stone-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="text-[12.5px] text-stone-500 hover:text-stone-700 flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <Sparkles size={12} /> Régénérer
         </button>
@@ -257,7 +257,7 @@ function SlideCard({ slide, total, dark, brand, registerCanvas }: {
           type="button"
           disabled={!ready}
           onClick={() => canvasRef.current && downloadCanvas(canvasRef.current, `slide-${String(slide.number).padStart(2, '0')}.png`)}
-          className="shrink-0 p-1.5 text-stone-400 hover:text-sage hover:bg-sage/10 rounded-lg transition-colors disabled:opacity-30 cursor-pointer"
+          className="shrink-0 p-1.5 text-stone-500 hover:text-stone-900 hover:bg-sage/10 rounded-lg transition-colors disabled:opacity-30 cursor-pointer"
           title="Télécharger ce visuel"
           aria-label={`Télécharger la slide ${slide.number}`}
         >
@@ -301,14 +301,14 @@ function HookCardBlock({ format, text, highlight, brand, filename }: {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-3">
-        <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+        <p className="text-[13px] font-medium text-stone-800">
           Visuel · {FORMAT_LABELS[format]}
         </p>
         <button
           type="button"
           disabled={!ready}
           onClick={() => canvasRef.current && downloadCanvas(canvasRef.current, filename)}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold uppercase tracking-widest bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors disabled:opacity-50 cursor-pointer"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[13px] font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
         >
           <Download size={12} /> Télécharger
         </button>
@@ -333,11 +333,11 @@ function CoverImageBlock({ coverImage, label }: { coverImage?: string; label: st
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">{label}</p>
+        <p className="text-[13px] font-medium text-stone-800">{label}</p>
         <button
           type="button"
           onClick={() => downloadImageFromUrl(coverImage, 'photo-couverture.jpg')}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold uppercase tracking-widest bg-stone-100 text-stone-500 hover:bg-stone-200 transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold bg-stone-100 text-stone-500 hover:bg-stone-200 transition-colors cursor-pointer"
         >
           <Download size={12} /> Télécharger
         </button>

@@ -1,6 +1,5 @@
 import { Inter, Cormorant_Garamond } from 'next/font/google';
 import '../index.css';
-import GlobalStyles from '../components/GlobalStyles';
 import UniversalPageEditor from '../components/pagebuilder/UniversalPageEditor';
 import ScrollAnimations from '../components/ScrollAnimations';
 import { getSettingsServer } from '../services/settingsServer';
@@ -48,7 +47,7 @@ export async function generateMetadata() {
           url: SITE_CONFIG.seoDefaults.ogImage,
           width: 1200,
           height: 630,
-          alt: "Emmanuelle Esthétique — Institut de beauté à domicile à Palézieux",
+          alt: SITE_CONFIG.name,
         }
       ],
     },
@@ -66,18 +65,28 @@ const SITE_URL = SITE_CONFIG.url;
 const PHOTO_URL = SITE_CONFIG.seoDefaults.ogImage;
 
 // Prestations proposées — signal de pertinence pour le SEO local.
-const KNOWS_ABOUT = [
-  'Soin du visage',
-  'Head Spa',
-  'Massage relaxant',
-  'Gua Sha',
-  'Auto-massage du visage',
-  'Beauté du regard',
-  'Cosmétique naturelle',
-  'Ateliers bien-être',
-];
+// Alimentées par Paramètres > Éditorial & Marque : une liste codée en dur
+// décrirait le métier du client précédent.
+function knowsAboutFrom(raw: string): string[] {
+  return raw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 12);
+}
 
-function buildStructuredData(sameAs: string[], business: BusinessInfo) {
+function buildStructuredData(
+  sameAs: string[],
+  business: BusinessInfo,
+  editorial: { activity: string; jobTitle: string },
+) {
+  const activity = editorial.activity;
+  const knowsAbout = knowsAboutFrom(editorial.activity);
+  // Zone desservie déduite de l'adresse : ville puis canton, rien d'inventé.
+  const areaServed = [
+    business.addressCity && { '@type': 'City', name: business.addressCity },
+    business.addressRegion && {
+      '@type': 'AdministrativeArea',
+      name: business.addressRegion,
+    },
+  ].filter(Boolean);
+
   // Adresse de l'entité (E-E-A-T / SEO local) — coordonnées éditables depuis
   // l'admin (Paramètres > Entreprise), pas de rue/code postal inventés si non
   // renseignés.
@@ -102,32 +111,29 @@ function buildStructuredData(sameAs: string[], business: BusinessInfo) {
         name: business.name,
         inLanguage: 'fr-CH',
         publisher: { '@id': `${SITE_URL}/#organization` },
-        about: { '@id': `${SITE_URL}/#emmanuelle` },
+        about: { '@id': `${SITE_URL}/#owner` },
       },
       {
         '@type': 'Person',
-        '@id': `${SITE_URL}/#emmanuelle`,
+        '@id': `${SITE_URL}/#owner`,
         name: business.owner,
-        jobTitle: 'Esthéticienne',
-        description:
-          "Esthéticienne à Palézieux, Emmanuelle propose des soins du visage doux et naturels, des Head Spa, des massages relaxants et des ateliers bien-être dans son institut à domicile.",
+        ...(editorial.jobTitle ? { jobTitle: editorial.jobTitle } : {}),
+        ...(activity ? { description: activity } : {}),
         url: SITE_URL,
         image: PHOTO_URL,
-        knowsAbout: KNOWS_ABOUT,
+        ...(knowsAbout.length ? { knowsAbout } : {}),
         address: postalAddress,
         ...(sameAs.length ? { sameAs } : {}),
         worksFor: { '@id': `${SITE_URL}/#organization` },
       },
       {
-        '@type': 'BeautySalon',
+        '@type': 'LocalBusiness',
         '@id': `${SITE_URL}/#organization`,
         name: business.name,
-        alternateName: `${business.name} — Institut à domicile`,
-        description:
-          "Institut de beauté et bien-être à domicile à Palézieux : soins du visage, Head Spa, massages relaxants, beauté du regard et ateliers de cosmétique naturelle.",
+        ...(activity ? { description: activity } : {}),
         url: SITE_URL,
         image: PHOTO_URL,
-        founder: { '@id': `${SITE_URL}/#emmanuelle` },
+        founder: { '@id': `${SITE_URL}/#owner` },
         address: postalAddress,
         ...(phone
           ? {
@@ -140,15 +146,11 @@ function buildStructuredData(sameAs: string[], business: BusinessInfo) {
               },
             }
           : {}),
-        // Institut à domicile à Palézieux — clientèle de proximité (Broye-Vully,
-        // Lavaux-Oron, Riviera) dans le canton de Vaud.
-        areaServed: [
-          { '@type': 'City', name: 'Palézieux' },
-          { '@type': 'AdministrativeArea', name: 'District de Lavaux-Oron', containedInPlace: { '@type': 'Country', name: 'Suisse' } },
-          { '@type': 'AdministrativeArea', name: 'Canton de Vaud', containedInPlace: { '@type': 'Country', name: 'Suisse' } },
-        ],
+        // Dérivée de l'adresse saisie dans les réglages : une liste de
+        // communes en dur suivrait le template d'installation en installation.
+        ...(areaServed.length ? { areaServed } : {}),
         priceRange: business.priceRange,
-        knowsAbout: KNOWS_ABOUT,
+        ...(knowsAbout.length ? { knowsAbout } : {}),
         ...(sameAs.length ? { sameAs } : {}),
       },
     ],
@@ -182,7 +184,14 @@ export default async function RootLayout({
       ].filter(Boolean)
     )
   );
-  const structuredData = buildStructuredData(sameAs, business);
+  const editorialSettings = await getSettingsServer([
+    'site_activity_context',
+    'business_job_title',
+  ]);
+  const structuredData = buildStructuredData(sameAs, business, {
+    activity: editorialSettings.site_activity_context || '',
+    jobTitle: editorialSettings.business_job_title || '',
+  });
 
   return (
     <html lang="fr" className={`${inter.variable} ${cormorant.variable}`}>
@@ -191,7 +200,6 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
-        <GlobalStyles />
         <ScrollAnimations />
         <UniversalPageEditor />
         {children}

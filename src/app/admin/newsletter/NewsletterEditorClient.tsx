@@ -32,10 +32,10 @@ function EmailPreview({ subject, html }: { subject: string; html: string }) {
       </div>
     </div>`;
   return (
-    <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
       <div className="px-5 py-3 border-b border-stone-100 bg-stone-50/50 flex items-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-stone-400">Aperçu (mail normal)</span>
-        {subject && <span className="text-xs text-stone-400 truncate">— {subject}</span>}
+        <span className="text-[12.5px] font-medium text-stone-700">Aperçu (mail normal)</span>
+        {subject && <span className="truncate text-[12.5px] text-stone-500">— {subject}</span>}
       </div>
       <div className="overflow-auto max-h-[600px] bg-white">
         <iframe srcDoc={full} title="Aperçu newsletter" className="w-full border-none" style={{ height: 600 }} />
@@ -82,13 +82,13 @@ export default function NewsletterEditor() {
     <div className="max-w-7xl mx-auto space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Audience</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Audience</p>
           <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5"><Send size={20} className="text-sage" /> Composer une newsletter</h1>
-          <p className="text-stone-400 text-sm mt-1 flex items-center gap-1.5 flex-wrap">
+          <p className="mt-1 text-sm text-stone-600 flex items-center gap-1.5 flex-wrap">
             <Users size={12} />
             {subscriberCount === null ? '…' : `${subscriberCount} abonné${subscriberCount !== 1 ? 's' : ''} actif${subscriberCount !== 1 ? 's' : ''}`}
             <span className="text-stone-200">·</span>
-            <Link href="/admin/subscribers" className="text-sage hover:text-sage/70 transition-colors">Gérer les abonnés</Link>
+            <Link href="/admin/subscribers" className="text-sage hover:text-stone-900/70 transition-colors">Gérer les abonnés</Link>
           </p>
         </div>
         <button onClick={() => setShowPreview(v => !v)}
@@ -101,12 +101,12 @@ export default function NewsletterEditor() {
       <div className={`grid gap-6 ${showPreview ? 'lg:grid-cols-2' : 'grid-cols-1'}`}>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold uppercase tracking-widest text-stone-400">Objet de l'email</label>
+            <label className="block text-[13px] font-medium text-stone-800">Objet de l'email</label>
             <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Ex : Une nouvelle réflexion sur le silence intérieur…"
-              className="w-full px-4 py-3 border border-stone-200 bg-white rounded-xl text-sm text-stone-800 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all shadow-sm" />
+              className="w-full px-4 py-3 border border-stone-200 bg-white rounded-xl text-sm text-stone-800 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors shadow-sm" />
           </div>
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold uppercase tracking-widest text-stone-400">Contenu</label>
+            <label className="block text-[13px] font-medium text-stone-800">Contenu</label>
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden shadow-sm [&_.ql-editor]:text-[17px] [&_.ql-editor]:leading-relaxed">
               <ReactQuill theme="snow" value={html} onChange={setHtml} modules={modules} className="mb-12 font-sans" placeholder="Écrivez votre newsletter…" />
             </div>
@@ -114,15 +114,15 @@ export default function NewsletterEditor() {
           <div className="space-y-3 pt-1">
             <div className="flex gap-2">
               <input type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)} placeholder="votre@email.com (test)"
-                className="flex-1 px-4 py-2.5 border border-stone-200 bg-white rounded-lg text-sm placeholder:text-stone-300 focus:border-sage outline-none transition-all" />
+                className="flex-1 px-4 py-2.5 border border-stone-200 bg-white rounded-lg text-sm placeholder:text-stone-400 focus:border-stone-900 outline-none transition-all" />
               <button onClick={() => send(true)} disabled={status === 'sending' || !subject || !html || !testEmail}
-                className="px-4 py-2.5 border border-sage text-sage text-xs font-semibold rounded-lg hover:bg-sage hover:text-white transition-colors disabled:opacity-40 cursor-pointer">
+                className="px-4 py-2.5 border border-stone-900 text-stone-900 text-xs font-semibold rounded-lg hover:bg-sage hover:text-white transition-colors disabled:opacity-40 cursor-pointer">
                 Test
               </button>
             </div>
             {!confirm ? (
               <button onClick={() => setConfirm(true)} disabled={status === 'sending' || !subject || !html}
-                className="w-full flex items-center justify-center gap-2 bg-sage text-white py-3.5 text-sm font-medium rounded-xl hover:bg-sage/80 transition-colors disabled:opacity-40 cursor-pointer shadow-sm">
+                className="w-full flex items-center justify-center gap-2 bg-sage text-white py-3.5 text-sm font-medium rounded-xl hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer shadow-sm">
                 {status === 'sending' ? <><Loader size={15} className="animate-spin" /> Envoi en cours…</> : <><Send size={15} /> Envoyer à {subscriberCount ?? '…'} abonnés</>}
               </button>
             ) : (
@@ -152,19 +152,19 @@ export default function NewsletterEditor() {
 
       {history.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-400 pb-2 border-b border-stone-100">Newsletters envoyées</h2>
-          <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+          <h2 className="text-[13px] font-medium text-stone-800 pb-2 border-b border-stone-100">Newsletters envoyées</h2>
+          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-stone-100 bg-stone-50/50">
-                <th className="text-left px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400">Objet</th>
-                <th className="text-left px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 hidden sm:table-cell">Date</th>
-                <th className="text-left px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400">Envoyés</th>
-                <th className="text-left px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 hidden sm:table-cell">Échecs</th>
+                <th className="text-left px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600">Objet</th>
+                <th className="text-left px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 hidden sm:table-cell">Date</th>
+                <th className="text-left px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600">Envoyés</th>
+                <th className="text-left px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 hidden sm:table-cell">Échecs</th>
               </tr></thead>
               <tbody>{history.map(n => (
                 <tr key={n.id} className="border-b border-stone-50 hover:bg-stone-50/50 transition-colors">
                   <td className="px-6 py-4 font-medium text-stone-900 truncate max-w-xs">{n.subject}</td>
-                  <td className="px-6 py-4 text-stone-400 text-xs hidden sm:table-cell">{new Date(n.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</td>
+                  <td className="px-6 py-4 text-stone-500 text-xs hidden sm:table-cell">{new Date(n.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</td>
                   <td className="px-6 py-4"><span className="inline-flex items-center gap-1 text-green-600 font-semibold text-xs"><CheckCircle size={12} /> {n.sent_count}</span></td>
                   <td className="px-6 py-4 hidden sm:table-cell">{n.failed_count > 0 ? <span className="text-red-400 font-semibold text-xs">{n.failed_count}</span> : <span className="text-stone-200 text-xs">0</span>}</td>
                 </tr>

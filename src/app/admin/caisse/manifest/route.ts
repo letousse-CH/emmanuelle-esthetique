@@ -27,7 +27,7 @@ export async function GET() {
       name: `Caisse — ${name}`,
       short_name: 'Caisse',
       // Tiret plutôt qu'un « de {name} » : le nom de l'entreprise est libre, et
-      // « de Emmanuelle » demanderait une élision qu'on ne peut pas deviner.
+      // « de Untel » demanderait une élision qu'on ne peut pas deviner.
       description: `Encaissement, clientèle et journal des recettes — ${name}.`,
       start_url: '/admin/caisse',
       scope: '/admin/caisse',

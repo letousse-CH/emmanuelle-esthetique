@@ -4,6 +4,9 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Send, ArrowRight, CheckCircle2 } from 'lucide-react';
 
+import { useSettings } from '../hooks/useSettings';
+import { SETTINGS_DEFAULTS } from '../constants/settings';
+
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
   whileInView: { opacity: 1, y: 0 },
@@ -18,15 +21,29 @@ const staggerContainer = {
 };
 
 export default function ContactForm({ light = false }: { light?: boolean }) {
+  /*
+    Les motifs proposés sont un réglage, pas du code : la liste d'origine
+    citait « le programme », l'offre du site précédent, sur tous les sites
+    issus du template.
+  */
+  const settings = useSettings(['contact_subjects']);
+  const subjects = (settings.contact_subjects || SETTINGS_DEFAULTS.contact_subjects)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    subject: 'Demande de premier contact',
+    subject: '',
     message: ''
   });
+
+  // Le premier motif de la liste sert de valeur de départ, quelle qu'elle soit.
+  const currentSubject = formData.subject || subjects[0] || '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +56,7 @@ export default function ContactForm({ light = false }: { light?: boolean }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, subject: currentSubject }),
       });
 
       const data = await response.json();
@@ -52,7 +69,7 @@ export default function ContactForm({ light = false }: { light?: boolean }) {
       setFormData({
         name: '',
         email: '',
-        subject: 'Demande de premier contact',
+        subject: '',
         message: ''
       });
       setTimeout(() => setSubmitted(false), 10000);
@@ -141,13 +158,13 @@ export default function ContactForm({ light = false }: { light?: boolean }) {
           <label htmlFor="subject" className="block text-xs uppercase tracking-widest text-stone-deep/60 mb-2 font-bold text-left">Sujet</label>
           <select 
             id="subject"
-            value={formData.subject}
+            value={currentSubject}
             onChange={(e) => setFormData({...formData, subject: e.target.value})}
             className="w-full bg-white border border-stone-200 px-4 py-3 outline-none focus:border-sage transition-colors"
           >
-            <option value="Demande de premier contact">Demande de premier contact</option>
-            <option value="Information sur le programme">Information sur le programme</option>
-            <option value="Autre demande">Autre demande</option>
+            {subjects.map((subject) => (
+              <option key={subject} value={subject}>{subject}</option>
+            ))}
           </select>
         </div>
         <div>

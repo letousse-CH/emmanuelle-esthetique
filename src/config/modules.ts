@@ -1,6 +1,7 @@
 /**
- * Système de modules activables/désactivables (Blog, Génération IA d'article,
- * Événements, Newsletter, Réseaux sociaux, Caisse). Les flags sont stockés dans la table Supabase `settings` comme
+ * Système de modules activables/désactivables : Pages (socle, toujours actif),
+ * Articles, Rédaction IA, Mots-clés, Réseaux, Newsletter, Caisse, Agents IA,
+ * Automatisations. Les flags sont stockés dans la table Supabase `settings` comme
  * n'importe quel autre réglage, pour réutiliser la plomberie RLS/admin existante.
  *
  * Ce fichier ne doit importer que des dépendances "server-safe" (pas de hooks
@@ -9,7 +10,17 @@
  */
 import { getSettingsServer } from '../services/settingsServer';
 
-export type ModuleName = 'blog' | 'ai_generation' | 'events' | 'newsletter' | 'social' | 'caisse';
+export type ModuleName =
+  | 'blog'
+  | 'ai_generation'
+  | 'events'
+  | 'keywords'
+  | 'newsletter'
+  | 'social'
+  | 'caisse'
+  | 'agents'
+  | 'automations'
+  | 'decodeur';
 
 export const MODULE_SETTING_KEYS = {
   blog: 'module_blog_enabled',
@@ -18,6 +29,10 @@ export const MODULE_SETTING_KEYS = {
   newsletter: 'module_newsletter_enabled',
   social: 'module_social_enabled',
   caisse: 'module_caisse_enabled',
+  keywords: 'module_keywords_enabled',
+  agents: 'module_agents_enabled',
+  automations: 'module_automations_enabled',
+  decodeur: 'module_decodeur_enabled',
 } as const;
 
 export type ModuleFlags = Record<ModuleName, boolean>;
@@ -30,6 +45,10 @@ export function toModuleFlags(values: Record<string, string>): ModuleFlags {
     newsletter: values[MODULE_SETTING_KEYS.newsletter] !== 'false',
     social: values[MODULE_SETTING_KEYS.social] !== 'false',
     caisse: values[MODULE_SETTING_KEYS.caisse] !== 'false',
+    keywords: values[MODULE_SETTING_KEYS.keywords] !== 'false',
+    agents: values[MODULE_SETTING_KEYS.agents] !== 'false',
+    automations: values[MODULE_SETTING_KEYS.automations] !== 'false',
+    decodeur: values[MODULE_SETTING_KEYS.decodeur] !== 'false',
   };
 }
 

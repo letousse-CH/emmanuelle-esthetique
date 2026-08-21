@@ -22,11 +22,6 @@ export async function listPromotions(): Promise<Promotion[]> {
   return (data ?? []) as Promotion[];
 }
 
-export async function getPromotion(id: string): Promise<Promotion | null> {
-  const { data, error } = await supabase.from('promotions').select('*').eq('id', id).maybeSingle();
-  if (error) throw new Error(error.message);
-  return (data as Promotion) ?? null;
-}
 
 export type PromotionInput = Pick<
   Promotion,

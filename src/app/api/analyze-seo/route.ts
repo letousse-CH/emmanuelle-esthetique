@@ -3,6 +3,7 @@ import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { callClaude, extractJson } from '../../../utils/ai';
 import { getSettingsServer } from '../../../services/settingsServer';
 import { SITE_CONFIG } from '../../../config/site';
+import { getAnthropicKey } from '../../../services/secrets';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface SeoFix {
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = await getAnthropicKey();
   if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') return NextResponse.json({ error: 'not_configured' }, { status: 500 });
 
   let title = '', meta_title = '', meta_description = '', content = '', focus_keyword = '';
@@ -175,7 +176,7 @@ export async function POST(req: NextRequest) {
         feature: 'seo-analyze',
         max_tokens: 1500,
         messages: [{ role: 'user', content: prompt }],
-        timeout: 8000
+        timeout: 25000
       });
       const raw = ((resp.content[0] as { text: string }).text).trim();
       try {

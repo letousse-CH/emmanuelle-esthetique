@@ -9,6 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getAiConfig } from '../services/aiConfig';
 import { recordAiUsage } from '../services/aiUsage';
 import { resolveModelSpec } from '../constants/aiModels';
+import { getAnthropicKey } from '../services/secrets';
 
 /**
  * Quand la réflexion adaptative est active, `max_tokens` plafonne réflexion
@@ -43,15 +44,20 @@ export interface ClaudeCallResult {
   content: { type: 'text'; text: string }[];
 }
 
-function resolveApiKey(override?: string): string {
-  const key = (process.env.ANTHROPIC_API_KEY || override || '').trim();
+/**
+ * La clé saisie dans l'admin l'emporte sur celle de l'environnement, sauf si
+ * l'appelant en fournit une explicitement. La lecture étant asynchrone (elle
+ * interroge la base), la fonction l'est devenue aussi.
+ */
+async function resolveApiKey(override?: string): Promise<string> {
+  const key = (override || (await getAnthropicKey()) || '').trim();
   if (!key || key === 'MY_ANTHROPIC_API_KEY') throw new Error('not_configured');
   return key;
 }
 
 /** Appelle Claude et retourne le texte de la réponse. Lève une erreur explicite sinon. */
 export async function callClaude(params: ClaudeCallParams): Promise<ClaudeCallResult> {
-  const client = new Anthropic({ apiKey: resolveApiKey(params.apiKey) });
+  const client = new Anthropic({ apiKey: await resolveApiKey(params.apiKey) });
 
   // Modèle et niveau de réflexion pilotés depuis /admin/settings → IA & Budget.
   // Les modèles antérieurs à la génération 4.6 (Haiku 4.5) refusent
@@ -83,6 +89,10 @@ export async function callClaude(params: ClaudeCallParams): Promise<ClaudeCallRe
       throw new Error('Limite de requêtes Anthropic atteinte — réessayez dans un instant.');
     }
     if (err instanceof Anthropic.APIConnectionError) {
+      const msg = String(err.message || '').toLowerCase();
+      if (msg.includes('timeout') || msg.includes('abort') || msg.includes('timed out')) {
+        throw new Error("Délai de réponse de l'IA dépassé. Réessayez dans un instant.");
+      }
       throw new Error("Impossible de joindre l'API Anthropic (réseau indisponible).");
     }
     if (err instanceof Anthropic.APIError) {
@@ -123,30 +133,43 @@ export async function callClaude(params: ClaudeCallParams): Promise<ClaudeCallRe
 export function extractJson(text: string): any {
   const cleaned = text.trim();
 
-  // Try direct parse
+  // 1. Direct parse
   try {
     return JSON.parse(cleaned);
   } catch {}
 
-  // Try regex match for JSON object
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch {}
-  }
+  // 2. Strip markdown code blocks
+  const stripped = cleaned
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
 
-  // Try cleaning markdown code block syntax
-  let stripped = cleaned.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
   try {
     return JSON.parse(stripped);
   } catch {}
 
-  // Try fixing missing closing brace
-  if (stripped.startsWith('{') && !stripped.endsWith('}')) {
+  // 3. Match JSON array [...]
+  const arrayMatch = stripped.match(/\[[\s\S]*\]/);
+  if (arrayMatch) {
     try {
-      return JSON.parse(stripped + '}');
+      return JSON.parse(arrayMatch[0]);
     } catch {}
+  }
+
+  // 4. Match JSON object {...}
+  const objectMatch = stripped.match(/\{[\s\S]*\}/);
+  if (objectMatch) {
+    try {
+      return JSON.parse(objectMatch[0]);
+    } catch {}
+  }
+
+  // 5. Auto-repair missing brackets
+  if (stripped.startsWith('[') && !stripped.endsWith(']')) {
+    try { return JSON.parse(stripped + ']'); } catch {}
+  }
+  if (stripped.startsWith('{') && !stripped.endsWith('}')) {
+    try { return JSON.parse(stripped + '}'); } catch {}
   }
 
   throw new Error("Format JSON invalide");

@@ -1,8 +1,8 @@
 export const revalidate = 60;
 import React from 'react';
 import { getPageMeta, buildMetadata } from '../../services/pageMeta';
-import { fetchPageBySlug } from '../../services/dynamicPages';
-import DynamicPageClient from './pages/[slug]/DynamicPageClient';
+import { fetchHomePage } from '../../services/homePage';
+import DynamicPageClient from '../../components/pagebuilder/DynamicPageClient';
 
 import { SITE_CONFIG } from '../../config/site';
 
@@ -22,16 +22,17 @@ export async function generateMetadata() {
 }
 
 export default async function Page() {
-  // Fetch CMS page regardless of published status so the builder page always takes priority
-  let cmsPage = await fetchPageBySlug(SLUG, true);
-  if (!cmsPage) {
-    cmsPage = await fetchPageBySlug('accueil', true);
-  }
+  /*
+    Le slug de la page d'accueil se choisit dans /admin/pages. La racine ne
+    cherchait que « home » puis « accueil » : une page importée sous un autre
+    nom rendait le site introuvable à son adresse principale.
+  */
+  const { page: cmsPage, slug } = await fetchHomePage();
 
   return (
     <DynamicPageClient
       initialPage={cmsPage}
-      slug={SLUG}
+      slug={slug}
       forceShow
     />
   );

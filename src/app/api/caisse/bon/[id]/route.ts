@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { renderToBuffer } from '@react-pdf/renderer';
 import BonCadeauDocument from '../../../../../components/pdf/BonCadeauDocument';
 import { getBusinessInfoServer } from '../../../../../config/site';
 import { getSettingsServer } from '../../../../../services/settingsServer';
 import type { GiftCard } from '../../../../../types/caisse';
+import { getSupabaseAdmin } from '../../../../../utils/supabaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? '',
-);
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Supabase non configuré.' }, { status: 503 });
+  }
+
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   if (!token) {
     return NextResponse.json({ error: 'Non autorisé. Token manquant.' }, { status: 401 });

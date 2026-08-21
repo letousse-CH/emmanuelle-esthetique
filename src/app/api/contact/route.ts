@@ -2,6 +2,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import { sendEmail } from '../../../services/email';
 import { checkRateLimit } from '../../../utils/rateLimit';
 import { SITE_CONFIG } from '../../../config/site';
+import { emitAutomationEvent } from '../../../services/automationRunner';
 
 function escapeHtml(str: string): string {
   return str
@@ -68,6 +69,11 @@ export async function POST(req: NextRequest) {
       { status: 503 }
     );
   }
+
+  // Une demande reçue est l'événement `lead.created` du module
+  // Automatisations. `emitAutomationEvent` ne lève jamais : un webhook cassé
+  // ne doit pas faire échouer un formulaire de contact déjà envoyé.
+  await emitAutomationEvent('lead.created', new URL(req.url).origin);
 
   return NextResponse.json({ success: true, message: 'Message envoyé avec succès.' });
 }

@@ -11,6 +11,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { validateSupabaseToken } from '../../../../utils/apiAuth';
 import { AI_MODELS } from '../../../../constants/aiModels';
+import { getAnthropicKey } from '../../../../services/secrets';
 
 // Le catalogue distant bouge de quelques fois par an : un cache long suffit.
 const CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = await getAnthropicKey();
   const liveIds =
     apiKey && apiKey !== 'MY_ANTHROPIC_API_KEY' ? await fetchLiveModelIds(apiKey) : null;
 

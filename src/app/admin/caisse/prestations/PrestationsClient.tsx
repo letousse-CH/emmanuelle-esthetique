@@ -149,11 +149,11 @@ export default function PrestationsClient() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Caisse</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Caisse</p>
           <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
             <Sparkles size={20} className="text-sage" /> Prestations
           </h1>
-          <p className="text-stone-400 text-sm mt-1">
+          <p className="mt-1 text-sm text-stone-600">
             Le catalogue de l&apos;écran d&apos;encaissement. Les prix sont TTC.
           </p>
           <div className="mt-3"><CaisseCatalogNav /></div>
@@ -161,13 +161,13 @@ export default function PrestationsClient() {
         <div className="flex flex-wrap gap-2 self-start">
           <button
             onClick={() => setShowCategories(true)}
-            className="flex items-center gap-2 px-3.5 py-2 border border-stone-200 text-stone-600 hover:border-sage hover:text-sage rounded-lg text-sm transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 rounded-lg text-sm transition-all cursor-pointer"
           >
             <FolderCog size={14} /> Catégories
           </button>
           <button
             onClick={() => setEditing({ service: null, type: 'forfait' })}
-            className="flex items-center gap-2 px-3.5 py-2 border border-stone-200 text-stone-600 hover:border-sage hover:text-sage rounded-lg text-sm transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 rounded-lg text-sm transition-all cursor-pointer"
           >
             <Layers size={14} /> Nouveau forfait
           </button>
@@ -191,13 +191,13 @@ export default function PrestationsClient() {
       )}
 
       {loading ? (
-        <div className="bg-white border border-stone-100 rounded-2xl shadow-sm flex items-center justify-center gap-2 p-8 text-stone-400 text-sm">
-          <div className="w-4 h-4 rounded-full border border-stone-200 border-t-sage animate-spin" /> Chargement…
+        <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+          <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
         </div>
       ) : services.length === 0 ? (
-        <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-10 text-center space-y-2">
-          <p className="text-stone-400 text-sm italic">Le catalogue est vide.</p>
-          <p className="text-stone-400 text-xs">
+        <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-10 text-center space-y-2">
+          <p className="text-sm text-stone-600">Le catalogue est vide.</p>
+          <p className="text-stone-500 text-xs">
             Ajoute les soins proposés — ils apparaîtront en un clic sur l&apos;
             <Link href="/admin/caisse" className="text-sage hover:underline">écran d&apos;encaissement</Link>,
             rangés par catégorie.
@@ -206,16 +206,16 @@ export default function PrestationsClient() {
       ) : (
         <div className="space-y-5">
           {groups.map(group => (
-            <section key={group.id ?? 'orphans'} className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+            <section key={group.id ?? 'orphans'} className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
               <div className="px-5 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
-                <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500">{group.nom}</h2>
-                <span className="text-[11px] text-stone-400 tabular-nums">
+                <h2 className="text-[13px] font-medium text-stone-800">{group.nom}</h2>
+                <span className="text-[12.5px] text-stone-500 tabular-nums">
                   {group.items.length} {group.items.length > 1 ? 'entrées' : 'entrée'}
                 </span>
               </div>
 
               {group.items.length === 0 ? (
-                <p className="px-5 py-6 text-center text-stone-300 text-xs italic">
+                <p className="px-5 py-6 text-center text-stone-500 text-xs italic">
                   Aucune prestation dans cette catégorie.
                 </p>
               ) : (
@@ -232,14 +232,14 @@ export default function PrestationsClient() {
                           <button
                             onClick={() => move(group, i, -1)} disabled={i === 0 || busyId !== null}
                             aria-label="Monter" title="Monter"
-                            className="p-0.5 text-stone-300 hover:text-stone-700 disabled:opacity-20 transition-colors cursor-pointer"
+                            className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
                           >
                             <ArrowUp size={12} />
                           </button>
                           <button
                             onClick={() => move(group, i, 1)} disabled={i === group.items.length - 1 || busyId !== null}
                             aria-label="Descendre" title="Descendre"
-                            className="p-0.5 text-stone-300 hover:text-stone-700 disabled:opacity-20 transition-colors cursor-pointer"
+                            className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
                           >
                             <ArrowDown size={12} />
                           </button>
@@ -249,14 +249,14 @@ export default function PrestationsClient() {
                           <p className="text-sm font-medium text-stone-900 flex items-center gap-2 flex-wrap">
                             <span className="truncate">{s.nom}</span>
                             {s.type === 'forfait' && (
-                              <span className="text-[10px] font-semibold text-sage bg-sage/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <span className="text-[12px] font-semibold text-sage bg-sage/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
                                 <Layers size={9} /> Forfait
                               </span>
                             )}
-                            {!s.active && <span className="text-[10px] font-semibold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full">Masquée</span>}
+                            {!s.active && <span className="text-[12px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">Masquée</span>}
                           </p>
                           {s.type === 'forfait' ? (
-                            <p className="text-xs text-stone-400 truncate">
+                            <p className="truncate text-[12.5px] text-stone-500">
                               {items.length === 0
                                 ? 'Composition à définir'
                                 : items.map(it => `${Number(it.quantite) > 1 ? `${Number(it.quantite)}× ` : ''}${it.service?.nom ?? '—'}`).join(' + ')}
@@ -265,12 +265,12 @@ export default function PrestationsClient() {
                               )}
                             </p>
                           ) : (
-                            s.description && <p className="text-xs text-stone-400 truncate">{s.description}</p>
+                            s.description && <p className="truncate text-[12.5px] text-stone-500">{s.description}</p>
                           )}
                         </div>
 
                         {tvaActive && (
-                          <span className="text-[11px] text-stone-400 tabular-nums shrink-0 hidden sm:block">
+                          <span className="text-[12.5px] text-stone-500 tabular-nums shrink-0 hidden sm:block">
                             TVA {Number(s.taux_tva_defaut)} %
                           </span>
                         )}
@@ -278,15 +278,15 @@ export default function PrestationsClient() {
 
                         <div className="flex items-center gap-1 shrink-0">
                           {busyId === s.id ? (
-                            <Loader2 size={14} className="animate-spin text-stone-300 mx-2" />
+                            <Loader2 size={14} className="animate-spin text-stone-400 mx-2" />
                           ) : (
                             <>
                               <button
                                 onClick={() => toggleActive(s)}
                                 aria-label={s.active ? `Masquer ${s.nom}` : `Afficher ${s.nom}`}
                                 title={s.active ? 'Masquer de la caisse' : 'Afficher dans la caisse'}
-                                className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded transition-all cursor-pointer ${
-                                  s.active ? 'text-sage hover:bg-sage/10' : 'text-stone-400 hover:bg-stone-100'
+                                className={`text-[12px] font-semibold px-2 py-1 rounded transition-all cursor-pointer ${
+                                  s.active ? 'text-sage hover:bg-sage/10' : 'text-stone-500 hover:bg-stone-100'
                                 }`}
                               >
                                 {s.active ? 'Active' : 'Off'}
@@ -294,14 +294,14 @@ export default function PrestationsClient() {
                               <button
                                 onClick={() => setEditing({ service: s, type: s.type })}
                                 aria-label={`Modifier ${s.nom}`} title="Modifier"
-                                className="p-1.5 text-stone-300 hover:text-sage rounded-md hover:bg-sage/10 transition-all cursor-pointer"
+                                className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
                               >
                                 <Pencil size={14} />
                               </button>
                               <button
                                 onClick={() => handleDelete(s)}
                                 aria-label={`Supprimer ${s.nom}`} title="Supprimer"
-                                className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                                className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -443,26 +443,26 @@ function ServiceDialog({
           <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
             {isForfait && <Layers size={14} className="text-sage" />} {titre}
           </h3>
-          <button onClick={onClose} aria-label="Fermer" className="p-1 text-stone-400 hover:text-stone-700 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
 
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label htmlFor="svc-nom" className="block text-[11px] font-medium text-stone-500 mb-1">Nom *</label>
+            <label htmlFor="svc-nom" className="block text-[12.5px] font-medium text-stone-700 mb-1">Nom *</label>
             <input
               id="svc-nom" type="text" value={nom} onChange={e => setNom(e.target.value)} required autoFocus
               placeholder={isForfait ? 'Forfait jambes + maillot + aisselles' : 'Soin du visage éclat — 60 min'}
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
             />
           </div>
 
           <div>
-            <label htmlFor="svc-cat" className="block text-[11px] font-medium text-stone-500 mb-1">Catégorie</label>
+            <label htmlFor="svc-cat" className="block text-[12.5px] font-medium text-stone-700 mb-1">Catégorie</label>
             <select
               id="svc-cat" value={categoryId} onChange={e => setCategoryId(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all cursor-pointer"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors cursor-pointer"
             >
               <option value="">Sans catégorie</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
@@ -473,7 +473,7 @@ function ServiceDialog({
             <div className="rounded-xl border border-stone-200 p-3.5 space-y-3 bg-stone-50/40">
               <div>
                 <p className="text-[11px] font-medium text-stone-500 mb-1">Composition *</p>
-                <p className="text-[10px] text-stone-400 leading-relaxed mb-2">
+                <p className="text-[12px] text-stone-500 leading-relaxed mb-2">
                   Les prestations couvertes par le forfait. Elles servent à afficher l&apos;économie —
                   la facture, elle, portera une seule ligne au prix du forfait.
                 </p>
@@ -491,16 +491,16 @@ function ServiceDialog({
                         type="number" min={1} step={1} value={parts[i].quantite}
                         onChange={e => setParts(prev => prev.map((p, j) =>
                           (j === i ? { ...p, quantite: Math.max(1, Number(e.target.value) || 1) } : p)))}
-                        className="w-14 px-2 py-1 border border-stone-200 rounded text-xs text-stone-700 text-center tabular-nums focus:border-sage outline-none"
+                        className="w-14 px-2 py-1 border border-stone-200 rounded text-xs text-stone-700 text-center tabular-nums focus:border-stone-900 outline-none"
                       />
-                      <span className="text-xs text-stone-400 tabular-nums shrink-0 w-20 text-right">
+                      <span className="text-[12.5px] text-stone-500 tabular-nums shrink-0 w-20 text-right">
                         {formatCHF(Number(it.service?.prix_chf ?? 0) * Number(it.quantite))}
                       </span>
                       <button
                         type="button"
                         onClick={() => setParts(prev => prev.filter((_, j) => j !== i))}
                         aria-label={`Retirer ${it.service?.nom ?? 'la prestation'}`}
-                        className="shrink-0 p-1 text-stone-300 hover:text-red-500 rounded cursor-pointer"
+                        className="shrink-0 p-1 text-stone-500 hover:text-red-700 rounded cursor-pointer"
                       >
                         <X size={12} />
                       </button>
@@ -513,7 +513,7 @@ function ServiceDialog({
                 <label htmlFor="svc-part-add" className="sr-only">Ajouter une prestation au forfait</label>
                 <select
                   id="svc-part-add" value="" onChange={e => addPart(e.target.value)}
-                  className="w-full px-3 py-2 border border-dashed border-stone-300 rounded-lg text-xs text-stone-600 bg-white focus:border-sage outline-none cursor-pointer"
+                  className="w-full px-3 py-2 border border-dashed border-stone-300 rounded-lg text-xs text-stone-600 bg-white focus:border-stone-900 outline-none cursor-pointer"
                 >
                   <option value="">+ Ajouter une prestation…</option>
                   {prestations
@@ -525,17 +525,17 @@ function ServiceDialog({
               {parts.length > 0 && (
                 <dl className="text-xs space-y-1 pt-1 border-t border-stone-200">
                   <div className="flex justify-between">
-                    <dt className="text-stone-400">Valeur cumulée</dt>
+                    <dt className="text-stone-500">Valeur cumulée</dt>
                     <dd className="text-stone-600 tabular-nums">{formatCHF(valeurCumulee)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-stone-400">Économie pour la cliente</dt>
+                    <dt className="text-stone-500">Économie pour la cliente</dt>
                     <dd className={`tabular-nums font-medium ${economie >= 0 ? 'text-sage' : 'text-amber-600'}`}>
                       {economie >= 0 ? `− ${formatCHF(economie)}` : `+ ${formatCHF(-economie)}`}
                     </dd>
                   </div>
                   {economie < 0 && (
-                    <p className="text-[10px] text-amber-600 leading-relaxed pt-0.5">
+                    <p className="text-[12px] text-amber-600 leading-relaxed pt-0.5">
                       Le forfait coûte plus cher que ses prestations prises séparément.
                     </p>
                   )}
@@ -545,37 +545,37 @@ function ServiceDialog({
           )}
 
           <div>
-            <label htmlFor="svc-desc" className="block text-[11px] font-medium text-stone-500 mb-1">
-              Description <span className="text-stone-300">(facultatif)</span>
+            <label htmlFor="svc-desc" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+              Description <span className="text-stone-500">(facultatif)</span>
             </label>
             <textarea
               id="svc-desc" rows={2} value={description} onChange={e => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors resize-y"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="svc-prix" className="block text-[11px] font-medium text-stone-500 mb-1">
+              <label htmlFor="svc-prix" className="block text-[12.5px] font-medium text-stone-700 mb-1">
                 {isForfait ? 'Prix du forfait TTC *' : 'Prix TTC (CHF) *'}
               </label>
               <input
                 id="svc-prix" type="text" inputMode="decimal" value={prix} onChange={e => setPrix(e.target.value)} required
                 placeholder="120.00"
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all tabular-nums"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
               />
             </div>
             <div>
-              <label htmlFor="svc-tva" className="block text-[11px] font-medium text-stone-500 mb-1">TVA par défaut</label>
+              <label htmlFor="svc-tva" className="block text-[12.5px] font-medium text-stone-700 mb-1">TVA par défaut</label>
               <select
                 id="svc-tva" value={taux} onChange={e => setTaux(Number(e.target.value))}
                 disabled={!tvaActive}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all disabled:bg-stone-50 disabled:text-stone-400 cursor-pointer"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors disabled:bg-stone-50 disabled:text-stone-500 cursor-pointer"
               >
                 {TAUX_TVA_CH.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
               {!tvaActive && (
-                <p className="text-[10px] text-stone-400 mt-1">
+                <p className="text-[12px] text-stone-500 mt-1">
                   Active la TVA dans <Link href="/admin/settings" className="text-sage hover:underline">Paramètres → Caisse</Link>.
                 </p>
               )}
@@ -603,7 +603,7 @@ function ServiceDialog({
             </button>
             <button
               type="submit" disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-sage transition-colors disabled:opacity-40 cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               {saving ? 'Enregistrement…' : 'Enregistrer'}
@@ -699,12 +699,12 @@ function CategoriesDialog({ categories, services, onClose, onChanged }: {
           <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
             <FolderCog size={14} className="text-sage" /> Catégories
           </h3>
-          <button onClick={onClose} aria-label="Fermer" className="p-1 text-stone-400 hover:text-stone-700 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
 
-        <p className="text-[11px] text-stone-400 leading-relaxed">
+        <p className="text-[12.5px] text-stone-500 leading-relaxed">
           Elles rangent le catalogue et deviennent les onglets de l&apos;écran d&apos;encaissement.
           Elles ne figurent sur aucune facture.
         </p>
@@ -717,14 +717,14 @@ function CategoriesDialog({ categories, services, onClose, onChanged }: {
                   <button
                     onClick={() => move(i, -1)} disabled={i === 0 || busy}
                     aria-label={`Monter ${c.nom}`}
-                    className="p-0.5 text-stone-300 hover:text-stone-700 disabled:opacity-20 cursor-pointer"
+                    className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 cursor-pointer"
                   >
                     <ArrowUp size={11} />
                   </button>
                   <button
                     onClick={() => move(i, 1)} disabled={i === rows.length - 1 || busy}
                     aria-label={`Descendre ${c.nom}`}
-                    className="p-0.5 text-stone-300 hover:text-stone-700 disabled:opacity-20 cursor-pointer"
+                    className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 cursor-pointer"
                   >
                     <ArrowDown size={11} />
                   </button>
@@ -735,15 +735,15 @@ function CategoriesDialog({ categories, services, onClose, onChanged }: {
                   defaultValue={c.nom}
                   onBlur={e => rename(c, e.target.value)}
                   disabled={busy}
-                  className="flex-1 min-w-0 px-2.5 py-1.5 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+                  className="flex-1 min-w-0 px-2.5 py-1.5 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
                 />
-                <span className="text-[10px] text-stone-300 tabular-nums w-6 text-right shrink-0">
+                <span className="text-[12px] text-stone-500 tabular-nums w-6 text-right shrink-0">
                   {counts.get(c.id) ?? 0}
                 </span>
                 <button
                   onClick={() => remove(c)} disabled={busy}
                   aria-label={`Supprimer ${c.nom}`}
-                  className="shrink-0 p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer disabled:opacity-40"
+                  className="shrink-0 p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer disabled:opacity-40"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -757,11 +757,11 @@ function CategoriesDialog({ categories, services, onClose, onChanged }: {
           <input
             id="cat-new" type="text" value={nouveau} onChange={e => setNouveau(e.target.value)}
             placeholder="Épilation, Maquillage…" disabled={busy}
-            className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+            className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
           />
           <button
             type="submit" disabled={busy || !nouveau.trim()}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-stone-200 text-stone-600 hover:border-sage hover:text-sage text-sm transition-all disabled:opacity-40 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 text-sm transition-all disabled:opacity-40 cursor-pointer"
           >
             <Plus size={14} /> Ajouter
           </button>

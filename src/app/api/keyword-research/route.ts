@@ -1,7 +1,8 @@
 /**
  * Keyword Intelligence — analyse d'un mot-clé unique.
  * 1. Google Suggest (gratuit, sans clé) → suggestions réelles
- * 2. Gemini → cluster sémantique, intent, volume estimé, brief complet
+ * 2. Le modèle Claude choisi dans /admin/settings → cluster sémantique,
+ *    intention, volume estimé, brief complet
  *
  * Le positionnement de la marque n'est pas codé en dur : il est lu depuis les
  * réglages « Éditorial & Marque » de l'admin (table `settings`).
@@ -10,6 +11,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { callClaude, extractJson } from '../../../utils/ai';
 import { getSettingsServer } from '../../../services/settingsServer';
+import { getAnthropicKey } from '../../../services/secrets';
 
 async function fetchGoogleSuggestions(keyword: string): Promise<string[]> {
   const queries = [keyword, `comment ${keyword}`, `pourquoi ${keyword}`];
@@ -56,20 +58,20 @@ async function getBrandContext(): Promise<BrandContext> {
 }
 
 function buildPrompt(keyword: string, suggestions: string[], ctx: BrandContext): string {
-  return `Tu es un expert SEO francophone spécialisé dans l'acquisition de trafic pour les activités de service de proximité.
+  return `Tu es un expert SEO & SIO (Search Intent & Information Optimization / GEO) francophone spécialisé dans l'acquisition de trafic pour les activités de service.
 
-## Contexte de la marque
+## Contexte de la marque & Positionnement
 ${ctx.activity}
 ${ctx.persona ? `\n### Persona cible\n${ctx.persona}` : ''}
 ${ctx.brand ? `\n### Charte de marque & offres\n${ctx.brand}` : ''}
 ${ctx.topics ? `\n### Piliers de contenu\n${ctx.topics}` : ''}
 
-## Stratégie d'entonnoir
-- **découverte (TOFU)** : la personne décrit un besoin ou un problème sans connaître la prestation — fort volume, intention informationnelle.
-- **comparaison (MOFU)** : elle compare des méthodes, des techniques ou des prestations et cherche à comprendre.
-- **conversion (BOFU)** : elle cherche un prestataire, un tarif, une réservation — souvent avec une intention locale.
+## Stratégie d'entonnoir SEO & SIO / GEO
+- **découverte (TOFU / SIO)** : la personne décrit un besoin, une douleur ou un problème sur ChatGPT, Perplexity ou Google sans connaître la prestation.
+- **comparaison (MOFU / GEO)** : elle compare des méthodes, des solutions ou des prestataires sur les moteurs IA et les communautés.
+- **conversion (BOFU / Service)** : elle cherche un prestataire, un tarif ou une réservation locale.
 
-## Mot-clé à analyser
+## Mot-clé ou Sujet à analyser
 "${keyword}"
 
 ${suggestions.length > 0 ? `## Suggestions Google Autocomplete\n${suggestions.slice(0, 15).map(s => `- ${s}`).join('\n')}` : ''}
@@ -85,13 +87,22 @@ Retourne UNIQUEMENT ce JSON valide, rien d'autre :
   "volume": "moyen",
   "category": "catégorie tirée des piliers de contenu ci-dessus",
   "funnel_level": "découverte",
-  "opportunity": "2-3 phrases précises sur l'opportunité SEO concrète et la place de ce mot-clé dans la stratégie du site",
+  "opportunity": "2-3 phrases précises sur l'opportunité SEO/SIO concrète et la place de ce mot-clé dans la stratégie du site",
   "rel_bridge": "Comment cet article amène naturellement le lecteur vers une offre nommée dans la charte de marque, ou vers la prise de rendez-vous",
-  "secondaryKeywords": ["exactement 10 à 12 termes LSI impactants, synonymes et entités sémantiques — qualité sur quantité"],
-  "relatedQuestions": ["6 questions PAA réelles que les gens tapent sur Google ?"],
+  "aiPrompts": [
+    "3 à 4 exemples exacts de prompts/questions que les prospects posent aux IA (ChatGPT, Perplexity, Claude, SearchGPT) sur ce sujet"
+  ],
+  "communityQuestions": [
+    "3 à 4 questions typiques posées par les utilisateurs sur Reddit, Quora ou forums spécialisés en lien avec ce problème"
+  ],
+  "geoCitationTips": [
+    "3 règles clés de structuration du contenu pour être cité par les moteurs IA (ex: puces claires, définitions directes, données chiffrées)"
+  ],
+  "secondaryKeywords": ["10 à 12 termes LSI impactants, synonymes et entités sémantiques"],
+  "relatedQuestions": ["6 questions PAA réelles tapées sur Google ?"],
   "suggestedTitle": "Titre H1 optimisé 55-65 caractères, mot-clé dans les 4 premiers mots",
   "suggestedSlug": "url-sans-accents-ni-espaces-ni-caracteres-speciaux",
-  "suggestedIntro": "Accroche 2-3 phrases dans le ton de voix de la marque — commencer par une scène ou une observation concrète, pas une définition",
+  "suggestedIntro": "Accroche 2-3 phrases dans le ton de voix de la marque — commencer par une scène ou une observation concrète",
   "contentTips": ["5 conseils de rédaction spécifiques à ce sujet et à la stratégie du site"],
   "cta": "Appel à l'action naturel vers une offre de la marque ou la prise de rendez-vous, formulé sans forcer",
   "topSuggestions": ["8 meilleures requêtes connexes pertinentes pour la niche"]
@@ -102,7 +113,8 @@ Règles :
 - funnel_level : "découverte" | "comparaison" | "conversion"
 - difficulty / volume : "faible" | "moyen" | "élevé"
 - intent : "informationnel" | "transactionnel" | "navigationnel"
-- Pour topSuggestions : ${suggestions.length > 0 ? 'sélectionne les 8 meilleures parmi les suggestions Google ci-dessus, complète si besoin' : 'génère les 8 variantes les plus pertinentes pour cette niche'}.
+- aiPrompts : très spécifique, axé sur les demandes formulées aux agents IA.
+- communityQuestions : axé sur l'empathie et les galères/besoins réels partagés sur Reddit ou forums.
 - rel_bridge est OBLIGATOIRE : tout article doit avoir une porte d'entrée vers une offre de la marque ou la prise de rendez-vous.`;
 }
 
@@ -112,7 +124,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = await getAnthropicKey();
   if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 500 });
   }
@@ -138,7 +150,7 @@ export async function POST(req: NextRequest) {
       feature: 'keyword-research',
       max_tokens: 2000,
       messages: [{ role: 'user', content: buildPrompt(keyword, suggestions, brandContext) }],
-      timeout: 8000
+      timeout: 25000
     });
 
     const raw = (response.content[0] as { type: string; text: string }).text.trim();

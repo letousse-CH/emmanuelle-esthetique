@@ -9,25 +9,17 @@ export async function fetchAllEvents(): Promise<SdeEvent[]> {
   return (data ?? []) as SdeEvent[];
 }
 
-export async function fetchUpcomingEvents(limit = 4): Promise<SdeEvent[]> {
+export async function fetchUpcomingEvents(limit: number = 3): Promise<SdeEvent[]> {
   const { data } = await supabase
     .from('events')
     .select('*')
     .eq('status', 'published')
-    .gte('date_start', new Date().toISOString().split('T')[0])
-    .order('date_start', { ascending: true })
+    .order('date_start', { ascending: true, nullsFirst: false })
     .limit(limit);
   return (data ?? []) as SdeEvent[];
 }
 
-export async function fetchEventBySlug(slug: string): Promise<SdeEvent | null> {
-  const { data } = await supabase
-    .from('events')
-    .select('*')
-    .eq('slug', slug)
-    .maybeSingle();
-  return (data ?? null) as SdeEvent | null;
-}
+
 
 export async function fetchEventRegistrationCount(eventIds: string[]): Promise<Record<string, number>> {
   if (!eventIds.length) return {};

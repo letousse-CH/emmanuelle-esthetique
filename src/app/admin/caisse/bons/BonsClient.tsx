@@ -71,11 +71,11 @@ export default function BonsClient() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Caisse</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Caisse</p>
           <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
             <Gift size={20} className="text-sage" /> Bons cadeaux
           </h1>
-          <p className="text-stone-400 text-sm mt-1">
+          <p className="mt-1 text-sm text-stone-600">
             {filtered.length} bon{filtered.length !== 1 ? 's' : ''}
             {filter === 'valables' && ' en cours de validité'}
           </p>
@@ -103,12 +103,12 @@ export default function BonsClient() {
         </div>
       )}
 
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-5">
-        <p className="text-[11px] text-stone-400 font-medium mb-1">Engagement en cours</p>
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5">
+        <p className="text-[12.5px] text-stone-500 font-medium mb-1">Engagement en cours</p>
         {loading
           ? <div className="h-7 w-28 bg-stone-100 rounded animate-pulse" />
           : <p className="text-xl font-semibold text-stone-900 tabular-nums">{formatCHF(encours)}</p>}
-        <p className="text-[11px] text-stone-400 mt-2 leading-relaxed">
+        <p className="text-[12.5px] text-stone-500 mt-2 leading-relaxed">
           Prestations déjà payées que l&apos;institut doit encore. C&apos;est une dette
           envers les clientes, pas un chiffre d&apos;affaires à venir — cet argent a
           été encaissé à la vente des bons.
@@ -117,12 +117,12 @@ export default function BonsClient() {
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300" />
+          <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-500" />
           <label htmlFor="bons-search" className="sr-only">Rechercher un bon</label>
           <input
             id="bons-search" type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Code, bénéficiaire, acheteuse…"
-            className="w-full pl-11 pr-4 py-3 border border-stone-200 bg-white rounded-xl text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all shadow-sm"
+            className="w-full pl-11 pr-4 py-3 border border-stone-200 bg-white rounded-xl text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors shadow-sm"
           />
         </div>
         <div className="flex rounded-xl border border-stone-200 bg-white overflow-hidden shadow-sm">
@@ -139,14 +139,14 @@ export default function BonsClient() {
         </div>
       </div>
 
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-8 text-stone-400 text-sm">
-            <div className="w-4 h-4 rounded-full border border-stone-200 border-t-sage animate-spin" /> Chargement…
+          <div className="flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+            <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-10 text-center space-y-2">
-            <p className="text-stone-400 text-sm italic">
+            <p className="text-sm text-stone-600">
               {search ? 'Aucun résultat.' : filter === 'valables' ? 'Aucun bon en cours de validité.' : 'Aucun bon émis.'}
             </p>
             {!search && (
@@ -170,11 +170,11 @@ export default function BonsClient() {
                       {card.code}
                       <StatusBadge card={card} />
                     </p>
-                    <p className="text-xs text-stone-400 truncate">
+                    <p className="truncate text-[12.5px] text-stone-500">
                       {card.libelle}
                       {card.beneficiaire && ` · pour ${card.beneficiaire}`}
                     </p>
-                    <p className="text-[11px] text-stone-300 mt-0.5">
+                    <p className="text-[11px] text-stone-500 mt-0.5">
                       Vendu à {card.acheteur_label} le {new Date(card.emis_le).toLocaleDateString('fr-CH')}
                       {' · '}échéance {new Date(`${card.expire_le}T00:00:00`).toLocaleDateString('fr-CH')}
                     </p>
@@ -185,7 +185,7 @@ export default function BonsClient() {
                       {formatCHF(card.montant_restant)}
                     </span>
                     {entame && (
-                      <span className="block text-[10px] text-stone-400 tabular-nums">
+                      <span className="block text-[12px] text-stone-500 tabular-nums">
                         sur {formatCHF(card.montant_initial)}
                       </span>
                     )}
@@ -195,7 +195,7 @@ export default function BonsClient() {
                     onClick={() => handleDownload(card)}
                     disabled={busy === card.id || card.status === 'annule'}
                     aria-label={`Imprimer le bon ${card.code}`} title="Imprimer le bon"
-                    className="shrink-0 p-1.5 text-stone-300 hover:text-sage rounded-md hover:bg-sage/10 transition-all disabled:opacity-30 cursor-pointer"
+                    className="shrink-0 p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors disabled:opacity-30 cursor-pointer"
                   >
                     {busy === card.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                   </button>
@@ -215,9 +215,9 @@ function StatusBadge({ card }: { card: GiftCard }) {
     ? 'text-green-600 bg-green-50'
     : label === 'Annulé'
       ? 'text-red-500 bg-red-50'
-      : 'text-stone-400 bg-stone-100';
+      : 'text-stone-600 bg-stone-100';
   return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${cls}`}>
+    <span className={`text-[12px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${cls}`}>
       {label}
     </span>
   );

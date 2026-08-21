@@ -1,164 +1,371 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Plus, Trash2, ChevronUp, ChevronDown, Save, Loader2, CheckCircle2, AlertCircle, ArrowLeft, FolderOpen, Link2, FolderPlus } from 'lucide-react';
-import { supabase } from '../../../services/supabase';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Check, ChevronDown, ChevronUp, ExternalLink, FolderOpen, FolderPlus,
+  Link2, Plus, Save, Scale, Trash2,
+} from 'lucide-react';
 
-interface MenuItem { name: string; path?: string; type?: 'link' | 'dropdown'; children?: { name: string; path: string }[]; }
+import { supabase } from '../../../services/supabase';
+import { fetchAllPages, type DynamicPage } from '../../../services/dynamicPages';
+import {
+  Badge, Button, Callout, Card, CardBody, CardFooter, CardHeader, EmptyState,
+  Field, FormMessage, Input, PageHeader, Spinner,
+} from '../../../components/admin/ui';
+
+interface MenuChild { name: string; path: string; }
+interface MenuItem { name: string; path?: string; type?: 'link' | 'dropdown'; children?: MenuChild[]; }
+interface LegalLink { name: string; path: string; }
+
+const MENU_KEY = 'navigation_menu';
+const LEGAL_KEY = 'footer_legal_links';
 
 export default function MenuClient() {
-  const router = useRouter();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
-  const [status, setStatus]       = useState<'idle' | 'success' | 'error'>('idle');
-  const [errorMsg, setErrorMsg]   = useState('');
+  const [legalLinks, setLegalLinks] = useState<LegalLink[]>([]);
+  const [pages, setPages] = useState<DynamicPage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase.from('settings').select('key, value').eq('key', 'navigation_menu').single();
-        if (error) { if (error.code === 'PGRST116') loadDefaults(); else throw error; }
-        else if (data?.value) setMenuItems(JSON.parse(data.value));
-      } catch (err) { console.error(err); setErrorMsg('Impossible de charger le menu.'); setStatus('error'); loadDefaults(); }
-      finally { setLoading(false); }
-    })();
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [{ data }, allPages] = await Promise.all([
+        supabase.from('settings').select('key, value').in('key', [MENU_KEY, LEGAL_KEY]),
+        fetchAllPages(),
+      ]);
+      const map = Object.fromEntries((data ?? []).map((row: any) => [row.key, row.value]));
+      const parse = (raw: string | undefined, fallback: any[]) => {
+        try { const value = JSON.parse(raw || '[]'); return Array.isArray(value) ? value : fallback; }
+        catch { return fallback; }
+      };
+      setMenuItems(parse(map[MENU_KEY], []));
+      setLegalLinks(parse(map[LEGAL_KEY], []));
+      setPages(allPages);
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Impossible de charger le menu.' });
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loadDefaults = () => setMenuItems([
-    { name: "Accueil", path: "/" },
-    { name: "À propos", path: "/a-propos" },
-    { name: "Soins", path: "/soins" },
-    { name: "Ateliers", path: "/ateliers" },
-    { name: "Bon cadeau", path: "/bon-cadeau" },
-    { name: "Contact", path: "/contact" }
-  ]);
+  useEffect(() => { void load(); }, [load]);
 
-  const moveItem = (i: number, d: -1 | 1) => { const n = [...menuItems]; if (i + d < 0 || i + d >= n.length) return; [n[i], n[i + d]] = [n[i + d], n[i]]; setMenuItems(n); };
-  const deleteItem = (i: number) => { if (!confirm('Supprimer ce lien ?')) return; setMenuItems(prev => prev.filter((_, j) => j !== i)); };
-  const addLink = () => setMenuItems(prev => [...prev, { name: "Nouveau lien", path: "/nouveau-slug" }]);
-  const addDropdown = () => setMenuItems(prev => [...prev, { name: "Nouveau Menu", type: "dropdown", children: [] }]);
-  const updateItem = (i: number, k: keyof MenuItem, v: any) => setMenuItems(prev => { const n = [...prev]; n[i] = { ...n[i], [k]: v }; return n; });
-  const moveSubItem = (ii: number, si: number, d: -1 | 1) => { const ch = [...(menuItems[ii].children || [])]; if (si + d < 0 || si + d >= ch.length) return; [ch[si], ch[si + d]] = [ch[si + d], ch[si]]; updateItem(ii, 'children', ch); };
-  const addSubItem = (ii: number) => updateItem(ii, 'children', [...(menuItems[ii].children || []), { name: "Sous-lien", path: "/" }]);
-  const deleteSubItem = (ii: number, si: number) => updateItem(ii, 'children', menuItems[ii].children?.filter((_, j) => j !== si));
-  const updateSubItem = (ii: number, si: number, k: 'name' | 'path', v: string) => { const ch = [...(menuItems[ii].children || [])]; ch[si] = { ...ch[si], [k]: v }; updateItem(ii, 'children', ch); };
+  // ── Manipulation du menu ─────────────────────────────────────────────
+  const moveItem = (i: number, d: -1 | 1) => {
+    const next = [...menuItems];
+    if (i + d < 0 || i + d >= next.length) return;
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    setMenuItems(next);
+  };
+  const updateItem = (i: number, key: keyof MenuItem, value: any) =>
+    setMenuItems((prev) => prev.map((item, j) => (j === i ? { ...item, [key]: value } : item)));
+  const deleteItem = (i: number) => setMenuItems((prev) => prev.filter((_, j) => j !== i));
+  const addDropdown = () =>
+    setMenuItems((prev) => [...prev, { name: 'Nouveau menu', type: 'dropdown', children: [] }]);
+  const addPage = (page: DynamicPage) =>
+    setMenuItems((prev) => [...prev, { name: page.title, path: page.slug === 'home' ? '/' : `/${page.slug}` }]);
+  const addCustom = () => setMenuItems((prev) => [...prev, { name: 'Nouveau lien', path: '/' }]);
+
+  const addSubItem = (i: number) =>
+    updateItem(i, 'children', [...(menuItems[i].children ?? []), { name: 'Sous-lien', path: '/' }]);
+  const updateSubItem = (i: number, si: number, key: keyof MenuChild, value: string) => {
+    const children = [...(menuItems[i].children ?? [])];
+    children[si] = { ...children[si], [key]: value };
+    updateItem(i, 'children', children);
+  };
+  const moveSubItem = (i: number, si: number, d: -1 | 1) => {
+    const children = [...(menuItems[i].children ?? [])];
+    if (si + d < 0 || si + d >= children.length) return;
+    [children[si], children[si + d]] = [children[si + d], children[si]];
+    updateItem(i, 'children', children);
+  };
+  const deleteSubItem = (i: number, si: number) =>
+    updateItem(i, 'children', (menuItems[i].children ?? []).filter((_, j) => j !== si));
+
+  // Une page déjà présente dans le menu ne se re-propose pas.
+  const usedPaths = new Set<string>([
+    ...menuItems.flatMap((item) => [item.path, ...(item.children ?? []).map((c) => c.path)]),
+    ...legalLinks.map((link) => link.path),
+  ].filter(Boolean) as string[]);
+
+  const pagePath = (page: DynamicPage) => (page.slug === 'home' ? '/' : `/${page.slug}`);
 
   const save = async () => {
-    setSaving(true); setStatus('idle'); setErrorMsg('');
-    try {
-      const { error } = await supabase.from('settings').upsert({ key: 'navigation_menu', value: JSON.stringify(menuItems) }, { onConflict: 'key' });
-      if (error) throw error;
-      setStatus('success'); setTimeout(() => setStatus('idle'), 3000);
-    } catch (err) { setErrorMsg(err instanceof Error ? err.message : 'Erreur réseau.'); setStatus('error'); }
-    finally { setSaving(false); }
+    setSaving(true);
+    setMessage(null);
+    const { error } = await supabase.from('settings').upsert(
+      [
+        { key: MENU_KEY, value: JSON.stringify(menuItems) },
+        { key: LEGAL_KEY, value: JSON.stringify(legalLinks.filter((l) => l.name.trim() && l.path.trim())) },
+      ],
+      { onConflict: 'key' },
+    );
+    setSaving(false);
+    setMessage(
+      error
+        ? { type: 'error', text: error.message }
+        : { type: 'success', text: 'Navigation enregistrée. Rechargez le site pour la voir.' },
+    );
   };
 
+  const availablePages = pages.filter((page) => !usedPaths.has(pagePath(page)));
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <button onClick={() => router.back()} className="flex items-center gap-1.5 text-stone-400 hover:text-stone-700 text-xs font-medium mb-2 cursor-pointer transition-colors">
-            <ArrowLeft size={13} /> Retour
-          </button>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Site</p>
-          <h1 className="text-2xl font-semibold text-stone-900">Menu de navigation</h1>
-          <p className="text-stone-400 text-sm mt-1">Gérez l'ordre, les noms et les liens du menu principal.</p>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {status === 'success' && <span className="flex items-center gap-1.5 text-green-600 text-sm font-medium"><CheckCircle2 size={14} /> Enregistré</span>}
-          {status === 'error' && <span className="flex items-center gap-1.5 text-red-500 text-sm font-medium"><AlertCircle size={14} /> {errorMsg}</span>}
-          <button onClick={save} disabled={saving || loading}
-            className="flex items-center gap-2 bg-sage hover:bg-sage/80 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 cursor-pointer shadow-sm">
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Sauvegarder
-          </button>
-        </div>
-      </div>
+    <div className="max-w-4xl space-y-6">
+      <PageHeader
+        title="Navigation"
+        description="Ce que vos visiteurs voient dans l'en-tête et en bas de page. Rien n'est proposé par défaut : vous choisissez parmi vos pages réelles."
+        actions={
+          <Button variant="primary" icon={saving ? undefined : Save} loading={saving} onClick={() => void save()}>
+            Enregistrer
+          </Button>
+        }
+      />
+
+      {message && <FormMessage message={message} />}
 
       {loading ? (
-        <div className="flex justify-center py-16"><div className="w-6 h-6 rounded-full border-2 border-stone-200 border-t-sage animate-spin" /></div>
+        <Spinner label="Chargement de la navigation…" />
       ) : (
-        <div className="space-y-4">
-          {menuItems.length === 0 ? (
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm text-center py-16">
-              <p className="text-stone-400 text-lg mb-1">Menu vide</p>
-              <p className="text-stone-400 text-sm">Ajoutez des liens ci-dessous.</p>
-            </div>
-          ) : menuItems.map((item, idx) => {
-            const isDropdown = item.type === 'dropdown';
-            return (
-              <div key={idx} className={`bg-white rounded-2xl border shadow-sm p-5 transition-all ${isDropdown ? 'border-sage/20' : 'border-stone-100'}`}>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg shrink-0 ${isDropdown ? 'bg-sage/10 text-sage' : 'bg-stone-100 text-stone-400'}`}>
-                      {isDropdown ? <FolderOpen size={15} /> : <Link2 size={15} />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <label htmlFor={`menu-name-${idx}`} className="block text-[9px] font-semibold uppercase tracking-widest text-stone-400 mb-0.5">Nom</label>
-                      <input id={`menu-name-${idx}`} type="text" value={item.name} onChange={e => updateItem(idx, 'name', e.target.value)}
-                        className="text-stone-900 font-medium text-base bg-transparent focus:outline-none border-b border-transparent focus:border-sage/40 w-full max-w-[200px] transition-colors" />
-                    </div>
-                  </div>
-                  {!isDropdown ? (
-                    <div className="flex-1 min-w-0 max-w-md sm:mx-4">
-                      <label htmlFor={`menu-path-${idx}`} className="block text-[9px] font-semibold uppercase tracking-widest text-stone-400 mb-0.5">URL</label>
-                      <input id={`menu-path-${idx}`} type="text" value={item.path} onChange={e => updateItem(idx, 'path', e.target.value)}
-                        className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-1.5 text-sm font-mono text-stone-600 focus:outline-none focus:ring-1 focus:ring-sage/30 transition-colors" />
-                    </div>
-                  ) : (
-                    <div className="flex-1 sm:mx-4 flex items-center justify-end">
-                      <button onClick={() => addSubItem(idx)}
-                        className="flex items-center gap-1.5 bg-sage/10 hover:bg-sage/20 text-sage px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer">
-                        <Plus size={11} /> Ajouter un sous-lien
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => moveItem(idx, -1)} disabled={idx === 0} aria-label={`Monter « ${item.name} »`} title="Monter" className="p-1.5 hover:bg-stone-100 text-stone-300 hover:text-stone-700 rounded-lg disabled:opacity-20 transition-colors cursor-pointer"><ChevronUp size={14} /></button>
-                    <button onClick={() => moveItem(idx, 1)} disabled={idx === menuItems.length - 1} aria-label={`Descendre « ${item.name} »`} title="Descendre" className="p-1.5 hover:bg-stone-100 text-stone-300 hover:text-stone-700 rounded-lg disabled:opacity-20 transition-colors cursor-pointer"><ChevronDown size={14} /></button>
-                    <button onClick={() => deleteItem(idx)} aria-label={`Supprimer « ${item.name} »`} title="Supprimer" className="p-1.5 hover:bg-red-50 text-stone-300 hover:text-red-500 rounded-lg transition-colors cursor-pointer"><Trash2 size={14} /></button>
-                  </div>
-                </div>
-                {isDropdown && (
-                  <div className="mt-4 pl-4 border-l-2 border-stone-100 space-y-2">
-                    {(!item.children || item.children.length === 0) ? (
-                      <p className="text-xs italic text-stone-400 py-1">Aucun sous-lien.</p>
-                    ) : item.children.map((child, subIdx) => (
-                      <div key={subIdx} className="bg-stone-50 rounded-xl border border-stone-100 p-3 flex flex-col sm:flex-row sm:items-center gap-3">
-                        <div className="min-w-0 sm:w-1/3">
-                          <label htmlFor={`menu-sub-name-${idx}-${subIdx}`} className="block text-[8px] font-semibold uppercase tracking-widest text-stone-400 mb-0.5">Titre</label>
-                          <input id={`menu-sub-name-${idx}-${subIdx}`} type="text" value={child.name} onChange={e => updateSubItem(idx, subIdx, 'name', e.target.value)}
-                            className="w-full bg-transparent font-medium text-stone-800 text-sm focus:outline-none border-b border-transparent focus:border-sage/40 transition-colors" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <label htmlFor={`menu-sub-path-${idx}-${subIdx}`} className="block text-[8px] font-semibold uppercase tracking-widest text-stone-400 mb-0.5">URL</label>
-                          <input id={`menu-sub-path-${idx}-${subIdx}`} type="text" value={child.path} onChange={e => updateSubItem(idx, subIdx, 'path', e.target.value)}
-                            className="w-full bg-white border border-stone-200 rounded-lg px-2.5 py-1 text-xs font-mono text-stone-600 focus:outline-none focus:ring-1 focus:ring-sage/30 transition-colors" />
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => moveSubItem(idx, subIdx, -1)} disabled={subIdx === 0} aria-label={`Monter « ${child.name} »`} title="Monter" className="p-1 hover:bg-stone-200 text-stone-300 hover:text-stone-700 rounded disabled:opacity-20 cursor-pointer transition-colors"><ChevronUp size={12} /></button>
-                          <button onClick={() => moveSubItem(idx, subIdx, 1)} disabled={subIdx === (item.children?.length || 0) - 1} aria-label={`Descendre « ${child.name} »`} title="Descendre" className="p-1 hover:bg-stone-200 text-stone-300 hover:text-stone-700 rounded disabled:opacity-20 cursor-pointer transition-colors"><ChevronDown size={12} /></button>
-                          <button onClick={() => deleteSubItem(idx, subIdx)} aria-label={`Supprimer « ${child.name} »`} title="Supprimer" className="p-1 hover:bg-red-50 text-stone-300 hover:text-red-500 rounded cursor-pointer transition-colors"><Trash2 size={12} /></button>
+        <>
+          {/* ── Menu principal ──────────────────────────────────────── */}
+          <Card>
+            <CardHeader
+              title="Menu principal"
+              description="Affiché dans l'en-tête du site, dans cet ordre."
+              actions={<Badge>{menuItems.length} entrée{menuItems.length > 1 ? 's' : ''}</Badge>}
+            />
+            <CardBody className="space-y-3">
+              {menuItems.length === 0 ? (
+                <EmptyState
+                  icon={Link2}
+                  title="Le menu est vide"
+                  description="Tant qu'il l'est, l'en-tête n'affiche que votre logo. Ajoutez vos pages ci-dessous."
+                />
+              ) : (
+                menuItems.map((item, idx) => {
+                  const isDropdown = item.type === 'dropdown';
+                  return (
+                    <div key={idx} className="rounded-lg border border-stone-200 p-4">
+                      <div className="flex flex-wrap items-end gap-3">
+                        <span className="mb-2 grid size-8 shrink-0 place-items-center rounded-lg bg-stone-100 text-stone-600">
+                          {isDropdown ? <FolderOpen size={15} /> : <Link2 size={15} />}
+                        </span>
+
+                        <Field label="Intitulé" htmlFor={`menu-name-${idx}`} className="min-w-[9rem] flex-1">
+                          <Input
+                            id={`menu-name-${idx}`}
+                            value={item.name}
+                            onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                          />
+                        </Field>
+
+                        {isDropdown ? (
+                          <div className="mb-1 flex-1">
+                            <Button size="sm" icon={Plus} onClick={() => addSubItem(idx)}>
+                              Ajouter un sous-lien
+                            </Button>
+                          </div>
+                        ) : (
+                          <Field label="Adresse" htmlFor={`menu-path-${idx}`} className="min-w-[11rem] flex-[2]">
+                            <Input
+                              id={`menu-path-${idx}`}
+                              value={item.path ?? ''}
+                              onChange={(e) => updateItem(idx, 'path', e.target.value)}
+                              className="font-mono text-[13px]"
+                            />
+                          </Field>
+                        )}
+
+                        <div className="mb-1 flex shrink-0 items-center gap-0.5">
+                          <IconAction label={`Monter « ${item.name} »`} disabled={idx === 0} onClick={() => moveItem(idx, -1)}>
+                            <ChevronUp size={15} />
+                          </IconAction>
+                          <IconAction label={`Descendre « ${item.name} »`} disabled={idx === menuItems.length - 1} onClick={() => moveItem(idx, 1)}>
+                            <ChevronDown size={15} />
+                          </IconAction>
+                          <IconAction label={`Retirer « ${item.name} »`} danger onClick={() => deleteItem(idx)}>
+                            <Trash2 size={15} />
+                          </IconAction>
                         </div>
                       </div>
-                    ))}
+
+                      {isDropdown && (
+                        <div className="mt-3 space-y-2 border-l-2 border-stone-200 pl-4">
+                          {(item.children ?? []).length === 0 ? (
+                            <p className="py-1 text-[12.5px] text-stone-600">Aucun sous-lien pour l'instant.</p>
+                          ) : (
+                            (item.children ?? []).map((child, si) => (
+                              <div key={si} className="flex flex-wrap items-end gap-3 rounded-lg bg-stone-50 p-3">
+                                <Field label="Intitulé" className="min-w-[8rem] flex-1">
+                                  <Input value={child.name} onChange={(e) => updateSubItem(idx, si, 'name', e.target.value)} />
+                                </Field>
+                                <Field label="Adresse" className="min-w-[10rem] flex-[2]">
+                                  <Input
+                                    value={child.path}
+                                    onChange={(e) => updateSubItem(idx, si, 'path', e.target.value)}
+                                    className="font-mono text-[13px]"
+                                  />
+                                </Field>
+                                <div className="mb-1 flex shrink-0 items-center gap-0.5">
+                                  <IconAction label="Monter" disabled={si === 0} onClick={() => moveSubItem(idx, si, -1)}>
+                                    <ChevronUp size={14} />
+                                  </IconAction>
+                                  <IconAction label="Descendre" disabled={si === (item.children?.length ?? 0) - 1} onClick={() => moveSubItem(idx, si, 1)}>
+                                    <ChevronDown size={14} />
+                                  </IconAction>
+                                  <IconAction label="Retirer" danger onClick={() => deleteSubItem(idx, si)}>
+                                    <Trash2 size={14} />
+                                  </IconAction>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </CardBody>
+            <CardFooter hint="Un menu déroulant regroupe plusieurs pages sous un même intitulé.">
+              <Button size="sm" icon={Plus} onClick={addCustom}>Lien libre</Button>
+              <Button size="sm" icon={FolderPlus} onClick={addDropdown}>Menu déroulant</Button>
+            </CardFooter>
+          </Card>
+
+          {/* ── Pages disponibles ───────────────────────────────────── */}
+          <Card>
+            <CardHeader
+              title="Vos pages"
+              description="Cliquez pour ajouter une page au menu. Seules les pages qui existent vraiment sont proposées."
+            />
+            <CardBody>
+              {pages.length === 0 ? (
+                <p className="text-[13px] text-stone-600">
+                  Aucune page n'a encore été créée. Rendez-vous dans <strong>Pages</strong> pour en ajouter une.
+                </p>
+              ) : availablePages.length === 0 ? (
+                <p className="flex items-center gap-1.5 text-[13px] text-stone-600">
+                  <Check size={14} className="text-emerald-600" />
+                  Toutes vos pages figurent déjà dans la navigation.
+                </p>
+              ) : (
+                <ul className="flex flex-wrap gap-2">
+                  {availablePages.map((page) => (
+                    <li key={page.id}>
+                      <button
+                        type="button"
+                        onClick={() => addPage(page)}
+                        className="flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-[13px] text-stone-800 transition-colors hover:border-stone-400 hover:bg-stone-50 cursor-pointer
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2"
+                      >
+                        <Plus size={13} className="text-stone-500" />
+                        {page.title}
+                        <span className="font-mono text-[11.5px] text-stone-500">{pagePath(page)}</span>
+                        {!page.published && <Badge tone="warning">brouillon</Badge>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+
+          {/* ── Liens de bas de page ────────────────────────────────── */}
+          <Card>
+            <CardHeader
+              title="Liens de bas de page"
+              description="Mentions légales, CGV, confidentialité… Affichés tout en bas, sur toutes les pages."
+              actions={
+                <Button size="sm" icon={Plus} onClick={() => setLegalLinks((prev) => [...prev, { name: '', path: '/' }])}>
+                  Ajouter
+                </Button>
+              }
+            />
+            <CardBody className="space-y-3">
+              <Callout tone="info">
+                Ces liens étaient auparavant écrits en dur dans le pied de page et pointaient vers des
+                pages que ce site n'a pas forcément. N'ajoutez ici que des pages réellement créées.
+              </Callout>
+
+              {legalLinks.length === 0 ? (
+                <p className="flex items-center gap-1.5 text-[13px] text-stone-600">
+                  <Scale size={14} className="text-stone-500" />
+                  Aucun lien : la ligne du bas n'affichera que votre nom et l'année.
+                </p>
+              ) : (
+                legalLinks.map((link, idx) => (
+                  <div key={idx} className="flex flex-wrap items-end gap-3 rounded-lg border border-stone-200 p-3">
+                    <Field label="Intitulé" className="min-w-[9rem] flex-1">
+                      <Input
+                        value={link.name}
+                        placeholder="Mentions légales"
+                        onChange={(e) =>
+                          setLegalLinks((prev) => prev.map((l, j) => (j === idx ? { ...l, name: e.target.value } : l)))
+                        }
+                      />
+                    </Field>
+                    <Field label="Adresse" className="min-w-[10rem] flex-[2]">
+                      <Input
+                        value={link.path}
+                        placeholder="/mentions-legales"
+                        className="font-mono text-[13px]"
+                        onChange={(e) =>
+                          setLegalLinks((prev) => prev.map((l, j) => (j === idx ? { ...l, path: e.target.value } : l)))
+                        }
+                      />
+                    </Field>
+                    <div className="mb-1 shrink-0">
+                      <IconAction label={`Retirer « ${link.name || 'ce lien'} »`} danger onClick={() => setLegalLinks((prev) => prev.filter((_, j) => j !== idx))}>
+                        <Trash2 size={15} />
+                      </IconAction>
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <button onClick={addLink} className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-stone-200 hover:border-sage hover:text-sage text-stone-400 rounded-2xl py-4 text-sm transition-all cursor-pointer bg-white">
-              <Plus size={14} /> Ajouter un lien de menu
-            </button>
-            <button onClick={addDropdown} className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-stone-200 hover:border-sage hover:text-sage text-stone-400 rounded-2xl py-4 text-sm transition-all cursor-pointer bg-white">
-              <FolderPlus size={14} /> Créer un menu déroulant
-            </button>
+                ))
+              )}
+            </CardBody>
+          </Card>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-6 py-4">
+            <p className="text-[13px] text-stone-600">
+              Les changements ne sont visibles sur le site qu'une fois enregistrés.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button icon={ExternalLink} onClick={() => window.open('/', '_blank', 'noopener')}>
+                Voir le site
+              </Button>
+              <Button variant="primary" icon={saving ? undefined : Save} loading={saving} onClick={() => void save()}>
+                Enregistrer
+              </Button>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
+  );
+}
+
+function IconAction({
+  label, onClick, disabled, danger, children,
+}: {
+  label: string; onClick: () => void; disabled?: boolean; danger?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={`grid size-8 place-items-center rounded-lg text-stone-500 transition-colors disabled:opacity-25 cursor-pointer disabled:cursor-default
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 ${
+          danger ? 'hover:bg-red-50 hover:text-red-700' : 'hover:bg-stone-100 hover:text-stone-900'
+        }`}
+    >
+      {children}
+    </button>
   );
 }

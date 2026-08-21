@@ -29,25 +29,33 @@ const FALLBACK_BRAND: BrandTokens = {
   siteName: SITE_CONFIG.name,
 };
 
-const BRAND_SETTING_KEYS = ['style_color_primary', 'style_color_btn_dark_bg', 'style_font_headings', 'style_font_body'] as const;
-
-// Les réglages « Design & Style » de l'admin font autorité, comme dans
-// GlobalStyles : on ne retombe sur FALLBACK_BRAND que si la valeur est vide.
-function isOldStyleDefault(_key: string, value: string): boolean {
-  // La table `settings` fait autorité (même règle que GlobalStyles) : seule une
-  // valeur vide justifie de retomber sur FALLBACK_BRAND.
-  return !value;
-}
+/*
+  Les quatre jetons qui font l'identité d'un visuel. `style_color_btn_dark_bg`
+  était lu ici alors qu'aucun jeton de ce nom n'existe dans
+  `constants/designTokens` : la couleur sombre des cartes restait donc
+  éternellement celle du repli, quoi qu'on règle dans l'admin. On lit désormais
+  la couleur de texte du site, qui est la teinte sombre de la charte.
+*/
+const BRAND_SETTING_KEYS = [
+  'style_color_primary',
+  'style_color_text',
+  'style_font_headings',
+  'style_font_body',
+] as const;
 
 export async function fetchBrandTokens(siteName?: string): Promise<BrandTokens> {
   const brand: BrandTokens = { ...FALLBACK_BRAND, siteName: siteName || FALLBACK_BRAND.siteName };
   try {
     const { data, error } = await supabase.from('settings').select('key, value').in('key', BRAND_SETTING_KEYS);
     if (error || !data) return brand;
-    const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
-    if (map.style_color_primary && !isOldStyleDefault('style_color_primary', map.style_color_primary)) brand.accent = map.style_color_primary;
-    if (map.style_color_btn_dark_bg && !isOldStyleDefault('style_color_btn_dark_bg', map.style_color_btn_dark_bg)) brand.dark = map.style_color_btn_dark_bg;
-    if (map.style_font_headings && !isOldStyleDefault('style_font_headings', map.style_font_headings)) brand.headingFont = map.style_font_headings;
+    const map = Object.fromEntries(
+      (data as { key: string; value: string | null }[]).map((r) => [r.key, (r.value ?? '').trim()]),
+    );
+    // La table `settings` fait autorité, comme dans GlobalStyles : seule une
+    // valeur vide justifie de retomber sur FALLBACK_BRAND.
+    if (map.style_color_primary) brand.accent = map.style_color_primary;
+    if (map.style_color_text) brand.dark = map.style_color_text;
+    if (map.style_font_headings) brand.headingFont = map.style_font_headings;
     if (map.style_font_body) brand.bodyFont = map.style_font_body;
   } catch {
     // Réseau indisponible : on garde le fallback de marque par défaut.

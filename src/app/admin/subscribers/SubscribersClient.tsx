@@ -9,7 +9,7 @@ type SortCol = 'email' | 'date' | 'status';
 type SortDir = 'asc' | 'desc';
 
 function SortIcon({ col, sortBy, sortDir }: { col: SortCol; sortBy: SortCol; sortDir: SortDir }) {
-  if (sortBy !== col) return <ArrowUpDown size={11} className="text-stone-300" />;
+  if (sortBy !== col) return <ArrowUpDown size={11} className="text-stone-500" />;
   return sortDir === 'asc' ? <ArrowUp size={11} className="text-sage" /> : <ArrowDown size={11} className="text-sage" />;
 }
 
@@ -84,11 +84,11 @@ export default function Subscribers() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Audience</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Audience</p>
           <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5"><Mail size={20} className="text-sage" /> Abonnés</h1>
-          <p className="text-stone-400 text-sm mt-1">
+          <p className="mt-1 text-sm text-stone-600">
             <span className="text-green-600 font-medium">{activeCount} actif{activeCount !== 1 ? 's' : ''}</span>
-            {inactiveCount > 0 && <span className="ml-2 text-stone-300">· {inactiveCount} désinscrit{inactiveCount !== 1 ? 's' : ''}</span>}
+            {inactiveCount > 0 && <span className="ml-2 text-stone-500">· {inactiveCount} désinscrit{inactiveCount !== 1 ? 's' : ''}</span>}
           </p>
         </div>
         <div className="flex gap-2">
@@ -103,17 +103,17 @@ export default function Subscribers() {
 
       <label htmlFor="subscribers-search" className="sr-only">Rechercher un email</label>
       <input id="subscribers-search" type="text" placeholder="Rechercher un email…" value={search} onChange={e => setSearch(e.target.value)}
-        className="w-full px-4 py-3 border border-stone-200 bg-white rounded-xl text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all shadow-sm" />
+        className="w-full px-4 py-3 border border-stone-200 bg-white rounded-xl text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors shadow-sm" />
 
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
         {loadError ? (
-          <div className="p-8 text-center"><p className="text-red-500 font-semibold text-sm mb-1">Erreur</p><p className="text-stone-400 text-xs font-mono">{loadError}</p></div>
+          <div className="p-8 text-center"><p className="text-red-500 font-semibold text-sm mb-1">Erreur</p><p className="text-stone-500 text-xs font-mono">{loadError}</p></div>
         ) : loading ? (
-          <div className="flex items-center justify-center gap-2 p-8 text-stone-400 text-sm">
-            <div className="w-4 h-4 rounded-full border border-stone-200 border-t-sage animate-spin" /> Chargement…
+          <div className="flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+            <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : sorted.length === 0 ? (
-          <p className="p-8 text-center text-stone-400 text-sm italic">{search ? 'Aucun résultat.' : 'Aucun abonné pour le moment.'}</p>
+          <p className="p-8 text-center text-sm text-stone-600">{search ? 'Aucun résultat.' : 'Aucun abonné pour le moment.'}</p>
         ) : (
           <>
             {/* Tableau — écrans sm et plus */}
@@ -123,11 +123,11 @@ export default function Subscribers() {
                   <tr className="border-b border-stone-100 bg-stone-50/50">
                     {([['email', 'Email'], ['date', 'Inscription'], ['status', 'Statut']] as [SortCol, string][]).map(([col, lbl]) => (
                       <th key={col} onClick={() => toggleSort(col)}
-                        className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 text-left cursor-pointer hover:text-stone-700 select-none transition-colors">
+                        className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-left cursor-pointer hover:text-stone-700 select-none transition-colors">
                         <span className="flex items-center gap-1.5">{lbl} <SortIcon col={col} sortBy={sortBy} sortDir={sortDir} /></span>
                       </th>
                     ))}
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 text-left">Bienvenue</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-left">Bienvenue</th>
                     <th className="px-6 py-3.5" />
                   </tr>
                 </thead>
@@ -135,7 +135,7 @@ export default function Subscribers() {
                   {sorted.map(sub => (
                     <tr key={sub.id} className={`border-b border-stone-50 hover:bg-stone-50/50 transition-colors group ${!sub.active ? 'opacity-50' : ''}`}>
                       <td className="px-6 py-4 font-medium text-stone-900">{sub.email}</td>
-                      <td className="px-6 py-4 text-stone-400 text-xs whitespace-nowrap">
+                      <td className="px-6 py-4 text-stone-500 text-xs whitespace-nowrap">
                         {new Date(sub.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="px-6 py-4">
@@ -147,7 +147,7 @@ export default function Subscribers() {
                       <td className="px-6 py-4 text-right">
                         <button onClick={() => handleDelete(sub.id)} disabled={deleting === sub.id}
                           aria-label={`Supprimer l'abonné ${sub.email}`} title="Supprimer"
-                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-all disabled:opacity-30 cursor-pointer">
+                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all disabled:opacity-30 cursor-pointer">
                           <Trash2 size={14} />
                         </button>
                       </td>
@@ -167,7 +167,7 @@ export default function Subscribers() {
                       <p className="font-medium text-stone-900 text-sm break-all">{sub.email}</p>
                       <span className="shrink-0"><SubStatusBadge active={sub.active} /></span>
                     </div>
-                    <div className="flex items-center justify-between gap-3 text-xs text-stone-400">
+                    <div className="flex items-center justify-between gap-3 text-[12.5px] text-stone-500">
                       <span>{new Date(sub.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       {!showSend && <WelcomeStatus sub={sub} result={welcomeResult[sub.id]} sending={sendingWelcome === sub.id} onSend={() => sendWelcome(sub)} />}
                     </div>
@@ -196,8 +196,8 @@ export default function Subscribers() {
 
 function SubStatusBadge({ active }: { active: boolean }) {
   return active
-    ? <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full whitespace-nowrap">● Abonné</span>
-    : <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-stone-400 bg-stone-100 px-2.5 py-1 rounded-full whitespace-nowrap">● Désinscrit</span>;
+    ? <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full whitespace-nowrap">● Abonné</span>
+    : <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-stone-500 bg-stone-100 px-2.5 py-1 rounded-full whitespace-nowrap">● Désinscrit</span>;
 }
 
 function WelcomeStatus({ sub, result, sending, onSend }: {
@@ -205,10 +205,10 @@ function WelcomeStatus({ sub, result, sending, onSend }: {
 }) {
   if (result === 'ok') return <span className="text-xs text-green-600 font-semibold whitespace-nowrap">✓ Envoyé</span>;
   if (result === 'err') return <span className="text-xs text-red-500 font-semibold whitespace-nowrap">✗ Erreur</span>;
-  if (sub.welcome_sent) return <span className="text-xs text-stone-400 italic whitespace-nowrap">{sub.welcome_sent_at ? new Date(sub.welcome_sent_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'Déjà envoyé'}</span>;
+  if (sub.welcome_sent) return <span className="text-[12.5px] text-stone-500 italic whitespace-nowrap">{sub.welcome_sent_at ? new Date(sub.welcome_sent_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'Déjà envoyé'}</span>;
   return (
     <button onClick={onSend} disabled={sending || !sub.active}
-      className="flex items-center gap-1.5 text-xs text-sage hover:text-sage/70 font-semibold transition-colors disabled:opacity-30 cursor-pointer whitespace-nowrap">
+      className="flex items-center gap-1.5 text-xs text-sage hover:text-stone-900/70 font-semibold transition-colors disabled:opacity-30 cursor-pointer whitespace-nowrap">
       <Send size={11} />{sending ? '…' : 'Envoyer'}
     </button>
   );

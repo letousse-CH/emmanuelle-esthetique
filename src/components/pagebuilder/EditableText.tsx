@@ -194,7 +194,7 @@ export default function EditableText({
         data-no-edit="true"
       />
       {showSaved && (
-        <span className="absolute -top-6 right-0 bg-green-500 text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1 shadow-lg animate-fadein z-50">
+        <span className="absolute -top-6 right-0 bg-green-500 text-white text-[12px] px-2 py-1 rounded-full flex items-center gap-1 shadow-lg animate-fadein z-50">
           <Check size={10} /> Enregistré
         </span>
       )}

@@ -333,10 +333,10 @@ export default function MediaManager() {
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-light text-stone-900 uppercase tracking-widest">Médiathèque</h1>
+          <h1 className="text-[26px] font-semibold tracking-tight text-stone-900">Médiathèque</h1>
           <p className="text-stone-500 mt-2">Gérez vos images et optimisez leur référencement (SEO).</p>
         </div>
-        <label className={`cursor-pointer bg-stone-900 text-white px-6 py-3 text-sm uppercase tracking-widest hover:bg-sage transition-colors flex items-center gap-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+        <label className={`cursor-pointer bg-stone-900 text-white px-6 py-3 text-sm hover:bg-stone-700 transition-colors flex items-center gap-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
           <Upload size={16} />
           {upload.stage === 'compressing' ? 'Compression…' : upload.stage === 'uploading' ? 'Envoi…' : 'Ajouter une image'}
           <input
@@ -360,7 +360,7 @@ export default function MediaManager() {
       />
 
       {/* Compression info capsule */}
-      <div className="flex items-center gap-2 mb-6 text-[11px] text-stone-400 uppercase tracking-widest font-bold">
+      <div className="flex items-center gap-2 mb-6 text-[12.5px] text-stone-500 font-bold">
         <Zap size={12} className="text-amber-400" />
         Compression automatique activée — WebP · max 1920 px · qualité 82%
       </div>
@@ -383,9 +383,9 @@ export default function MediaManager() {
       {/* Grid */}
       <div className="bg-white border border-stone-100 shadow-sm p-6">
         {loading ? (
-          <div className="py-12 text-center text-stone-400 italic">Chargement...</div>
+          <div className="py-12 text-center text-stone-600">Chargement...</div>
         ) : medias.length === 0 ? (
-          <div className="py-12 text-center text-stone-400 italic">Aucune image. Commencez par en ajouter une.</div>
+          <div className="py-12 text-center text-stone-600">Aucune image. Commencez par en ajouter une.</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {medias.map((asset) => (
@@ -408,7 +408,7 @@ export default function MediaManager() {
 
                 <div className="p-4 space-y-4">
                   <div className="space-y-1">
-                    <label htmlFor={`media-alt-${asset.id}`} className="text-xs uppercase tracking-widest font-bold text-stone-500">
+                    <label htmlFor={`media-alt-${asset.id}`} className="text-[13px] font-medium text-stone-800">
                       Texte Alternatif (Alt)
                     </label>
                     <input
@@ -416,18 +416,18 @@ export default function MediaManager() {
                       type="text"
                       value={asset.alt_text}
                       onChange={(e) => handleAltChange(asset.id, e.target.value)}
-                      className="w-full border-b border-stone-300 bg-transparent py-1 focus:border-sage outline-none transition-colors text-sm"
+                      className="w-full border-b border-stone-300 bg-transparent py-1 focus:border-stone-900 outline-none transition-colors text-sm"
                       placeholder="Décrivez l'image pour Google..."
                     />
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-stone-200">
-                    <span className="text-xs text-stone-400 truncate w-3/4" title={asset.url}>
+                    <span className="truncate text-[12.5px] text-stone-500 w-3/4" title={asset.url}>
                       {asset.url.split('/').pop()}
                     </span>
                     <button
                       onClick={() => copyToClipboard(asset.url, asset.id)}
-                      className="text-stone-400 hover:text-sage transition-colors"
+                      className="text-stone-500 hover:text-stone-900 transition-colors"
                       title="Copier l'URL"
                       aria-label={copiedId === asset.id ? 'URL copiée' : "Copier l'URL de l'image"}
                     >

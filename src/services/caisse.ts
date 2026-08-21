@@ -486,16 +486,6 @@ export async function listGiftCardsForSale(transactionId: string): Promise<GiftC
   return (data ?? []) as GiftCard[];
 }
 
-/** Encaissements ayant consommé ce bon — l'historique d'utilisation. */
-export async function listGiftCardUsages(giftCardId: string): Promise<Transaction[]> {
-  const { data, error } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('gift_card_id', giftCardId)
-    .order('created_at', { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as Transaction[];
-}
 
 export async function cancelTransaction(id: string, reason: string): Promise<Transaction> {
   const { data, error } = await supabase.rpc('caisse_cancel_transaction', {
@@ -527,15 +517,3 @@ export async function listTransactions(from: string, to: string): Promise<Transa
   }));
 }
 
-export async function getTransaction(id: string): Promise<TransactionWithItems | null> {
-  const { data, error } = await supabase
-    .from('transactions')
-    .select('*, transaction_items(*)')
-    .eq('id', id)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) return null;
-  const tx = data as TransactionWithItems;
-  tx.transaction_items = [...(tx.transaction_items ?? [])].sort((a, b) => a.ordre - b.ordre);
-  return tx;
-}

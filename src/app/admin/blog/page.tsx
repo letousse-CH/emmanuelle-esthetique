@@ -69,7 +69,7 @@ export default function BlogList() {
       {!moduleFlags.blog && <ModuleDisabledBanner moduleLabel="Blog" />}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Contenu</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Contenu</p>
           <h1 className="text-2xl font-semibold text-stone-900">Articles du blog</h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -77,24 +77,24 @@ export default function BlogList() {
             onClick={handleApplyMeshing}
             disabled={!!meshingProgress || loading}
             title="Injecte les liens internes dans tous les articles publiés"
-            className="flex items-center gap-2 border border-stone-200 text-stone-500 hover:border-sage hover:text-sage px-4 py-2 rounded-lg text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="flex items-center gap-2 border border-stone-200 text-stone-500 hover:border-stone-400 hover:text-stone-900 px-4 py-2 rounded-lg text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             <Link2 size={14} />
             {meshingProgress ? `Maillage… ${meshingProgress.done}/${meshingProgress.total}` : 'Maillage interne'}
           </button>
-          <Link href="/admin/blog/new" className="flex items-center gap-2 bg-sage text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-sage/80 transition-colors">
+          <Link href="/admin/blog/new" className="flex items-center gap-2 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors">
             <Plus size={15} /> Nouvel article
           </Link>
         </div>
       </div>
 
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-12 text-stone-400 text-sm">
-            <div className="w-4 h-4 rounded-full border border-stone-200 border-t-sage animate-spin" /> Chargement…
+          <div className="flex items-center justify-center gap-2 py-12 text-stone-500 text-sm">
+            <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : articlesState.length === 0 ? (
-          <p className="py-16 text-center text-stone-400 text-sm italic">Aucun article trouvé.</p>
+          <p className="py-16 text-center text-sm text-stone-600">Aucun article trouvé.</p>
         ) : (
           <>
             {/* Tableau — écrans sm et plus */}
@@ -102,10 +102,10 @@ export default function BlogList() {
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-stone-100 bg-stone-50/50">
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400">Titre</th>
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400">Date</th>
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 text-center">Statut</th>
-                    <th className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 text-center">SEO</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600">Titre</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600">Date</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-center">Statut</th>
+                    <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-center">SEO</th>
                     <th className="px-6 py-3.5" />
                   </tr>
                 </thead>
@@ -114,9 +114,9 @@ export default function BlogList() {
                     <tr key={article.id} className="border-b border-stone-50 hover:bg-stone-50/50 transition-colors group">
                       <td className="px-6 py-4">
                         <p className="font-medium text-stone-900">{article.title}</p>
-                        <p className="text-xs text-stone-400 mt-0.5 font-mono">/{article.slug}</p>
+                        <p className="text-[12.5px] text-stone-500 mt-0.5 font-mono">/{article.slug}</p>
                       </td>
-                      <td className="px-6 py-4 text-stone-400 text-xs whitespace-nowrap">
+                      <td className="px-6 py-4 text-stone-500 text-xs whitespace-nowrap">
                         {new Date(article.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="px-6 py-4 text-center">
@@ -128,15 +128,15 @@ export default function BlogList() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1 justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
                           <a href={`/blog/${article.slug}`} target="_blank" rel="noreferrer"
-                            className="p-1.5 text-stone-300 hover:text-stone-700 rounded-md hover:bg-stone-100 transition-colors" title="Voir" aria-label={`Voir l'article « ${article.title} »`}>
+                            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors" title="Voir" aria-label={`Voir l'article « ${article.title} »`}>
                             <Eye size={14} />
                           </a>
                           <Link href={`/admin/blog/edit/${article.id}`}
-                            className="p-1.5 text-stone-300 hover:text-sage rounded-md hover:bg-sage/10 transition-colors" title="Modifier" aria-label={`Modifier l'article « ${article.title} »`}>
+                            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors" title="Modifier" aria-label={`Modifier l'article « ${article.title} »`}>
                             <Edit size={14} />
                           </Link>
                           <button onClick={() => handleDelete(article.id)}
-                            className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-colors cursor-pointer" title="Supprimer" aria-label={`Supprimer l'article « ${article.title} »`}>
+                            className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer" title="Supprimer" aria-label={`Supprimer l'article « ${article.title} »`}>
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -153,12 +153,12 @@ export default function BlogList() {
                 <div key={article.id} className="p-4 space-y-3">
                   <div>
                     <p className="font-medium text-stone-900 leading-snug">{article.title}</p>
-                    <p className="text-xs text-stone-400 mt-0.5 font-mono">/{article.slug}</p>
+                    <p className="text-[12.5px] text-stone-500 mt-0.5 font-mono">/{article.slug}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <StatusBadge article={article} />
                     <SeoBadge score={seoScores[article.id]} />
-                    <span className="text-[11px] text-stone-400 ml-auto whitespace-nowrap">
+                    <span className="text-[12.5px] text-stone-500 ml-auto whitespace-nowrap">
                       {new Date(article.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
                   </div>
@@ -189,7 +189,7 @@ export default function BlogList() {
 function StatusBadge({ article }: { article: Article }) {
   if (article.published) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-green-600 bg-green-50 px-2.5 py-1 rounded-full text-[10px] font-semibold">
+      <span className="inline-flex items-center gap-1.5 text-green-600 bg-green-50 px-2.5 py-1 rounded-full text-[12px] font-semibold">
         <CheckCircle size={10} /> Publié
       </span>
     );
@@ -197,26 +197,26 @@ function StatusBadge({ article }: { article: Article }) {
   if (article.scheduled_at) {
     return (
       <span className="inline-flex flex-col items-center gap-0.5">
-        <span className="inline-flex items-center gap-1.5 text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full text-[10px] font-semibold">
+        <span className="inline-flex items-center gap-1.5 text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full text-[12px] font-semibold">
           <Clock size={10} /> Programmé
         </span>
-        <span className="text-[10px] text-amber-500">
+        <span className="text-[12px] text-amber-500">
           {new Date(article.scheduled_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
         </span>
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-stone-400 bg-stone-100 px-2.5 py-1 rounded-full text-[10px] font-semibold">
+    <span className="inline-flex items-center gap-1.5 text-stone-500 bg-stone-100 px-2.5 py-1 rounded-full text-[12px] font-semibold">
       <FileText size={10} /> Brouillon
     </span>
   );
 }
 
 function SeoBadge({ score }: { score: number | undefined }) {
-  if (score === undefined) return <span className="text-stone-300 text-xs">—</span>;
+  if (score === undefined) return <span className="text-stone-500 text-xs">—</span>;
   return (
-    <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold ${
+    <span className={`inline-flex px-2.5 py-1 rounded-full text-[12px] font-bold ${
       score >= 75 ? 'bg-green-100 text-green-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
     }`}>{score}%</span>
   );

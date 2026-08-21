@@ -70,11 +70,11 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-medium text-stone-400 uppercase tracking-widest mb-1">{greeting}</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">{greeting}</p>
           <h1 className="text-2xl font-semibold text-stone-900">Tableau de bord</h1>
         </div>
         {loading && (
-          <div className="flex items-center gap-2 text-xs text-stone-400 mt-1">
+          <div className="flex items-center gap-2 text-[12.5px] text-stone-500 mt-1">
             <div className="w-3.5 h-3.5 rounded-full border border-stone-200 border-t-sage animate-spin" />
             Mise à jour…
           </div>
@@ -93,10 +93,10 @@ export default function Dashboard() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* Bar chart */}
-        <div className="lg:col-span-3 bg-white border border-stone-100 rounded-2xl shadow-sm p-6">
+        <div className="lg:col-span-3 bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-400">Visites — 7 derniers jours</h2>
-            {week > 0 && <span className="text-xs text-stone-400 font-medium">{fmt(week)} total</span>}
+            <h2 className="text-[13px] font-medium text-stone-800">Visites — 7 derniers jours</h2>
+            {week > 0 && <span className="text-[12.5px] text-stone-500 font-medium">{fmt(week)} total</span>}
           </div>
           {loading ? (
             <div className="h-44 flex items-end gap-2">
@@ -106,7 +106,7 @@ export default function Dashboard() {
             </div>
           ) : week === 0 ? (
             <div className="h-44 flex items-center justify-center">
-              <p className="text-stone-400 text-sm italic">Aucune visite encore enregistrée</p>
+              <p className="text-sm text-stone-600">Aucune visite encore enregistrée</p>
             </div>
           ) : (
             <div className="flex items-end gap-2 h-44">
@@ -114,9 +114,9 @@ export default function Dashboard() {
                 const h = Math.max((d.count / maxDay) * 100, d.count > 0 ? 5 : 0);
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
-                    {d.count > 0 && <span className="text-[10px] font-semibold text-stone-400 group-hover:text-stone-700">{d.count}</span>}
+                    {d.count > 0 && <span className="text-[12px] font-semibold text-stone-500 group-hover:text-stone-700">{d.count}</span>}
                     <div className="w-full rounded-t-md bg-sage/25 group-hover:bg-sage/50 transition-colors duration-150" style={{ height: `${h}%` }} />
-                    <span className="text-[10px] text-stone-400 whitespace-nowrap">{d.date}</span>
+                    <span className="text-[12px] text-stone-500 whitespace-nowrap">{d.date}</span>
                   </div>
                 );
               })}
@@ -125,8 +125,8 @@ export default function Dashboard() {
         </div>
 
         {/* Top pages */}
-        <div className="lg:col-span-2 bg-white border border-stone-100 rounded-2xl shadow-sm p-6">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-400 mb-6">Pages populaires — ce mois</h2>
+        <div className="lg:col-span-2 bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6">
+          <h2 className="text-[13px] font-medium text-stone-800 mb-6">Pages populaires — ce mois</h2>
           {loading ? (
             <div className="space-y-4">
               {[...Array(5)].map((_, i) => (
@@ -137,7 +137,7 @@ export default function Dashboard() {
               ))}
             </div>
           ) : topPages.length === 0 ? (
-            <p className="text-stone-400 text-sm italic">Aucune donnée disponible</p>
+            <p className="text-sm text-stone-600">Aucune donnée disponible</p>
           ) : (
             <ul className="space-y-4">
               {topPages.map((p, i) => {
@@ -146,7 +146,7 @@ export default function Dashboard() {
                   <li key={i}>
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-sm text-stone-700 font-medium truncate max-w-[65%]">{label(p.page)}</span>
-                      <span className="text-xs font-semibold text-stone-400 shrink-0">{fmt(p.count)}</span>
+                      <span className="text-xs font-semibold text-stone-500 shrink-0">{fmt(p.count)}</span>
                     </div>
                     <div className="h-1 bg-stone-100 rounded-full overflow-hidden">
                       <div className="h-full bg-sage/40 rounded-full" style={{ width: `${pct}%` }} />
@@ -174,7 +174,7 @@ export default function Dashboard() {
             rel={a.external ? 'noopener noreferrer' : undefined}
             className="flex items-center gap-2.5 bg-white hover:bg-stone-50 border border-stone-100 rounded-xl px-4 py-3.5 text-sm text-stone-500 hover:text-stone-800 shadow-sm transition-all cursor-pointer group"
           >
-            <a.icon size={14} className="shrink-0 text-stone-300 group-hover:text-sage transition-colors" />
+            <a.icon size={14} className="shrink-0 text-stone-500 group-hover:text-stone-900 transition-colors" />
             <span className="truncate">{a.label}</span>
           </a>
         ))}
@@ -188,10 +188,10 @@ function Kpi({ icon: Icon, label, value, accent, loading }: {
 }) {
   const cls = { sage: 'text-sage bg-sage/10', blue: 'text-blue-500 bg-blue-50', amber: 'text-amber-500 bg-amber-50' };
   return (
-    <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-5 space-y-3">
+    <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5 space-y-3">
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${cls[accent]}`}><Icon size={15} /></div>
       <div>
-        <p className="text-[11px] text-stone-400 font-medium mb-1">{label}</p>
+        <p className="text-[12.5px] text-stone-500 font-medium mb-1">{label}</p>
         {loading ? <div className="h-7 w-16 bg-stone-100 rounded animate-pulse" /> : <p className="text-2xl font-semibold text-stone-900 tabular-nums">{value}</p>}
       </div>
     </div>

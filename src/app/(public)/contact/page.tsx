@@ -1,69 +1,138 @@
 import type { Metadata } from 'next';
-import { Mail, Phone, MapPin } from 'lucide-react';
-import ContactForm from '../../../components/ContactForm';
-import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
+import { Mail, MapPin, Phone } from 'lucide-react';
 
-export const metadata: Metadata = {
-  title: `Contact & rendez-vous | ${SITE_CONFIG.name}`,
-  description: "Prenez rendez-vous pour un soin du visage, un Head Spa ou un massage à l'institut à domicile d'Emmanuelle, à Palézieux (Vaud).",
-  alternates: { canonical: `${SITE_CONFIG.url}/contact` },
-};
+import ContactForm from '../../../components/ContactForm';
+import DynamicPageClient from '../../../components/pagebuilder/DynamicPageClient';
+import PageChrome from '../../../components/PageChrome';
+import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
+import { fetchPageBySlug } from '../../../services/dynamicPages';
+import { getSettingsServer } from '../../../services/settingsServer';
+import { buildMetadata, getPageMeta } from '../../../services/pageMeta';
+
+/**
+ * Page de contact.
+ *
+ * Deux régimes, dans cet ordre :
+ *
+ * 1. **Une page « contact » créée dans le constructeur fait autorité.** C'est
+ *    l'échappatoire pour qui veut une vraie mise en page : sans elle, `/contact`
+ *    était la seule page publique dont le contenu vivait dans le code, hors de
+ *    portée du client.
+ *
+ * 2. **Sinon, un gabarit minimal**, construit uniquement à partir des réglages.
+ *    Il n'affiche que ce qui est renseigné. Le texte qui s'y trouvait —
+ *    « Dites-moi ce qui vous ferait du bien », « Institut à domicile,
+ *    l'adresse exacte vous est transmise… » — décrivait l'activité du site
+ *    d'origine et s'affichait tel quel sur tout site issu du template.
+ */
+export const revalidate = 60;
+
+const CONTACT_SLUG = 'contact';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const page = await fetchPageBySlug(CONTACT_SLUG, false);
+  const businessName = (await getSettingsServer(['business_name'])).business_name || SITE_CONFIG.name;
+
+  const meta = await getPageMeta(CONTACT_SLUG, {
+    title: `${page?.title ?? 'Contact'} | ${businessName}`,
+    description: SITE_CONFIG.seoDefaults.description,
+    og_title: `${page?.title ?? 'Contact'} | ${businessName}`,
+    og_description: SITE_CONFIG.seoDefaults.ogDescription,
+    og_image: SITE_CONFIG.seoDefaults.ogImage,
+    keywords: SITE_CONFIG.seoDefaults.keywords,
+  });
+
+  return buildMetadata(CONTACT_SLUG, meta, `${SITE_CONFIG.url}/contact`);
+}
 
 export default async function ContactPage() {
+  const page = await fetchPageBySlug(CONTACT_SLUG, false);
+
+  if (page) {
+    return (
+      <>
+        {(!page.show_header || !page.show_footer) && (
+          <PageChrome showHeader={page.show_header ?? true} showFooter={page.show_footer ?? true} />
+        )}
+        <DynamicPageClient initialPage={page} slug={CONTACT_SLUG} />
+      </>
+    );
+  }
+
   const business = await getBusinessInfoServer();
+  const settings = await getSettingsServer(['contact_intro', 'contact_address_note', 'header_register_link']);
   const locationLabel = [business.addressCity, business.addressRegion].filter(Boolean).join(', ');
 
   return (
-    <div className="pt-32 pb-24 px-6 bg-paper min-h-screen">
-      <div className="max-w-3xl mx-auto text-center mb-16">
-        <span className="text-sage font-bold tracking-widest uppercase text-xs block mb-4">Contact</span>
-        <h1 className="font-serif text-4xl md:text-6xl font-bold text-stone-900 mb-6">Prendre rendez-vous</h1>
-        <p className="text-lg font-light text-stone-500 leading-relaxed">
-          Dites-moi simplement ce qui vous ferait du bien, et nous trouvons ensemble le créneau qui vous arrange. Réponse sous 48 heures.
-        </p>
+    <div className="min-h-screen bg-paper px-6 pb-24 pt-32">
+      <div className="mx-auto mb-16 max-w-3xl text-center">
+        <span className="mb-4 block text-xs font-bold uppercase tracking-widest text-sage">Contact</span>
+        <h1 className="mb-6 font-serif text-4xl font-bold text-stone-900 md:text-6xl">
+          {business.name ? `Écrire à ${business.name}` : 'Nous écrire'}
+        </h1>
+        {settings.contact_intro && (
+          <p className="text-lg font-light leading-relaxed text-stone-500">{settings.contact_intro}</p>
+        )}
       </div>
 
-      <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-start">
+      <div className="mx-auto grid max-w-6xl items-start gap-16 md:grid-cols-2">
         <div className="space-y-8">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-stone-400 mb-1">Contact</p>
-            <p className="text-lg font-medium text-stone-900">{business.owner} — {business.name}</p>
-          </div>
+          {(business.owner || business.name) && (
+            <div>
+              <p className="mb-1 text-xs uppercase tracking-widest text-stone-500">Contact</p>
+              <p className="text-lg font-medium text-stone-900">
+                {[business.owner, business.name].filter(Boolean).join(' — ')}
+              </p>
+            </div>
+          )}
 
           {business.email && (
             <div className="flex items-start gap-5">
-              <div className="bg-sage/10 p-3 rounded-full shrink-0"><Mail className="w-5 h-5 text-sage" /></div>
+              <div className="shrink-0 rounded-full bg-sage/10 p-3"><Mail className="h-5 w-5 text-sage" /></div>
               <div>
-                <p className="text-xs uppercase tracking-widest text-stone-400 mb-1">Email</p>
-                <a href={`mailto:${business.email}`} className="text-lg font-medium text-stone-900 hover:text-sage transition-colors">{business.email}</a>
+                <p className="mb-1 text-xs uppercase tracking-widest text-stone-500">E-mail</p>
+                <a href={`mailto:${business.email}`} className="text-lg font-medium text-stone-900 transition-colors hover:text-sage">
+                  {business.email}
+                </a>
               </div>
             </div>
           )}
 
           {business.phone && (
             <div className="flex items-start gap-5">
-              <div className="bg-sage/10 p-3 rounded-full shrink-0"><Phone className="w-5 h-5 text-sage" /></div>
+              <div className="shrink-0 rounded-full bg-sage/10 p-3"><Phone className="h-5 w-5 text-sage" /></div>
               <div>
-                <p className="text-xs uppercase tracking-widest text-stone-400 mb-1">Téléphone</p>
-                <a href={`tel:${business.phone.replace(/\s+/g, '')}`} className="text-lg font-medium text-stone-900 hover:text-sage transition-colors">{business.phone}</a>
+                <p className="mb-1 text-xs uppercase tracking-widest text-stone-500">Téléphone</p>
+                <a href={`tel:${business.phone.replace(/\s+/g, '')}`} className="text-lg font-medium text-stone-900 transition-colors hover:text-sage">
+                  {business.phone}
+                </a>
               </div>
             </div>
           )}
 
-          <div className="flex items-start gap-5">
-            <div className="bg-sage/10 p-3 rounded-full shrink-0"><MapPin className="w-5 h-5 text-sage" /></div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-stone-400 mb-1">L'institut</p>
-              <p className="text-lg font-medium text-stone-900">{locationLabel}</p>
-              <p className="text-sm text-stone-500 mt-1">Institut à domicile — l'adresse exacte et le plan d'accès vous sont transmis à la confirmation du rendez-vous.</p>
+          {(locationLabel || settings.contact_address_note) && (
+            <div className="flex items-start gap-5">
+              <div className="shrink-0 rounded-full bg-sage/10 p-3"><MapPin className="h-5 w-5 text-sage" /></div>
+              <div>
+                <p className="mb-1 text-xs uppercase tracking-widest text-stone-500">Adresse</p>
+                {locationLabel && <p className="text-lg font-medium text-stone-900">{locationLabel}</p>}
+                {settings.contact_address_note && (
+                  <p className="mt-1 text-sm text-stone-500">{settings.contact_address_note}</p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="pt-4">
-            <a href="/soins" className="inline-flex items-center gap-2 text-sage font-bold uppercase tracking-widest text-xs hover:gap-3 transition-all">
-              Découvrir les soins →
-            </a>
-          </div>
+          {settings.header_register_link && (
+            <div className="pt-4">
+              <a
+                href={settings.header_register_link}
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sage transition-all hover:gap-3"
+              >
+                Prendre rendez-vous →
+              </a>
+            </div>
+          )}
         </div>
 
         <ContactForm light />

@@ -1,39 +1,50 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import AiKeyPanel from './AiKeyPanel';
+import DesignSystemPanel from './DesignSystemPanel';
+import EditorialVoiceInterviewModal from './EditorialVoiceInterviewModal';
+import FleetManagerPanel from './FleetManagerPanel';
 import { supabase } from '../../../services/supabase';
-import { Save, Lock, Tag, Image, X, Check, Sun, Moon, Palette, Type, Sliders, Eye, RefreshCw, Share2, Puzzle, Building2, Sparkles, AlertTriangle, BookOpen, CreditCard } from 'lucide-react';
+import { Save, Lock, Tag, Image, X, Check, Sun, Moon, Palette, Type, Sliders, Eye, RefreshCw, Share2, Puzzle, Building2, Sparkles, AlertTriangle, BookOpen, CreditCard, Mic, ShieldCheck, Server } from 'lucide-react';
 import { settingsCache } from '../../../hooks/useSettings';
 import { SETTINGS_DEFAULTS } from '../../../constants/settings';
 import { AI_EFFORT_LEVELS, AI_MODELS, AiEffort, AiModelSpec, DEFAULT_AI_EFFORT, DEFAULT_AI_MODEL } from '../../../constants/aiModels';
+import { MODULE_SETTING_KEYS } from '../../../config/modules';
+import { PageHeader, SideNav, type TabItem } from '../../../components/admin/ui';
+
+/**
+ * Les rubriques de réglages, dans l'ordre où on s'en sert : ce qui identifie
+ * l'entreprise d'abord, ce qui la fait parler ensuite, l'outillage enfin.
+ * Chaque description dit ce qu'on trouve derrière — un intitulé seul
+ * (« Général », « Modules ») n'apprend rien à quelqu'un qui découvre l'écran.
+ */
+const SETTINGS_SECTIONS: TabItem[] = [
+  { id: 'business', label: 'Entreprise', icon: Building2,
+    description: "Nom, adresse, téléphone, e-mail — repris sur le site et dans les factures." },
+  { id: 'general', label: 'Identité visuelle', icon: Image,
+    description: 'Logos, favicon, visuels du pied de page.' },
+  { id: 'style', label: 'Design & style', icon: Palette,
+    description: 'Couleurs, polices, rythme des pages et boutons.' },
+  { id: 'editorial', label: 'Éditorial & marque', icon: BookOpen,
+    description: "Ce que l'IA doit savoir de votre activité et de votre ton." },
+  { id: 'modules', label: 'Modules', icon: Puzzle,
+    description: 'Activez ou masquez les grandes fonctions du site.' },
+  { id: 'ai', label: 'IA & budget', icon: Sparkles,
+    description: 'Modèle utilisé, niveau de réflexion, plafond de dépense.' },
+  { id: 'caisse', label: 'Caisse & TVA', icon: CreditCard,
+    description: 'Taux de TVA, IBAN, mentions de facture et bons cadeaux.' },
+  { id: 'fleet', label: 'Flotte Multi-Sites', icon: Server,
+    description: 'Gérer et mettre à jour vos autres sites clients (ex: audeladeschaines.com) en 1-clic.' },
+  { id: 'security', label: 'Sécurité', icon: Lock,
+    description: 'Mot de passe du compte administrateur.' },
+];
 
 interface MediaAsset {
   id: string;
   url: string;
   alt_text: string;
 }
-
-const GOOGLE_FONTS_SERIF = [
-  'Playfair Display',
-  'Cormorant Garamond',
-  'Lora',
-  'Merriweather',
-  'Cinzel',
-  'EB Garamond',
-  'Libre Baskerville',
-  'Spectral'
-];
-
-const GOOGLE_FONTS_SANS = [
-  'Inter',
-  'Outfit',
-  'Poppins',
-  'Montserrat',
-  'Nunito',
-  'Open Sans',
-  'Roboto',
-  'Raleway'
-];
 
 export default function Settings() {
 
@@ -42,6 +53,30 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [pwdLoading, setPwdLoading]           = useState(false);
   const [pwdMessage, setPwdMessage]           = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // ── Migration & Système ──────────────────────────────────
+  const [migrating, setMigrating] = useState(false);
+  const [migrateLog, setMigrateLog] = useState<{ success?: boolean; message?: string; error?: string; logs?: string[] } | null>(null);
+
+  const handleAutoMigrate = async () => {
+    setMigrating(true);
+    setMigrateLog(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
+      const res = await fetch('/api/admin/auto-migrate', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de la migration');
+      setMigrateLog(data);
+    } catch (err: any) {
+      setMigrateLog({ error: err?.message || 'Erreur lors de la synchronisation Supabase.' });
+    } finally {
+      setMigrating(false);
+    }
+  };
 
   // ── Hero section ──────────────────────────────────────────
   const [heroImage, setHeroImage]       = useState('');
@@ -92,31 +127,6 @@ export default function Settings() {
   const [headerRegisterFetching, setHeaderRegisterFetching]   = useState(true);
 
   // ── Style Global ──────────────────────────────────────────
-  const [headingFont, setHeadingFont]                 = useState('Cormorant Garamond');
-  const [customHeadingFont, setCustomHeadingFont]       = useState('');
-  const [bodyFont, setBodyFont]                       = useState('Inter');
-  const [customBodyFont, setCustomBodyFont]             = useState('');
-  const [primaryColor, setPrimaryColor]               = useState('#8A9A7B');
-  
-  const [btnDarkBg, setBtnDarkBg]                     = useState('#3A3730');
-  const [btnDarkText, setBtnDarkText]                 = useState('#ffffff');
-  const [btnDarkHoverBg, setBtnDarkHoverBg]           = useState('#433e37');
-  
-  const [btnLightBg, setBtnLightBg]                   = useState('#ffffff');
-  const [btnLightText, setBtnLightText]               = useState('#3A3730');
-  const [btnLightBorder, setBtnLightBorder]           = useState('#E2D9CB');
-  const [btnLightHoverBg, setBtnLightHoverBg]         = useState('#F5F0E8');
-  const [btnLightHoverText, setBtnLightHoverText]     = useState('#8A9A7B');
-  const [btnLightHoverBorder, setBtnLightHoverBorder] = useState('#8A9A7B');
-  
-  const [textH2Color, setTextH2Color]                 = useState('#3A3730');
-  const [textBodyColor, setTextBodyColor]             = useState('#3A3730');
-  
-  const [borderRadiusBase, setBorderRadiusBase]       = useState('8px');
-  
-  const [styleLoading, setStyleLoading]               = useState(false);
-  const [styleFetching, setStyleFetching]             = useState(true);
-  const [styleMessage, setStyleMessage]               = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // ── Modules ───────────────────────────────────────────────
   const [moduleBlogEnabled, setModuleBlogEnabled]           = useState(true);
@@ -125,6 +135,12 @@ export default function Settings() {
   const [moduleNewsletterEnabled, setModuleNewsletterEnabled] = useState(true);
   const [moduleSocialEnabled, setModuleSocialEnabled]       = useState(true);
   const [moduleCaisseEnabled, setModuleCaisseEnabled]       = useState(true);
+  // Trois modules existaient dans `config/modules.ts` — et gouvernaient déjà la
+  // navigation de l'admin, les tâches planifiées et le widget public — sans
+  // aucun interrupteur ici : impossible de les couper.
+  const [moduleKeywordsEnabled, setModuleKeywordsEnabled]   = useState(true);
+  const [moduleAgentsEnabled, setModuleAgentsEnabled]       = useState(true);
+  const [moduleAutomationsEnabled, setModuleAutomationsEnabled] = useState(true);
   const [modulesLoading, setModulesLoading]                 = useState(false);
   const [modulesFetching, setModulesFetching]               = useState(true);
   const [modulesMessage, setModulesMessage]                 = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -152,6 +168,11 @@ export default function Settings() {
   const [bizAddressRegion, setBizAddressRegion]   = useState('');
   const [bizAddressCountry, setBizAddressCountry] = useState('');
   const [bizPriceRange, setBizPriceRange]         = useState('');
+  // Textes de la page /contact. Ils vivaient en dur dans le composant de la
+  // page : c'était la seule page publique dont le contenu échappait au client.
+  const [contactIntro, setContactIntro]           = useState('');
+  const [contactAddressNote, setContactAddressNote] = useState('');
+  const [contactSubjects, setContactSubjects]     = useState(SETTINGS_DEFAULTS.contact_subjects);
   const [bizLoading, setBizLoading]               = useState(false);
   const [bizFetching, setBizFetching]             = useState(true);
   const [bizMessage, setBizMessage]               = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -178,12 +199,11 @@ export default function Settings() {
   const [editorialLoading, setEditorialLoading]       = useState(false);
   const [editorialFetching, setEditorialFetching]     = useState(true);
   const [editorialMessage, setEditorialMessage]       = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [isEditorialVoiceModalOpen, setIsEditorialVoiceModalOpen] = useState(false);
 
-  const [activeTab, setActiveTab]                     = useState<'general' | 'business' | 'editorial' | 'modules' | 'caisse' | 'ai' | 'style' | 'security'>('general');
+  const [activeTab, setActiveTab]                     = useState<'general' | 'business' | 'editorial' | 'modules' | 'caisse' | 'ai' | 'style' | 'fleet' | 'security'>('general');
 
   // Preview button hovers
-  const [darkBtnHover, setDarkBtnHover]               = useState(false);
-  const [lightBtnHover, setLightBtnHover]             = useState(false);
 
   const renderPresets = (setter: (val: string) => void) => (
     <div className="flex flex-wrap gap-1 mt-1">
@@ -209,10 +229,28 @@ export default function Settings() {
     </div>
   );
 
+  const [isMasterStudio, setIsMasterStudio] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      const isMaster =
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host.includes('kinetick') ||
+        process.env.NEXT_PUBLIC_IS_MASTER === 'true';
+      setIsMasterStudio(isMaster);
+    }
+  }, []);
+
+  const visibleSections = SETTINGS_SECTIONS.filter((section) => {
+    if (section.id === 'fleet') return isMasterStudio;
+    return true;
+  });
+
   useEffect(() => {
     loadHero();
     loadPromo();
-    loadStyles();
     loadSocials();
     loadAuthor();
     loadHeaderRegisterLink();
@@ -284,6 +322,7 @@ export default function Settings() {
     'business_name', 'business_owner', 'business_email', 'business_phone',
     'business_address_street', 'business_address_postal', 'business_address_city',
     'business_address_region', 'business_address_country', 'business_price_range',
+    'contact_intro', 'contact_address_note', 'contact_subjects',
   ];
 
   const loadBusiness = async () => {
@@ -304,6 +343,9 @@ export default function Settings() {
       if (map.business_address_region)   setBizAddressRegion(map.business_address_region);
       if (map.business_address_country) setBizAddressCountry(map.business_address_country);
       if (map.business_price_range)      setBizPriceRange(map.business_price_range);
+      if (map.contact_intro)             setContactIntro(map.contact_intro);
+      if (map.contact_address_note)      setContactAddressNote(map.contact_address_note);
+      if (map.contact_subjects)          setContactSubjects(map.contact_subjects);
     }
     setBizFetching(false);
   };
@@ -325,6 +367,9 @@ export default function Settings() {
         { key: 'business_address_region',  value: bizAddressRegion.trim() },
         { key: 'business_address_country', value: bizAddressCountry.trim() },
         { key: 'business_price_range',     value: bizPriceRange.trim() },
+        { key: 'contact_intro',            value: contactIntro.trim() },
+        { key: 'contact_address_note',     value: contactAddressNote.trim() },
+        { key: 'contact_subjects',         value: contactSubjects.trim() },
       ], { onConflict: 'key' });
     if (error) {
       setBizMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
@@ -340,6 +385,9 @@ export default function Settings() {
       settingsCache.set('business_address_region', bizAddressRegion.trim());
       settingsCache.set('business_address_country', bizAddressCountry.trim());
       settingsCache.set('business_price_range', bizPriceRange.trim());
+      settingsCache.set('contact_intro', contactIntro.trim());
+      settingsCache.set('contact_address_note', contactAddressNote.trim());
+      settingsCache.set('contact_subjects', contactSubjects.trim());
     }
     setBizLoading(false);
   };
@@ -413,7 +461,18 @@ export default function Settings() {
       settingsCache.set('ai_effort', aiEffort);
       settingsCache.set('ai_budget_monthly_usd', String(budget));
       settingsCache.set('ai_budget_alert_percent', String(percent));
-      setAiMessage({ type: 'success', text: 'Réglages IA enregistrés. Les prochaines générations utilisent ce modèle (délai maximum : 1 minute).' });
+      /*
+        La configuration IA est mise en cache côté serveur pour ne pas payer un
+        aller-retour Supabase à chaque génération. On purge ce cache tout de
+        suite : sans cet appel, le modèle fraîchement choisi ne s'appliquait
+        qu'à l'expiration du TTL.
+      */
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch('/api/admin/ai-status?refresh=true', {
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      }).catch(() => { /* purge best-effort : l'enregistrement, lui, a réussi */ });
+
+      setAiMessage({ type: 'success', text: 'Réglages IA enregistrés. Les prochaines générations utilisent ce modèle.' });
       await loadAiUsage();
     }
     setAiLoading(false);
@@ -424,7 +483,7 @@ export default function Settings() {
     const { data } = await supabase
       .from('settings')
       .select('key, value')
-      .in('key', ['module_blog_enabled', 'module_ai_generation_enabled', 'module_events_enabled', 'module_newsletter_enabled', 'module_social_enabled', 'module_caisse_enabled']);
+      .in('key', Object.values(MODULE_SETTING_KEYS));
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.module_blog_enabled !== undefined)          setModuleBlogEnabled(map.module_blog_enabled !== 'false');
@@ -433,6 +492,9 @@ export default function Settings() {
       if (map.module_newsletter_enabled !== undefined)    setModuleNewsletterEnabled(map.module_newsletter_enabled !== 'false');
       if (map.module_social_enabled !== undefined)        setModuleSocialEnabled(map.module_social_enabled !== 'false');
       if (map.module_caisse_enabled !== undefined)        setModuleCaisseEnabled(map.module_caisse_enabled !== 'false');
+      if (map.module_keywords_enabled !== undefined)      setModuleKeywordsEnabled(map.module_keywords_enabled !== 'false');
+      if (map.module_agents_enabled !== undefined)        setModuleAgentsEnabled(map.module_agents_enabled !== 'false');
+      if (map.module_automations_enabled !== undefined)   setModuleAutomationsEnabled(map.module_automations_enabled !== 'false');
     }
     setModulesFetching(false);
   };
@@ -501,6 +563,9 @@ export default function Settings() {
         { key: 'module_newsletter_enabled',     value: String(moduleNewsletterEnabled) },
         { key: 'module_social_enabled',         value: String(moduleSocialEnabled) },
         { key: 'module_caisse_enabled',         value: String(moduleCaisseEnabled) },
+        { key: 'module_keywords_enabled',       value: String(moduleKeywordsEnabled) },
+        { key: 'module_agents_enabled',         value: String(moduleAgentsEnabled) },
+        { key: 'module_automations_enabled',    value: String(moduleAutomationsEnabled) },
       ], { onConflict: 'key' });
     if (error) {
       setModulesMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
@@ -512,6 +577,9 @@ export default function Settings() {
       settingsCache.set('module_newsletter_enabled', String(moduleNewsletterEnabled));
       settingsCache.set('module_social_enabled', String(moduleSocialEnabled));
       settingsCache.set('module_caisse_enabled', String(moduleCaisseEnabled));
+      settingsCache.set('module_keywords_enabled', String(moduleKeywordsEnabled));
+      settingsCache.set('module_agents_enabled', String(moduleAgentsEnabled));
+      settingsCache.set('module_automations_enabled', String(moduleAutomationsEnabled));
     }
     setModulesLoading(false);
   };
@@ -644,70 +712,6 @@ export default function Settings() {
       setPromoAmount(map.promo_amount || '20 CHF');
     }
     setPromoFetching(false);
-  };
-
-  const loadStyles = async () => {
-    setStyleFetching(true);
-    const keys = [
-      'style_font_headings',
-      'style_font_body',
-      'style_color_primary',
-      'style_color_btn_dark_bg',
-      'style_color_btn_dark_text',
-      'style_color_btn_dark_hover_bg',
-      'style_color_btn_light_bg',
-      'style_color_btn_light_text',
-      'style_color_btn_light_border',
-      'style_color_btn_light_hover_bg',
-      'style_color_btn_light_hover_text',
-      'style_color_btn_light_hover_border',
-      'style_border_radius_base',
-      'style_color_text_h2',
-      'style_color_text_body'
-    ];
-    const { data } = await supabase
-      .from('settings')
-      .select('key, value')
-      .in('key', keys);
-      
-    if (data) {
-      const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
-      
-      if (map.style_font_headings) {
-        if (GOOGLE_FONTS_SERIF.includes(map.style_font_headings)) {
-          setHeadingFont(map.style_font_headings);
-        } else {
-          setHeadingFont('custom');
-          setCustomHeadingFont(map.style_font_headings);
-        }
-      }
-      if (map.style_font_body) {
-        if (GOOGLE_FONTS_SANS.includes(map.style_font_body)) {
-          setBodyFont(map.style_font_body);
-        } else {
-          setBodyFont('custom');
-          setCustomBodyFont(map.style_font_body);
-        }
-      }
-      if (map.style_color_primary) setPrimaryColor(map.style_color_primary);
-      
-      if (map.style_color_btn_dark_bg) setBtnDarkBg(map.style_color_btn_dark_bg);
-      if (map.style_color_btn_dark_text) setBtnDarkText(map.style_color_btn_dark_text);
-      if (map.style_color_btn_dark_hover_bg) setBtnDarkHoverBg(map.style_color_btn_dark_hover_bg);
-      
-      if (map.style_color_btn_light_bg) setBtnLightBg(map.style_color_btn_light_bg);
-      if (map.style_color_btn_light_text) setBtnLightText(map.style_color_btn_light_text);
-      if (map.style_color_btn_light_border) setBtnLightBorder(map.style_color_btn_light_border);
-      if (map.style_color_btn_light_hover_bg) setBtnLightHoverBg(map.style_color_btn_light_hover_bg);
-      if (map.style_color_btn_light_hover_text) setBtnLightHoverText(map.style_color_btn_light_hover_text);
-      if (map.style_color_btn_light_hover_border) setBtnLightHoverBorder(map.style_color_btn_light_hover_border);
-      
-      if (map.style_color_text_h2) setTextH2Color(map.style_color_text_h2);
-      if (map.style_color_text_body) setTextBodyColor(map.style_color_text_body);
-      
-      if (map.style_border_radius_base) setBorderRadiusBase(map.style_border_radius_base);
-    }
-    setStyleFetching(false);
   };
 
   const openPicker = async (type: 'hero' | 'logo' | 'footerLogo' | 'footerImage' | 'favicon', trigger?: HTMLElement) => {
@@ -857,69 +861,14 @@ export default function Settings() {
     setPwdLoading(false);
   };
 
-  const handleSaveStyles = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStyleMessage(null);
-    setStyleLoading(true);
-
-    const actualHeadingFont = headingFont === 'custom' ? customHeadingFont : headingFont;
-    const actualBodyFont = bodyFont === 'custom' ? customBodyFont : bodyFont;
-
-    if (!actualHeadingFont.trim() || !actualBodyFont.trim()) {
-      setStyleMessage({ type: 'error', text: 'Veuillez renseigner les polices.' });
-      setStyleLoading(false);
-      return;
-    }
-
-    const updates = [
-      { key: 'style_font_headings', value: actualHeadingFont.trim() },
-      { key: 'style_font_body', value: actualBodyFont.trim() },
-      { key: 'style_color_primary', value: primaryColor },
-      { key: 'style_color_btn_dark_bg', value: btnDarkBg },
-      { key: 'style_color_btn_dark_text', value: btnDarkText },
-      { key: 'style_color_btn_dark_hover_bg', value: btnDarkHoverBg },
-      { key: 'style_color_btn_light_bg', value: btnLightBg },
-      { key: 'style_color_btn_light_text', value: btnLightText },
-      { key: 'style_color_btn_light_border', value: btnLightBorder },
-      { key: 'style_color_btn_light_hover_bg', value: btnLightHoverBg },
-      { key: 'style_color_btn_light_hover_text', value: btnLightHoverText },
-      { key: 'style_color_btn_light_hover_border', value: btnLightHoverBorder },
-      { key: 'style_color_text_h2', value: textH2Color },
-      { key: 'style_color_text_body', value: textBodyColor },
-      { key: 'style_border_radius_base', value: borderRadiusBase },
-    ];
-
-    const { error } = await supabase
-      .from('settings')
-      .upsert(updates, { onConflict: 'key' });
-
-    if (error) {
-      setStyleMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
-    } else {
-      setStyleMessage({ type: 'success', text: 'Styles globaux sauvegardés avec succès ! Rechargement de la page...' });
-      
-      const localMap = Object.fromEntries(updates.map(u => [u.key, u.value]));
-      localStorage.setItem('site_global_styles', JSON.stringify(localMap));
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    }
-    setStyleLoading(false);
-  };
-
-  const activeHeadingFont = headingFont === 'custom' ? customHeadingFont : headingFont;
-  const activeBodyFont = bodyFont === 'custom' ? customBodyFont : bodyFont;
-
-  const previewHeadingFontUrl = activeHeadingFont ? activeHeadingFont.replace(/ /g, '+') : 'Playfair+Display';
-  const previewBodyFontUrl = activeBodyFont ? activeBodyFont.replace(/ /g, '+') : 'Inter';
-  const previewGoogleFontsUrl = `https://fonts.googleapis.com/css2?family=${previewHeadingFontUrl}:wght@300;400;500;600;700;800&family=${previewBodyFontUrl}:wght@300;400;500;600;700&display=swap`;
+  const currentSection = visibleSections.find((section) => section.id === activeTab);
 
   return (
     <>
-      {activeTab === 'style' && (
-        <link rel="stylesheet" href={previewGoogleFontsUrl} />
-      )}
+      <PageHeader
+        title="Paramètres"
+        description={currentSection?.description ?? 'Coordonnées, marque, modules et apparence du site.'}
+      />
 
       {/* ── Modal sélecteur de médias ─────────────────────── */}
       {showPicker && (
@@ -934,19 +883,19 @@ export default function Settings() {
             aria-labelledby="media-picker-title"
             tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl rounded-2xl overflow-hidden outline-none"
+            className="bg-white w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl rounded-xl overflow-hidden outline-none"
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
-              <h3 id="media-picker-title" className="font-bold text-stone-900 uppercase tracking-widest text-sm">Choisir une image</h3>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
+              <h3 id="media-picker-title" className="font-bold text-stone-900 text-sm">Choisir une image</h3>
               <button onClick={() => setShowPicker(false)} aria-label="Fermer la médiathèque" className="p-2 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer">
                 <X size={18} />
               </button>
             </div>
             <div className="overflow-y-auto p-6">
               {mediaLoading ? (
-                <p className="text-center text-stone-400 italic py-12">Chargement des médias…</p>
+                <p className="text-center text-stone-600 py-12">Chargement des médias…</p>
               ) : mediaAssets.length === 0 ? (
-                <p className="text-center text-stone-400 italic py-12">Aucune image dans la médiathèque.</p>
+                <p className="text-center text-stone-600 py-12">Aucune image dans la médiathèque.</p>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {mediaAssets.map(asset => {
@@ -969,17 +918,17 @@ export default function Settings() {
                           if (activePicker === 'favicon') setFaviconImage(asset.url);
                           setShowPicker(false);
                         }}
-                        className={`relative group aspect-video rounded-xl overflow-hidden border-2 transition-all duration-200 ${isSelected ? 'border-sage shadow-lg' : 'border-stone-200 hover:border-sage/50'}`}
+                        className={`relative group aspect-video rounded-xl overflow-hidden border-2 transition-all duration-200 ${isSelected ? 'border-stone-900 shadow-lg' : 'border-stone-200 hover:border-stone-400/50'}`}
                       >
                         <img src={asset.url} alt={asset.alt_text} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                         {isSelected && (
-                          <div className="absolute inset-0 bg-sage/20 flex items-center justify-center">
-                            <div className="bg-sage text-white rounded-full p-1.5">
+                          <div className="absolute inset-0 bg-stone-900/20 flex items-center justify-center">
+                            <div className="bg-stone-900 text-white rounded-full p-1.5">
                               <Check size={14} />
                             </div>
                           </div>
                         )}
-                        <div className="absolute bottom-0 left-0 right-0 bg-stone-900/60 text-white text-[10px] px-2 py-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute bottom-0 left-0 right-0 bg-stone-900/60 text-white text-[12px] px-2 py-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
                           {asset.alt_text || 'Sans titre'}
                         </div>
                       </button>
@@ -992,93 +941,34 @@ export default function Settings() {
         </div>
       )}
 
-      <div className={`transition-all duration-300 ${activeTab === 'style' ? 'max-w-5xl' : 'max-w-2xl'} space-y-10`}>
-        <div className="mb-2">
-          <h1 className="text-2xl font-light text-stone-900 uppercase tracking-widest">
-            Paramètres du site & design
-          </h1>
-          <p className="text-stone-500 mt-2">Gérez la charte graphique globale et les paramètres généraux de votre site.</p>
+      <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-8">
+        {/*
+          Les huit rubriques étaient huit pastilles en capitales étroites sur une
+          ligne qui passait à la ligne : impossible de savoir laquelle était
+          active, ni ce que chacune contenait. En colonne, chaque rubrique garde
+          son nom entier et une phrase qui dit ce qu'on y règle.
+        */}
+        <div className="mb-6 lg:mb-0">
+          <SideNav
+            label="Rubriques des paramètres"
+            active={activeTab}
+            onChange={(id) => setActiveTab(id as typeof activeTab)}
+            items={visibleSections}
+          />
         </div>
 
-        {/* Navigation Onglets */}
-        <div role="tablist" aria-label="Sections des paramètres" className="flex flex-wrap gap-1.5 bg-stone-100 p-1.5 rounded-xl w-fit">
-          <button
-            role="tab"
-            aria-selected={activeTab === 'general'}
-            onClick={() => setActiveTab('general')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'general' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
-          >
-            <Tag size={14} /> Général
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'business'}
-            onClick={() => setActiveTab('business')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'business' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
-          >
-            <Building2 size={14} /> Entreprise
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'editorial'}
-            onClick={() => setActiveTab('editorial')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'editorial' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
-          >
-            <BookOpen size={14} /> Éditorial &amp; Marque
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'modules'}
-            onClick={() => setActiveTab('modules')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'modules' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
-          >
-            <Puzzle size={14} /> Modules
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'caisse'}
-            onClick={() => setActiveTab('caisse')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'caisse' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
-          >
-            <CreditCard size={14} /> Caisse
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'ai'}
-            onClick={() => setActiveTab('ai')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'ai' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
-          >
-            <Sparkles size={14} /> IA &amp; Budget
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'style'}
-            onClick={() => setActiveTab('style')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'style' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
-          >
-            <Palette size={14} /> Design & Style
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'security'}
-            onClick={() => setActiveTab('security')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer ${activeTab === 'security' ? 'bg-white text-sage shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
-          >
-            <Lock size={14} /> Sécurité
-          </button>
-        </div>
-
+        <div className="min-w-0 space-y-8">
         {/* ── Onglet Général (Hero + Code promo) ────────────────── */}
         {activeTab === 'general' && (
           <div className="space-y-10 animate-fadein">
             {/* Logo Section */}
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-6 flex items-center gap-2">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Image size={16} /> Identité visuelle — Logo du site
               </h2>
 
               {heroFetching ? (
-                <p className="text-stone-400 italic text-sm">Chargement…</p>
+                <p className="text-stone-600 text-sm">Chargement…</p>
               ) : (
                 <form onSubmit={handleSaveLogo} className="space-y-8">
                   {logoMessage && (
@@ -1089,8 +979,8 @@ export default function Settings() {
 
                   {/* Logo Image */}
                   {/* Favicon */}
-                  <div className="space-y-3 pb-6 border-b border-stone-100">
-                    <label htmlFor="settings-favicon" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">
+                  <div className="space-y-3 pb-6 border-b border-stone-200">
+                    <label htmlFor="settings-favicon" className="block text-[13px] font-medium text-stone-800">
                       Favicon (icône onglet navigateur — format carré .png ou .svg recommandé)
                     </label>
 
@@ -1107,21 +997,21 @@ export default function Settings() {
                         value={faviconImage}
                         onChange={(e) => setFaviconImage(e.target.value)}
                         placeholder="https://… ou choisir depuis la médiathèque →"
-                        className="flex-1 px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm"
+                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                       />
                       <button
                         type="button"
                         onClick={(e) => openPicker('favicon', e.currentTarget)}
-                        className="flex items-center gap-2 px-4 py-3 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs uppercase tracking-widest transition-colors whitespace-nowrap cursor-pointer"
+                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-[13px] font-medium text-stone-800 transition-colors hover:bg-stone-50 hover:border-stone-400 whitespace-nowrap cursor-pointer"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
                     </div>
-                    <p className="text-[11px] text-stone-400">Pris en compte au prochain déploiement (rendu côté serveur).</p>
+                    <p className="text-[12.5px] text-stone-500">Pris en compte au prochain déploiement (rendu côté serveur).</p>
                   </div>
 
                   <div className="space-y-3">
-                    <label htmlFor="settings-logo" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">
+                    <label htmlFor="settings-logo" className="block text-[13px] font-medium text-stone-800">
                       Logo principal (En-tête et Favicon - Format carré recommandé)
                     </label>
 
@@ -1139,12 +1029,12 @@ export default function Settings() {
                         value={logoImage}
                         onChange={(e) => setLogoImage(e.target.value)}
                         placeholder="https://… ou choisir depuis la médiathèque →"
-                        className="flex-1 px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm"
+                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                       />
                       <button
                         type="button"
                         onClick={(e) => openPicker('logo', e.currentTarget)}
-                        className="flex items-center gap-2 px-4 py-3 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs uppercase tracking-widest transition-colors whitespace-nowrap cursor-pointer"
+                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-[13px] font-medium text-stone-800 transition-colors hover:bg-stone-50 hover:border-stone-400 whitespace-nowrap cursor-pointer"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
@@ -1152,8 +1042,8 @@ export default function Settings() {
                   </div>
 
                   {/* Logo du Footer Image */}
-                  <div className="space-y-3 pt-6 border-t border-stone-100">
-                    <label htmlFor="settings-footer-logo" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">
+                  <div className="space-y-3 pt-6 border-t border-stone-200">
+                    <label htmlFor="settings-footer-logo" className="block text-[13px] font-medium text-stone-800">
                       Logo du pied de page (Footer - Format paysage/allongé recommandé)
                     </label>
 
@@ -1171,12 +1061,12 @@ export default function Settings() {
                         value={footerLogoImage}
                         onChange={(e) => setFooterLogoImage(e.target.value)}
                         placeholder="https://… ou choisir depuis la médiathèque →"
-                        className="flex-1 px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm"
+                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                       />
                       <button
                         type="button"
                         onClick={(e) => openPicker('footerLogo', e.currentTarget)}
-                        className="flex items-center gap-2 px-4 py-3 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs uppercase tracking-widest transition-colors whitespace-nowrap cursor-pointer"
+                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-[13px] font-medium text-stone-800 transition-colors hover:bg-stone-50 hover:border-stone-400 whitespace-nowrap cursor-pointer"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
@@ -1184,8 +1074,8 @@ export default function Settings() {
                   </div>
 
                   {/* Image footer (colonne gauche) */}
-                  <div className="space-y-3 pt-6 border-t border-stone-100">
-                    <label htmlFor="settings-footer-image" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">
+                  <div className="space-y-3 pt-6 border-t border-stone-200">
+                    <label htmlFor="settings-footer-image" className="block text-[13px] font-medium text-stone-800">
                       Image du footer — colonne gauche
                     </label>
 
@@ -1202,23 +1092,23 @@ export default function Settings() {
                         value={footerImage}
                         onChange={(e) => setFooterImage(e.target.value)}
                         placeholder="https://… ou choisir depuis la médiathèque →"
-                        className="flex-1 px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm"
+                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                       />
                       <button
                         type="button"
                         onClick={(e) => openPicker('footerImage', e.currentTarget)}
-                        className="flex items-center gap-2 px-4 py-3 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs uppercase tracking-widest transition-colors whitespace-nowrap cursor-pointer"
+                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-[13px] font-medium text-stone-800 transition-colors hover:bg-stone-50 hover:border-stone-400 whitespace-nowrap cursor-pointer"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex justify-end border-t border-stone-100 pt-6">
+                  <div className="flex justify-end border-t border-stone-200 pt-6">
                     <button
                       type="submit"
                       disabled={logoLoading || !logoImage.trim()}
-                      className="flex items-center gap-2 bg-stone-900 hover:bg-sage text-white px-8 py-4 text-xs font-bold uppercase tracking-widest transition-colors disabled:opacity-50 cursor-pointer"
+                      className="flex items-center gap-2 bg-stone-900 hover:bg-stone-700 text-white px-8 py-4 text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       {logoLoading ? (
                         <>Enregistrement…</>
@@ -1232,13 +1122,13 @@ export default function Settings() {
             </div>
 
             {/* Code Promo */}
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-6 flex items-center gap-2">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Tag size={16} /> Email de bienvenue — Code promo
               </h2>
 
               {promoFetching ? (
-                <p className="text-stone-400 italic text-sm">Chargement…</p>
+                <p className="text-stone-600 text-sm">Chargement…</p>
               ) : (
                 <form onSubmit={handleSavePromo} className="space-y-6">
                   {promoMessage && (
@@ -1247,7 +1137,7 @@ export default function Settings() {
                     </div>
                   )}
                   <div className="space-y-2">
-                    <label htmlFor="promo-code" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">
+                    <label htmlFor="promo-code" className="block text-[13px] font-medium text-stone-800">
                       Code promo
                     </label>
                     <input
@@ -1255,13 +1145,13 @@ export default function Settings() {
                       type="text"
                       value={promoCode}
                       onChange={(e) => setPromoCode(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white font-mono text-lg tracking-widest uppercase"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 font-mono text-lg tracking-widest uppercase"
                       placeholder="BIENVENUE"
                     />
-                    <p className="text-xs text-stone-400">Le code sera automatiquement mis en majuscules.</p>
+                    <p className="text-[12.5px] text-stone-500">Le code sera automatiquement mis en majuscules.</p>
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="promo-amount" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">
+                    <label htmlFor="promo-amount" className="block text-[13px] font-medium text-stone-800">
                       Montant de la réduction
                     </label>
                     <input
@@ -1269,13 +1159,13 @@ export default function Settings() {
                       type="text"
                       value={promoAmount}
                       onChange={(e) => setPromoAmount(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                       placeholder="20 CHF"
                     />
-                    <p className="text-xs text-stone-400">Exemples : 20 CHF, 15 €, 10%</p>
+                    <p className="text-[12.5px] text-stone-500">Exemples : 20 CHF, 15 €, 10%</p>
                   </div>
-                  <div className="border-2 border-dashed border-sage/40 bg-sage/5 rounded-lg p-5 text-center space-y-1">
-                    <p className="text-xs uppercase tracking-widest text-stone-400">Aperçu dans l'email</p>
+                  <div className="border-2 border-dashed border-stone-300 bg-stone-50 rounded-lg p-5 text-center space-y-1">
+                    <p className="text-[12.5px] font-medium text-stone-700">Aperçu dans l'email</p>
                     <p className="font-mono text-2xl font-bold text-stone-900 tracking-widest">{promoCode || 'BIENVENUE'}</p>
                     <p className="text-sm text-stone-500">Réduction de <strong>{promoAmount || '20 CHF'}</strong> sur la première séance individuelle</p>
                   </div>
@@ -1283,7 +1173,7 @@ export default function Settings() {
                     <button
                       type="submit"
                       disabled={promoLoading}
-                      className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                     >
                       <Save size={16} />
                       {promoLoading ? 'Sauvegarde…' : 'Sauvegarder'}
@@ -1293,13 +1183,13 @@ export default function Settings() {
               )}
             </div>
             {/* Bouton S'inscrire */}
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-6 flex items-center gap-2">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Sliders size={16} /> Bouton d'action du Menu (Header)
               </h2>
 
               {headerRegisterFetching ? (
-                <p className="text-stone-400 italic text-sm">Chargement…</p>
+                <p className="text-stone-600 text-sm">Chargement…</p>
               ) : (
                 <form onSubmit={handleSaveHeaderRegisterLink} className="space-y-6">
                   {headerRegisterMessage && (
@@ -1308,7 +1198,7 @@ export default function Settings() {
                     </div>
                   )}
                   <div className="space-y-2">
-                    <label htmlFor="header-register-link" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">
+                    <label htmlFor="header-register-link" className="block text-[13px] font-medium text-stone-800">
                       Lien du bouton "S'inscrire" (Menu principal)
                     </label>
                     <input
@@ -1316,16 +1206,16 @@ export default function Settings() {
                       type="text"
                       value={headerRegisterLink}
                       onChange={(e) => setHeaderRegisterLink(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
                       placeholder="/contact"
                     />
-                    <p className="text-xs text-stone-400">Exemple : /contact, /programme-complet, ou un lien externe complet https://...</p>
+                    <p className="text-[12.5px] text-stone-500">Exemple : /contact, /programme-complet, ou un lien externe complet https://...</p>
                   </div>
                   <div className="pt-2">
                     <button
                       type="submit"
                       disabled={headerRegisterLoading}
-                      className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                     >
                       <Save size={16} />
                       {headerRegisterLoading ? 'Sauvegarde…' : 'Sauvegarder le lien'}
@@ -1336,12 +1226,12 @@ export default function Settings() {
             </div>
 
             {/* Réseaux sociaux */}
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-6 flex items-center gap-2">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Share2 size={16} /> Réseaux sociaux
               </h2>
               {socialFetching ? (
-                <p className="text-stone-400 italic text-sm">Chargement…</p>
+                <p className="text-stone-600 text-sm">Chargement…</p>
               ) : (
                 <form onSubmit={handleSaveSocials} className="space-y-5">
                   {socialMessage && (
@@ -1356,14 +1246,14 @@ export default function Settings() {
                     { label: 'Spotify',   value: socialSpotify,   setter: setSocialSpotify,   placeholder: 'https://open.spotify.com/show/...' },
                   ].map(({ label, value, setter, placeholder }) => (
                     <div key={label} className="space-y-1.5">
-                      <label htmlFor={`settings-social-${label.toLowerCase()}`} className="block text-xs uppercase tracking-widest text-stone-500 font-bold">{label}</label>
+                      <label htmlFor={`settings-social-${label.toLowerCase()}`} className="block text-[13px] font-medium text-stone-800">{label}</label>
                       <input
                         id={`settings-social-${label.toLowerCase()}`}
                         type="url"
                         value={value}
                         onChange={(e) => setter(e.target.value)}
                         placeholder={placeholder}
-                        className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm"
+                        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
                       />
                     </div>
                   ))}
@@ -1371,7 +1261,7 @@ export default function Settings() {
                     <button
                       type="submit"
                       disabled={socialLoading}
-                      className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                     >
                       <Save size={16} />
                       {socialLoading ? 'Sauvegarde…' : 'Sauvegarder les réseaux'}
@@ -1382,8 +1272,8 @@ export default function Settings() {
             </div>
 
             {/* Auteur (bio + lien) */}
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-6 flex items-center gap-2">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Share2 size={16} /> Auteur — Bio & lien (affiché en bas des articles)
               </h2>
               <form onSubmit={handleSaveAuthor} className="space-y-5">
@@ -1393,33 +1283,33 @@ export default function Settings() {
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <label htmlFor="settings-author-bio" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Description / Bio</label>
+                  <label htmlFor="settings-author-bio" className="block text-[13px] font-medium text-stone-800">Description / Bio</label>
                   <textarea
                     id="settings-author-bio"
                     rows={4}
                     value={authorBio}
                     onChange={(e) => setAuthorBio(e.target.value)}
                     placeholder="Courte présentation de l'auteur affichée sous chaque article…"
-                    className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm resize-none"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-none"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label htmlFor="settings-author-link" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Lien « En savoir plus »</label>
+                  <label htmlFor="settings-author-link" className="block text-[13px] font-medium text-stone-800">Lien « En savoir plus »</label>
                   <input
                     id="settings-author-link"
                     type="text"
                     value={authorLink}
                     onChange={(e) => setAuthorLink(e.target.value)}
                     placeholder="/about"
-                    className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
                   />
-                  <p className="text-[11px] text-stone-400">URL relative (ex : /about) ou absolue.</p>
+                  <p className="text-[12.5px] text-stone-500">URL relative (ex : /about) ou absolue.</p>
                 </div>
                 <div className="pt-2">
                   <button
                     type="submit"
                     disabled={authorLoading}
-                    className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                   >
                     <Save size={16} />
                     {authorLoading ? 'Sauvegarde…' : 'Sauvegarder'}
@@ -1431,561 +1321,29 @@ export default function Settings() {
         )}
 
         {/* ── Onglet Design & Style ──────────────────────────────── */}
-        {activeTab === 'style' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-fadein">
-            {/* Form Panel */}
-            <div className="lg:col-span-7 space-y-6">
-              <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8 space-y-6">
-                <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-4 flex items-center gap-2">
-                  <Palette size={16} /> Personnalisation du Design
-                </h2>
-                
-                {styleFetching ? (
-                  <p className="text-stone-400 italic text-sm">Chargement des styles...</p>
-                ) : (
-                  <form onSubmit={handleSaveStyles} className="space-y-8">
-                    {styleMessage && (
-                      <div className={`p-4 text-sm ${styleMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                        {styleMessage.text}
-                      </div>
-                    )}
+        {/*
+          Design & style.
 
-                    {/* Section 1: Typographie */}
-                    <div className="space-y-4">
-                      <h3 className="text-xs uppercase tracking-widest text-stone-500 font-bold border-b border-stone-50 pb-1 flex items-center gap-2">
-                        <Type size={14} /> 1. Typographie
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Heading Font */}
-                        <div className="space-y-1.5">
-                          <label className="block text-xs text-stone-600 font-medium">Police des Titres (H1...H6)</label>
-                          <select
-                            value={headingFont}
-                            onChange={(e) => setHeadingFont(e.target.value)}
-                            className="w-full px-3 py-2 border border-stone-200 rounded text-sm bg-stone-50 outline-none focus:border-sage"
-                          >
-                            {GOOGLE_FONTS_SERIF.map(font => (
-                              <option key={font} value={font}>{font}</option>
-                            ))}
-                            <option value="custom">Autre police (Google Fonts)...</option>
-                          </select>
-                          {headingFont === 'custom' && (
-                            <input
-                              type="text"
-                              value={customHeadingFont}
-                              onChange={(e) => setCustomHeadingFont(e.target.value)}
-                              placeholder="Nom exact Google Font (ex: Lora)"
-                              className="w-full mt-2 px-3 py-2 border border-stone-200 rounded text-sm outline-none focus:border-sage"
-                            />
-                          )}
-                        </div>
+          L'onglet contenait **deux éditeurs concurrents** pour les mêmes
+          réglages : le panneau de jetons, et un formulaire « Personnalisation
+          du Design » plus ancien qui réécrivait la police, la couleur primaire
+          et le rayon des angles — plus deux clés, `style_color_text_h2` et
+          `style_color_text_body`, qui n'existent dans aucun jeton et que
+          `GlobalStyles` n'a jamais lues. Enregistrer l'un défaisait donc
+          silencieusement l'autre. Il ne reste que le panneau, qui porte
+          désormais son propre aperçu.
+        */}
+        {activeTab === 'style' && <DesignSystemPanel />}
 
-                        {/* Body Font */}
-                        <div className="space-y-1.5">
-                          <label className="block text-xs text-stone-600 font-medium">Police du Texte (Paragraphes)</label>
-                          <select
-                            value={bodyFont}
-                            onChange={(e) => setBodyFont(e.target.value)}
-                            className="w-full px-3 py-2 border border-stone-200 rounded text-sm bg-stone-50 outline-none focus:border-sage"
-                          >
-                            {GOOGLE_FONTS_SANS.map(font => (
-                              <option key={font} value={font}>{font}</option>
-                            ))}
-                            <option value="custom">Autre police (Google Fonts)...</option>
-                          </select>
-                          {bodyFont === 'custom' && (
-                            <input
-                              type="text"
-                              value={customBodyFont}
-                              onChange={(e) => setCustomBodyFont(e.target.value)}
-                              placeholder="Nom exact Google Font (ex: Lato)"
-                              className="w-full mt-2 px-3 py-2 border border-stone-200 rounded text-sm outline-none focus:border-sage"
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Section 2: Couleur Principale */}
-                    <div className="space-y-4">
-                      <h3 className="text-xs uppercase tracking-widest text-stone-500 font-bold border-b border-stone-50 pb-1 flex items-center gap-2">
-                        <Palette size={14} /> 2. Couleur principale du site
-                      </h3>
-                      <div className="space-y-3">
-                        <label className="block text-xs text-stone-600 font-medium">Actuellement le vert sauge. Modifie également les éléments utilisant la couleur principale.</label>
-                        <div className="flex flex-wrap items-center gap-4">
-                          <div className="flex items-center gap-3">
-                            <div className="relative w-10 h-10 rounded-full border border-stone-200 overflow-hidden shrink-0 shadow-inner">
-                              <input 
-                                type="color" 
-                                value={primaryColor} 
-                                onChange={(e) => {
-                                  setPrimaryColor(e.target.value);
-                                  if (btnDarkBg === primaryColor) setBtnDarkBg(e.target.value);
-                                }} 
-                                className="absolute inset-0 w-[150%] h-[150%] -translate-x-[15%] -translate-y-[15%] cursor-pointer border-none p-0"
-                              />
-                            </div>
-                            <input 
-                              type="text" 
-                              value={primaryColor} 
-                              onChange={(e) => setPrimaryColor(e.target.value)} 
-                              className="w-24 px-3 py-1.5 border border-stone-200 text-xs font-mono rounded"
-                            />
-                          </div>
-                          {/* Presets */}
-                          {renderPresets((val) => {
-                            setPrimaryColor(val);
-                            setBtnDarkBg(val);
-                          })}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Section 3: Boutons */}
-                    <div className="space-y-4">
-                      <h3 className="text-xs uppercase tracking-widest text-stone-500 font-bold border-b border-stone-50 pb-1 flex items-center gap-2">
-                        <Sliders size={14} /> 3. Boutons
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Dark Button */}
-                        <div className="space-y-3 p-4 bg-stone-50/50 border border-stone-100 rounded-xl">
-                          <h4 className="text-xs uppercase tracking-wider text-stone-700 font-bold">Bouton Foncé / Primaire</h4>
-                          
-                          {/* BG */}
-                          <div className="space-y-1">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-xs text-stone-500">Arrière-plan</span>
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="color" 
-                                  value={btnDarkBg} 
-                                  onChange={(e) => setBtnDarkBg(e.target.value)} 
-                                  className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                                />
-                                <input 
-                                  type="text" 
-                                  value={btnDarkBg} 
-                                  onChange={(e) => setBtnDarkBg(e.target.value)} 
-                                  className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                                />
-                              </div>
-                            </div>
-                            {renderPresets(setBtnDarkBg)}
-                          </div>
-
-                          {/* Text */}
-                          <div className="space-y-1 border-t border-stone-100 pt-2">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-xs text-stone-500">Couleur texte</span>
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="color" 
-                                  value={btnDarkText} 
-                                  onChange={(e) => setBtnDarkText(e.target.value)} 
-                                  className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                                />
-                                <input 
-                                  type="text" 
-                                  value={btnDarkText} 
-                                  onChange={(e) => setBtnDarkText(e.target.value)} 
-                                  className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                                />
-                              </div>
-                            </div>
-                            {renderPresets(setBtnDarkText)}
-                          </div>
-
-                          {/* Hover BG */}
-                          <div className="space-y-1 border-t border-stone-100 pt-2">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-xs text-stone-500">Survol (Hover BG)</span>
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="color" 
-                                  value={btnDarkHoverBg} 
-                                  onChange={(e) => setBtnDarkHoverBg(e.target.value)} 
-                                  className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                                />
-                                <input 
-                                  type="text" 
-                                  value={btnDarkHoverBg} 
-                                  onChange={(e) => setBtnDarkHoverBg(e.target.value)} 
-                                  className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                                />
-                              </div>
-                            </div>
-                            {renderPresets(setBtnDarkHoverBg)}
-                          </div>
-                        </div>
-
-                        {/* Light Button */}
-                        <div className="space-y-3 p-4 bg-stone-50/50 border border-stone-100 rounded-xl">
-                          <h4 className="text-xs uppercase tracking-wider text-stone-700 font-bold">Bouton Clair / Secondaire</h4>
-                          
-                          {/* BG */}
-                          <div className="space-y-1">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-xs text-stone-500">Arrière-plan</span>
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="color" 
-                                  value={btnLightBg} 
-                                  onChange={(e) => setBtnLightBg(e.target.value)} 
-                                  className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                                />
-                                <input 
-                                  type="text" 
-                                  value={btnLightBg} 
-                                  onChange={(e) => setBtnLightBg(e.target.value)} 
-                                  className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                                />
-                              </div>
-                            </div>
-                            {renderPresets(setBtnLightBg)}
-                          </div>
-
-                          {/* Text */}
-                          <div className="space-y-1 border-t border-stone-100 pt-2">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-xs text-stone-500">Couleur texte</span>
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="color" 
-                                  value={btnLightText} 
-                                  onChange={(e) => setBtnLightText(e.target.value)} 
-                                  className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                                />
-                                <input 
-                                  type="text" 
-                                  value={btnLightText} 
-                                  onChange={(e) => setBtnLightText(e.target.value)} 
-                                  className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                                />
-                              </div>
-                            </div>
-                            {renderPresets(setBtnLightText)}
-                          </div>
-
-                          {/* Border */}
-                          <div className="space-y-1 border-t border-stone-100 pt-2">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-xs text-stone-500">Couleur bordure</span>
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="color" 
-                                  value={btnLightBorder} 
-                                  onChange={(e) => setBtnLightBorder(e.target.value)} 
-                                  className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                                />
-                                <input 
-                                  type="text" 
-                                  value={btnLightBorder} 
-                                  onChange={(e) => setBtnLightBorder(e.target.value)} 
-                                  className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                                />
-                              </div>
-                            </div>
-                            {renderPresets(setBtnLightBorder)}
-                          </div>
-
-                          {/* Hover BG */}
-                          <div className="space-y-1 border-t border-stone-100 pt-2">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-xs text-stone-500">Survol (Hover BG)</span>
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="color" 
-                                  value={btnLightHoverBg} 
-                                  onChange={(e) => setBtnLightHoverBg(e.target.value)} 
-                                  className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                                />
-                                <input 
-                                  type="text" 
-                                  value={btnLightHoverBg} 
-                                  onChange={(e) => setBtnLightHoverBg(e.target.value)} 
-                                  className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                                />
-                              </div>
-                            </div>
-                            {renderPresets(setBtnLightHoverBg)}
-                          </div>
-
-                          {/* Hover Text */}
-                          <div className="space-y-1 border-t border-stone-100 pt-2">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-xs text-stone-500">Survol Texte</span>
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="color" 
-                                  value={btnLightHoverText} 
-                                  onChange={(e) => setBtnLightHoverText(e.target.value)} 
-                                  className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                                />
-                                <input 
-                                  type="text" 
-                                  value={btnLightHoverText} 
-                                  onChange={(e) => setBtnLightHoverText(e.target.value)} 
-                                  className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                                />
-                              </div>
-                            </div>
-                            {renderPresets(setBtnLightHoverText)}
-                          </div>
-
-                          {/* Hover Border */}
-                          <div className="space-y-1 border-t border-stone-100 pt-2">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="text-xs text-stone-500">Survol Bordure</span>
-                              <div className="flex items-center gap-2">
-                                <input 
-                                  type="color" 
-                                  value={btnLightHoverBorder} 
-                                  onChange={(e) => setBtnLightHoverBorder(e.target.value)} 
-                                  className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                                />
-                                <input 
-                                  type="text" 
-                                  value={btnLightHoverBorder} 
-                                  onChange={(e) => setBtnLightHoverBorder(e.target.value)} 
-                                  className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                                />
-                              </div>
-                            </div>
-                            {renderPresets(setBtnLightHoverBorder)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Section 4: Couleurs du Texte */}
-                    <div className="space-y-4">
-                      <h3 className="text-xs uppercase tracking-widest text-stone-500 font-bold border-b border-stone-50 pb-1 flex items-center gap-2">
-                        <Palette size={14} /> 4. Couleurs du Texte
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Heading H2 Color */}
-                        <div className="space-y-3 p-4 bg-stone-50/50 border border-stone-100 rounded-xl">
-                          <h4 className="text-xs uppercase tracking-wider text-stone-700 font-bold">Titres H2</h4>
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="text-xs text-stone-500">Couleur</span>
-                            <div className="flex items-center gap-2">
-                              <input 
-                                type="color" 
-                                value={textH2Color} 
-                                onChange={(e) => setTextH2Color(e.target.value)} 
-                                className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                              />
-                              <input 
-                                type="text" 
-                                value={textH2Color} 
-                                onChange={(e) => setTextH2Color(e.target.value)} 
-                                className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                              />
-                            </div>
-                          </div>
-                          {renderPresets(setTextH2Color)}
-                        </div>
-
-                        {/* Paragraph Body Color */}
-                        <div className="space-y-3 p-4 bg-stone-50/50 border border-stone-100 rounded-xl">
-                          <h4 className="text-xs uppercase tracking-wider text-stone-700 font-bold">Texte de paragraphe</h4>
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="text-xs text-stone-500">Couleur</span>
-                            <div className="flex items-center gap-2">
-                              <input 
-                                type="color" 
-                                value={textBodyColor} 
-                                onChange={(e) => setTextBodyColor(e.target.value)} 
-                                className="w-7 h-7 rounded border-0 cursor-pointer p-0"
-                              />
-                              <input 
-                                type="text" 
-                                value={textBodyColor} 
-                                onChange={(e) => setTextBodyColor(e.target.value)} 
-                                className="w-20 px-2 py-1 border border-stone-200 text-[10px] font-mono rounded"
-                              />
-                            </div>
-                          </div>
-                          {renderPresets(setTextBodyColor)}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Section 5: Border Radius */}
-                    <div className="space-y-4">
-                      <h3 className="text-xs uppercase tracking-widest text-stone-500 font-bold border-b border-stone-50 pb-1 flex items-center gap-2">
-                        <Sliders size={14} /> 5. Arrondi des angles (Border Radius)
-                      </h3>
-                      
-                      <div className="space-y-4 p-4 bg-stone-50/50 border border-stone-100 rounded-xl">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                          <span className="text-xs text-stone-600">Base de l'arrondi : <strong>{borderRadiusBase}</strong></span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {[
-                              { name: 'Sharp', val: '0px' },
-                              { name: 'Subtle', val: '4px' },
-                              { name: 'Standard', val: '8px' },
-                              { name: 'Rounded', val: '12px' },
-                              { name: 'Extra', val: '16px' }
-                            ].map(p => (
-                              <button
-                                type="button"
-                                key={p.val}
-                                onClick={() => setBorderRadiusBase(p.val)}
-                                className={`px-2.5 py-1 text-[10px] font-bold rounded border transition-colors cursor-pointer ${borderRadiusBase === p.val ? 'bg-sage border-sage text-white' : 'bg-white border-stone-200 text-stone-500 hover:border-stone-400'}`}
-                              >
-                                {p.name}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-4">
-                          <input
-                            type="range"
-                            min="0"
-                            max="24"
-                            step="1"
-                            value={parseInt(borderRadiusBase) || 0}
-                            onChange={(e) => setBorderRadiusBase(e.target.value + 'px')}
-                            className="flex-1 accent-sage cursor-pointer"
-                          />
-                          <span className="text-xs font-mono bg-white border border-stone-200 px-2.5 py-1 rounded">
-                            {borderRadiusBase}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Submit */}
-                    <div className="pt-4 border-t border-stone-100">
-                      <button
-                        type="submit"
-                        disabled={styleLoading}
-                        className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3.5 uppercase tracking-widest text-xs font-bold hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                      >
-                        <Save size={16} />
-                        {styleLoading ? 'Sauvegarde...' : 'Sauvegarder les styles globaux'}
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            </div>
-
-            {/* Live Preview Panel */}
-            <div className="lg:col-span-5 lg:sticky lg:top-8 space-y-6">
-              <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8 space-y-6">
-                <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 flex items-center gap-2">
-                  <Eye size={16} /> Aperçu en temps réel
-                </h2>
-                
-                <div 
-                  style={{
-                    '--preview-color-sage': primaryColor,
-                    '--preview-font-headings': `'${activeHeadingFont}', serif`,
-                    '--preview-font-body': `'${activeBodyFont}', sans-serif`,
-                    '--preview-radius-base': borderRadiusBase,
-                  } as React.CSSProperties}
-                  className="space-y-6"
-                >
-                  {/* Card Preview */}
-                  <div 
-                    style={{ 
-                      borderRadius: `calc(${borderRadiusBase} * 1.5)`,
-                      borderColor: 'rgba(231, 229, 228, 0.7)'
-                    }} 
-                    className="p-6 bg-stone-50 border border-stone-200/70 shadow-sm transition-all"
-                  >
-                    <span 
-                      style={{ fontFamily: 'var(--preview-font-body)', color: 'var(--preview-color-sage)' }} 
-                      className="text-[10px] font-bold uppercase tracking-[0.25em] mb-2 block"
-                    >
-                      Exemple de tag
-                    </span>
-                    
-                    <h3 
-                      style={{ fontFamily: 'var(--preview-font-headings)' }} 
-                      className="text-2xl font-bold text-stone-900 mb-3 leading-snug"
-                    >
-                      Titre principal d'exemple
-                    </h3>
-                    
-                    <p 
-                      style={{ fontFamily: 'var(--preview-font-body)' }} 
-                      className="text-sm text-stone-600 leading-relaxed mb-6 font-light"
-                    >
-                      Voici un paragraphe de démonstration. Il utilise la police du texte de corps pour afficher un contenu de lecture fluide et agréable.
-                    </p>
-
-                    {/* Buttons Preview */}
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <button
-                        type="button"
-                        onMouseEnter={() => setDarkBtnHover(true)}
-                        onMouseLeave={() => setDarkBtnHover(false)}
-                        style={{
-                          backgroundColor: darkBtnHover ? btnDarkHoverBg : btnDarkBg,
-                          color: btnDarkText,
-                          borderRadius: borderRadiusBase,
-                          fontFamily: 'var(--preview-font-body)',
-                        }}
-                        className="px-6 py-3 text-xs uppercase tracking-widest font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        Bouton Foncé
-                      </button>
-
-                      <button
-                        type="button"
-                        onMouseEnter={() => setLightBtnHover(true)}
-                        onMouseLeave={() => setLightBtnHover(false)}
-                        style={{
-                          backgroundColor: lightBtnHover ? btnLightHoverBg : btnLightBg,
-                          color: lightBtnHover ? btnLightHoverText : btnLightText,
-                          borderColor: lightBtnHover ? btnLightHoverBorder : btnLightBorder,
-                          borderWidth: '1px',
-                          borderRadius: borderRadiusBase,
-                          fontFamily: 'var(--preview-font-body)',
-                        }}
-                        className="px-6 py-3 text-xs uppercase tracking-widest font-bold transition-all border flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        Bouton Clair
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Div Content Alert Preview */}
-                  <div 
-                    style={{ 
-                      borderRadius: borderRadiusBase,
-                      borderLeftWidth: '4px',
-                      borderLeftColor: 'var(--preview-color-sage)',
-                      backgroundColor: `${primaryColor}0c`
-                    }} 
-                    className="p-5 border border-stone-200/40 text-stone-700 italic text-sm font-light leading-relaxed"
-                  >
-                    <span style={{ fontFamily: 'var(--preview-font-headings)' }} className="font-bold block text-stone-900 not-italic mb-1">Citation ou Témoignage</span>
-                    « Un vrai moment pour soi, dans un cadre chaleureux. On ressort le teint reposé et la tête légère. »
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Onglet Entreprise ────────────────────────────────────── */}
         {activeTab === 'business' && (
-          <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8 animate-fadein">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-6 flex items-center gap-2">
+          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+            <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
               <Building2 size={16} /> Coordonnées d'entreprise
             </h2>
 
             {bizFetching ? (
-              <p className="text-stone-400 text-sm italic">Chargement…</p>
+              <p className="text-sm text-stone-600">Chargement…</p>
             ) : (
               <form onSubmit={handleSaveBusiness} className="space-y-6">
                 {bizMessage && (
@@ -1996,54 +1354,110 @@ export default function Settings() {
 
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label htmlFor="biz-name" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Nom de l'entreprise / du site</label>
+                    <label htmlFor="biz-name" className="block text-[13px] font-medium text-stone-800">Nom de l'entreprise / du site</label>
                     <input id="biz-name" value={bizName} onChange={(e) => setBizName(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="biz-owner" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Nom du propriétaire / praticien</label>
+                    <label htmlFor="biz-owner" className="block text-[13px] font-medium text-stone-800">Nom du propriétaire / praticien</label>
                     <input id="biz-owner" value={bizOwner} onChange={(e) => setBizOwner(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="biz-email" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">E-mail de contact</label>
+                    <label htmlFor="biz-email" className="block text-[13px] font-medium text-stone-800">E-mail de contact</label>
                     <input id="biz-email" type="email" value={bizEmail} onChange={(e) => setBizEmail(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="biz-phone" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Téléphone</label>
+                    <label htmlFor="biz-phone" className="block text-[13px] font-medium text-stone-800">Téléphone</label>
                     <input id="biz-phone" value={bizPhone} onChange={(e) => setBizPhone(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2 sm:col-span-2">
-                    <label htmlFor="biz-street" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Rue et numéro</label>
+                    <label htmlFor="biz-street" className="block text-[13px] font-medium text-stone-800">Rue et numéro</label>
                     <input id="biz-street" value={bizAddressStreet} onChange={(e) => setBizAddressStreet(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="biz-postal" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Code postal</label>
+                    <label htmlFor="biz-postal" className="block text-[13px] font-medium text-stone-800">Code postal</label>
                     <input id="biz-postal" value={bizAddressPostal} onChange={(e) => setBizAddressPostal(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="biz-city" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Ville</label>
+                    <label htmlFor="biz-city" className="block text-[13px] font-medium text-stone-800">Ville</label>
                     <input id="biz-city" value={bizAddressCity} onChange={(e) => setBizAddressCity(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="biz-region" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Région / Canton</label>
+                    <label htmlFor="biz-region" className="block text-[13px] font-medium text-stone-800">Région / Canton</label>
                     <input id="biz-region" value={bizAddressRegion} onChange={(e) => setBizAddressRegion(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="biz-country" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Pays (code ISO, ex : CH)</label>
+                    <label htmlFor="biz-country" className="block text-[13px] font-medium text-stone-800">Pays (code ISO, ex : CH)</label>
                     <input id="biz-country" value={bizAddressCountry} onChange={(e) => setBizAddressCountry(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="biz-price-range" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">Gamme de prix (SEO, ex : CHF 450–CHF 1295)</label>
+                    <label htmlFor="biz-price-range" className="block text-[13px] font-medium text-stone-800">Gamme de prix (SEO, ex : CHF 450–CHF 1295)</label>
                     <input id="biz-price-range" value={bizPriceRange} onChange={(e) => setBizPriceRange(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                  </div>
+                </div>
+
+                {/*
+                  Page de contact : deux textes et la liste des motifs, et rien
+                  de plus. Le gabarit n'affiche que ce qui est renseigné, et une
+                  page « contact » créée dans le constructeur remplace tout ce
+                  bloc.
+                */}
+                <div className="space-y-4 border-t border-stone-200 pt-6">
+                  <div>
+                    <h3 className="text-[15px] font-semibold text-stone-900">Page de contact</h3>
+                    <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
+                      Ces textes s&apos;affichent sur <span className="font-mono text-[12.5px]">/contact</span>,
+                      au-dessus de vos coordonnées. Laissez-les vides pour n&apos;afficher que le formulaire.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="contact-intro" className="block text-[13px] font-medium text-stone-800">
+                      Phrase d&apos;accroche
+                    </label>
+                    <textarea
+                      id="contact-intro"
+                      rows={2}
+                      value={contactIntro}
+                      onChange={(e) => setContactIntro(e.target.value)}
+                      placeholder="Ce que le visiteur doit savoir avant d'écrire : délai de réponse, ce que vous attendez de lui…"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm leading-relaxed text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="contact-subjects" className="block text-[13px] font-medium text-stone-800">
+                      Motifs proposés dans le formulaire
+                    </label>
+                    <textarea
+                      id="contact-subjects"
+                      rows={3}
+                      value={contactSubjects}
+                      onChange={(e) => setContactSubjects(e.target.value)}
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm leading-relaxed text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                    />
+                    <p className="text-[12.5px] leading-relaxed text-stone-500">
+                      Un motif par ligne. Le premier est proposé par défaut.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="contact-address-note" className="block text-[13px] font-medium text-stone-800">
+                      Précision sur l&apos;adresse
+                    </label>
+                    <input
+                      id="contact-address-note"
+                      value={contactAddressNote}
+                      onChange={(e) => setContactAddressNote(e.target.value)}
+                      placeholder="Ex. : parking devant, 2e étage, accès par la cour…"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                    />
                   </div>
                 </div>
 
@@ -2051,7 +1465,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={bizLoading}
-                    className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                   >
                     <Save size={16} />
                     {bizLoading ? 'Enregistrement…' : 'Enregistrer les coordonnées'}
@@ -2064,18 +1478,28 @@ export default function Settings() {
 
         {/* ── Onglet Éditorial & Marque ───────────────────────────── */}
         {activeTab === 'editorial' && (
-          <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8 animate-fadein space-y-6">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-2 flex items-center gap-2">
-                <BookOpen size={16} /> Ligne Éditoriale, Ton &amp; Branding
-              </h2>
-              <p className="text-stone-500 text-sm">
-                Décrivez l'activité, le positionnement, le persona cible, le ton de voix et les piliers thématiques. Ces informations sont pré-remplies avec vos paramètres actuels et seront réutilisées par l'intelligence artificielle pour suggérer des sujets de blog, rédiger des articles et concevoir des contenus alignés avec votre marque.
-              </p>
+          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-3 mb-2">
+              <div>
+                <h2 className="text-[15px] font-semibold text-stone-900 flex items-center gap-2">
+                  <BookOpen size={16} /> Ligne Éditoriale, Ton &amp; Branding
+                </h2>
+                <p className="text-stone-500 text-sm mt-1">
+                  Décrivez l'activité, le positionnement, le persona cible, le ton de voix et les piliers thématiques. Réutilisés par l'IA pour générer vos articles et posts.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditorialVoiceModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-semibold shadow-md transition-all shrink-0 cursor-pointer"
+              >
+                <Mic size={16} />
+                Lancer l'interview vocale (Claude)
+              </button>
             </div>
 
             {editorialFetching ? (
-              <p className="text-stone-400 text-sm italic">Chargement des paramètres éditoriaux…</p>
+              <p className="text-sm text-stone-600">Chargement des paramètres éditoriaux…</p>
             ) : (
               <form onSubmit={handleSaveEditorial} className="space-y-6">
                 {editorialMessage && (
@@ -2086,9 +1510,9 @@ export default function Settings() {
 
                 {/* Champ 1 : Activité et Contexte */}
                 <div className="space-y-2">
-                  <label htmlFor="editorial-activity" className="block text-xs uppercase tracking-widest text-stone-700 font-bold flex items-center justify-between">
+                  <label htmlFor="editorial-activity" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
                     <span>1. Activité &amp; Contexte général du site</span>
-                    <span className="text-[10px] text-stone-400 font-normal">Description du métier, de la spécialisation et de l'offre</span>
+                    <span className="text-[12px] text-stone-500 font-normal">Description du métier, de la spécialisation et de l'offre</span>
                   </label>
                   <textarea
                     id="editorial-activity"
@@ -2096,15 +1520,15 @@ export default function Settings() {
                     value={siteActivityContext}
                     onChange={(e) => setSiteActivityContext(e.target.value)}
                     placeholder="Présentation globale du site et de son secteur..."
-                    className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
                 {/* Champ 2 : Public Cible et Persona */}
                 <div className="space-y-2">
-                  <label htmlFor="editorial-target" className="block text-xs uppercase tracking-widest text-stone-700 font-bold flex items-center justify-between">
+                  <label htmlFor="editorial-target" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
                     <span>2. Public Cible &amp; Persona</span>
-                    <span className="text-[10px] text-stone-400 font-normal">Profil des lecteurs/clients, douleurs et attentes</span>
+                    <span className="text-[12px] text-stone-500 font-normal">Profil des lecteurs/clients, douleurs et attentes</span>
                   </label>
                   <textarea
                     id="editorial-target"
@@ -2112,15 +1536,15 @@ export default function Settings() {
                     value={siteTargetPersona}
                     onChange={(e) => setSiteTargetPersona(e.target.value)}
                     placeholder="Profil démographique, psychologique et problématiques du public visé..."
-                    className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
                 {/* Champ 3 : Ton de voix */}
                 <div className="space-y-2">
-                  <label htmlFor="editorial-tone" className="block text-xs uppercase tracking-widest text-stone-700 font-bold flex items-center justify-between">
+                  <label htmlFor="editorial-tone" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
                     <span>3. Ton de voix &amp; Style d'écriture</span>
-                    <span className="text-[10px] text-stone-400 font-normal">Registre de langue, tutoiement/vouvoiement, posture</span>
+                    <span className="text-[12px] text-stone-500 font-normal">Registre de langue, tutoiement/vouvoiement, posture</span>
                   </label>
                   <textarea
                     id="editorial-tone"
@@ -2128,15 +1552,15 @@ export default function Settings() {
                     value={siteToneOfVoice}
                     onChange={(e) => setSiteToneOfVoice(e.target.value)}
                     placeholder="Direct, conversationnel, tutoiement, parole de cabinet..."
-                    className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
                 {/* Champ 4 : Ton de marque & Vocabulaire */}
                 <div className="space-y-2">
-                  <label htmlFor="editorial-brand" className="block text-xs uppercase tracking-widest text-stone-700 font-bold flex items-center justify-between">
+                  <label htmlFor="editorial-brand" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
                     <span>4. Ton de marque, Promesse &amp; Vocabulaire</span>
-                    <span className="text-[10px] text-stone-400 font-normal">Mots clés de marque, termes privilégiés et mots interdits</span>
+                    <span className="text-[12px] text-stone-500 font-normal">Mots clés de marque, termes privilégiés et mots interdits</span>
                   </label>
                   <textarea
                     id="editorial-brand"
@@ -2144,15 +1568,15 @@ export default function Settings() {
                     value={siteBrandTone}
                     onChange={(e) => setSiteBrandTone(e.target.value)}
                     placeholder="Promesse phare, expressions fortes de la marque, mots interdits..."
-                    className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
                 {/* Champ 5 : Piliers & Thématiques du Blog */}
                 <div className="space-y-2">
-                  <label htmlFor="editorial-topics" className="block text-xs uppercase tracking-widest text-stone-700 font-bold flex items-center justify-between">
+                  <label htmlFor="editorial-topics" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
                     <span>5. Piliers &amp; Thématiques majeures du Blog</span>
-                    <span className="text-[10px] text-stone-400 font-normal">Grandes thématiques pour les idées et articles de blog</span>
+                    <span className="text-[12px] text-stone-500 font-normal">Grandes thématiques pour les idées et articles de blog</span>
                   </label>
                   <textarea
                     id="editorial-topics"
@@ -2160,7 +1584,7 @@ export default function Settings() {
                     value={siteBlogTopics}
                     onChange={(e) => setSiteBlogTopics(e.target.value)}
                     placeholder="1. Thématique A...\n2. Thématique B..."
-                    className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
@@ -2168,7 +1592,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={editorialLoading}
-                    className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                   >
                     <Save size={16} />
                     {editorialLoading ? 'Enregistrement…' : 'Enregistrer la ligne éditoriale'}
@@ -2181,8 +1605,8 @@ export default function Settings() {
 
         {/* ── Onglet Modules ───────────────────────────────────────── */}
         {activeTab === 'modules' && (
-          <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8 animate-fadein">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-2 flex items-center gap-2">
+          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+            <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-2 mb-2 flex items-center gap-2">
               <Puzzle size={16} /> Modules du site
             </h2>
             <p className="text-stone-500 text-sm mb-6">
@@ -2191,7 +1615,7 @@ export default function Settings() {
             </p>
 
             {modulesFetching ? (
-              <p className="text-stone-400 text-sm italic">Chargement…</p>
+              <p className="text-sm text-stone-600">Chargement…</p>
             ) : (
               <form onSubmit={handleSaveModules} className="space-y-6">
                 {modulesMessage && (
@@ -2207,6 +1631,9 @@ export default function Settings() {
                   { label: 'Newsletter', desc: "Admin Newsletter (envoi d'e-mails), formulaires d'inscription et bannière sur le site.", value: moduleNewsletterEnabled, setter: setModuleNewsletterEnabled },
                   { label: 'Réseaux Sociaux', desc: "Génération de contenu Instagram/LinkedIn/Facebook (articles, flux RSS, suggestions), calendrier et automatisation.", value: moduleSocialEnabled, setter: setModuleSocialEnabled },
                   { label: 'Caisse & facturation', desc: "Encaissement, fichier clientes, quittances PDF, journal des recettes et export pour la fiducie. Module interne : rien n'apparaît sur le site public.", value: moduleCaisseEnabled, setter: setModuleCaisseEnabled },
+                  { label: 'Mots-clés & SEO', desc: 'Espace SEO : recherche de mots-clés, suggestions de sujets et clusters sémantiques.', value: moduleKeywordsEnabled, setter: setModuleKeywordsEnabled },
+                  { label: 'Agents IA', desc: "Widget de conversation sur le site public et suivi des échanges dans l'admin.", value: moduleAgentsEnabled, setter: setModuleAgentsEnabled },
+                  { label: 'Automatisations', desc: 'Déclencheurs planifiés et événements applicatifs (webhook, e-mail, génération de contenu).', value: moduleAutomationsEnabled, setter: setModuleAutomationsEnabled },
                 ].map((mod) => (
                   <div key={mod.label} className="flex items-start gap-4 py-3 border-b border-stone-50 last:border-0">
                     <button
@@ -2215,13 +1642,13 @@ export default function Settings() {
                       aria-checked={mod.value}
                       aria-label={`${mod.value ? 'Désactiver' : 'Activer'} le module ${mod.label}`}
                       onClick={() => mod.setter(!mod.value)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-0.5 cursor-pointer ${mod.value ? 'bg-sage' : 'bg-stone-200'}`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-0.5 cursor-pointer ${mod.value ? 'bg-stone-900' : 'bg-stone-200'}`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${mod.value ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                     <span>
                       <span className="block text-sm font-medium text-stone-800">{mod.label}</span>
-                      <span className="block text-xs text-stone-400">{mod.desc}</span>
+                      <span className="block text-[12.5px] text-stone-500">{mod.desc}</span>
                     </span>
                   </div>
                 ))}
@@ -2230,7 +1657,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={modulesLoading}
-                    className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                   >
                     <Save size={16} />
                     {modulesLoading ? 'Enregistrement…' : 'Enregistrer les modules'}
@@ -2243,8 +1670,8 @@ export default function Settings() {
 
         {/* ── Onglet Caisse & facturation ─────────────────────────── */}
         {activeTab === 'caisse' && (
-          <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8 animate-fadein">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-2 flex items-center gap-2">
+          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+            <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-2 mb-2 flex items-center gap-2">
               <CreditCard size={16} /> Caisse &amp; facturation
             </h2>
             <p className="text-stone-500 text-sm mb-6">
@@ -2253,7 +1680,7 @@ export default function Settings() {
             </p>
 
             {caisseFetching ? (
-              <p className="text-stone-400 text-sm italic">Chargement…</p>
+              <p className="text-sm text-stone-600">Chargement…</p>
             ) : (
               <form onSubmit={handleSaveCaisse} className="space-y-6">
                 {caisseMessage && (
@@ -2269,13 +1696,13 @@ export default function Settings() {
                     aria-checked={caisseTvaAssujetti}
                     aria-label={`${caisseTvaAssujetti ? 'Désactiver' : 'Activer'} l'assujettissement à la TVA`}
                     onClick={() => setCaisseTvaAssujetti(!caisseTvaAssujetti)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-0.5 cursor-pointer ${caisseTvaAssujetti ? 'bg-sage' : 'bg-stone-200'}`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-0.5 cursor-pointer ${caisseTvaAssujetti ? 'bg-stone-900' : 'bg-stone-200'}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${caisseTvaAssujetti ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                   <span>
                     <span className="block text-sm font-medium text-stone-800">Activité assujettie à la TVA</span>
-                    <span className="block text-xs text-stone-400 leading-relaxed">
+                    <span className="block text-[12.5px] text-stone-500 leading-relaxed">
                       À laisser désactivé tant que le chiffre d&apos;affaires annuel reste sous CHF 100&apos;000 (LTVA art. 10) :
                       les factures portent alors la mention « TVA non applicable » et un taux de 0 %.
                       Activer ce réglage fait apparaître le choix du taux à la caisse.
@@ -2286,7 +1713,7 @@ export default function Settings() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
-                    <label htmlFor="caisse-taux" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                    <label htmlFor="caisse-taux" className="block text-[13px] font-medium text-stone-800 mb-2">
                       Taux par défaut
                     </label>
                     <select
@@ -2294,20 +1721,20 @@ export default function Settings() {
                       value={caisseTvaTaux}
                       onChange={e => setCaisseTvaTaux(e.target.value)}
                       disabled={!caisseTvaAssujetti}
-                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all disabled:bg-stone-50 disabled:text-stone-400 cursor-pointer"
+                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all disabled:bg-stone-50 disabled:text-stone-500 cursor-pointer"
                     >
                       <option value="0">0 % — non assujettie</option>
                       <option value="8.1">8.1 % — taux normal</option>
                       <option value="3.8">3.8 % — hébergement</option>
                       <option value="2.6">2.6 % — taux réduit</option>
                     </select>
-                    <p className="text-[11px] text-stone-400 mt-1.5">
+                    <p className="text-[12.5px] text-stone-500 mt-1.5">
                       Appliqué aux nouvelles prestations du catalogue. Chaque prestation peut avoir le sien.
                     </p>
                   </div>
 
                   <div>
-                    <label htmlFor="caisse-tva-numero" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                    <label htmlFor="caisse-tva-numero" className="block text-[13px] font-medium text-stone-800 mb-2">
                       N° TVA
                     </label>
                     <input
@@ -2316,16 +1743,16 @@ export default function Settings() {
                       value={caisseTvaNumero}
                       onChange={e => setCaisseTvaNumero(e.target.value)}
                       placeholder="CHE-123.456.789 TVA"
-                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all"
                     />
-                    <p className="text-[11px] text-stone-400 mt-1.5">
+                    <p className="text-[12.5px] text-stone-500 mt-1.5">
                       Obligatoire sur les factures dès l&apos;assujettissement (OTVA art. 26).
                     </p>
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="caisse-iban" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                  <label htmlFor="caisse-iban" className="block text-[13px] font-medium text-stone-800 mb-2">
                     IBAN
                   </label>
                   <input
@@ -2334,15 +1761,15 @@ export default function Settings() {
                     value={caisseIban}
                     onChange={e => setCaisseIban(e.target.value)}
                     placeholder="CH00 0000 0000 0000 0000 0"
-                    className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+                    className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all"
                   />
-                  <p className="text-[11px] text-stone-400 mt-1.5">
+                  <p className="text-[12.5px] text-stone-500 mt-1.5">
                     Imprimé sur la quittance uniquement quand le paiement est un virement.
                   </p>
                 </div>
 
                 <div>
-                  <label htmlFor="caisse-mentions" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                  <label htmlFor="caisse-mentions" className="block text-[13px] font-medium text-stone-800 mb-2">
                     Mentions en pied de facture
                   </label>
                   <textarea
@@ -2350,23 +1777,23 @@ export default function Settings() {
                     rows={3}
                     value={caisseMentions}
                     onChange={e => setCaisseMentions(e.target.value)}
-                    className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
+                    className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all resize-y"
                   />
                 </div>
 
-                <div className="pt-2 border-t border-stone-100">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-4">Bons cadeaux</h3>
+                <div className="pt-2 border-t border-stone-200">
+                  <h3 className="text-[13px] font-medium text-stone-800 mb-4">Bons cadeaux</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
-                      <label htmlFor="caisse-bon-validite" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                      <label htmlFor="caisse-bon-validite" className="block text-[13px] font-medium text-stone-800 mb-2">
                         Durée de validité
                       </label>
                       <select
                         id="caisse-bon-validite"
                         value={caisseBonValidite}
                         onChange={e => setCaisseBonValidite(e.target.value)}
-                        className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all cursor-pointer"
+                        className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all cursor-pointer"
                       >
                         <option value="12">1 an</option>
                         <option value="24">2 ans</option>
@@ -2377,7 +1804,7 @@ export default function Settings() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-stone-100 bg-stone-50/60 px-5 py-4 text-xs text-stone-500 leading-relaxed">
+                  <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/60 px-5 py-4 text-xs text-stone-500 leading-relaxed">
                     Le droit suisse ne fixe <strong>aucune durée minimale</strong>. Un bon cadeau est une
                     créance ordinaire : à défaut d&apos;accord contraire, il se prescrit par 10 ans
                     (CO art. 127). Une validité courte reste possible si elle est annoncée à l&apos;achat,
@@ -2390,7 +1817,7 @@ export default function Settings() {
                   </div>
 
                   <div className="mt-4">
-                    <label htmlFor="caisse-bon-mentions" className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">
+                    <label htmlFor="caisse-bon-mentions" className="block text-[13px] font-medium text-stone-800 mb-2">
                       Conditions imprimées sur le bon
                     </label>
                     <textarea
@@ -2398,12 +1825,12 @@ export default function Settings() {
                       rows={3}
                       value={caisseBonMentions}
                       onChange={e => setCaisseBonMentions(e.target.value)}
-                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
+                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all resize-y"
                     />
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-stone-100 bg-stone-50/60 px-5 py-4 text-xs text-stone-500 leading-relaxed">
+                <div className="rounded-xl border border-stone-200 bg-stone-50/60 px-5 py-4 text-xs text-stone-500 leading-relaxed">
                   <strong className="block text-stone-700 mb-1 font-semibold">Numérotation et conservation</strong>
                   Les factures sont numérotées <code className="px-1 bg-white rounded border border-stone-200">FAC-{new Date().getFullYear()}-0001</code>,
                   en continu et par année civile. Une écriture encaissée ne peut être ni supprimée ni recalculée :
@@ -2416,7 +1843,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={caisseLoading}
-                    className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                   >
                     <Save size={16} />
                     {caisseLoading ? 'Enregistrement…' : 'Enregistrer les réglages'}
@@ -2429,8 +1856,8 @@ export default function Settings() {
 
         {/* ── Onglet IA & Budget ──────────────────────────────────── */}
         {activeTab === 'ai' && (
-          <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8 animate-fadein">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-2 flex items-center gap-2">
+          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+            <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-2 mb-2 flex items-center gap-2">
               <Sparkles size={16} /> Modèle IA &amp; budget
             </h2>
             <p className="text-stone-500 text-sm mb-6">
@@ -2439,7 +1866,7 @@ export default function Settings() {
             </p>
 
             {aiFetching ? (
-              <p className="text-stone-400 text-sm italic">Chargement…</p>
+              <p className="text-sm text-stone-600">Chargement…</p>
             ) : (
               <form onSubmit={handleSaveAi} className="space-y-8">
                 {aiMessage && (
@@ -2450,7 +1877,7 @@ export default function Settings() {
 
                 {/* ── Choix du modèle ────────────────────────────────── */}
                 <fieldset className="space-y-3">
-                  <legend className="text-xs uppercase tracking-widest text-stone-500 font-bold mb-2">Modèle</legend>
+                  <legend className="text-[13px] font-medium text-stone-800 mb-2">Modèle</legend>
                   {aiCatalog.map((m) => {
                     const selected = aiModel === m.id;
                     // Coût indicatif d'un article généré (~2 000 tokens en entrée, ~16 000 en sortie).
@@ -2458,7 +1885,7 @@ export default function Settings() {
                     return (
                       <label
                         key={m.id}
-                        className={`flex gap-3 items-start p-4 border rounded-xl cursor-pointer transition-colors ${selected ? 'border-sage bg-sage/5' : 'border-stone-200 hover:border-stone-300'} ${m.available === false ? 'opacity-60' : ''}`}
+                        className={`flex gap-3 items-start p-4 border rounded-xl cursor-pointer transition-colors ${selected ? 'border-stone-900 bg-stone-50' : 'border-stone-200 hover:border-stone-300'} ${m.available === false ? 'opacity-60' : ''}`}
                       >
                         <input
                           type="radio"
@@ -2471,17 +1898,17 @@ export default function Settings() {
                         <span className="flex-1">
                           <span className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-bold text-stone-800">{m.label}</span>
-                            {m.badge === 'qualite'    && <span className="text-[10px] uppercase tracking-wider bg-stone-900 text-white px-2 py-0.5 rounded-full">Qualité max</span>}
-                            {m.badge === 'equilibre'  && <span className="text-[10px] uppercase tracking-wider bg-sage text-white px-2 py-0.5 rounded-full">Meilleur rapport</span>}
-                            {m.badge === 'economique' && <span className="text-[10px] uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-full">Le moins cher</span>}
+                            {m.badge === 'qualite'    && <span className="text-[12px] bg-stone-900 text-white px-2 py-0.5 rounded-full">Qualité max</span>}
+                            {m.badge === 'equilibre'  && <span className="text-[12px] bg-stone-900 text-white px-2 py-0.5 rounded-full">Meilleur rapport</span>}
+                            {m.badge === 'economique' && <span className="text-[12px] bg-amber-500 text-white px-2 py-0.5 rounded-full">Le moins cher</span>}
                             {m.available === false && (
-                              <span className="text-[10px] uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                              <span className="text-[12px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
                                 Plus servi par Anthropic
                               </span>
                             )}
                           </span>
                           <span className="block text-xs text-stone-500 mt-1">{m.description}</span>
-                          <span className="block text-xs text-stone-400 mt-1 font-mono">
+                          <span className="block text-[12.5px] text-stone-500 mt-1 font-mono">
                             ${m.inputPricePerMTok} / M tokens entrée · ${m.outputPricePerMTok} / M sortie
                             {' — '}≈ ${perArticle.toFixed(2)} par article généré
                           </span>
@@ -2489,7 +1916,7 @@ export default function Settings() {
                       </label>
                     );
                   })}
-                  <p className="text-xs text-stone-400">
+                  <p className="text-[12.5px] text-stone-500">
                     Les balises méta restent générées avec Haiku 4.5 quel que soit ce choix : la tâche est trop
                     courte pour justifier un modèle coûteux.
                   </p>
@@ -2497,7 +1924,7 @@ export default function Settings() {
 
                 {/* ── Niveau de réflexion ────────────────────────────── */}
                 <fieldset className="space-y-2">
-                  <legend className="text-xs uppercase tracking-widest text-stone-500 font-bold mb-2">
+                  <legend className="text-[13px] font-medium text-stone-800 mb-2">
                     Niveau de réflexion
                   </legend>
                   <div className="flex flex-wrap gap-2">
@@ -2507,13 +1934,13 @@ export default function Settings() {
                         type="button"
                         onClick={() => setAiEffort(level.value)}
                         title={level.hint}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest border transition-colors cursor-pointer ${aiEffort === level.value ? 'bg-sage text-white border-sage' : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300'}`}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${aiEffort === level.value ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300'}`}
                       >
                         {level.label}
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-stone-400">
+                  <p className="text-[12.5px] text-stone-500">
                     {AI_EFFORT_LEVELS.find((l) => l.value === aiEffort)?.hint}
                   </p>
                   {aiCatalog.find((m) => m.id === aiModel)?.supportsEffort === false && (
@@ -2525,7 +1952,7 @@ export default function Settings() {
 
                 {/* ── Budget & alerte ────────────────────────────────── */}
                 <fieldset className="space-y-4">
-                  <legend className="text-xs uppercase tracking-widest text-stone-500 font-bold mb-2">
+                  <legend className="text-[13px] font-medium text-stone-800 mb-2">
                     Budget mensuel &amp; alerte
                   </legend>
                   <div className="grid sm:grid-cols-2 gap-4">
@@ -2540,7 +1967,7 @@ export default function Settings() {
                         step="1"
                         value={aiBudget}
                         onChange={(e) => setAiBudget(e.target.value)}
-                        className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sage"
+                        className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
                       />
                     </div>
                     <div className="space-y-2">
@@ -2555,11 +1982,11 @@ export default function Settings() {
                         step="1"
                         value={aiAlertPercent}
                         onChange={(e) => setAiAlertPercent(e.target.value)}
-                        className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sage"
+                        className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-stone-400">
+                  <p className="text-[12.5px] text-stone-500">
                     Anthropic ne publie pas le solde du compte via son API : la dépense est reconstituée à partir des
                     tokens facturés à chaque génération, puis comparée à ce budget. Une bannière apparaît en haut de
                     l'admin dès le seuil atteint. Le rechargement des crédits reste à faire sur console.anthropic.com.
@@ -2570,7 +1997,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={aiLoading}
-                    className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                   >
                     <Save size={16} />
                     {aiLoading ? 'Enregistrement…' : 'Enregistrer les réglages IA'}
@@ -2581,15 +2008,15 @@ export default function Settings() {
 
             {/* ── Consommation du mois ─────────────────────────────── */}
             {aiUsage && (
-              <div className="mt-10 border-t border-stone-100 pt-6">
+              <div className="mt-10 border-t border-stone-200 pt-6">
                 <div className="flex items-center justify-between gap-4 mb-4">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-stone-500">
+                  <h3 className="text-[13px] font-medium text-stone-800">
                     Consommation depuis le 1er du mois
                   </h3>
                   <button
                     type="button"
                     onClick={loadAiUsage}
-                    className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-stone-400 hover:text-sage transition-colors cursor-pointer"
+                    className="flex items-center gap-1 text-[12px] text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
                   >
                     <RefreshCw size={12} /> Actualiser
                   </button>
@@ -2613,17 +2040,17 @@ export default function Settings() {
                         ${Number(aiUsage.usage.totalUsd).toFixed(2)}
                       </span>
                       {aiUsage.config.budgetUsd > 0 && (
-                        <span className="text-sm text-stone-400">
+                        <span className="text-sm text-stone-600">
                           sur ${Number(aiUsage.config.budgetUsd).toFixed(2)} — reste ${Number(aiUsage.remainingUsd ?? 0).toFixed(2)}
                         </span>
                       )}
-                      <span className="text-xs text-stone-400">({aiUsage.usage.calls} appels)</span>
+                      <span className="text-[12.5px] text-stone-500">({aiUsage.usage.calls} appels)</span>
                     </div>
 
                     {aiUsage.config.budgetUsd > 0 && (
                       <div className="h-2 bg-stone-100 rounded-full mt-3 overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all ${aiUsage.level === 'exceeded' ? 'bg-red-500' : aiUsage.level === 'warning' ? 'bg-amber-500' : 'bg-sage'}`}
+                          className={`h-full rounded-full transition-all ${aiUsage.level === 'exceeded' ? 'bg-red-500' : aiUsage.level === 'warning' ? 'bg-amber-500' : 'bg-stone-900'}`}
                           style={{ width: `${Math.min(100, aiUsage.percentUsed)}%` }}
                         />
                       </div>
@@ -2635,9 +2062,9 @@ export default function Settings() {
                         { title: 'Par usage', rows: aiUsage.usage.byFeature },
                       ].map((block) => (
                         <div key={block.title}>
-                          <p className="text-[10px] uppercase tracking-wider text-stone-400 font-bold mb-2">{block.title}</p>
+                          <p className="text-[12px] text-stone-500 font-bold mb-2">{block.title}</p>
                           {block.rows.length === 0 ? (
-                            <p className="text-xs text-stone-400 italic">Aucune génération ce mois-ci.</p>
+                            <p className="text-[12.5px] text-stone-500 italic">Aucune génération ce mois-ci.</p>
                           ) : (
                             <ul className="space-y-1">
                               {block.rows.map((row: any) => (
@@ -2652,7 +2079,7 @@ export default function Settings() {
                       ))}
                     </div>
 
-                    <p className="text-[11px] text-stone-400 mt-4">
+                    <p className="text-[12.5px] text-stone-500 mt-4">
                       Estimation calculée sur les tarifs publics d'Anthropic ; la facture réelle peut différer
                       légèrement (remises, tarifs de lancement).
                     </p>
@@ -2663,59 +2090,119 @@ export default function Settings() {
           </div>
         )}
 
-        {/* ── Onglet Sécurité (Mot de passe) ──────────────────────── */}
-        {activeTab === 'security' && (
-          <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 md:p-8 animate-fadein">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-sage border-b border-stone-100 pb-2 mb-6 flex items-center gap-2">
-              <Lock size={16} /> Sécurité
-            </h2>
+        {/* ── Onglet Flotte Multi-Sites ────────────────────────────── */}
+        {activeTab === 'fleet' && <FleetManagerPanel />}
 
-            <form onSubmit={handleUpdatePassword} className="space-y-6">
-              {pwdMessage && (
-                <div className={`p-4 text-sm ${pwdMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                  {pwdMessage.text}
+        {/* ── Onglet Sécurité (Mot de passe) ──────────────────────── */}
+
+        {activeTab === 'security' && (
+          <div className="space-y-6">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
+                <Lock size={16} /> Sécurité
+              </h2>
+
+              <form onSubmit={handleUpdatePassword} className="space-y-6">
+                {pwdMessage && (
+                  <div className={`p-4 text-sm ${pwdMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                    {pwdMessage.text}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <label htmlFor="new-password" className="block text-[13px] font-medium text-stone-800">
+                    Nouveau mot de passe
+                  </label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="confirm-password" className="block text-[13px] font-medium text-stone-800">
+                    Confirmer le nouveau mot de passe
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    disabled={pwdLoading || !password}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                  >
+                    <Save size={16} />
+                    {pwdLoading ? 'Mise à jour…' : 'Mettre à jour le mot de passe'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein space-y-4">
+              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 flex items-center gap-2">
+                <ShieldCheck size={16} className="text-emerald-600" /> Synchronisation Système & Base Supabase
+              </h2>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Exécutez la vérification automatique pour vous assurer que les tables Supabase possèdent toutes les colonnes requises par les nouvelles fonctionnalités (Hub SIO/GEO, entonnoir, prompts IA).
+              </p>
+
+              {migrateLog && (
+                <div className={`p-4 text-xs rounded-lg space-y-2 border ${migrateLog.error ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
+                  <p className="font-semibold">{migrateLog.error ? migrateLog.error : migrateLog.message}</p>
+                  {migrateLog.logs && migrateLog.logs.length > 0 && (
+                    <ul className="list-disc pl-4 space-y-1 font-mono text-[11px]">
+                      {migrateLog.logs.map((l, i) => <li key={i}>{l}</li>)}
+                    </ul>
+                  )}
                 </div>
               )}
-              <div className="space-y-2">
-                <label htmlFor="new-password" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">
-                  Nouveau mot de passe
-                </label>
-                <input
-                  id="new-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white"
-                  placeholder="••••••••"
-                />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="confirm-password" className="block text-xs uppercase tracking-widest text-stone-500 font-bold">
-                  Confirmer le nouveau mot de passe
-                </label>
-                <input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage outline-none transition-all bg-stone-50 focus:bg-white"
-                  placeholder="••••••••"
-                />
-              </div>
-              <div className="pt-4">
-                <button
-                  type="submit"
-                  disabled={pwdLoading || !password}
-                  className="flex items-center justify-center gap-2 bg-stone-900 text-white px-6 py-3 uppercase tracking-widest text-sm hover:bg-sage transition-colors disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                >
-                  <Save size={16} />
-                  {pwdLoading ? 'Mise à jour…' : 'Mettre à jour le mot de passe'}
-                </button>
-              </div>
-            </form>
+
+              <button
+                type="button"
+                onClick={handleAutoMigrate}
+                disabled={migrating}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-xs font-semibold text-white transition-colors hover:bg-stone-800 disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                <RefreshCw size={14} className={migrating ? 'animate-spin' : ''} />
+                {migrating ? 'Synchronisation en cours…' : 'Vérifier & Synchroniser la Base Supabase'}
+              </button>
+            </div>
           </div>
         )}
+        </div>
       </div>
+
+      <EditorialVoiceInterviewModal
+        isOpen={isEditorialVoiceModalOpen}
+        onClose={() => setIsEditorialVoiceModalOpen(false)}
+        initialValues={{
+          site_activity_context: siteActivityContext,
+          site_target_persona: siteTargetPersona,
+          site_tone_of_voice: siteToneOfVoice,
+          site_brand_tone: siteBrandTone,
+          site_blog_topics: siteBlogTopics,
+        }}
+        onApply={(data) => {
+          if (data.site_activity_context) setSiteActivityContext(data.site_activity_context);
+          if (data.site_target_persona) setSiteTargetPersona(data.site_target_persona);
+          if (data.site_tone_of_voice) setSiteToneOfVoice(data.site_tone_of_voice);
+          if (data.site_brand_tone) setSiteBrandTone(data.site_brand_tone);
+          if (data.site_blog_topics) setSiteBlogTopics(data.site_blog_topics);
+          setEditorialMessage({
+            type: 'success',
+            text: 'Ligne éditoriale pré-remplie par l’interview vocale Claude ! N’oubliez pas de cliquer sur "Enregistrer la ligne éditoriale".',
+          });
+        }}
+      />
     </>
   );
 }

@@ -5,7 +5,7 @@ import PageBuilderClient from '../PageBuilderClient';
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="p-8 text-stone-500 italic">Chargement...</div>}>
+    <Suspense fallback={<div className="p-8 text-sm text-stone-600">Chargement...</div>}>
       <PageBuilderClient />
     </Suspense>
   );

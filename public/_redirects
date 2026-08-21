@@ -1,1 +1,6 @@
-/medias/* https://xyzyhzdabmbqyycxcpgl.supabase.co/storage/v1/object/public/medias/:splat 200
+# Aucune redirection de médias par défaut.
+#
+# Ne jamais coder ici l'URL d'un projet Supabase : un `to` codé en dur suivrait
+# le template d'installation en installation et servirait les médias du client
+# précédent. Les URL de médias sont dérivées de NEXT_PUBLIC_SUPABASE_URL ou de
+# NEXT_PUBLIC_R2_PUBLIC_URL — voir src/utils/media.ts.

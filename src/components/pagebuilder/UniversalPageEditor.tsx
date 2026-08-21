@@ -423,7 +423,7 @@ export default function UniversalPageEditor() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
           </span>
-          <span className="text-xs font-black uppercase tracking-widest text-white/90">Édition en ligne</span>
+          <span className="text-xs font-black text-white/90">Édition en ligne</span>
         </div>
 
         <div className="h-4 w-px bg-white/10" />

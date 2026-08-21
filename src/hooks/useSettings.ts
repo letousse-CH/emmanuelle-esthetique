@@ -24,10 +24,9 @@ export function fetchAllSettings(): Promise<void> {
       throw new Error(error.message);
     }
     if (data) {
-      for (const r of data as { key: string; value: string }[]) {
-        if (r.value) {
-          settingsCache.set(r.key, IMAGE_KEYS.has(r.key) ? proxyUrl(r.value) : r.value);
-        }
+      for (const r of data as { key: string; value: string | null }[]) {
+        const val = (r.value ?? '').trim();
+        settingsCache.set(r.key, IMAGE_KEYS.has(r.key) && val ? proxyUrl(val) : val);
       }
     }
   }).catch((err) => {

@@ -1,11 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
 import type { PageSection, SectionData, SectionType } from './wireframes.config';
 
-export const SECTION_DEFAULTS: Record<SectionType, Record<string, unknown>> = {
+export const SECTION_DEFAULTS: Record<string, Record<string, unknown>> = {
   hero_1:        { title: 'Nouveau titre', description: 'Description…' },
   hero_2:        { title: 'Nouveau titre' },
-  hero_3:        { title: 'Prendre soin de vous', title_italic: 'chez vous', description: 'Une parenthèse de bien-être, à domicile.', items: ['Soins du visage', 'Head Spa', 'Massages'], cta_primary_text: 'Réserver', cta_primary_href: '/contact', image_url: '' },
-  hero_4:        { title: 'Le bien-être', title_italic: 'à votre porte', description: 'Soins du visage, Head Spa et massages relaxants à domicile.', card_title: 'Sur rendez-vous', card_text: 'Palézieux et environs, du lundi au samedi.', cta_text: 'Prendre rendez-vous', cta_href: '/contact', image_url: '' },
+  hero_3:        { title: 'Votre titre', title_italic: 'ici', description: '', items: ['Première prestation', 'Deuxième prestation', 'Troisième prestation'], cta_primary_text: 'Réserver', cta_primary_href: '/contact', image_url: '' },
+  hero_4:        { title: 'Votre titre', title_italic: 'ici', description: '', card_title: 'Sur rendez-vous', card_text: '', cta_text: 'Prendre rendez-vous', cta_href: '/contact', image_url: '' },
   hero_5:        { eyebrow: 'Nos soins', title: 'Titre de la page', description: 'Une phrase d\'introduction courte.', align: 'center' },
   intro_1:       { quote: 'Citation…', text: 'Texte de présentation…' },
   features_1:    { title: 'Points clés', items: ['Point 1', 'Point 2'] },
@@ -19,14 +19,29 @@ export const SECTION_DEFAULTS: Record<SectionType, Record<string, unknown>> = {
   gallery_carousel: { title: 'Carrousel d\'images', description: 'Défilement horizontal…', cards: [{ title: 'Image 1', description: '…', image: 'https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=800' }] },
   gallery_masonry: { title: 'Galerie en Cascade', description: 'Style Pinterest…', cards: [{ title: 'Image 1', description: '…', image: 'https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=800' }] },
   faq_1:  { title: 'Foire Aux Questions', cards: [{ question: 'Question 1 ?', answer: 'Réponse 1…' }] },
-  marquee_1: { items: ['Soins du visage', 'Head Spa', 'Massages relaxants', 'Beauté du regard'], bg_color: '#0f0e0d', text_color: '#d4b483', separator: '★', speed: 'normal' },
+  marquee_1: { items: ['Première prestation', 'Deuxième prestation', 'Troisième prestation'], bg_color: '#0f0e0d', text_color: '#d4b483', separator: '★', speed: 'normal' },
   pricing_1: { title: 'Notre offre', price: '895 €', price_note: 'paiement en plusieurs fois possible', badge: 'Programme 3 mois', items: ['Inclus 1', 'Inclus 2'], cta_text: 'Réserver', cta_href: '#' },
   // Avis : emplacements vides volontairement — à remplir avec de vrais
   // témoignages depuis l'éditeur. Ne pas pré-remplir avec des avis fictifs.
   reviews_1: { title: 'Ce que disent', title_bold: 'nos clientes', description: 'Remplacez ces emplacements par de vrais témoignages.', cta_text: '', cta_href: '#', cards: [{ name: 'Avis à remplacer', date: '—', rating: 5, text: 'Emplacement réservé à un témoignage authentique. Modifiez ce texte depuis l\'éditeur.' }, { name: 'Avis à remplacer', date: '—', rating: 5, text: 'Emplacement réservé à un témoignage authentique. Modifiez ce texte depuis l\'éditeur.' }, { name: 'Avis à remplacer', date: '—', rating: 5, text: 'Emplacement réservé à un témoignage authentique. Modifiez ce texte depuis l\'éditeur.' }] },
   stats_1: { title: 'Des résultats concrets', cards: [{ value: '500+', label: 'Personnes accompagnées' }, { value: '98%', label: 'Taux de satisfaction' }, { value: '10 ans', label: "D'expérience clinique" }] },
   timeline_1: { title: 'Comment ça se passe', cards: [{ title: 'Premier échange', description: 'Un appel gratuit pour comprendre votre situation.' }, { title: 'Diagnostic', description: 'On pose des mots sur ce que vous vivez.' }, { title: 'Plan d\'action', description: 'Une feuille de route claire et personnalisée.' }] },
+  cta_2:         { title: 'Prêt à commencer ?', description: 'Une phrase qui lève la dernière hésitation.', cta_text: 'Nous contacter', cta_href: '/contact' },
+  cta_3:         { title: 'Une question ?', description: 'Nous répondons sous 24 h ouvrées.', cta_text: 'Écrivez-nous', cta_href: '/contact' },
+  testimonial_2: { title: 'Ce qu\'on dit de nous', cards: [{ quote: 'Emplacement à remplacer par un vrai témoignage.', author: 'Nom', role: 'Fonction' }, { quote: 'Emplacement à remplacer par un vrai témoignage.', author: 'Nom', role: 'Fonction' }, { quote: 'Emplacement à remplacer par un vrai témoignage.', author: 'Nom', role: 'Fonction' }] },
+  team_1:        { title: 'L\'équipe', description: '', cards: [{ name: 'Prénom Nom', role: 'Fonction', image: '', bio: '' }, { name: 'Prénom Nom', role: 'Fonction', image: '', bio: '' }, { name: 'Prénom Nom', role: 'Fonction', image: '', bio: '' }] },
+  contact_1:     { title: 'Nous joindre', description: '', address: 'Rue et numéro, code postal, ville', phone: '', email: '', hours: 'Du lundi au vendredi, 9h – 18h' },
+  steps_1:       { title: 'Comment ça se passe', cards: [{ title: 'Premier contact', description: '' }, { title: 'Proposition', description: '' }, { title: 'Réalisation', description: '' }, { title: 'Suivi', description: '' }] },
+  stats_2:       { cards: [{ value: '10 ans', label: 'D\'expérience' }, { value: '250', label: 'Clients accompagnés' }, { value: '48 h', label: 'Délai de réponse' }, { value: '100 %', label: 'Sur-mesure' }] },
+  faq_2:         { title: 'Questions fréquentes', cards: [{ question: 'Première question ?', answer: 'Réponse.' }, { question: 'Deuxième question ?', answer: 'Réponse.' }, { question: 'Troisième question ?', answer: 'Réponse.' }, { question: 'Quatrième question ?', answer: 'Réponse.' }] },
+  compare_1:     { title: 'Pourquoi nous choisir', left_label: 'Ailleurs', right_label: 'Chez nous', rows: [{ label: 'Premier critère', left: false, right: true }, { label: 'Deuxième critère', left: false, right: true }, { label: 'Troisième critère', left: true, right: true }] },
+  banner_1:      { text: 'Information ou promotion à afficher ici.', cta_text: 'En savoir plus', cta_href: '#' },
   logos_1: { eyebrow: 'Ils en parlent', cards: Array.from({ length: 4 }, () => ({ image: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='40'><rect width='120' height='40' rx='6' fill='%23d6d3d1'/><text x='60' y='25' font-family='sans-serif' font-size='12' fill='%2378716c' text-anchor='middle'>LOGO</text></svg>", alt: 'Logo' })) },
+  hero_video:    { eyebrow: 'Découvrir en vidéo', title: 'Présentation vidéo de notre offre', description: 'Découvrez en 2 minutes comment nous vous accompagnons.', cta_text: 'Démarrer', cta_href: '#', video_poster: 'https://images.unsplash.com/photo-1522542550221-31fd19575a2d?auto=format&fit=crop&w=1200&q=80', trust_text: 'Rejoint par plus de 500 professionnels' },
+  pricing_2:     { eyebrow: 'Tarifs simples', title: 'Choisissez la formule adaptée', description: 'Des offres claires, sans engagement.', yearly_discount_badge: '-20%', plans: [{ name: 'Essentiel', price_monthly: '29 €', price_yearly: '24 €', period: '/mois', description: 'Idéal pour démarrer', popular: false, features: ['Accès complet', 'Support 7j/7'], cta_text: 'Choisir' }, { name: 'Pro', price_monthly: '59 €', price_yearly: '47 €', period: '/mois', description: 'Pour accélérer', badge: 'Populaire', popular: true, features: ['Tout de Essentiel', 'Accompagnement dédié', 'Mises à jour prioritaires'], cta_text: 'Essayer Pro' }, { name: 'Sur-Mesure', price_monthly: '99 €', price_yearly: '79 €', period: '/mois', description: 'Pour les grands projets', popular: false, features: ['Projet dédié', 'Garantie de réponse 2h'], cta_text: 'Nous contacter' }] },
+  stats_3:       { title: 'Métriques clés', description: 'Des résultats concrets et vérifiés', cards: [{ metric: '99%', label: 'Satisfaction client', sublabel: 'Sur +500 avis' }, { metric: '+12K', label: 'Projets livrés', sublabel: 'En 5 ans', highlight: true }, { metric: '24/7', label: 'Support réactif', sublabel: 'Assistance dédiée' }, { metric: '4.9/5', label: 'Note moyenne', sublabel: 'Sur Trustpilot' }] },
+  newsletter_1:  { eyebrow: 'Newsletter', title: 'Restez informé de nos nouveautés', description: 'Recevez nos conseils exclusifs directement dans votre boîte mail.', placeholder: 'Votre adresse e-mail...', button_text: 'S’inscrire', privacy_note: 'Désinscription en 1 clic. Pas de spam.' },
+  bento_grid_1:  { eyebrow: 'Fonctionnalités', title: 'Tout ce dont vous avez besoin', description: 'Une suite moderne conçue pour la performance.', cards: [{ title: 'Interface Intuitive', description: 'Prise en main immédiate.', tag: 'Performance', metric: '10x', image_url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80' }, { title: 'Sécurité Maximale', description: 'Données chiffrées.', tag: 'Sécurité' }, { title: 'Collaboration Fluide', description: 'Travaillez en équipe sans friction.', tag: 'Équipe' }, { title: 'Analytics en Direct', description: 'Suivez vos indicateurs en temps réel.', tag: 'Statistiques', metric: '100%', image_url: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=800&q=80' }] },
 };
 
 /**
@@ -77,6 +92,13 @@ export function usePageEditor(initial: PageSection[]) {
     setHistoryLen(next.length);
   }, []);
 
+  const redoRef = useRef<PageSection[][]>([]);
+  const [redoLen, setRedoLen] = useState(0);
+  const setRedo = useCallback((next: PageSection[][]) => {
+    redoRef.current = next;
+    setRedoLen(next.length);
+  }, []);
+
   // Miroir synchrone de l'état : `commit` doit rester une fonction pure (pas
   // d'effet dans un updater `setState`, React le rejoue en mode strict).
   const sectionsRef = useRef<PageSection[]>(initial);
@@ -100,17 +122,19 @@ export function usePageEditor(initial: PageSection[]) {
     if (!shouldCoalesce) {
       setHistory([...historyRef.current.slice(-(HISTORY_LIMIT - 1)), prev]);
     }
+    setRedo([]);
     setDirty(true);
-  }, [setHistory]);
+  }, [setHistory, setRedo]);
 
   /** Remplace le contenu sans polluer l'historique (chargement d'une page). */
   const reset = useCallback((next: PageSection[]) => {
     sectionsRef.current = next;
     setSectionsState(next);
     setHistory([]);
+    setRedo([]);
     setDirty(false);
     lastEdit.current = { key: '', at: 0 };
-  }, [setHistory]);
+  }, [setHistory, setRedo]);
 
   /** Remplace le contenu comme une action utilisateur annulable (génération IA). */
   const replaceAll = useCallback((next: PageSection[]) => {
@@ -184,15 +208,93 @@ export function usePageEditor(initial: PageSection[]) {
     const h = historyRef.current;
     if (h.length === 0) return;
     const previous = h[h.length - 1];
+    const current = sectionsRef.current;
     historyRef.current = h.slice(0, -1);
     sectionsRef.current = previous;
     setSectionsState(previous);
     setHistory(historyRef.current);
+    setRedo([...redoRef.current, current]);
     setDirty(true);
     lastEdit.current = { key: '', at: 0 };
-  }, [setHistory]);
+  }, [setHistory, setRedo]);
+
+  const redo = useCallback(() => {
+    const r = redoRef.current;
+    if (r.length === 0) return;
+    const next = r[r.length - 1];
+    const current = sectionsRef.current;
+    redoRef.current = r.slice(0, -1);
+    sectionsRef.current = next;
+    setSectionsState(next);
+    setRedo(redoRef.current);
+    setHistory([...historyRef.current, current]);
+    setDirty(true);
+    lastEdit.current = { key: '', at: 0 };
+  }, [setHistory, setRedo]);
 
   const markClean = useCallback(() => setDirty(false), []);
+
+  /**
+   * Bascule le type d'une section tout en préservant le contenu utilisateur
+   * (titres, sous-titres, descriptions, images, boutons et cartes).
+   */
+  const swapType = useCallback((i: number, newType: SectionType) => {
+    commit((prev) => {
+      if (!prev[i] || prev[i].type === newType) return prev;
+      const oldSection = prev[i];
+      const oldData = (oldSection.data || {}) as Record<string, unknown>;
+      const newDefaults = JSON.parse(JSON.stringify(SECTION_DEFAULTS[newType] ?? {})) as Record<string, unknown>;
+
+      const newData: Record<string, unknown> = {
+        ...newDefaults,
+        ...oldData,
+      };
+
+      if (oldData.cta_primary_text && !newData.cta_text) {
+        newData.cta_text = oldData.cta_primary_text;
+      }
+      if (oldData.cta_primary_href && !newData.cta_href) {
+        newData.cta_href = oldData.cta_primary_href;
+      }
+      if (oldData.cta_text && !newData.cta_primary_text) {
+        newData.cta_primary_text = oldData.cta_text;
+      }
+      if (oldData.cta_href && !newData.cta_primary_href) {
+        newData.cta_primary_href = oldData.cta_href;
+      }
+
+      if (oldData.quote && !newData.description) {
+        newData.description = oldData.quote;
+      }
+      if (oldData.description && !newData.quote) {
+        newData.quote = oldData.description;
+      }
+      if (typeof oldData.content === 'string' && oldData.content.trim() && !newData.description) {
+        newData.description = oldData.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+      if (typeof oldData.description === 'string' && oldData.description.trim() && !newData.content) {
+        newData.content = `<p>${oldData.description}</p>`;
+      }
+
+      if (oldData.image_url && !newData.image) {
+        newData.image = oldData.image_url;
+      }
+      if (oldData.image && !newData.image_url) {
+        newData.image_url = oldData.image;
+      }
+
+      if (Array.isArray(oldData.cards) && oldData.cards.length > 0) {
+        newData.cards = oldData.cards;
+      }
+      if (Array.isArray(oldData.items) && oldData.items.length > 0) {
+        newData.items = oldData.items;
+      }
+
+      return prev.map((s, idx) =>
+        idx === i ? { ...s, type: newType, data: newData as SectionData } : s
+      );
+    });
+  }, [commit]);
 
   return {
     sections,
@@ -204,9 +306,12 @@ export function usePageEditor(initial: PageSection[]) {
     remove,
     duplicate,
     add,
+    swapType,
     updateField,
     undo,
+    redo,
     canUndo: historyLen > 0,
+    canRedo: redoLen > 0,
     dirty,
     markClean,
   };

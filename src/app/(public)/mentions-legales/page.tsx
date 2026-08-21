@@ -1,5 +1,5 @@
 import { fetchPageBySlug } from '../../../services/dynamicPages';
-import DynamicPageClient from '../pages/[slug]/DynamicPageClient';
+import DynamicPageClient from '../../../components/pagebuilder/DynamicPageClient';
 import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
 
 const SLUG = 'mentions-legales';

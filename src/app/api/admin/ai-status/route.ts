@@ -5,8 +5,9 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { validateSupabaseToken } from '../../../../utils/apiAuth';
 import Anthropic from '@anthropic-ai/sdk';
-import { getAiConfig } from '../../../../services/aiConfig';
+import { getAiConfig, invalidateAiConfigCache } from '../../../../services/aiConfig';
 import { resolveModelSpec } from '../../../../constants/aiModels';
+import { getAnthropicKey } from '../../../../services/secrets';
 
 let cachedStatus: {
   ok: boolean;
@@ -33,13 +34,18 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const forceRefresh = searchParams.get('refresh') === 'true';
 
+  // Un rafraîchissement forcé purge aussi le cache de configuration : c'est le
+  // seul moyen, depuis le navigateur, de faire prendre effet immédiatement un
+  // changement de modèle sans attendre l'expiration du TTL côté serveur.
+  if (forceRefresh) invalidateAiConfigCache();
+
   // Return cached version if still valid
   const now = Date.now();
   if (cachedStatus && !forceRefresh && (now - cachedStatus.checkedAt < CACHE_TTL)) {
     return NextResponse.json(cachedStatus);
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = await getAnthropicKey();
 
   if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') {
     cachedStatus = {

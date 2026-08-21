@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '../../services/supabase';
-import { SITE_CONFIG } from '../../config/site';
+import { SITE_CONFIG, getBusinessInfoServer } from '../../config/site';
+import { getSettingsServer } from '../../services/settingsServer';
 
 export const dynamic = 'force-dynamic'; // Toujours à jour en temps réel pour les LLM (GEO SEO)
 
@@ -13,33 +14,38 @@ export async function GET() {
       supabase.from('events').select('title, slug, excerpt, location, date_start').eq('status', 'published').order('date_start', { ascending: true })
     ]);
 
-    // 2. Build the llms.txt content in Markdown
-    let content = `# ${SITE_CONFIG.name}\n\n`;
-    content += `> ${SITE_CONFIG.seoDefaults.description}\n\n`;
+    // 2. Construction du Markdown
+    //
+    // Rien n'est écrit en dur sur l'activité : tout vient des réglages et du
+    // contenu réellement publié. Une description de métier figée ici suivrait
+    // le template d'une installation à l'autre et décrirait le mauvais client.
+    const business = await getBusinessInfoServer();
+    const editorial = await getSettingsServer(['site_activity_context', 'site_description']);
 
-    content += `## Informations Clés & SEO Géo-Localisé (GEO SEO)\n`;
-    content += `- **Activité** : Institut de beauté et bien-être à domicile — soins du visage, Head Spa, massages relaxants, beauté du regard et ateliers d'auto-soin.\n`;
-    content += `- **Professionnelle** : ${SITE_CONFIG.owner}, esthéticienne.\n`;
-    content += `- **Localisation** : institut à domicile à Palézieux, canton de Vaud, Suisse.\n`;
-    content += `- **Zone de couverture** : Palézieux et sa région (Lavaux-Oron, Broye-Vully, Riviera), canton de Vaud.\n`;
-    content += `- **Contact** : uniquement sur rendez-vous, pris via le formulaire de contact du site.\n\n`;
+    const siteName = business.name || SITE_CONFIG.name;
+    const summary = editorial.site_activity_context || editorial.site_description || '';
 
-    content += `## Pages Principales\n`;
-    content += `- [Accueil](${SITE_CONFIG.url}/) : Présentation de l'institut, des soins, des ateliers et des bons cadeaux.\n`;
-    content += `- [Soins](${SITE_CONFIG.url}/soins) : Soins du visage et du corps, Head Spa, massages relaxants et beauté du regard.\n`;
-    content += `- [Ateliers](${SITE_CONFIG.url}/ateliers) : Ateliers d'auto-soin en petit comité — Gua Sha, auto-massage du visage, Glowing Face.\n`;
-    content += `- [Bon cadeau](${SITE_CONFIG.url}/bon-cadeau) : Bons cadeaux à offrir et produits de soin naturels.\n`;
-    content += `- [Blog](${SITE_CONFIG.url}/blog) : Conseils de soin, rituels de beauté et bien-être au quotidien.\n`;
-    content += `- [À Propos & Contact](${SITE_CONFIG.url}/a-propos) : Présentation de ${SITE_CONFIG.owner} et prise de rendez-vous.\n`;
-    content += `- [Mentions Légales](${SITE_CONFIG.url}/mentions-legales) : Informations juridiques et RGPD.\n\n`;
+    let content = `# ${siteName}\n\n`;
+    if (summary) content += `> ${summary}\n\n`;
+
+    content += `## Informations\n`;
+    if (business.owner) content += `- **Responsable** : ${business.owner}\n`;
+    if (business.addressCity) {
+      const place = [business.addressCity, business.addressRegion, business.addressCountry]
+        .filter(Boolean)
+        .join(', ');
+      content += `- **Localisation** : ${place}\n`;
+    }
+    if (business.email) content += `- **Contact** : ${business.email}\n`;
+    content += `\n`;
 
     if (pages && pages.length > 0) {
-      // Filtrer les pages systèmes déjà listées
-      const systemSlugs = ['home', 'a-propos', 'soins', 'bon-cadeau', 'mentions-legales', 'ateliers', 'blog'];
-      const customPages = pages.filter(p => !systemSlugs.includes(p.slug));
-      
+      // On liste les pages réellement publiées : la liste figée d'un site
+      // précédent masquerait les pages du site courant.
+      const customPages = pages.filter(p => p.slug !== 'home');
+
       if (customPages.length > 0) {
-        content += `## Pages Thématiques\n`;
+        content += `## Pages\n`;
         customPages.forEach(p => {
           content += `- [${p.title}](${SITE_CONFIG.url}/${p.slug})\n`;
         });
@@ -48,10 +54,10 @@ export async function GET() {
     }
 
     if (events && events.length > 0) {
-      content += `## Ateliers à Palézieux (Suisse)\n`;
+      content += `## Ateliers\n`;
       events.forEach(e => {
         const dateStr = e.date_start ? new Date(e.date_start).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Date à confirmer';
-        const loc = e.location || 'Palézieux, Suisse';
+        const loc = e.location || '';
         content += `- [${e.title}](${SITE_CONFIG.url}/ateliers/${e.slug}) : ${e.excerpt || 'Aucun résumé disponible.'} (Date: ${dateStr} | Lieu: ${loc})\n`;
       });
       content += `\n`;

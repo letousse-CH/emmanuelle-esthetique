@@ -11,14 +11,20 @@ import { isModuleEnabledServer } from '../../../config/modules';
 
 export const metadata = {
   title: `Blog | ${SITE_CONFIG.name} - ${SITE_CONFIG.owner}`,
-  description: "Conseils de soin du visage, rituels de beauté naturelle, Gua Sha et bien-être au quotidien, par Emmanuelle Esthétique à Palézieux.",
-  keywords: "conseils soin du visage, routine peau naturelle, gua sha, head spa, cosmétique naturelle, bien-être Palézieux",
+  description: "",
+  keywords: "",
   alternates: {
     canonical: `${SITE_CONFIG.url}/blog`,
   },
+  /*
+    Le titre et la description annonçaient « Beauté & bien-être » et des
+    « rituels de beauté naturelle » : le sujet du site d'origine, servi en Open
+    Graph et en Schema.org sur tout site issu du template. Les métadonnées SEO
+    propres à la page se règlent depuis /admin, via `page_meta`.
+  */
   openGraph: {
-    title: `Blog — Beauté & bien-être | ${SITE_CONFIG.name}`,
-    description: "Conseils de soin, rituels de beauté naturelle et gestes bien-être à reproduire chez soi.",
+    title: `Blog | ${SITE_CONFIG.name}`,
+    description: "",
     url: `${SITE_CONFIG.url}/blog`,
     images: [
       {
@@ -48,8 +54,10 @@ export default async function BlogPage() {
     excerpt: a.meta_description || "Découvrez cet article de blog...",
     date: new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
     author: SITE_CONFIG.owner,
-    category: a.category || "Beauté & bien-être",
-    image: proxyUrl(a.cover_image) || "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1000&auto=format&fit=crop",
+    // Ni catégorie ni image de repli codées en dur : une photo Unsplash
+    // s'affichait sur les articles sans visuel, quel que soit leur sujet.
+    category: a.category || "",
+    image: proxyUrl(a.cover_image) || "",
     readTime: "5 min"
   }));
 
@@ -57,7 +65,7 @@ export default async function BlogPage() {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     "name": `Blog ${SITE_CONFIG.name}`,
-    "description": "Conseils de soin, rituels de beauté naturelle et gestes bien-être à reproduire chez soi.",
+    "description": "",
     "url": `${SITE_CONFIG.url}/blog`,
     "inLanguage": "fr-CH",
     "author": { "@type": "Person", "@id": `${SITE_CONFIG.url}/#owner`, "name": SITE_CONFIG.owner },
@@ -101,19 +109,28 @@ export default async function BlogPage() {
                 className="bg-white rounded-[2.5rem] overflow-hidden border border-stone-200 shadow-sm hover:shadow-2xl transition-transform duration-500 hover:-translate-y-2 group"
               >
                 <Link href={`/blog/${post.slug}`} className="block">
-                  <div className="aspect-[16/10] overflow-hidden relative">
-                    <img
-                      src={post.image}
-                      alt={post.title}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    />
-                    <div className="absolute top-6 left-6">
-                      <span className="bg-white/90 backdrop-blur-md text-stone-900 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
-                        {post.category}
-                      </span>
-                    </div>
+                  {/*
+                    Sans image, un aplat neutre plutôt qu'une photo de repli :
+                    `src=""` fait recharger la page entière, et une photo
+                    Unsplash générique illustrait des articles sans rapport.
+                  */}
+                  <div className="aspect-[16/10] overflow-hidden relative bg-stone-100">
+                    {post.image && (
+                      <img
+                        src={post.image}
+                        alt={post.title}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      />
+                    )}
+                    {post.category && (
+                      <div className="absolute top-6 left-6">
+                        <span className="bg-white/90 backdrop-blur-md text-stone-900 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
+                          {post.category}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="p-8 md:p-10 space-y-6">
                     <div className="flex items-center gap-6 text-xs text-stone-400 font-medium uppercase tracking-widest">

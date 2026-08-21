@@ -44,11 +44,11 @@ export default function CaisseTabBar() {
                 href={tab.path}
                 aria-current={isActive ? 'page' : undefined}
                 className={`h-full flex flex-col items-center justify-center gap-1 transition-colors ${
-                  isActive ? 'text-sage' : 'text-stone-400 active:text-stone-700'
+                  isActive ? 'text-sage' : 'text-stone-500 active:text-stone-700'
                 }`}
               >
                 <tab.icon size={19} strokeWidth={isActive ? 2.2 : 1.8} />
-                <span className="text-[10px] font-medium tracking-tight">{tab.name}</span>
+                <span className="text-[12px] font-medium tracking-tight">{tab.name}</span>
               </Link>
             </li>
           );

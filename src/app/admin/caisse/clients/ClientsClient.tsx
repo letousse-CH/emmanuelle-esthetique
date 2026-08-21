@@ -122,11 +122,11 @@ export default function ClientsClient() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Caisse</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Caisse</p>
           <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
             <Users size={20} className="text-sage" /> Clientes
           </h1>
-          <p className="text-stone-400 text-sm mt-1">
+          <p className="mt-1 text-sm text-stone-600">
             {filtered.length} fiche{filtered.length !== 1 ? 's' : ''}
             {search && ` sur ${clients.length}`}
           </p>
@@ -162,13 +162,13 @@ export default function ClientsClient() {
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300" />
+          <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-500" />
           <label htmlFor="clients-search" className="sr-only">Rechercher une cliente</label>
           <input
             id="clients-search"
             type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Nom, prénom, téléphone ou e-mail…"
-            className="w-full pl-11 pr-4 py-3 border border-stone-200 bg-white rounded-xl text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all shadow-sm"
+            className="w-full pl-11 pr-4 py-3 border border-stone-200 bg-white rounded-xl text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors shadow-sm"
           />
         </div>
         <button
@@ -182,13 +182,13 @@ export default function ClientsClient() {
         </button>
       </div>
 
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-8 text-stone-400 text-sm">
-            <div className="w-4 h-4 rounded-full border border-stone-200 border-t-sage animate-spin" /> Chargement…
+          <div className="flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+            <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : filtered.length === 0 ? (
-          <p className="p-8 text-center text-stone-400 text-sm italic">
+          <p className="p-8 text-center text-sm text-stone-600">
             {search ? 'Aucun résultat.' : 'Aucune cliente enregistrée.'}
           </p>
         ) : (
@@ -198,7 +198,7 @@ export default function ClientsClient() {
                 <thead>
                   <tr className="border-b border-stone-100 bg-stone-50/50">
                     {['Cliente', 'Contact', 'Dernière visite', 'Accords'].map(h => (
-                      <th key={h} className="px-6 py-3.5 text-[10px] font-semibold uppercase tracking-widest text-stone-400 text-left">{h}</th>
+                      <th key={h} className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-left">{h}</th>
                     ))}
                     <th className="px-6 py-3.5" />
                   </tr>
@@ -209,27 +209,27 @@ export default function ClientsClient() {
                       <td className="px-6 py-4 font-medium text-stone-900">
                         <button
                           onClick={() => setDetail(c)}
-                          className="text-left hover:text-sage transition-colors cursor-pointer"
+                          className="text-left hover:text-stone-900 transition-colors cursor-pointer"
                         >
                           {clientFullName(c)}
                         </button>
-                        {c.archived && <span className="ml-2 text-[10px] font-semibold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full">Archivée</span>}
+                        {c.archived && <span className="ml-2 text-[12px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">Archivée</span>}
                       </td>
                       <td className="px-6 py-4 text-stone-500 text-xs">
                         {c.telephone && <span className="block whitespace-nowrap">{c.telephone}</span>}
                         {c.email && <span className="block truncate max-w-[13rem]">{c.email}</span>}
-                        {!c.telephone && !c.email && <span className="text-stone-300">—</span>}
+                        {!c.telephone && !c.email && <span className="text-stone-500">—</span>}
                       </td>
                       <td className="px-6 py-4 text-stone-500 text-xs whitespace-nowrap tabular-nums">
                         {stats.get(c.id)?.derniere_visite
                           ? <>
                               {dateCH(stats.get(c.id)!.derniere_visite)}
-                              <span className="block text-stone-300">
+                              <span className="block text-stone-500">
                                 {stats.get(c.id)!.nb_visites} visite{Number(stats.get(c.id)!.nb_visites) > 1 ? 's' : ''}
                                 {' · '}{formatCHF(stats.get(c.id)!.total_encaisse)}
                               </span>
                             </>
-                          : <span className="text-stone-300">Jamais venue</span>}
+                          : <span className="text-stone-500">Jamais venue</span>}
                       </td>
                       <td className="px-6 py-4">
                         <ConsentBadges client={c} />
@@ -265,12 +265,12 @@ export default function ClientsClient() {
                       onUnarchive={() => handleUnarchive(c)}
                     />
                   </div>
-                  <p className="text-xs text-stone-400">
+                  <p className="text-[12.5px] text-stone-500">
                     {[c.telephone, c.email].filter(Boolean).join(' · ') || 'Aucun contact'}
                   </p>
                   <div className="flex items-center gap-2">
                     <ConsentBadges client={c} />
-                    <span className="text-[11px] text-stone-300 tabular-nums">
+                    <span className="text-[11px] text-stone-500 tabular-nums">
                       {stats.get(c.id)?.derniere_visite ? dateCH(stats.get(c.id)!.derniere_visite) : 'Jamais venue'}
                     </span>
                   </div>
@@ -308,13 +308,13 @@ export default function ClientsClient() {
  *  entre ou non dans une audience de promotion. */
 function ConsentBadges({ client }: { client: Client }) {
   if (!client.consent_email && !client.consent_whatsapp) {
-    return <span className="text-[11px] text-stone-300">Aucun</span>;
+    return <span className="text-[11px] text-stone-500">Aucun</span>;
   }
   return (
     <span className="inline-flex items-center gap-1">
       {client.consent_email && (
         <span
-          className="inline-flex items-center gap-1 text-[10px] font-medium text-sage bg-sage/10 px-1.5 py-0.5 rounded"
+          className="inline-flex items-center gap-1 text-[12px] font-medium text-sage bg-sage/10 px-1.5 py-0.5 rounded"
           title="Accepte les offres par e-mail"
         >
           <Mail size={9} /> E-mail
@@ -322,7 +322,7 @@ function ConsentBadges({ client }: { client: Client }) {
       )}
       {client.consent_whatsapp && (
         <span
-          className="inline-flex items-center gap-1 text-[10px] font-medium text-sage bg-sage/10 px-1.5 py-0.5 rounded"
+          className="inline-flex items-center gap-1 text-[12px] font-medium text-sage bg-sage/10 px-1.5 py-0.5 rounded"
           title="Accepte les offres par WhatsApp"
         >
           <MessageCircle size={9} /> WhatsApp
@@ -336,7 +336,7 @@ function RowActions({ client, busy, onEdit, onDelete, onUnarchive }: {
   client: Client; busy: boolean;
   onEdit: () => void; onDelete: () => void; onUnarchive: () => void;
 }) {
-  if (busy) return <Loader2 size={14} className="animate-spin text-stone-300 inline" />;
+  if (busy) return <Loader2 size={14} className="animate-spin text-stone-500 inline" />;
   return (
     <span className="inline-flex items-center gap-1">
       {client.archived ? (
@@ -351,14 +351,14 @@ function RowActions({ client, busy, onEdit, onDelete, onUnarchive }: {
           <button
             onClick={onEdit}
             aria-label={`Modifier ${clientFullName(client)}`} title="Modifier"
-            className="p-1.5 text-stone-300 hover:text-sage rounded-md hover:bg-sage/10 transition-all cursor-pointer"
+            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
           >
             <Pencil size={14} />
           </button>
           <button
             onClick={onDelete}
             aria-label={`Supprimer ${clientFullName(client)}`} title="Supprimer"
-            className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+            className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
           >
             <Trash2 size={14} />
           </button>
@@ -429,7 +429,7 @@ function ClientDialog({ client, onClose, onSaved }: {
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-stone-900">{client ? 'Modifier la fiche' : 'Nouvelle cliente'}</h3>
-          <button onClick={onClose} aria-label="Fermer" className="p-1 text-stone-400 hover:text-stone-700 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -446,28 +446,28 @@ function ClientDialog({ client, onClose, onSaved }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="client-naissance" className="text-[11px] font-medium text-stone-500 mb-1 flex items-center gap-1.5">
-                <Cake size={11} className="text-stone-300" /> Date de naissance
+                <Cake size={11} className="text-stone-500" /> Date de naissance
               </label>
               <input
                 id="client-naissance" type="date" value={form.date_naissance ?? ''}
                 onChange={e => setForm(f => ({ ...f, date_naissance: e.target.value || null }))}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
               />
-              <p className="text-[10px] text-stone-400 mt-1">Sert au segment « anniversaires du mois ».</p>
+              <p className="text-[12px] text-stone-500 mt-1">Sert au segment « anniversaires du mois ».</p>
             </div>
           </div>
 
 
           <div>
-            <label htmlFor="client-notes" className="block text-[11px] font-medium text-stone-500 mb-1">
-              Notes générales <span className="text-stone-300">(préférences, habitudes…)</span>
+            <label htmlFor="client-notes" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+              Notes générales <span className="text-stone-500">(préférences, habitudes…)</span>
             </label>
             <textarea
               id="client-notes" rows={3} value={form.notes ?? ''}
               onChange={e => set('notes')(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors resize-y"
             />
-            <p className="text-[10px] text-stone-400 mt-1">
+            <p className="text-[12px] text-stone-500 mt-1">
               Préférences et habitudes seulement — aucune donnée de santé n&apos;est conservée.
             </p>
           </div>
@@ -475,7 +475,7 @@ function ClientDialog({ client, onClose, onSaved }: {
           {/* ── Accords publicitaires ─────────────────────────────────── */}
           <fieldset className="rounded-xl border border-stone-200 p-3.5 space-y-2.5">
             <legend className="text-[11px] font-medium text-stone-500 px-1">Accords publicitaires</legend>
-            <p className="text-[10px] text-stone-400 leading-relaxed">
+            <p className="text-[12px] text-stone-500 leading-relaxed">
               À cocher seulement si elle l&apos;a dit. Encaisser quelqu&apos;un ne vaut pas accord
               (LCD art. 3 al. 1 let. o) : sans ces cases, elle ne recevra aucune promotion.
             </p>
@@ -508,7 +508,7 @@ function ClientDialog({ client, onClose, onSaved }: {
             </button>
             <button
               type="submit" disabled={saving || !form.nom?.trim()}
-              className="flex-1 flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-sage transition-colors disabled:opacity-40 cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               {saving ? 'Enregistrement…' : 'Enregistrer'}
@@ -527,11 +527,11 @@ function Input({ label, value, onChange, type = 'text', required, autoFocus }: {
   const id = `ci-${label.replace(/\W+/g, '-').toLowerCase()}`;
   return (
     <div>
-      <label htmlFor={id} className="block text-[11px] font-medium text-stone-500 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-[12.5px] font-medium text-stone-700 mb-1">{label}</label>
       <input
         id={id} type={type} value={value} required={required} autoFocus={autoFocus}
         onChange={e => onChange(e.target.value)}
-        className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+        className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
       />
     </div>
   );
@@ -545,10 +545,10 @@ function Consent({ id, icon: Icon, label, detail, checked, disabled, onToggle }:
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-start gap-2.5 min-w-0">
-        <Icon size={13} className="text-stone-300 shrink-0 mt-0.5" />
+        <Icon size={13} className="text-stone-500 shrink-0 mt-0.5" />
         <div className="min-w-0">
           <label htmlFor={id} className="text-sm text-stone-700 cursor-pointer">{label}</label>
-          <p className="text-[11px] text-stone-400 truncate">{detail}</p>
+          <p className="text-[12.5px] text-stone-500 truncate">{detail}</p>
         </div>
       </div>
       <button

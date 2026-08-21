@@ -3,8 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 import { SITE_CONFIG } from '../../../config/site';
 import { sendEmail } from '../../../services/email';
 import { buildUnsubToken, isUnsubConfigured } from '../../../utils/unsubToken';
+import { emitAutomationEvent } from '../../../services/automationRunner';
 
-const SESSION_URL = `${SITE_CONFIG.url}/soins`;
+/*
+  L'e-mail renvoyait vers `/soins`, page du site d'origine : sur tout autre
+  site issu du template, le bouton de l'e-mail de bienvenue tombait sur un 404.
+  On renvoie à l'accueil, qui existe toujours.
+*/
+const SESSION_URL = SITE_CONFIG.url;
 
 async function getPromoSettings(client: any): Promise<{ code: string; amount: string }> {
   const { data } = await client
@@ -74,23 +80,30 @@ function buildWelcomeHtml(email: string, promoCode: string, promoAmount: string)
     <div class="body">
       <h1>Bienvenue ✦</h1>
 
-      <p>Merci de rejoindre la lettre de l'institut. C'est un plaisir de vous compter parmi nous.</p>
+      <!--
+        Le texte parlait de « la lettre de l'institut », de « rituels de saison »
+        et du « premier soin » : l'activité du site d'origine, envoyée à chaque
+        nouvel abonné de tout site issu du template. Formulation neutre, nom de
+        l'entreprise repris des réglages.
+      -->
+      <p>Merci de rejoindre la lettre de ${SITE_CONFIG.name}. C'est un plaisir de vous compter parmi nous.</p>
 
-      <p>Vous recevrez de temps en temps des conseils de soin, des rituels de saison, les gestes à reproduire chez vous et les nouveautés de l'institut. Jamais de spam, jamais de survente.</p>
+      <p>Vous recevrez de temps en temps des nouvelles, des conseils utiles et les nouveautés. Jamais de spam, jamais de survente.</p>
 
-      <p>Pour vous souhaiter la bienvenue, voici une réduction sur votre premier soin :</p>
+      ${promoCode ? `
+      <p>Pour vous souhaiter la bienvenue, voici un code de réduction :</p>
 
       <div class="promo">
         <p class="promo-label">Votre code de bienvenue</p>
         <p class="promo-code">${promoCode}</p>
-        <p class="promo-desc">Réduction de <strong>${promoAmount}</strong> sur votre premier soin<br/>À mentionner lors de la prise de rendez-vous.</p>
+        <p class="promo-desc">Réduction de <strong>${promoAmount}</strong> sur votre première commande<br/>À mentionner lors de votre prise de contact.</p>
         <p style="font-size:12px;color:#a8a29e;margin-top:0.75rem;">Valable jusqu'au <strong>${expiryDate()}</strong></p>
-      </div>
+      </div>` : ''}
 
-      <p>Que vous veniez pour un soin du visage, un Head Spa ou simplement pour souffler une heure, le soin est adapté à votre peau et à votre humeur du jour.</p>
+      
 
       <div style="text-align:center; margin-top:2rem;">
-        <a class="cta" href="${SESSION_URL}">Découvrir les soins</a>
+        <a class="cta" href="${SESSION_URL}">Découvrir le site</a>
       </div>
 
       <p style="margin-top:2.5rem; font-style:italic; color:#78716c; font-size:15px;">
@@ -169,6 +182,8 @@ export async function POST(req: NextRequest) {
       .from('subscribers')
       .update({ welcome_sent: true, welcome_sent_at: new Date().toISOString() })
       .eq('email', email);
+
+    await emitAutomationEvent('subscriber.created', new URL(req.url).origin);
 
     return NextResponse.json({ sent: true });
   } catch (err: any) {

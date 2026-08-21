@@ -3,21 +3,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import {
-  ArrowLeft, Sparkles, Save, Eye, EyeOff, Trash2, Plus, ChevronUp, ChevronDown,
-  Loader2, CheckCircle2, AlertCircle, ExternalLink, GripVertical, ChevronRight,
-  LayoutGrid, Wand2, Copy, Undo2
-} from 'lucide-react';
+import { ArrowLeft, Sparkles, Save, Eye, EyeOff, Trash2, Plus, ChevronUp, ChevronDown, Loader2, CheckCircle2, AlertCircle, ExternalLink, GripVertical, ChevronRight, LayoutGrid, Wand2, Copy, Undo2, Redo2, LayoutTemplate, RefreshCw } from 'lucide-react';
 import DynamicPageRenderer from '../../../components/pagebuilder/DynamicPageRenderer';
+import GlobalStyles from '../../../components/GlobalStyles';
+import PreviewFrame from '../../../components/pagebuilder/PreviewFrame';
 import { WIREFRAME_REGISTRY } from '../../../components/pagebuilder/wireframes.config';
 import type { SectionType, PageSection } from '../../../components/pagebuilder/wireframes.config';
 import { SECTION_LABELS, SectionPreview } from '../../../components/pagebuilder/sectionPreviews';
-import FieldEditor from '../../../components/pagebuilder/FieldEditor';
+import SectionEditorModal from '../../../components/pagebuilder/SectionEditorModal';
+import TemplatePicker from '../../../components/pagebuilder/TemplatePicker';
+import SectionLibrary from '../../../components/pagebuilder/SectionLibrary';
 import { usePageEditor } from '../../../components/pagebuilder/usePageEditor';
 import { savePage, updatePage, fetchPageById, generateSlug } from '../../../services/dynamicPages';
 import { supabase } from '../../../services/supabase';
 import { getSeoPrefix } from '../../../services/pageMeta';
 import MediaPickerModal from '../../../components/pagebuilder/MediaPickerModal';
+import { PageEditorContext } from '../../../contexts/PageEditorContext';
 import { SITE_CONFIG } from '../../../config/site';
 
 type Status = 'idle' | 'generating' | 'saving' | 'success' | 'error';
@@ -29,13 +30,6 @@ const VIEWPORTS: Record<Viewport, { label: string; short: string; width?: number
   desktop: { label: 'Aperçu ordinateur',        short: '🖥', width: undefined },
 };
 
-const SECTION_CATEGORIES: { label: string; types: SectionType[] }[] = [
-  { label: 'Hero', types: ['hero_1', 'hero_2', 'hero_3', 'hero_4', 'hero_5'] },
-  { label: 'Contenu', types: ['intro_1', 'text_1', 'text_image_1', 'features_1', 'features_2', 'features_3', 'timeline_1'] },
-  { label: 'Preuve sociale', types: ['testimonial_1', 'reviews_1', 'faq_1', 'stats_1', 'logos_1'] },
-  { label: 'Médias', types: ['gallery_grid', 'gallery_carousel', 'gallery_masonry'] },
-  { label: 'Action', types: ['cta_1', 'marquee_1', 'pricing_1'] },
-];
 
 // Les pages dynamiques sont servies par la route attrape-tout `(public)/[slug]`
 // — il n'existe pas de route `/pages/<slug>`, que la barre de titre affichait
@@ -89,13 +83,20 @@ export default function PageBuilder() {
   const [errorMsg, setErrorMsg]       = useState('');
   const [preview, setPreview]         = useState(false);
   const [activeSection, setActiveSection] = useState<number | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  // Une page vide n'a rien à montrer : plutôt qu'un canevas blanc, on propose
+  // directement une structure. C'est le moment où un débutant décroche.
+  const templateOfferedRef = useRef(false);
   const [visibleSection, setVisibleSection] = useState<number | null>(null);
-  const [addPanelOpen, setAddPanelOpen]   = useState(false);
-  const [addQuery, setAddQuery]           = useState('');
   const [viewport, setViewport]           = useState<Viewport>('desktop');
   const [dragIndex, setDragIndex]         = useState<number | null>(null);
   const [dropIndex, setDropIndex]         = useState<number | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  // Document de l'aperçu : c'est l'iframe qui le fournit dès qu'une largeur
+  // d'écran est simulée. `null` = aperçu rendu directement dans la page.
+  const previewDocRef = useRef<Document | null>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   // ── États SEO ──
@@ -112,18 +113,29 @@ export default function PageBuilder() {
   // modifications non sauvegardées (titre, slug, options, SEO).
   const [savedMeta, setSavedMeta] = useState('');
 
-  const { sections, setSections, replaceAll, move, moveTo, remove, duplicate, add, updateField, undo, canUndo, dirty, markClean } =
+  const { sections, setSections, replaceAll, move, moveTo, remove, duplicate, add, swapType, updateField, undo, redo, canUndo, canRedo, dirty, markClean } =
     usePageEditor([]);
 
   const selectSection = (i: number) => {
     setActiveSection(prev => prev === i ? null : i);
-    setAddPanelOpen(false);
-    const el = previewRef.current?.querySelector(`#section-${i}`) as HTMLElement | null;
+    const scope: ParentNode = previewDocRef.current ?? previewRef.current ?? document;
+    const el = scope.querySelector(`#section-${i}`) as HTMLElement | null;
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  useEffect(() => {
+    // Laisse le temps au chargement de la page existante : proposer une
+    // structure à quelqu'un qui vient d'ouvrir une page remplie serait absurde.
+    if (templateOfferedRef.current) return;
+    const timer = setTimeout(() => {
+      templateOfferedRef.current = true;
+      if (sections.length === 0) setTemplatePickerOpen(true);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [sections.length]);
+
   /** Clic dans l'aperçu en mode édition → sélectionne la section visée. */
-  const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement> | MouseEvent) => {
     const target = e.target as HTMLElement;
     const section = target.closest('[id^="section-"]');
     if (!section) return;
@@ -133,17 +145,52 @@ export default function PageBuilder() {
     e.preventDefault();
     e.stopPropagation();
     setActiveSection(idx);
-    setAddPanelOpen(false);
+    // Le clic dans l'aperçu ouvre la configuration : c'est le geste attendu
+    // quand on désigne un élément à modifier.
+    setEditorOpen(true);
     sidebarRef.current
       ?.querySelector(`[data-section-item="${idx}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
+  // Raccourcis clavier globaux (⌘/Ctrl + Z, ⌘/Ctrl + Shift + Z / Y, ⌘/Ctrl + S)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isInput = activeEl && (activeEl.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(activeEl.tagName));
+
+      if (isCmdOrCtrl && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        save();
+        return;
+      }
+
+      if (isCmdOrCtrl && !isInput) {
+        if (e.key.toLowerCase() === 'z') {
+          if (e.shiftKey) {
+            e.preventDefault();
+            if (canRedo) redo();
+          } else {
+            e.preventDefault();
+            if (canUndo) undo();
+          }
+        } else if (e.key.toLowerCase() === 'y') {
+          e.preventDefault();
+          if (canRedo) redo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo, canUndo, canRedo]);
+
   /**
    * En prévisualisation, un clic sur un lien de la page quittait l'éditeur (et
    * donc les modifications non enregistrées). On ouvre la cible dans un onglet.
    */
-  const handlePreviewLinkClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePreviewLinkClick = (e: React.MouseEvent<HTMLDivElement> | MouseEvent) => {
     const link = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
     if (!link) return;
     const href = link.getAttribute('href') || '';
@@ -161,6 +208,9 @@ export default function PageBuilder() {
   useEffect(() => {
     const container = previewRef.current;
     if (!container || sections.length === 0) return;
+    // Dans un iframe, l'observation se fait sur le document de l'aperçu ; la
+    // racine reste le conteneur qui défile côté back-office.
+    const scope: ParentNode = previewDocRef.current ?? container;
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -173,7 +223,7 @@ export default function PageBuilder() {
       { root: container, threshold: 0.3 }
     );
     sections.forEach((_, idx) => {
-      const el = container.querySelector(`#section-${idx}`);
+      const el = scope.querySelector(`#section-${idx}`);
       if (el) observer.observe(el);
     });
     return () => observer.disconnect();
@@ -246,6 +296,43 @@ export default function PageBuilder() {
     } catch (e: unknown) { setErrorMsg(e instanceof Error ? e.message : 'Erreur inconnue'); setStatus('error'); }
   };
 
+  const [isOptimizingStyle, setIsOptimizingStyle] = useState(false);
+
+  const handleOptimizeStyle = async () => {
+    if (sections.length === 0) {
+      setErrorMsg('Ajoutez au moins une section avant d\'optimiser le style.');
+      return;
+    }
+
+    setIsOptimizingStyle(true);
+    setErrorMsg('');
+
+    try {
+      const res = await fetch('/api/admin/optimize-page-style', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pageTitle: title || 'Page',
+          sections,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de l’optimisation du style.');
+
+      if (Array.isArray(data.sections) && data.sections.length > 0) {
+        replaceAll(data.sections);
+        setStatus('success');
+        setTimeout(() => setStatus(s => s === 'success' ? 'idle' : s), 2500);
+      }
+    } catch (err: any) {
+      console.error('Erreur optimisation style :', err);
+      setErrorMsg(err.message || 'Échec de l’optimisation du style.');
+    } finally {
+      setIsOptimizingStyle(false);
+    }
+  };
+
   const save = async () => {
     if (!title.trim() || !slug.trim() || sections.length === 0) { setErrorMsg('Titre, slug et au moins une section sont obligatoires.'); setStatus('error'); return; }
     setStatus('saving'); setErrorMsg('');
@@ -271,6 +358,20 @@ export default function PageBuilder() {
       setStatus('success'); setTimeout(() => setStatus(s => s === 'success' ? 'idle' : s), 2500);
     } catch (e: unknown) { setErrorMsg(e instanceof Error ? e.message : 'Erreur inconnue'); setStatus('error'); }
   };
+
+  const editorContext = React.useMemo(
+    () => ({
+      updateField,
+      savePage: save,
+      openSectionEditor: (idx: number) => {
+        setActiveSection(idx);
+        setEditorOpen(true);
+      },
+      swapType,
+      isEditing: !preview,
+    }),
+    [updateField, preview, save, swapType],
+  );
 
   const generateSeoMeta = async () => {
     if (sections.length === 0) return;
@@ -320,8 +421,6 @@ export default function PageBuilder() {
     const at = activeSection !== null ? activeSection + 1 : sections.length;
     add(type, at);
     setActiveSection(at);
-    setAddPanelOpen(false);
-    setAddQuery('');
   };
 
   const handleRemoveSection = (i: number) => {
@@ -341,20 +440,6 @@ export default function PageBuilder() {
     setDropIndex(null);
   };
 
-  const filteredCategories = React.useMemo(() => {
-    const q = addQuery.trim().toLowerCase();
-    if (!q) return SECTION_CATEGORIES;
-    return SECTION_CATEGORIES
-      .map(cat => ({
-        ...cat,
-        types: cat.types.filter(type =>
-          `${SECTION_LABELS[type] ?? ''} ${type} ${WIREFRAME_REGISTRY[type]?.description ?? ''}`
-            .toLowerCase()
-            .includes(q),
-        ),
-      }))
-      .filter(cat => cat.types.length > 0);
-  }, [addQuery]);
 
   // ── Modifications non enregistrées ──
   const metaSnapshot = () => JSON.stringify([
@@ -391,32 +476,32 @@ export default function PageBuilder() {
   }, [undo]);
 
   return (
-    <div className="flex flex-col h-screen bg-stone-50">
+    <div className="flex h-[calc(100vh-3.5rem)] flex-col bg-stone-50">
 
       {/* ── Topbar ─────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-stone-100 px-5 py-0 flex items-center justify-between shrink-0 h-14 shadow-sm">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/admin/pages" className="p-2 text-stone-400 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-all">
+          <Link href="/admin/pages" className="p-2 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-all">
             <ArrowLeft size={16} />
           </Link>
           <div className="h-5 w-px bg-stone-200" />
           <div className="min-w-0">
             <input
               placeholder="Titre de la page"
-              className="font-semibold text-stone-900 text-sm bg-transparent focus:outline-none w-48 placeholder:text-stone-300 border-b border-transparent focus:border-sage/40 transition-colors"
+              className="font-semibold text-stone-900 text-sm bg-transparent focus:outline-none w-48 placeholder:text-stone-400 border-b border-transparent focus:border-stone-900/40 transition-colors"
               value={title}
               onChange={e => handleTitleChange(e.target.value)}
             />
             <div className="flex items-center gap-0.5 mt-0.5">
-              <span className="text-stone-300 text-[11px]">/</span>
+              <span className="text-stone-500 text-[11px]">/</span>
               <input
                 placeholder="slug"
                 title="Adresse de la page (sans accent ni espace)"
-                className="text-stone-400 text-[11px] bg-transparent focus:outline-none border-b border-transparent focus:border-stone-300 transition-colors w-32 placeholder:text-stone-200"
+                className="text-stone-500 text-[11px] bg-transparent focus:outline-none border-b border-transparent focus:border-stone-300 transition-colors w-32 placeholder:text-stone-200"
                 value={slug}
                 onChange={e => setSlug(generateSlug(e.target.value))}
               />
-              {slug === 'home' && <span className="text-stone-300 text-[10px] ml-1">(page d'accueil)</span>}
+              {slug === 'home' && <span className="text-stone-500 text-[12px] ml-1">(page d'accueil)</span>}
             </div>
           </div>
         </div>
@@ -432,14 +517,24 @@ export default function PageBuilder() {
             <span className="text-amber-600 text-xs font-medium">Modifications non enregistrées</span>
           )}
 
-          <button
-            onClick={undo}
-            disabled={!canUndo}
-            title="Annuler la dernière modification (⌘/Ctrl + Z)"
-            className="p-2 text-stone-400 hover:text-stone-800 hover:bg-stone-100 rounded-lg disabled:opacity-25 transition-all cursor-pointer"
-          >
-            <Undo2 size={14} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              title="Annuler la dernière modification (⌘/Ctrl + Z)"
+              className="p-2 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg disabled:opacity-25 transition-all cursor-pointer"
+            >
+              <Undo2 size={14} />
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              title="Rétablir la dernière modification (⌘/Ctrl + Shift + Z)"
+              className="p-2 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg disabled:opacity-25 transition-all cursor-pointer"
+            >
+              <Redo2 size={14} />
+            </button>
+          </div>
 
           <button
             onClick={() => setPublished(!published)}
@@ -454,28 +549,38 @@ export default function PageBuilder() {
           <button
             onClick={() => setShowHeader(!showHeader)}
             title="Afficher / masquer le header sur cette page"
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${showHeader ? 'bg-stone-50 text-stone-600 border-stone-200' : 'bg-stone-100 text-stone-400 border-stone-200 line-through'}`}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${showHeader ? 'bg-stone-50 text-stone-600 border-stone-200' : 'bg-stone-100 text-stone-500 border-stone-200 line-through'}`}
           >
             En-tête
           </button>
           <button
             onClick={() => setShowFooter(!showFooter)}
             title="Afficher / masquer le footer sur cette page"
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${showFooter ? 'bg-stone-50 text-stone-600 border-stone-200' : 'bg-stone-100 text-stone-400 border-stone-200 line-through'}`}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${showFooter ? 'bg-stone-50 text-stone-600 border-stone-200' : 'bg-stone-100 text-stone-500 border-stone-200 line-through'}`}
           >
             Pied de page
           </button>
 
           {published && slug && (
-            <a href={getPagePath(slug)} target="_blank" rel="noopener noreferrer" className="p-2 text-stone-400 hover:text-sage hover:bg-sage/5 rounded-lg transition-all">
+            <a href={getPagePath(slug)} target="_blank" rel="noopener noreferrer" className="p-2 text-stone-500 hover:text-stone-900 hover:bg-sage/5 rounded-lg transition-all">
               <ExternalLink size={14} />
             </a>
           )}
 
           <button
+            type="button"
+            onClick={handleOptimizeStyle}
+            disabled={isOptimizingStyle || sections.length === 0}
+            className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0"
+          >
+            {isOptimizingStyle ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+            {isOptimizingStyle ? 'Optimisation…' : 'Optimiser le style'}
+          </button>
+
+          <button
             onClick={save}
             disabled={status === 'saving'}
-            className="flex items-center gap-1.5 bg-sage text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-sage/80 transition-colors disabled:opacity-50 shadow-sm"
+            className="flex items-center gap-1.5 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50 shadow-sm"
           >
             {status === 'saving' ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
             Sauvegarder
@@ -485,6 +590,27 @@ export default function PageBuilder() {
 
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
 
+        {/* ── Bibliothèque de sections (ancrée, pas superposée) ────────── */}
+        {libraryOpen && (
+          <div className="hidden lg:block">
+            <SectionLibrary
+              insertLabel={
+                activeSection !== null
+                  ? `Après la section ${activeSection + 1}`
+                  : 'À la fin de la page'
+              }
+              onClose={() => setLibraryOpen(false)}
+              onInsert={(type) => {
+                const at = activeSection !== null ? activeSection + 1 : sections.length;
+                add(type, at);
+                // La cible avance : deux ajouts successifs se suivent au lieu
+                // de s'empiler à l'envers.
+                setActiveSection(at);
+              }}
+            />
+          </div>
+        )}
+
         {/* ── Panneau gauche ──────────────────────────────────────────── */}
         <aside className="w-full lg:w-72 max-h-[50vh] lg:max-h-none bg-white border-b lg:border-b-0 lg:border-r border-stone-100 flex flex-col overflow-hidden shrink-0">
           {/* Onglets de la Sidebar */}
@@ -492,7 +618,7 @@ export default function PageBuilder() {
             <button
               type="button"
               onClick={() => setActiveTab('content')}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest text-center transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'content' ? 'border-sage text-sage bg-white' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
+              className={`flex-1 py-3 text-xs font-bold text-center transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'content' ? 'border-stone-900 text-stone-900 bg-white' : 'border-transparent text-stone-500 hover:text-stone-600'}`}
             >
               <LayoutGrid size={13} />
               Structure
@@ -500,7 +626,7 @@ export default function PageBuilder() {
             <button
               type="button"
               onClick={() => setActiveTab('seo')}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest text-center transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'seo' ? 'border-sage text-sage bg-white' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
+              className={`flex-1 py-3 text-xs font-bold text-center transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'seo' ? 'border-stone-900 text-stone-900 bg-white' : 'border-transparent text-stone-500 hover:text-stone-600'}`}
             >
               <Sparkles size={13} />
               SEO
@@ -513,12 +639,12 @@ export default function PageBuilder() {
               <div className="p-4 border-b border-stone-100 shrink-0 bg-white">
                 <div className="flex items-center gap-2 mb-2.5">
                   <Wand2 size={13} className="text-sage" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Générer avec l'IA</p>
+                  <p className="text-[12.5px] font-medium text-stone-700">Générer avec l'IA</p>
                 </div>
                 <textarea
                   rows={3}
                   placeholder="Décrivez la page souhaitée…"
-                  className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-sage/30 focus:border-sage/40 mb-2.5 placeholder:text-stone-300 leading-relaxed transition-all"
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-stone-900 focus:border-stone-900/40 mb-2.5 placeholder:text-stone-400 leading-relaxed transition-all"
                   value={prompt}
                   onChange={e => setPrompt(e.target.value)}
                 />
@@ -526,7 +652,7 @@ export default function PageBuilder() {
                   type="button"
                   onClick={generate}
                   disabled={status === 'generating' || !prompt.trim()}
-                  className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-xl text-xs font-semibold hover:bg-sage transition-colors disabled:opacity-40 shadow-sm cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-xl text-xs font-semibold hover:bg-stone-700 transition-colors disabled:opacity-40 shadow-sm cursor-pointer"
                 >
                   {status === 'generating'
                     ? <><Loader2 size={13} className="animate-spin" /> Génération…</>
@@ -538,9 +664,9 @@ export default function PageBuilder() {
               <div ref={sidebarRef} className="flex-1 overflow-y-auto">
                 <div className="px-4 pt-4 pb-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <LayoutGrid size={13} className="text-stone-400" />
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
-                      Sections {sections.length > 0 && <span className="text-stone-300">({sections.length})</span>}
+                    <LayoutGrid size={13} className="text-stone-500" />
+                    <p className="text-[12.5px] font-medium text-stone-700">
+                      Sections {sections.length > 0 && <span className="text-stone-500">({sections.length})</span>}
                     </p>
                   </div>
                 </div>
@@ -548,9 +674,9 @@ export default function PageBuilder() {
                 {sections.length === 0 ? (
                   <div className="px-4 py-8 text-center">
                     <div className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center mx-auto mb-3">
-                      <LayoutGrid size={18} className="text-stone-300" />
+                      <LayoutGrid size={18} className="text-stone-500" />
                     </div>
-                    <p className="text-sm text-stone-400 font-light leading-relaxed">
+                    <p className="text-sm text-stone-600 font-light leading-relaxed">
                       Générez une page ou<br />ajoutez des sections.
                     </p>
                   </div>
@@ -576,47 +702,45 @@ export default function PageBuilder() {
                           <div
                             draggable
                             onDragStart={() => setDragIndex(i)}
-                            onClick={() => selectSection(i)}
+                            onClick={() => { selectSection(i); setEditorOpen(true); }}
                             className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer transition-all group/item ${isActive ? 'bg-sage/8 border border-sage/20' : isVisible ? 'bg-stone-100/80 border border-stone-200' : 'bg-stone-50 border border-stone-100 hover:border-stone-200 hover:bg-stone-100/60'} rounded-xl`}
                           >
                             <span title="Glisser pour réordonner" className="shrink-0 cursor-grab active:cursor-grabbing">
-                              <GripVertical size={13} className="text-stone-300" />
+                              <GripVertical size={13} className="text-stone-500" />
                             </span>
                             <div className="flex-1 min-w-0">
                               <p className={`text-xs font-semibold truncate ${isActive ? 'text-sage' : 'text-stone-600'}`}>
-                                <span className="text-stone-300 font-mono mr-1">{i + 1}</span>
+                                <span className="text-stone-500 font-mono mr-1">{i + 1}</span>
                                 {SECTION_LABELS[section.type] ?? section.type}
                               </p>
-                              <p className="text-[10px] text-stone-400 truncate leading-tight mt-0.5">
+                              <p className="text-[12px] text-stone-500 truncate leading-tight mt-0.5">
                                 {sectionSummary(section) || WIREFRAME_REGISTRY[section.type]?.description}
                               </p>
                             </div>
                             <div className="flex items-center gap-0.5 shrink-0">
                               <button type="button" title="Monter" onClick={e => { e.stopPropagation(); move(i, -1); }} disabled={i === 0}
-                                className="p-1 text-stone-300 hover:text-stone-700 hover:bg-white rounded-md disabled:opacity-20 transition-all cursor-pointer">
+                                className="p-1 text-stone-500 hover:text-stone-900 hover:bg-white rounded-md disabled:opacity-20 transition-all cursor-pointer">
                                 <ChevronUp size={12} />
                               </button>
                               <button type="button" title="Descendre" onClick={e => { e.stopPropagation(); move(i, 1); }} disabled={i === sections.length - 1}
-                                className="p-1 text-stone-300 hover:text-stone-700 hover:bg-white rounded-md disabled:opacity-20 transition-all cursor-pointer">
+                                className="p-1 text-stone-500 hover:text-stone-900 hover:bg-white rounded-md disabled:opacity-20 transition-all cursor-pointer">
                                 <ChevronDown size={12} />
                               </button>
+                              <button type="button" title="Changer de variante" onClick={e => { e.stopPropagation(); selectSection(i); setEditorOpen(true); }}
+                                className="p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-md transition-all cursor-pointer">
+                                <RefreshCw size={11} />
+                              </button>
                               <button type="button" title="Dupliquer" onClick={e => { e.stopPropagation(); duplicate(i); setActiveSection(i + 1); }}
-                                className="p-1 text-stone-300 hover:text-sage hover:bg-white rounded-md transition-all cursor-pointer">
+                                className="p-1 text-stone-500 hover:text-stone-900 hover:bg-white rounded-md transition-all cursor-pointer">
                                 <Copy size={11} />
                               </button>
                               <button type="button" title="Supprimer" onClick={e => { e.stopPropagation(); handleRemoveSection(i); }}
-                                className="p-1 text-stone-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all cursor-pointer">
+                                className="p-1 text-stone-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-all cursor-pointer">
                                 <Trash2 size={11} />
                               </button>
                             </div>
                           </div>
 
-                          {/* Champs éditables */}
-                          {isActive && (
-                            <div className="border border-t-0 border-sage/20 rounded-b-xl bg-sage/3 px-3 py-3">
-                              <FieldEditor section={section} sectionIndex={i} onUpdate={updateField} />
-                            </div>
-                          )}
                         </div>
                       );
                     })}
@@ -626,64 +750,37 @@ export default function PageBuilder() {
 
               {/* Ajouter une section */}
               <div className="border-t border-stone-100 shrink-0 bg-white">
+
                 <button
                   type="button"
-                  onClick={() => { setAddPanelOpen(v => !v); setActiveSection(null); }}
+                  onClick={() => setTemplatePickerOpen(true)}
+                  className="w-full flex items-center gap-2 border-b border-stone-100 px-4 py-3 text-xs font-semibold text-stone-500 transition-all hover:bg-stone-50 hover:text-stone-800 cursor-pointer"
+                >
+                  <LayoutTemplate size={13} className="text-sage" />
+                  Partir d&apos;une structure
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLibraryOpen(true)}
                   className="w-full flex items-center justify-between px-4 py-3 text-sm text-stone-500 hover:text-stone-800 hover:bg-stone-50 transition-all cursor-pointer"
                 >
                   <span className="flex items-center gap-2 text-xs font-semibold">
                     <Plus size={13} className="text-sage" />
                     {activeSection !== null ? `Insérer après la section ${activeSection + 1}` : 'Ajouter une section'}
                   </span>
-                  <ChevronRight size={13} className={`text-stone-300 transition-transform duration-200 ${addPanelOpen ? 'rotate-90' : ''}`} />
+                  <ChevronRight size={13} className="text-stone-500" />
                 </button>
 
-                {addPanelOpen && (
-                  <div className="px-3 pb-3 space-y-4 border-t border-stone-100 pt-3 max-h-[28rem] overflow-y-auto">
-                    <input
-                      autoFocus
-                      value={addQuery}
-                      onChange={e => setAddQuery(e.target.value)}
-                      placeholder="Rechercher un type de section…"
-                      className="w-full border border-stone-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-sage/30 focus:border-sage/40 placeholder:text-stone-300"
-                    />
-                    {filteredCategories.length === 0 && (
-                      <p className="text-xs text-stone-400 text-center py-4">Aucun type de section ne correspond.</p>
-                    )}
-                    {filteredCategories.map(cat => (
-                      <div key={cat.label}>
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-stone-400 px-1 mb-1.5">{cat.label}</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {cat.types.map(type => (
-                            <button
-                              type="button"
-                              key={type}
-                              title={WIREFRAME_REGISTRY[type]?.description}
-                              onClick={() => handleAddSection(type)}
-                              className="group/add flex flex-col rounded-xl border border-stone-200 bg-white overflow-hidden text-left hover:border-sage hover:shadow-sm transition-all cursor-pointer"
-                            >
-                              <span className="block aspect-[8/5] bg-stone-50 border-b border-stone-100 group-hover/add:bg-sage/5 transition-colors">
-                                <SectionPreview type={type} />
-                              </span>
-                              <span className="px-2 py-1.5 text-[10px] font-semibold text-stone-600 group-hover/add:text-sage transition-colors leading-tight">
-                                {SECTION_LABELS[type] ?? type}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </>
           ) : (
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* Génération IA SEO */}
-              <div className="bg-stone-50 border border-stone-100 rounded-2xl p-3.5 space-y-3 bg-stone-50/50">
+              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-3 bg-stone-50/50">
                 <div className="flex items-center gap-2">
                   <Sparkles size={13} className="text-sage" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Optimisation SEO par IA</p>
+                  <p className="text-[12px] font-bold text-stone-500">Optimisation SEO par IA</p>
                 </div>
                 
                 <button
@@ -702,79 +799,79 @@ export default function PageBuilder() {
                 </button>
 
                 {genMetaStatus === 'error' && errorMsg && (
-                  <p className="text-[10px] text-red-500 font-medium leading-tight mt-1 text-center animate-fadein">
-                    {errorMsg === 'not_configured' ? 'Clé API Gemini non configurée.' : errorMsg === 'Unauthorized' ? 'Session expirée. Veuillez vous reconnecter.' : errorMsg}
+                  <p className="text-[12px] text-red-500 font-medium leading-tight mt-1 text-center animate-fadein">
+                    {errorMsg === 'not_configured' ? 'Clé API Anthropic non configurée.' : errorMsg === 'Unauthorized' ? 'Session expirée. Veuillez vous reconnecter.' : errorMsg}
                   </p>
                 )}
                 
-                <p className="text-[10px] text-stone-400 font-light leading-relaxed">
+                <p className="text-[12px] text-stone-500 font-light leading-relaxed">
                   L'IA analysera le contenu des sections de votre page pour générer des balises optimisées.
                 </p>
               </div>
 
               {/* Title */}
               <div className="space-y-1">
-                <div className="flex justify-between text-[10px]">
-                  <label className="font-bold text-stone-500 uppercase tracking-widest">Meta Title</label>
-                  <span className={seoTitle.length > 60 ? 'text-orange-500' : 'text-stone-400'}>{seoTitle.length}/60</span>
+                <div className="flex justify-between text-[12px]">
+                  <label className="text-[13px] font-medium text-stone-800">Meta Title</label>
+                  <span className={seoTitle.length > 60 ? 'text-orange-600' : 'text-stone-600'}>{seoTitle.length}/60</span>
                 </div>
                 <input
                   type="text"
                   value={seoTitle}
                   onChange={e => setSeoTitle(e.target.value)}
                   placeholder="Titre de la page"
-                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-sage bg-white text-stone-800 focus:ring-1 focus:ring-sage/20 focus:border-sage transition-all"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-stone-900 bg-white text-stone-800 focus:ring-1 focus:ring-stone-900/20 focus:border-stone-900 transition-all"
                 />
               </div>
 
               {/* Description */}
               <div className="space-y-1">
-                <div className="flex justify-between text-[10px]">
-                  <label className="font-bold text-stone-500 uppercase tracking-widest">Meta Description</label>
-                  <span className={seoDescription.length > 160 ? 'text-orange-500' : 'text-stone-400'}>{seoDescription.length}/160</span>
+                <div className="flex justify-between text-[12px]">
+                  <label className="text-[13px] font-medium text-stone-800">Meta Description</label>
+                  <span className={seoDescription.length > 160 ? 'text-orange-600' : 'text-stone-600'}>{seoDescription.length}/160</span>
                 </div>
                 <textarea
                   rows={4}
                   value={seoDescription}
                   onChange={e => setSeoDescription(e.target.value)}
                   placeholder="Description de la page..."
-                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-sage bg-white text-stone-800 resize-none leading-relaxed focus:ring-1 focus:ring-sage/20 focus:border-sage transition-all"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-stone-900 bg-white text-stone-800 resize-none leading-relaxed focus:ring-1 focus:ring-stone-900/20 focus:border-stone-900 transition-all"
                 />
               </div>
 
               {/* OG Title */}
               <div className="space-y-1">
-                <div className="flex justify-between text-[10px]">
-                  <label className="font-bold text-stone-500 uppercase tracking-widest">OG Title</label>
-                  <span className="text-stone-400">{seoOgTitle.length}</span>
+                <div className="flex justify-between text-[12px]">
+                  <label className="text-[13px] font-medium text-stone-800">OG Title</label>
+                  <span className="text-stone-500">{seoOgTitle.length}</span>
                 </div>
                 <input
                   type="text"
                   value={seoOgTitle}
                   onChange={e => setSeoOgTitle(e.target.value)}
                   placeholder="Titre Facebook/Twitter"
-                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-sage bg-white text-stone-800 focus:ring-1 focus:ring-sage/20 focus:border-sage transition-all"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-stone-900 bg-white text-stone-800 focus:ring-1 focus:ring-stone-900/20 focus:border-stone-900 transition-all"
                 />
               </div>
 
               {/* OG Description */}
               <div className="space-y-1">
-                <div className="flex justify-between text-[10px]">
-                  <label className="font-bold text-stone-500 uppercase tracking-widest">OG Description</label>
-                  <span className="text-stone-400">{seoOgDescription.length}</span>
+                <div className="flex justify-between text-[12px]">
+                  <label className="text-[13px] font-medium text-stone-800">OG Description</label>
+                  <span className="text-stone-500">{seoOgDescription.length}</span>
                 </div>
                 <textarea
                   rows={3}
                   value={seoOgDescription}
                   onChange={e => setSeoOgDescription(e.target.value)}
                   placeholder="Description réseaux..."
-                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-sage bg-white text-stone-800 resize-none leading-relaxed focus:ring-1 focus:ring-sage/20 focus:border-sage transition-all"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-stone-900 bg-white text-stone-800 resize-none leading-relaxed focus:ring-1 focus:ring-stone-900/20 focus:border-stone-900 transition-all"
                 />
               </div>
 
               {/* OG Image */}
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-widest">OG Image</label>
+                <label className="block text-[12px] text-[13px] font-medium text-stone-800">OG Image</label>
                 {seoOgImage && (
                   <div className="relative aspect-video rounded-xl overflow-hidden border border-stone-200 bg-stone-100">
                     <img src={seoOgImage} alt="OG" className="w-full h-full object-cover" />
@@ -786,7 +883,7 @@ export default function PageBuilder() {
                     value={seoOgImage}
                     onChange={e => setSeoOgImage(e.target.value)}
                     placeholder="https://..."
-                    className="flex-1 px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-sage bg-white text-stone-800 min-w-0 focus:ring-1 focus:ring-sage/20 focus:border-sage transition-all"
+                    className="flex-1 px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-stone-900 bg-white text-stone-800 min-w-0 focus:ring-1 focus:ring-stone-900/20 focus:border-stone-900 transition-all"
                   />
                   <button
                     type="button"
@@ -800,13 +897,13 @@ export default function PageBuilder() {
 
               {/* Keywords */}
               <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-widest">Mots-clés</label>
+                <label className="block text-[12px] text-[13px] font-medium text-stone-800">Mots-clés</label>
                 <input
                   type="text"
                   value={seoKeywords}
                   onChange={e => setSeoKeywords(e.target.value)}
-                  placeholder="soin du visage, head spa, gua sha..."
-                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-sage bg-white text-stone-800 focus:ring-1 focus:ring-sage/20 focus:border-sage transition-all"
+                  placeholder="vos prestations principales, séparées par des virgules..."
+                  className="w-full px-3 py-2 border border-stone-200 rounded-xl text-xs outline-none focus:border-stone-900 bg-white text-stone-800 focus:ring-1 focus:ring-stone-900/20 focus:border-stone-900 transition-all"
                 />
               </div>
             </div>
@@ -816,12 +913,12 @@ export default function PageBuilder() {
         {/* ── Zone de prévisualisation ─────────────────────────────── */}
         <div ref={previewRef} className="flex-1 overflow-y-auto bg-white">
           {sections.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-stone-300 select-none">
+            <div className="flex flex-col items-center justify-center h-full text-stone-500 select-none">
               <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center mb-5">
-                <Sparkles size={28} className="text-stone-300" />
+                <Sparkles size={28} className="text-stone-500" />
               </div>
-              <p className="text-xl font-light text-stone-400 mb-2">Votre page apparaîtra ici</p>
-              <p className="text-sm text-stone-400">Utilisez le panneau gauche pour composer</p>
+              <p className="text-xl font-light text-stone-500 mb-2">Votre page apparaîtra ici</p>
+              <p className="text-sm text-stone-600">Utilisez le panneau gauche pour composer</p>
             </div>
           ) : (
             <>
@@ -831,16 +928,24 @@ export default function PageBuilder() {
                   {preview ? 'Mode prévisualisation — interactions actives' : 'Mode édition — cliquez sur une section pour la modifier'}
                 </p>
                 <div className="flex items-center gap-4">
-                  {/* Largeurs d'aperçu : vérifier le rendu mobile sans quitter l'éditeur. */}
-                  {!preview && (
+                  {/*
+                    Largeurs d'aperçu. Elles n'étaient proposées qu'en mode
+                    édition, où elles ne faisaient que rétrécir une div : la
+                    mise en page restait celle du bureau. Elles simulent
+                    désormais une vraie fenêtre, dans les deux modes.
+                  */}
+                  {(
                     <div className="flex items-center gap-1">
                       {(['mobile', 'tablet', 'desktop'] as const).map(v => (
                         <button
                           key={v}
                           onClick={() => setViewport(v)}
                           title={VIEWPORTS[v].label}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer ${
-                            viewport === v ? 'bg-amber-200/70 text-amber-800' : 'text-amber-500 hover:bg-amber-100'
+                          aria-pressed={viewport === v}
+                          className={`rounded px-2 py-0.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                            viewport === v
+                              ? 'bg-stone-900 text-white'
+                              : 'text-stone-600 hover:bg-stone-200'
                           }`}
                         >
                           {VIEWPORTS[v].short}
@@ -863,13 +968,42 @@ export default function PageBuilder() {
                 boutons de la page restent neutralisés) pour sélectionner la
                 section correspondante dans le panneau.
               */}
-              <div
-                className="mx-auto transition-all duration-300"
-                style={{ maxWidth: preview ? undefined : VIEWPORTS[viewport].width }}
-                onClickCapture={preview ? handlePreviewLinkClick : handlePreviewClick}
-              >
-                <DynamicPageRenderer sections={sections} />
-              </div>
+              {/*
+                `data-site-theme` + `GlobalStyles` : sans eux, l'aperçu ne
+                recevait aucun des réglages « Design & Style » — palette,
+                polices, boutons, rythme — et montrait donc autre chose que ce
+                que verra le visiteur. La portée reste confinée à ce bloc : le
+                reste du back-office garde son apparence propre.
+              */}
+              {VIEWPORTS[viewport].width ? (
+                /*
+                  Largeur simulée : le rendu part dans un iframe, seul endroit
+                  où les points de rupture de Tailwind s'évaluent pour de bon.
+                */
+                <div className="bg-stone-100 p-4">
+                  <PreviewFrame
+                    width={VIEWPORTS[viewport].width!}
+                    onClickCapture={preview ? handlePreviewLinkClick : handlePreviewClick}
+                    onDocument={(doc) => { previewDocRef.current = doc; }}
+                  >
+                    <GlobalStyles />
+                    <PageEditorContext.Provider value={editorContext}>
+                      <DynamicPageRenderer sections={sections} />
+                    </PageEditorContext.Provider>
+                  </PreviewFrame>
+                </div>
+              ) : (
+                <div
+                  data-site-theme
+                  className="mx-auto transition-all duration-300"
+                  onClickCapture={preview ? handlePreviewLinkClick : handlePreviewClick}
+                >
+                  <GlobalStyles />
+                  <PageEditorContext.Provider value={editorContext}>
+                    <DynamicPageRenderer sections={sections} />
+                  </PageEditorContext.Provider>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -879,6 +1013,39 @@ export default function PageBuilder() {
         onClose={() => setMediaPickerOpen(false)}
         onSelect={url => { setSeoOgImage(url); setMediaPickerOpen(false); }}
       />
+
+
+      {templatePickerOpen && (
+        <TemplatePicker
+          onClose={() => setTemplatePickerOpen(false)}
+          onApply={(next) => {
+            replaceAll(next);
+            setTemplatePickerOpen(false);
+            setActiveSection(null);
+          }}
+        />
+      )}
+
+      {editorOpen && activeSection !== null && sections[activeSection] && (
+        <SectionEditorModal
+          section={sections[activeSection]}
+          sectionIndex={activeSection}
+          total={sections.length}
+          sections={sections}
+          onUpdate={updateField}
+          onSwapType={swapType}
+          onMoveSection={move}
+          onMoveToSection={moveTo}
+          onDuplicateSection={duplicate}
+          onRemoveSection={handleRemoveSection}
+          onAddSection={add}
+          onClose={() => setEditorOpen(false)}
+          onNavigate={(next) => {
+            if (next < 0 || next >= sections.length) return;
+            selectSection(next);
+          }}
+        />
+      )}
     </div>
   );
 }

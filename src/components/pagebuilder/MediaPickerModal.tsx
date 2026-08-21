@@ -3,9 +3,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
-import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Loader2, Image as ImageIcon, Search, Sparkles } from 'lucide-react';
 import { compressImage, uploadFileToR2 } from '../../utils/imageUpload';
 import AddMediaByUrl from '../AddMediaByUrl';
+import StockImageSearch from './StockImageSearch';
 
 interface MediaAsset {
   id: string;
@@ -25,9 +26,8 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<'my-medias' | 'stock'>('my-medias');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Erreur d'upload de fichier : le message de l'API indique quelles variables
-  // R2 manquent et rappelle l'alternative « ajouter par URL ».
   const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
@@ -99,7 +99,7 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
             <p className="text-sm text-stone-500 font-light">Sélectionnez une image ou ajoutez-en une nouvelle.</p>
           </div>
           <div className="flex items-center gap-4">
-            <label className={`cursor-pointer bg-sage text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-wood transition-colors flex items-center gap-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <label className={`cursor-pointer bg-stone-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-wood transition-colors flex items-center gap-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
               {isUploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
               {isUploading ? 'Envoi...' : 'Uploader'}
               <input
@@ -111,10 +111,36 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
                 disabled={isUploading}
               />
             </label>
-            <button onClick={onClose} className="p-2 text-stone-400 hover:text-stone-900 bg-white rounded-full border border-stone-200 shadow-sm transition-colors">
+            <button onClick={onClose} className="p-2 text-stone-500 hover:text-stone-900 bg-white rounded-full border border-stone-200 shadow-sm transition-colors">
               <X size={20} />
             </button>
           </div>
+        </div>
+
+        {/* Tabs Bar */}
+        <div className="px-6 py-2.5 bg-stone-100 border-b border-stone-200 flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab('my-medias')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
+              activeTab === 'my-medias'
+                ? 'bg-stone-900 text-white shadow-sm'
+                : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
+            }`}
+          >
+            <ImageIcon size={14} /> Mes Médias & Upload
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('stock')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
+              activeTab === 'stock'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-sm'
+                : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
+            }`}
+          >
+            <Search size={14} /> Banque d'images Stock (Unsplash / Pexels)
+          </button>
         </div>
 
         {uploadError && (
@@ -123,24 +149,32 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
           </p>
         )}
 
-        {/* Ajout par URL — utilisable même sans stockage configuré */}
-        <AddMediaByUrl
-          className="px-6 py-3 border-b border-stone-200 bg-white shrink-0"
-          onAdded={(asset) => {
-            setMedias((prev) => [asset, ...prev]);
-            onSelect(asset.url);
-          }}
-        />
-
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 bg-stone-100">
+          {activeTab === 'stock' ? (
+            <StockImageSearch
+              onSelectUrl={(url) => {
+                onSelect(url);
+                onClose();
+              }}
+            />
+          ) : (
+            <>
+              {/* Ajout par URL — utilisable même sans stockage configuré */}
+              <AddMediaByUrl
+                className="mb-4 p-3 bg-white rounded-xl border border-stone-200"
+                onAdded={(asset) => {
+                  setMedias((prev) => [asset, ...prev]);
+                  onSelect(asset.url);
+                }}
+              />
           {loading ? (
-            <div className="h-full flex flex-col items-center justify-center text-stone-400 gap-4">
+            <div className="h-full flex flex-col items-center justify-center text-stone-500 gap-4">
               <Loader2 className="animate-spin" size={32} />
               <p className="text-sm">Chargement des médias...</p>
             </div>
           ) : medias.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-stone-400 gap-4">
+            <div className="h-full flex flex-col items-center justify-center text-stone-500 gap-4">
               <ImageIcon size={48} className="opacity-30" />
               <p className="text-sm">Votre bibliothèque est vide.</p>
               <p className="text-xs max-w-sm text-center leading-relaxed">
@@ -153,7 +187,7 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
               {medias.map((asset) => (
                 <div 
                   key={asset.id} 
-                  className="group relative aspect-square bg-stone-200 rounded-xl overflow-hidden border-2 border-transparent hover:border-sage cursor-pointer transition-all shadow-sm hover:shadow-md"
+                  className="group relative aspect-square bg-stone-200 rounded-xl overflow-hidden border-2 border-transparent hover:border-stone-400 cursor-pointer transition-all shadow-sm hover:shadow-md"
                   onClick={() => onSelect(asset.url)}
                 >
                   <img
@@ -163,13 +197,15 @@ export default function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPic
                     loading="lazy"
                   />
                   <div className="absolute inset-0 bg-stone-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="bg-sage text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
+                    <span className="bg-stone-900 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg">
                       Sélectionner
                     </span>
                   </div>
                 </div>
               ))}
             </div>
+          )}
+            </>
           )}
         </div>
 

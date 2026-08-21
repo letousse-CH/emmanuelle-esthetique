@@ -313,11 +313,11 @@ export default function JournalClient() {
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Caisse</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Caisse</p>
           <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
             <BookOpenCheck size={20} className="text-sage" /> Journal &amp; chiffre d&apos;affaires
           </h1>
-          <p className="text-stone-400 text-sm mt-1">Livre de caisse — {periodLabel}</p>
+          <p className="mt-1 text-sm text-stone-600">Livre de caisse — {periodLabel}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -359,7 +359,7 @@ export default function JournalClient() {
       </div>
 
       {/* Sélecteur de période */}
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-4 flex flex-wrap items-center gap-3">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-4 flex flex-wrap items-center gap-3">
         <div className="flex rounded-lg border border-stone-200 overflow-hidden">
           {(['mois', 'annee'] as PeriodMode[]).map(m => (
             <button
@@ -380,7 +380,7 @@ export default function JournalClient() {
             <label htmlFor="journal-month" className="sr-only">Mois</label>
             <select
               id="journal-month" value={month} onChange={e => setMonth(Number(e.target.value))}
-              className="px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage outline-none cursor-pointer"
+              className="px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
             >
               {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
             </select>
@@ -390,13 +390,13 @@ export default function JournalClient() {
         <label htmlFor="journal-year" className="sr-only">Année</label>
         <select
           id="journal-year" value={year} onChange={e => setYear(Number(e.target.value))}
-          className="px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage outline-none cursor-pointer"
+          className="px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
         >
           {years.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
 
         <div className="ml-auto flex items-baseline gap-2">
-          <span className="text-xs text-stone-400">CA {periodLabel}</span>
+          <span className="text-[12.5px] text-stone-500">CA {periodLabel}</span>
           <span className="text-lg font-semibold text-stone-900 tabular-nums">{formatCHF(totals.ttc)}</span>
         </div>
       </div>
@@ -404,17 +404,17 @@ export default function JournalClient() {
       {/* Marge sur marchandises — délibérément séparée du CA, qu'elle ne
           complète pas : c'est un indicateur de rentabilité, pas de recette. */}
       {margeProduits.articles > 0 && (
-        <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-5">
+        <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="w-9 h-9 rounded-xl bg-sage/10 flex items-center justify-center shrink-0">
                 <Package size={16} className="text-sage" />
               </span>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-stone-400">
+                <p className="text-[13px] font-medium text-stone-800">
                   Marge sur produits — {periodLabel}
                 </p>
-                <p className="text-[11px] text-stone-400 mt-0.5">
+                <p className="text-[12.5px] text-stone-500 mt-0.5">
                   {qteLabel(margeProduits.articles)} article{margeProduits.articles > 1 ? 's' : ''} vendu
                   {margeProduits.articles > 1 ? 's' : ''} pour {formatCHF(margeProduits.ventes)}
                 </p>
@@ -424,7 +424,7 @@ export default function JournalClient() {
               {formatCHF(margeProduits.marge)}
             </p>
           </div>
-          <p className="text-[10px] text-stone-400 leading-relaxed mt-3 pt-3 border-t border-stone-50">
+          <p className="text-[12px] text-stone-500 leading-relaxed mt-3 pt-3 border-t border-stone-50">
             Vente hors taxe moins le prix d&apos;achat figé au moment de chaque vente. Ce montant
             n&apos;est pas une recette et ne s&apos;ajoute pas au chiffre d&apos;affaires : il dit ce
             que la marchandise a rapporté au-delà de ce qu&apos;elle a coûté.
@@ -440,24 +440,24 @@ export default function JournalClient() {
 
       {/* Graphiques */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div className="lg:col-span-3 bg-white border border-stone-100 rounded-2xl shadow-sm p-6">
+        <div className="lg:col-span-3 bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-400">
+            <h2 className="text-[13px] font-medium text-stone-800">
               {mode === 'mois' ? 'Recettes par jour' : 'Recettes par mois'}
             </h2>
-            <span className="text-xs text-stone-400 font-medium">{paidRows.length} encaissement{paidRows.length !== 1 ? 's' : ''}</span>
+            <span className="text-[12.5px] text-stone-500 font-medium">{paidRows.length} encaissement{paidRows.length !== 1 ? 's' : ''}</span>
           </div>
           <SeriesChart data={series} loading={loading} />
         </div>
 
-        <div className="lg:col-span-2 bg-white border border-stone-100 rounded-2xl shadow-sm p-6">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-400 mb-6">Par mode de paiement</h2>
+        <div className="lg:col-span-2 bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6">
+          <h2 className="text-[13px] font-medium text-stone-800 mb-6">Par mode de paiement</h2>
           {loading ? (
             <div className="space-y-4">
               {[...Array(4)].map((_, i) => <div key={i} className="h-8 bg-stone-100 rounded animate-pulse" />)}
             </div>
           ) : totals.ttc === 0 ? (
-            <p className="text-stone-400 text-sm italic">Aucune recette sur la période.</p>
+            <p className="text-sm text-stone-600">Aucune recette sur la période.</p>
           ) : (
             <ul className="space-y-4">
               {byPayment.map(m => {
@@ -466,8 +466,8 @@ export default function JournalClient() {
                   <li key={m.value}>
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-sm text-stone-700 font-medium">{m.label}</span>
-                      <span className="text-xs text-stone-400 tabular-nums">
-                        {formatCHF(m.total)} <span className="text-stone-300">· {Math.round(pct)} %</span>
+                      <span className="text-[12.5px] text-stone-500 tabular-nums">
+                        {formatCHF(m.total)} <span className="text-stone-500">· {Math.round(pct)} %</span>
                       </span>
                     </div>
                     <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
@@ -480,8 +480,8 @@ export default function JournalClient() {
           )}
 
           <dl className="mt-6 pt-4 border-t border-stone-100 space-y-1.5">
-            <div className="flex justify-between text-xs"><dt className="text-stone-400">Total HT</dt><dd className="text-stone-600 tabular-nums">{formatCHF(totals.ht)}</dd></div>
-            <div className="flex justify-between text-xs"><dt className="text-stone-400">TVA</dt><dd className="text-stone-600 tabular-nums">{formatCHF(totals.tva)}</dd></div>
+            <div className="flex justify-between text-xs"><dt className="text-stone-500">Total HT</dt><dd className="text-stone-600 tabular-nums">{formatCHF(totals.ht)}</dd></div>
+            <div className="flex justify-between text-xs"><dt className="text-stone-500">TVA</dt><dd className="text-stone-600 tabular-nums">{formatCHF(totals.tva)}</dd></div>
             <div className="flex justify-between text-sm pt-1.5 border-t border-stone-50"><dt className="text-stone-700 font-medium">Recettes encaissées</dt><dd className="text-stone-900 font-semibold tabular-nums">{formatCHF(totals.ttc)}</dd></div>
           </dl>
 
@@ -493,7 +493,7 @@ export default function JournalClient() {
                 </span>
                 <span className="text-stone-600 tabular-nums">{formatCHF(totals.bons)}</span>
               </div>
-              <p className="text-[10px] text-stone-400 mt-1.5 leading-relaxed">
+              <p className="text-[12px] text-stone-500 mt-1.5 leading-relaxed">
                 Hors recettes : cet argent est entré en caisse le jour où les bons
                 ont été vendus. L&apos;ajouter ici doublerait le chiffre d&apos;affaires.
               </p>
@@ -503,19 +503,19 @@ export default function JournalClient() {
       </div>
 
       {/* Journal */}
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
         <div className="px-5 py-3.5 border-b border-stone-100 flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-400">Journal des recettes</h2>
-          <span className="text-xs text-stone-400">{rows.length} écriture{rows.length !== 1 ? 's' : ''}</span>
+          <h2 className="text-[13px] font-medium text-stone-800">Journal des recettes</h2>
+          <span className="text-[12.5px] text-stone-500">{rows.length} écriture{rows.length !== 1 ? 's' : ''}</span>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-8 text-stone-400 text-sm">
-            <div className="w-4 h-4 rounded-full border border-stone-200 border-t-sage animate-spin" /> Chargement…
+          <div className="flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+            <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : rows.length === 0 ? (
           <div className="p-10 text-center space-y-2">
-            <p className="text-stone-400 text-sm italic">Aucun encaissement sur cette période.</p>
+            <p className="text-sm text-stone-600">Aucun encaissement sur cette période.</p>
             <Link href="/admin/caisse" className="text-sage text-sm font-medium hover:underline">Encaisser un soin →</Link>
           </div>
         ) : (
@@ -577,7 +577,7 @@ function Kpi({ label, value, loading, accent }: {
 }) {
   return (
     <div className={`bg-white border rounded-2xl shadow-sm p-5 space-y-2 ${accent ? 'border-sage/30' : 'border-stone-100'}`}>
-      <p className="text-[11px] text-stone-400 font-medium flex items-center gap-1.5">
+      <p className="text-[12.5px] text-stone-500 font-medium flex items-center gap-1.5">
         {accent && <TrendingUp size={12} className="text-sage" />}{label}
       </p>
       {loading
@@ -603,7 +603,7 @@ function SeriesChart({ data, loading }: { data: { label: string; value: number }
   if (total === 0) {
     return (
       <div className="h-44 flex items-center justify-center">
-        <p className="text-stone-400 text-sm italic">Aucune recette sur la période</p>
+        <p className="text-sm text-stone-600">Aucune recette sur la période</p>
       </div>
     );
   }
@@ -614,7 +614,7 @@ function SeriesChart({ data, loading }: { data: { label: string; value: number }
         const h = d.value > 0 ? Math.max((d.value / max) * 100, 4) : 0;
         return (
           <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group min-w-0">
-            <span className="text-[9px] font-semibold text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tabular-nums">
+            <span className="text-[11.5px] font-semibold text-stone-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tabular-nums">
               {formatAmount(d.value)}
             </span>
             <div
@@ -622,7 +622,7 @@ function SeriesChart({ data, loading }: { data: { label: string; value: number }
               style={{ height: `${h}%` }}
               title={`${d.label} — ${formatCHF(d.value)}`}
             />
-            <span className="text-[9px] text-stone-400 truncate w-full text-center">{d.label}</span>
+            <span className="text-[11.5px] text-stone-500 truncate w-full text-center">{d.label}</span>
           </div>
         );
       })}
@@ -651,22 +651,22 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
           onClick={onToggle}
           aria-expanded={open}
           aria-label={`${open ? 'Masquer' : 'Afficher'} le détail de la facture ${tx.numero}`}
-          className="shrink-0 p-1 text-stone-300 hover:text-stone-700 transition-colors cursor-pointer"
+          className="shrink-0 p-1 text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
         >
           {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
         </button>
 
         <div className="w-28 shrink-0 hidden sm:block">
           <p className="text-xs text-stone-500 tabular-nums">{d.toLocaleDateString('fr-CH')}</p>
-          <p className="text-[10px] text-stone-300 tabular-nums">{d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}</p>
+          <p className="text-[12px] text-stone-500 tabular-nums">{d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}</p>
         </div>
 
         <div className="flex-1 min-w-0">
           <p className="text-sm text-stone-900 font-medium truncate">
             {tx.client_label}
-            {cancelled && <span className="ml-2 text-[10px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Annulée</span>}
+            {cancelled && <span className="ml-2 text-[12px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Annulée</span>}
           </p>
-          <p className="text-[11px] text-stone-400 tabular-nums flex items-center gap-1.5 flex-wrap">
+          <p className="text-[12.5px] text-stone-500 tabular-nums flex items-center gap-1.5 flex-wrap">
             <span>{tx.numero} · {MODE_PAIEMENT_LABELS[tx.mode_paiement]}</span>
             {bon > 0 && (
               <span className="inline-flex items-center gap-1 text-sage">
@@ -683,11 +683,11 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
         </div>
 
         <div className="shrink-0 text-right">
-          <span className={`block text-sm font-medium tabular-nums ${cancelled ? 'text-stone-400 line-through' : 'text-stone-900'}`}>
+          <span className={`block text-sm font-medium tabular-nums ${cancelled ? 'text-stone-500 line-through' : 'text-stone-900'}`}>
             {formatCHF(recette)}
           </span>
           {bon > 0 && !cancelled && (
-            <span className="block text-[10px] text-stone-400 tabular-nums">
+            <span className="block text-[12px] text-stone-500 tabular-nums">
               sur {formatCHF(tx.total_ttc)}
             </span>
           )}
@@ -698,7 +698,7 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
             onClick={onDownload}
             disabled={downloading}
             aria-label={`Télécharger la facture ${tx.numero}`} title="Quittance PDF"
-            className="p-1.5 text-stone-300 hover:text-sage rounded-md hover:bg-sage/10 transition-all disabled:opacity-40 cursor-pointer"
+            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors disabled:opacity-40 cursor-pointer"
           >
             {downloading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
           </button>
@@ -707,14 +707,14 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
               <button
                 onClick={onCorrect}
                 aria-label={`Corriger la facture ${tx.numero}`} title="Corriger cette écriture"
-                className="p-1.5 text-stone-300 hover:text-amber-600 rounded-md hover:bg-amber-50 transition-all cursor-pointer"
+                className="p-1.5 text-stone-500 hover:text-amber-700 rounded-md hover:bg-amber-50 transition-all cursor-pointer"
               >
                 <PenLine size={14} />
               </button>
               <button
                 onClick={onCancel}
                 aria-label={`Annuler la facture ${tx.numero}`} title="Annuler cette écriture"
-                className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
               >
                 <Ban size={14} />
               </button>
@@ -728,15 +728,15 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
           {tx.transaction_items.map(item => (
             <div key={item.id} className="flex items-center justify-between text-xs text-stone-500 gap-3">
               <span className="truncate">
-                {Number(item.quantite) !== 1 && <span className="text-stone-400">{Number(item.quantite)} × </span>}
+                {Number(item.quantite) !== 1 && <span className="text-stone-500">{Number(item.quantite)} × </span>}
                 {item.description}
-                {Number(item.taux_tva) > 0 && <span className="text-stone-300"> (TVA {Number(item.taux_tva)} %)</span>}
+                {Number(item.taux_tva) > 0 && <span className="text-stone-500"> (TVA {Number(item.taux_tva)} %)</span>}
               </span>
               <span className="tabular-nums shrink-0">{formatCHF(item.total_ttc)}</span>
             </div>
           ))}
           <div className="flex items-center justify-between text-xs pt-1.5 mt-1.5 border-t border-stone-200/60">
-            <span className="text-stone-400">HT {formatCHF(tx.total_ht)} · TVA {formatCHF(tx.total_tva)}</span>
+            <span className="text-stone-500">HT {formatCHF(tx.total_ht)} · TVA {formatCHF(tx.total_tva)}</span>
             <span className="text-stone-700 font-medium tabular-nums">{formatCHF(tx.total_ttc)}</span>
           </div>
           {bon > 0 && (
@@ -750,7 +750,7 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
               Cette facture rectifie une écriture annulée.
             </p>
           )}
-          {tx.note && <p className="text-xs text-stone-400 italic pt-1">Note : {tx.note}</p>}
+          {tx.note && <p className="text-[12.5px] text-stone-500 italic pt-1">Note : {tx.note}</p>}
           {tx.cancel_reason && <p className="text-xs text-red-500 pt-1">Motif d&apos;annulation : {tx.cancel_reason}</p>}
         </div>
       )}
@@ -807,7 +807,7 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
               ? <><PenLine size={15} className="text-amber-600" /> Corriger {tx.numero}</>
               : <><Ban size={15} className="text-red-500" /> Annuler {tx.numero}</>}
           </h3>
-          <button onClick={onClose} aria-label="Fermer" className="p-1 text-stone-400 hover:text-stone-700 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -840,11 +840,11 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
 
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label htmlFor="cancel-reason" className="block text-[11px] font-medium text-stone-500 mb-1">Motif *</label>
+            <label htmlFor="cancel-reason" className="block text-[12.5px] font-medium text-stone-700 mb-1">Motif *</label>
             <input
               id="cancel-reason" type="text" value={reason} onChange={e => setReason(e.target.value)}
               required autoFocus placeholder="Erreur de saisie, soin non réalisé…"
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
             />
           </div>
 
@@ -860,7 +860,7 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
             <button
               type="submit" disabled={saving || !reason.trim()}
               className={`flex-1 flex items-center justify-center gap-2 text-white py-2.5 rounded-lg text-sm transition-colors disabled:opacity-40 cursor-pointer ${
-                isCorrection ? 'bg-stone-900 hover:bg-sage' : 'bg-red-600 hover:bg-red-700'
+                isCorrection ? 'bg-stone-900 hover:bg-stone-700' : 'bg-red-600 hover:bg-red-700'
               }`}
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}

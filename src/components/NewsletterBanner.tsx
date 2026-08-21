@@ -7,7 +7,12 @@ import { supabase } from '../services/supabase';
 import EditableImage from './pagebuilder/EditableImage';
 import { useModuleFlags } from '../hooks/useModuleFlags';
 
-const MOUNTAIN_IMG_FALLBACK = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=2000&auto=format&fit=crop';
+/*
+  Aucune image de repli. Le bandeau affichait une photo de montagne Unsplash
+  tant qu'aucun visuel n'était choisi : sans rapport avec l'activité, et
+  identique sur tous les sites issus du template. Sans image, le bandeau garde
+  simplement son fond de couleur.
+*/
 
 function useNewsletter() {
   const [email, setEmail]   = useState('');
@@ -56,12 +61,14 @@ export function NewsletterBanner({ bgImage, bg, theme }: { bgImage?: string; bg?
       }`}
     >
       <div className="absolute inset-0">
-        <EditableImage
-          settingKey="newsletter_bg"
-          src={bgImage || MOUNTAIN_IMG_FALLBACK}
-          alt="Newsletter background"
-          className="w-full h-full object-cover object-center"
-        />
+        {bgImage && (
+          <EditableImage
+            settingKey="newsletter_bg"
+            src={bgImage}
+            alt=""
+            className="w-full h-full object-cover object-center"
+          />
+        )}
         {bg ? (
           <div 
             style={{ backgroundColor: hexToRgba(bg === 'transparent' ? '#0A0A0A' : bg, 0.7) }}
@@ -92,28 +99,6 @@ export function NewsletterBanner({ bgImage, bg, theme }: { bgImage?: string; bg?
         >
           <NewsletterForm email={email} setEmail={setEmail} status={status} setStatus={setStatus} submit={submit} />
         </motion.div>
-      </div>
-    </section>
-  );
-}
-
-/* ── Version compacte (articles de blog) ───────────────────── */
-export function NewsletterBannerCompact() {
-  const { email, setEmail, status, setStatus, submit } = useNewsletter();
-  const moduleFlags = useModuleFlags();
-  if (!moduleFlags.newsletter) return null;
-
-  return (
-    <section className="py-16 px-6 bg-sage">
-      <div className="max-w-lg mx-auto text-center">
-        <p className="text-white text-xs font-bold uppercase tracking-[0.3em] mb-4">La lettre d'Emmanuelle Esthétique</p>
-        <h2 className="font-serif text-3xl md:text-4xl font-bold text-white leading-snug mb-4">
-          Des clés concrètes livrées<br className="hidden sm:block" /> directement dans votre boîte.
-        </h2>
-        <p className="text-white/80 text-sm leading-relaxed mb-8">
-          De temps en temps : conseils de soin, rituels de saison et nouveautés de l'institut — sans jamais aucun spam.
-        </p>
-        <NewsletterForm email={email} setEmail={setEmail} status={status} setStatus={setStatus} submit={submit} />
       </div>
     </section>
   );

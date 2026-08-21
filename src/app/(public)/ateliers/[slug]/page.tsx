@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: PageProps) {
   }
 
   const title = event.meta_title || `${event.title} | ${SITE_CONFIG.name}`;
-  const description = event.meta_description || event.excerpt || `Atelier bien-être animé par ${SITE_CONFIG.owner} à Palézieux.`;
+  const description = event.meta_description || event.excerpt || `Atelier animé par ${SITE_CONFIG.owner}`;
 
   return {
     title,

@@ -4,6 +4,7 @@ import { extractJson } from '../../../utils/ai';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { recordAiUsage } from '../../../services/aiUsage';
 import { getSettingsServer } from '../../../services/settingsServer';
+import { getAnthropicKey } from '../../../services/secrets';
 
 /**
  * Les balises méta sont une micro-tâche : elles restent volontairement sur le
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = await getAnthropicKey();
   if (!apiKey) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY non configurée' }, { status: 500 });
   }

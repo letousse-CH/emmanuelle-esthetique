@@ -159,7 +159,7 @@ export default function EventEdit() {
     router.push('/admin/events');
   };
 
-  if (loading) return <div className="text-stone-400 italic p-6">Chargement…</div>;
+  if (loading) return <div className="text-stone-600 p-6">Chargement…</div>;
 
   const paidCount = registrations.filter(r => r.payment_status === 'paid').length;
   const pendingCount = registrations.filter(r => r.payment_status === 'pending').length;
@@ -169,10 +169,10 @@ export default function EventEdit() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <Link href="/admin/events" className="text-stone-400 hover:text-stone-700 transition-colors">
+          <Link href="/admin/events" className="text-stone-500 hover:text-stone-700 transition-colors">
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-2xl font-light text-stone-900 uppercase tracking-widest">
+          <h1 className="text-[26px] font-semibold tracking-tight text-stone-900">
             {isNew ? 'Nouvel événement' : 'Modifier l\'événement'}
           </h1>
         </div>
@@ -181,28 +181,28 @@ export default function EventEdit() {
           {!isNew && form.status !== 'paused' && (
             <button
               onClick={() => handleSave('paused')}
-              className="flex items-center gap-2 border border-amber-200 text-amber-600 px-4 py-2 text-xs uppercase tracking-widest hover:bg-amber-50 transition-colors"
+              className="flex items-center gap-2 border border-amber-200 text-amber-600 px-4 py-2 text-xs hover:bg-amber-50 transition-colors"
             >
               <PauseCircle size={15} /> Mettre en pause
             </button>
           )}
           <button
             onClick={() => handleSave('draft')}
-            className="flex items-center gap-2 border border-stone-200 text-stone-600 px-4 py-2 text-xs uppercase tracking-widest hover:bg-stone-50 transition-colors"
+            className="flex items-center gap-2 border border-stone-200 text-stone-600 px-4 py-2 text-xs hover:bg-stone-50 transition-colors"
           >
             <EyeOff size={15} /> Brouillon
           </button>
           <button
             onClick={() => handleSave('published')}
             disabled={saving}
-            className="flex items-center gap-2 bg-stone-900 text-white px-4 py-2 text-xs uppercase tracking-widest hover:bg-sage transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 bg-stone-900 text-white px-4 py-2 text-xs hover:bg-stone-700 transition-colors disabled:opacity-60"
           >
             <Eye size={15} /> {saving ? 'Enregistrement…' : 'Publier'}
           </button>
           <button
             onClick={() => handleSave()}
             disabled={saving}
-            className="flex items-center gap-2 bg-sage text-white px-4 py-2 text-xs uppercase tracking-widest hover:bg-sage/80 transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 bg-sage text-white px-4 py-2 text-xs hover:bg-stone-700 transition-colors disabled:opacity-60"
           >
             <Save size={15} /> Sauvegarder
           </button>
@@ -223,19 +223,19 @@ export default function EventEdit() {
           {/* Titre + Slug */}
           <div className="bg-white border border-stone-200 p-6 space-y-4">
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Titre *</label>
+              <label className="block text-[12.5px] font-medium text-stone-700 mb-1.5">Titre *</label>
               <input
                 type="text"
                 value={form.title}
                 onChange={handleTitleChange}
                 placeholder="Atelier Méditation & Rêves…"
-                className="w-full border border-stone-200 px-4 py-3 text-stone-900 font-medium text-lg focus:outline-none focus:border-sage transition-colors"
+                className="w-full border border-stone-200 px-4 py-3 text-stone-900 font-medium text-lg focus:outline-none focus:border-stone-900 transition-colors"
               />
             </div>
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Slug URL *</label>
+              <label className="block text-[12.5px] font-medium text-stone-700 mb-1.5">Slug URL *</label>
               <div className="flex items-center border border-stone-200 focus-within:border-sage transition-colors">
-                <span className="px-3 py-2.5 bg-stone-50 text-stone-400 text-sm border-r border-stone-200 whitespace-nowrap">/ateliers/</span>
+                <span className="px-3 py-2.5 bg-stone-50 text-stone-500 text-sm border-r border-stone-200 whitespace-nowrap">/ateliers/</span>
                 <input
                   type="text"
                   value={form.slug}
@@ -245,20 +245,20 @@ export default function EventEdit() {
               </div>
             </div>
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-1.5">Résumé (accroche)</label>
+              <label className="block text-[12.5px] font-medium text-stone-700 mb-1.5">Résumé (accroche)</label>
               <textarea
                 value={form.excerpt || ''}
                 onChange={setInput('excerpt')}
                 rows={2}
                 placeholder="Une courte phrase affichée dans la liste des événements…"
-                className="w-full border border-stone-200 px-4 py-3 text-sm text-stone-700 focus:outline-none focus:border-sage transition-colors resize-none"
+                className="w-full border border-stone-200 px-4 py-3 text-sm text-stone-700 focus:outline-none focus:border-stone-900 transition-colors resize-none"
               />
             </div>
           </div>
 
           {/* Description riche */}
           <div className="bg-white border border-stone-200 p-6">
-            <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400 mb-3">Description complète</label>
+            <label className="block text-[12.5px] font-medium text-stone-700 mb-3">Description complète</label>
             <ReactQuill
               theme="snow"
               value={form.description || ''}
@@ -278,13 +278,13 @@ export default function EventEdit() {
 
           {/* Image */}
           <div className="bg-white border border-stone-200 p-6 space-y-3">
-            <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400">Image (URL)</label>
+            <label className="block text-[12.5px] font-medium text-stone-700">Image (URL)</label>
             <input
               type="url"
               value={form.image_url || ''}
               onChange={setInput('image_url')}
               placeholder="https://…"
-              className="w-full border border-stone-200 px-4 py-3 text-sm text-stone-700 focus:outline-none focus:border-sage transition-colors"
+              className="w-full border border-stone-200 px-4 py-3 text-sm text-stone-700 focus:outline-none focus:border-stone-900 transition-colors"
             />
             {form.image_url && (
               <img src={form.image_url} alt="" className="w-full h-40 object-cover rounded-sm border border-stone-100" />
@@ -294,12 +294,12 @@ export default function EventEdit() {
           {/* SEO */}
           <div className="bg-white border border-stone-200 p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold uppercase tracking-widest text-stone-400">SEO — Balises méta</label>
+              <label className="text-[12.5px] font-medium text-stone-700">SEO — Balises méta</label>
               <button
                 type="button"
                 onClick={generateMeta}
                 disabled={generatingMeta || !form.title.trim()}
-                className="flex items-center gap-1.5 text-xs bg-sage text-white px-3 py-1.5 hover:bg-sage/80 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 text-xs bg-sage text-white px-3 py-1.5 hover:bg-stone-700 transition-colors disabled:opacity-50"
               >
                 <Sparkles size={12} />
                 {generatingMeta ? 'Génération…' : 'Générer par IA'}
@@ -308,8 +308,8 @@ export default function EventEdit() {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold uppercase tracking-widest text-stone-400">Meta Title</label>
-                <span className={`text-[10px] ${(form.meta_title || '').length > 60 ? 'text-red-400' : (form.meta_title || '').length >= 50 ? 'text-green-500' : 'text-stone-400'}`}>
+                <label className="text-[13px] font-medium text-stone-800">Meta Title</label>
+                <span className={`text-[12px] ${(form.meta_title || '').length > 60 ? 'text-red-400' : (form.meta_title || '').length >= 50 ? 'text-green-500' : 'text-stone-500'}`}>
                   {(form.meta_title || '').length}/60
                 </span>
               </div>
@@ -319,7 +319,7 @@ export default function EventEdit() {
                 value={form.meta_title || ''}
                 onChange={e => setForm(prev => ({ ...prev, meta_title: e.target.value }))}
                 placeholder="Titre SEO optimisé (50-60 car.)"
-                className="w-full border border-stone-200 px-4 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-sage transition-colors"
+                className="w-full border border-stone-200 px-4 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-900 transition-colors"
               />
               <div className="mt-1 h-0.5 bg-stone-100 rounded-full">
                 <div className={`h-0.5 rounded-full transition-all ${(form.meta_title || '').length > 60 ? 'bg-red-400' : 'bg-sage'}`}
@@ -329,8 +329,8 @@ export default function EventEdit() {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold uppercase tracking-widest text-stone-400">Meta Description</label>
-                <span className={`text-[10px] ${(form.meta_description || '').length > 160 ? 'text-red-400' : (form.meta_description || '').length >= 140 ? 'text-green-500' : 'text-stone-400'}`}>
+                <label className="text-[13px] font-medium text-stone-800">Meta Description</label>
+                <span className={`text-[12px] ${(form.meta_description || '').length > 160 ? 'text-red-400' : (form.meta_description || '').length >= 140 ? 'text-green-500' : 'text-stone-500'}`}>
                   {(form.meta_description || '').length}/160
                 </span>
               </div>
@@ -340,7 +340,7 @@ export default function EventEdit() {
                 value={form.meta_description || ''}
                 onChange={e => setForm(prev => ({ ...prev, meta_description: e.target.value }))}
                 placeholder="Description SEO (140-160 car.)"
-                className="w-full border border-stone-200 px-4 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-sage transition-colors resize-none"
+                className="w-full border border-stone-200 px-4 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-900 transition-colors resize-none"
               />
               <div className="mt-1 h-0.5 bg-stone-100 rounded-full">
                 <div className={`h-0.5 rounded-full transition-all ${(form.meta_description || '').length > 160 ? 'bg-red-400' : (form.meta_description || '').length >= 140 ? 'bg-green-400' : 'bg-sage'}`}
@@ -349,13 +349,13 @@ export default function EventEdit() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-stone-400 mb-1">Keywords</label>
+              <label className="block text-[13px] font-medium text-stone-800 mb-1">Keywords</label>
               <textarea
                 rows={2}
                 value={form.meta_keywords || ''}
                 onChange={e => setForm(prev => ({ ...prev, meta_keywords: e.target.value }))}
                 placeholder="mot-clé 1, mot-clé 2, mot-clé 3…"
-                className="w-full border border-stone-200 px-4 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-sage transition-colors resize-none"
+                className="w-full border border-stone-200 px-4 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-900 transition-colors resize-none"
               />
             </div>
           </div>
@@ -364,7 +364,7 @@ export default function EventEdit() {
           {!isNew && registrations.length > 0 && (
             <div className="bg-white border border-stone-200 p-6">
               <div className="flex items-center justify-between mb-4">
-                <label className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
+                <label className="text-[12.5px] font-medium text-stone-700">
                   Inscriptions
                 </label>
                 <div className="flex gap-3 text-xs">
@@ -374,7 +374,7 @@ export default function EventEdit() {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-stone-500">
-                  <thead className="text-[10px] uppercase tracking-widest text-stone-400 border-b border-stone-100">
+                  <thead className="text-[12px] text-stone-500 border-b border-stone-100">
                     <tr>
                       <th className="text-left py-2 pr-4">Nom</th>
                       <th className="text-left py-2 pr-4">E-mail</th>
@@ -391,7 +391,7 @@ export default function EventEdit() {
                           <span className={`font-bold ${r.payment_status === 'paid' ? 'text-green-600' : r.payment_status === 'pending' ? 'text-amber-500' : 'text-red-400'}`}>
                             {r.payment_status === 'paid' ? 'Payé' : r.payment_status === 'pending' ? 'En attente' : r.payment_status}
                           </span>
-                          {r.payment_type === 'installment' && <span className="text-stone-400 ml-1">(3×)</span>}
+                          {r.payment_type === 'installment' && <span className="text-stone-500 ml-1">(3×)</span>}
                         </td>
                         <td className="py-2">{new Date(r.created_at).toLocaleDateString('fr-FR')}</td>
                       </tr>
@@ -408,11 +408,11 @@ export default function EventEdit() {
 
           {/* Statut */}
           <div className="bg-white border border-stone-200 p-5 space-y-3">
-            <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400">Statut</label>
+            <label className="block text-[12.5px] font-medium text-stone-700">Statut</label>
             <select
               value={form.status}
               onChange={setInput('status')}
-              className="w-full border border-stone-200 px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-sage"
+              className="w-full border border-stone-200 px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-900"
             >
               <option value="draft">Brouillon</option>
               <option value="published">Publié</option>
@@ -427,11 +427,11 @@ export default function EventEdit() {
 
           {/* Catégorie */}
           <div className="bg-white border border-stone-200 p-5 space-y-3">
-            <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400">Catégorie</label>
+            <label className="block text-[12.5px] font-medium text-stone-700">Catégorie</label>
             <select
               value={form.category}
               onChange={setInput('category')}
-              className="w-full border border-stone-200 px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-sage"
+              className="w-full border border-stone-200 px-3 py-2.5 text-sm text-stone-700 focus:outline-none focus:border-stone-900"
             >
               {(Object.entries(CATEGORY_LABELS) as [EventCategory, string][]).map(([val, label]) => (
                 <option key={val} value={val}>{label}</option>
@@ -441,43 +441,43 @@ export default function EventEdit() {
 
           {/* Date & Horaires */}
           <div className="bg-white border border-stone-200 p-5 space-y-3">
-            <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400">Date & Horaires</label>
+            <label className="block text-[12.5px] font-medium text-stone-700">Date & Horaires</label>
             <div>
-              <label className="block text-xs text-stone-400 mb-1">Date de début</label>
+              <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Date de début</label>
               <input
                 type="date"
                 value={form.date_start || ''}
                 onChange={setInput('date_start')}
-                className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-sage"
+                className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
               />
             </div>
             <div>
-              <label className="block text-xs text-stone-400 mb-1">Date de fin <span className="text-stone-300">(facultatif — pour retraites multi-jours)</span></label>
+              <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Date de fin <span className="text-stone-500">(facultatif — pour retraites multi-jours)</span></label>
               <input
                 type="date"
                 value={form.date_end || ''}
                 onChange={setInput('date_end')}
                 min={form.date_start || undefined}
-                className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-sage"
+                className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs text-stone-400 mb-1">Début</label>
+                <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Début</label>
                 <input
                   type="time"
                   value={form.time_start || ''}
                   onChange={setInput('time_start')}
-                  className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-sage"
+                  className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
                 />
               </div>
               <div>
-                <label className="block text-xs text-stone-400 mb-1">Fin</label>
+                <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Fin</label>
                 <input
                   type="time"
                   value={form.time_end || ''}
                   onChange={setInput('time_end')}
-                  className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-sage"
+                  className="w-full border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
                 />
               </div>
             </div>
@@ -485,34 +485,34 @@ export default function EventEdit() {
 
           {/* Lieu */}
           <div className="bg-white border border-stone-200 p-5 space-y-3">
-            <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400">Lieu</label>
+            <label className="block text-[12.5px] font-medium text-stone-700">Lieu</label>
             <input
               type="text"
               value={form.location}
               onChange={setInput('location')}
-              placeholder="Palézieux, Vaud — Suisse"
-              className="w-full border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:border-sage"
+              placeholder="Ville, canton — pays"
+              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
             />
             <textarea
               value={form.address || ''}
               onChange={setInput('address')}
               rows={2}
               placeholder="Adresse précise (communiquée après inscription)"
-              className="w-full border border-stone-200 px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-sage"
+              className="w-full border border-stone-200 px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-stone-900"
             />
           </div>
 
           {/* Tarif & Places */}
           <div className="bg-white border border-stone-200 p-5 space-y-3">
-            <label className="block text-[11px] font-bold uppercase tracking-widest text-stone-400">Tarif & Places</label>
+            <label className="block text-[12.5px] font-medium text-stone-700">Tarif & Places</label>
             <div>
-              <label className="block text-xs text-stone-400 mb-1">Prix (CHF) — mettre 0 pour gratuit</label>
+              <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Prix (CHF) — mettre 0 pour gratuit</label>
               <input
                 type="number"
                 min={0}
                 value={form.price_chf}
                 onChange={setInput('price_chf')}
-                className="w-full border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:border-sage"
+                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
               />
               {Number(form.price_chf) === 0 && (
                 <p className="text-xs text-emerald-600 mt-1 font-bold">✓ Événement gratuit</p>
@@ -522,18 +522,18 @@ export default function EventEdit() {
               )}
             </div>
             <div>
-              <label className="block text-xs text-stone-400 mb-1">Texte de ristourne (optionnel)</label>
+              <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Texte de ristourne (optionnel)</label>
               <input
                 type="text"
                 value={form.discount_label || ''}
                 onChange={setInput('discount_label')}
                 placeholder="ex : dont une séance offerte"
-                className="w-full border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:border-sage"
+                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
               />
-              <p className="text-xs text-stone-400 mt-1 italic">Affiché en vert sous le prix dans les cartes événement.</p>
+              <p className="text-[12.5px] text-stone-500 mt-1 italic">Affiché en vert sous le prix dans les cartes événement.</p>
             </div>
             <div>
-              <label className="block text-xs text-stone-400 mb-1">
+              <label className="block text-[12.5px] font-medium text-stone-700 mb-1">
                 <Users size={11} className="inline mr-1" />
                 Places max. (vide = illimité)
               </label>
@@ -546,7 +546,7 @@ export default function EventEdit() {
                   max_participants: e.target.value ? Number(e.target.value) : null,
                 }))}
                 placeholder="12"
-                className="w-full border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:border-sage"
+                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
               />
             </div>
           </div>
@@ -560,19 +560,19 @@ export default function EventEdit() {
                 onChange={e => setForm(prev => ({ ...prev, is_online: e.target.checked }))}
                 className="accent-sage w-4 h-4"
               />
-              <span className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Événement en ligne (visio)</span>
+              <span className="text-[12.5px] font-medium text-stone-700">Événement en ligne (visio)</span>
             </label>
             {form.is_online && (
               <div>
-                <label className="block text-xs text-stone-400 mb-1">Lien de connexion</label>
+                <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Lien de connexion</label>
                 <input
                   type="url"
                   value={form.visio_url || ''}
                   onChange={setInput('visio_url')}
                   placeholder="https://meet.google.com/… ou https://zoom.us/j/…"
-                  className="w-full border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:border-sage"
+                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                 />
-                <p className="text-xs text-stone-400 mt-1 italic">
+                <p className="text-[12.5px] text-stone-500 mt-1 italic">
                   Visible sur le site et envoyé par e-mail la veille de l'événement.
                 </p>
               </div>
@@ -588,40 +588,40 @@ export default function EventEdit() {
                 onChange={e => setForm(prev => ({ ...prev, is_recurring: e.target.checked }))}
                 className="accent-sage w-4 h-4"
               />
-              <span className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Événement récurrent</span>
+              <span className="text-[12.5px] font-medium text-stone-700">Événement récurrent</span>
             </label>
             {form.is_recurring && (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-stone-400 mb-1">Nombre de séances incluses</label>
+                  <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Nombre de séances incluses</label>
                   <input
                     type="number"
                     min={2}
                     value={form.recurrence_sessions ?? ''}
                     onChange={e => setForm(prev => ({ ...prev, recurrence_sessions: e.target.value ? Number(e.target.value) : null }))}
                     placeholder="8"
-                    className="w-full border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:border-sage"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-stone-400 mb-1">Jour de la semaine</label>
+                  <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Jour de la semaine</label>
                   <select
                     value={form.recurrence_day || ''}
                     onChange={setInput('recurrence_day')}
-                    className="w-full border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:border-sage"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                   >
                     <option value="">— Sélectionner —</option>
                     {DAYS.map(d => <option key={d} value={d.toLowerCase()}>{d}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-stone-400 mb-1">Description de la récurrence (libre)</label>
+                  <label className="block text-[12.5px] font-medium text-stone-700 mb-1">Description de la récurrence (libre)</label>
                   <input
                     type="text"
                     value={form.recurrence_description || ''}
                     onChange={setInput('recurrence_description')}
                     placeholder="ex : tous les lundis de septembre à décembre"
-                    className="w-full border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:border-sage"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                   />
                 </div>
               </div>

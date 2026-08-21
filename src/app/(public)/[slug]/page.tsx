@@ -3,7 +3,7 @@ import React from 'react';
 import { notFound } from 'next/navigation';
 import { supabase } from '../../../services/supabase';
 import { fetchPageBySlug } from '../../../services/dynamicPages';
-import DynamicPageClient from '../pages/[slug]/DynamicPageClient';
+import DynamicPageClient from '../../../components/pagebuilder/DynamicPageClient';
 import PageChrome from '../../../components/PageChrome';
 
 import { getPageMeta, buildMetadata } from '../../../services/pageMeta';

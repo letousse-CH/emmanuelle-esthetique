@@ -20,27 +20,18 @@ export async function fetchPublishedArticles(): Promise<Article[]> {
   return (data ?? []) as Article[];
 }
 
-export async function fetchRecentArticles(limit = 3): Promise<Pick<Article, 'id' | 'title' | 'slug' | 'cover_image' | 'meta_description' | 'created_at' | 'category'>[]> {
+export async function fetchRecentArticles(limit: number = 3): Promise<Article[]> {
   const { data, error } = await supabase
     .from('articles')
-    .select('id, title, slug, cover_image, meta_description, created_at, category')
+    .select('*')
     .eq('published', true)
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) console.error('[articles] fetchRecent:', error.message);
-  return (data ?? []) as Pick<Article, 'id' | 'title' | 'slug' | 'cover_image' | 'meta_description' | 'created_at' | 'category'>[];
+  return (data ?? []) as Article[];
 }
 
-export async function fetchArticleBySlug(slug: string): Promise<Article | null> {
-  const { data, error } = await supabase
-    .from('articles')
-    .select('*')
-    .eq('slug', slug)
-    .eq('published', true)
-    .maybeSingle();
-  if (error) console.error('[articles] fetchBySlug:', error.message);
-  return (data ?? null) as Article | null;
-}
+
 
 export async function deleteArticle(id: string): Promise<{ success: boolean; error?: string }> {
   const { data, error } = await supabase

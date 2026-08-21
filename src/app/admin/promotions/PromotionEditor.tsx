@@ -221,20 +221,20 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
             <input
               id="promo-nom" type="text" value={nom} onChange={e => mark(setNom)(e.target.value)}
               placeholder="Nom de la promotion"
-              className="w-full text-lg font-semibold text-stone-900 bg-transparent border-0 outline-none placeholder:text-stone-300"
+              className="w-full text-lg font-semibold text-stone-900 bg-transparent border-0 outline-none placeholder:text-stone-400"
             />
-            <p className="text-[11px] text-stone-400">
+            <p className="text-[12.5px] text-stone-500">
               {CANAL_LABELS[canal]} · {segmentDef.label}
               {dirty && <span className="text-amber-600"> · modifications non enregistrées</span>}
             </p>
           </div>
           <button
             onClick={save} disabled={saving || !dirty}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:border-sage hover:text-sage text-xs transition-all disabled:opacity-40 cursor-pointer"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 text-xs transition-all disabled:opacity-40 cursor-pointer"
           >
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Enregistrer
           </button>
-          <button onClick={onClose} aria-label="Fermer" className="shrink-0 p-1.5 text-stone-400 hover:text-stone-800 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="shrink-0 p-1.5 text-stone-500 hover:text-stone-800 cursor-pointer">
             <X size={18} />
           </button>
         </header>
@@ -256,8 +256,8 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
           )}
 
           {/* ── Canal ───────────────────────────────────────────────────── */}
-          <section className="bg-white border border-stone-100 rounded-2xl p-4 space-y-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400">Canal</p>
+          <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+            <p className="text-[12.5px] font-medium text-stone-700">Canal</p>
             <div className="grid grid-cols-3 gap-2">
               {(['email', 'whatsapp', 'les_deux'] as PromotionCanal[]).map(c => (
                 <button
@@ -273,8 +273,8 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
           </section>
 
           {/* ── Segment ─────────────────────────────────────────────────── */}
-          <section className="bg-white border border-stone-100 rounded-2xl p-4 space-y-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400">Destinataires</p>
+          <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+            <p className="text-[12.5px] font-medium text-stone-700">Destinataires</p>
             <div>
               <label htmlFor="promo-segment" className="sr-only">Segment</label>
               <select
@@ -285,16 +285,16 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                   mark(setSegment)(key);
                   setParams(def?.param ? { [def.param.name]: def.param.default } : {});
                 }}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage outline-none cursor-pointer"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
               >
                 {SEGMENTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
               </select>
-              <p className="text-[11px] text-stone-400 mt-1.5">{segmentDef.help}</p>
+              <p className="text-[12.5px] text-stone-500 mt-1.5">{segmentDef.help}</p>
             </div>
 
             {segmentDef.param && (
               <div>
-                <label htmlFor="promo-param" className="block text-[11px] font-medium text-stone-500 mb-1">
+                <label htmlFor="promo-param" className="block text-[12.5px] font-medium text-stone-700 mb-1">
                   {segmentDef.param.label}
                 </label>
                 {segment === 'anniversaires' ? (
@@ -302,7 +302,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                     id="promo-param"
                     value={params.mois ?? 0}
                     onChange={e => { setParams({ mois: Number(e.target.value) }); setDirty(true); }}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage outline-none cursor-pointer"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
                   >
                     <option value={0}>Mois en cours</option>
                     {MOIS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
@@ -315,14 +315,14 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                       setParams({ [segmentDef.param!.name]: Math.max(1, Number(e.target.value) || 1) });
                       setDirty(true);
                     }}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage outline-none tabular-nums"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none tabular-nums"
                   />
                 )}
               </div>
             )}
 
             {loading ? (
-              <p className="text-xs text-stone-300 italic">Calcul de l&apos;audience…</p>
+              <p className="text-xs text-stone-500 italic">Calcul de l&apos;audience…</p>
             ) : (
               <div className="space-y-2 pt-1">
                 {/* Les deux compteurs s'affichent quel que soit le canal choisi :
@@ -371,26 +371,26 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
 
           {/* ── Rédaction e-mail ────────────────────────────────────────── */}
           {utiliseEmail && (
-            <section className="bg-white border border-stone-100 rounded-2xl p-4 space-y-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 flex items-center gap-1.5">
+            <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+              <p className="text-[12.5px] font-medium text-stone-700 flex items-center gap-1.5">
                 <Mail size={12} /> Message e-mail
               </p>
               <div>
-                <label htmlFor="promo-objet" className="block text-[11px] font-medium text-stone-500 mb-1">Objet *</label>
+                <label htmlFor="promo-objet" className="block text-[12.5px] font-medium text-stone-700 mb-1">Objet *</label>
                 <input
                   id="promo-objet" type="text" value={objet} onChange={e => mark(setObjet)(e.target.value)}
                   placeholder="−20 % sur les soins du visage en septembre"
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage outline-none"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 outline-none"
                 />
               </div>
               <div>
-                <label htmlFor="promo-corps" className="block text-[11px] font-medium text-stone-500 mb-1">Message *</label>
+                <label htmlFor="promo-corps" className="block text-[12.5px] font-medium text-stone-700 mb-1">Message *</label>
                 <textarea
                   id="promo-corps" rows={8} value={messageEmail} onChange={e => mark(setMessageEmail)(e.target.value)}
                   placeholder={"Bonjour {{prenom}},\n\nCe mois-ci, …"}
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage outline-none resize-y"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 outline-none resize-y"
                 />
-                <p className="text-[10px] text-stone-400 mt-1 leading-relaxed">
+                <p className="text-[12px] text-stone-500 mt-1 leading-relaxed">
                   Texte simple : une ligne vide sépare deux paragraphes. Le lien de désinscription
                   est ajouté automatiquement — il est obligatoire.
                 </p>
@@ -402,11 +402,11 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                 <input
                   id="promo-test" type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)}
                   placeholder="Adresse pour un essai"
-                  className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage outline-none"
+                  className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 outline-none"
                 />
                 <button
                   onClick={sendTest} disabled={sending || !testEmail.trim() || !objet.trim() || !messageEmail.trim()}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:border-sage hover:text-sage text-sm transition-all disabled:opacity-40 cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 text-sm transition-all disabled:opacity-40 cursor-pointer"
                 >
                   {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Essai
                 </button>
@@ -415,14 +415,14 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
               <button
                 onClick={sendAll}
                 disabled={sending || parEmail.length === 0 || !objet.trim() || !messageEmail.trim()}
-                className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-sage transition-colors disabled:opacity-40 cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
               >
                 {sending && progress
                   ? <><Loader2 size={14} className="animate-spin" /> {progress.done} / {progress.total}…</>
                   : <><Send size={14} /> Envoyer aux {parEmail.filter(e => !servis.email.has(e.email!.toLowerCase())).length} adresses restantes</>}
               </button>
               {servis.email.size > 0 && (
-                <p className="text-[10px] text-stone-400 text-center">
+                <p className="text-[12px] text-stone-500 text-center">
                   {servis.email.size} adresse{servis.email.size > 1 ? 's ont' : ' a'} déjà reçu cette promotion —
                   {' '}elle{servis.email.size > 1 ? 's' : ''} ne {servis.email.size > 1 ? 'seront' : 'sera'} pas resollicité{servis.email.size > 1 ? 'es' : 'e'}.
                 </p>
@@ -444,8 +444,8 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
 
           {/* ── Rédaction WhatsApp ──────────────────────────────────────── */}
           {utiliseWa && (
-            <section className="bg-white border border-stone-100 rounded-2xl p-4 space-y-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 flex items-center gap-1.5">
+            <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+              <p className="text-[12.5px] font-medium text-stone-700 flex items-center gap-1.5">
                 <MessageCircle size={12} /> Message WhatsApp
               </p>
               <div>
@@ -453,9 +453,9 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                 <textarea
                   id="promo-wa" rows={5} value={messageWa} onChange={e => mark(setMessageWa)(e.target.value)}
                   placeholder={"Bonjour {{prenom}} ! Ce mois-ci, …"}
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage outline-none resize-y"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 outline-none resize-y"
                 />
-                <p className="text-[10px] text-stone-400 mt-1 leading-relaxed">
+                <p className="text-[12px] text-stone-500 mt-1 leading-relaxed">
                   Court et direct : ce n&apos;est pas un e-mail. Un clic ouvre la conversation
                   avec le message déjà écrit, tu appuies sur envoyer dans WhatsApp.
                 </p>
@@ -463,12 +463,12 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
               <Variables />
 
               {parWa.length === 0 ? (
-                <p className="text-xs text-stone-400 italic">
+                <p className="text-[12.5px] text-stone-500 italic">
                   Aucune destinataire joignable : il faut un numéro exploitable et l&apos;accord WhatsApp coché.
                 </p>
               ) : (
                 <>
-                  <div className="flex items-center justify-between text-[11px] text-stone-400">
+                  <div className="flex items-center justify-between text-[12.5px] text-stone-500">
                     <span>{waFaits} / {parWa.length} contactées</span>
                     {waFaits > 0 && <span className="text-sage">Coché après ouverture de la conversation</span>}
                   </div>
@@ -484,12 +484,12 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-stone-700 truncate">{entry.nom}</p>
-                            <p className="text-[11px] text-stone-400 tabular-nums">+{entry.waNumber}</p>
+                            <p className="text-[12.5px] text-stone-500 tabular-nums">+{entry.waNumber}</p>
                           </div>
                           {fait ? (
                             <button
                               onClick={() => undoWhatsApp(entry)}
-                              className="shrink-0 flex items-center gap-1 text-[11px] text-stone-400 hover:text-stone-700 cursor-pointer"
+                              className="shrink-0 flex items-center gap-1 text-[12.5px] text-stone-500 hover:text-stone-700 cursor-pointer"
                               title="Marquer comme non envoyé"
                             >
                               <RotateCcw size={12} /> Annuler
@@ -527,18 +527,18 @@ function Chip({ icon: Icon, label, muted }: {
   return (
     <span
       className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-lg ${
-        muted ? 'text-stone-400 bg-stone-50 border border-dashed border-stone-200' : 'text-stone-600 bg-stone-100'
+        muted ? 'text-stone-500 bg-stone-50 border border-dashed border-stone-200' : 'text-stone-600 bg-stone-100'
       }`}
       title={muted ? 'Canal non sélectionné pour cette promotion' : undefined}
     >
-      <Icon size={11} className={muted ? 'text-stone-300' : 'text-stone-400'} /> {label}
+      <Icon size={11} className={muted ? 'text-stone-400' : 'text-stone-600'} /> {label}
     </span>
   );
 }
 
 function Variables() {
   return (
-    <p className="text-[10px] text-stone-400">
+    <p className="text-[12px] text-stone-500">
       Variables :{' '}
       {VARIABLES_DISPONIBLES.map((v, i) => (
         <span key={v.token}>

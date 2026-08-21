@@ -2,6 +2,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { callClaude, extractJson } from '../../../utils/ai';
 import { getSettingsServer } from '../../../services/settingsServer';
+import { getAnthropicKey } from '../../../services/secrets';
 
 export async function POST(req: NextRequest) {
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
@@ -9,7 +10,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = await getAnthropicKey();
   if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') return NextResponse.json({ error: 'not_configured' });
 
   let theme = '';
@@ -62,30 +63,36 @@ Réponds UNIQUEMENT avec ce JSON valide, rien d'autre :
     {
       "id": "generated-[timestamp]-1",
       "category": "Nom de la catégorie, tirée des piliers de contenu ci-dessus",
-      "keyword": "requête exacte google en français",
+      "keyword": "requête exacte ou prompt IA clé",
       "question": "reformulation en question",
       "difficulty": "faible",
       "volume": "moyen",
       "intent": "informationnel",
+      "funnel_level": "découverte",
       "suggestedTitle": "Titre H1 accrocheur (55-65 chars), mot-clé dans les 4 premiers mots",
       "suggestedSlug": "url-en-minuscules-sans-accents",
-      "suggestedIntro": "Accroche 2-3 phrases dans le style direct et incisif aligné avec le ton du site (Problème / Empathie / Solution)",
+      "suggestedIntro": "Accroche 2-3 phrases dans le style direct et incisif aligné avec le ton du site",
+      "rel_bridge": "Pont commercial naturel reliant cet article à une offre de la marque",
+      "aiPrompts": ["Exemple de prompt ChatGPT/Perplexity 1", "Exemple de prompt 2"],
+      "communityQuestions": ["Question d'utilisateur Reddit / Forum 1", "Question 2"],
+      "geoCitationTips": ["Conseil pour être cité par les moteurs IA 1", "Conseil 2"],
       "relatedQuestions": ["Question PAA 1", "Question PAA 2", "Question PAA 3"],
       "secondaryKeywords": ["8 à 10 termes LSI / cluster sémantique"],
       "contentTips": ["Conseil rédaction 1", "Conseil rédaction 2", "Conseil rédaction 3"],
       "cta": "Appel à l'action vers les services ou le programme phare de la marque",
-      "opportunity": "Pourquoi cette requête est une opportunité SEO concrète"
+      "opportunity": "Pourquoi cette requête est une opportunité SIO/SEO concrète"
     }
   ]
 }
 
 Difficulty : "faible", "moyen", "élevé"
 Volume : "faible", "moyen", "élevé"
-Intent : "informationnel", "transactionnel", "navigationnel"`,
+Intent : "informationnel", "transactionnel", "navigationnel"
+funnel_level : "découverte", "comparaison", "conversion"`,
       }],
     });
   } catch (err: any) {
-    console.error('[generate-seo-ideas] Gemini call failed:', err);
+    console.error('[generate-seo-ideas] appel au modèle en échec :', err);
     return NextResponse.json({ error: err?.message || 'Erreur IA' }, { status: 500 });
   }
 

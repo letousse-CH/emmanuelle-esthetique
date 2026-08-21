@@ -115,11 +115,11 @@ export default function ProduitsClient() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Caisse</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Caisse</p>
           <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
             <Package size={20} className="text-sage" /> Produits &amp; stock
           </h1>
-          <p className="text-stone-400 text-sm mt-1">
+          <p className="mt-1 text-sm text-stone-600">
             La marchandise revendue à l&apos;institut. Le stock se déduit des mouvements, il ne se saisit pas.
           </p>
           <div className="mt-3"><CaisseCatalogNav /></div>
@@ -168,15 +168,15 @@ export default function ProduitsClient() {
         </div>
       )}
 
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-8 text-stone-400 text-sm">
-            <div className="w-4 h-4 rounded-full border border-stone-200 border-t-sage animate-spin" /> Chargement…
+          <div className="flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+            <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : products.length === 0 ? (
           <div className="p-10 text-center space-y-2">
-            <p className="text-stone-400 text-sm italic">Aucun produit au catalogue.</p>
-            <p className="text-stone-400 text-xs">
+            <p className="text-sm text-stone-600">Aucun produit au catalogue.</p>
+            <p className="text-stone-500 text-xs">
               Ajoute les articles revendus — ils apparaîtront sous l&apos;onglet « Produits » de l&apos;
               <Link href="/admin/caisse" className="text-sage hover:underline">écran d&apos;encaissement</Link>,
               et leur stock se décomptera à chaque vente.
@@ -195,14 +195,14 @@ export default function ProduitsClient() {
                       <button
                         onClick={() => move(i, -1)} disabled={i === 0 || busyId !== null}
                         aria-label="Monter" title="Monter"
-                        className="p-0.5 text-stone-300 hover:text-stone-700 disabled:opacity-20 transition-colors cursor-pointer"
+                        className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
                       >
                         <ArrowUp size={12} />
                       </button>
                       <button
                         onClick={() => move(i, 1)} disabled={i === products.length - 1 || busyId !== null}
                         aria-label="Descendre" title="Descendre"
-                        className="p-0.5 text-stone-300 hover:text-stone-700 disabled:opacity-20 transition-colors cursor-pointer"
+                        className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
                       >
                         <ArrowDown size={12} />
                       </button>
@@ -211,10 +211,10 @@ export default function ProduitsClient() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-stone-900 flex items-center gap-2 flex-wrap">
                         <span className="truncate">{p.nom}</span>
-                        {p.marque && <span className="text-[11px] text-stone-400 font-normal">{p.marque}</span>}
-                        {!p.active && <span className="text-[10px] font-semibold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full">Masqué</span>}
+                        {p.marque && <span className="text-[12.5px] text-stone-500 font-normal">{p.marque}</span>}
+                        {!p.active && <span className="text-[12px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">Masqué</span>}
                       </p>
-                      <p className="text-xs text-stone-400 truncate">
+                      <p className="truncate text-[12.5px] text-stone-500">
                         {p.reference && <span className="font-mono">{p.reference} · </span>}
                         Achat {formatCHF(p.prix_achat_chf)} → vente {formatCHF(p.prix_vente_chf)}
                         {' · '}
@@ -228,13 +228,13 @@ export default function ProduitsClient() {
 
                     <div className="flex items-center gap-1 shrink-0">
                       {busyId === p.id ? (
-                        <Loader2 size={14} className="animate-spin text-stone-300 mx-2" />
+                        <Loader2 size={14} className="animate-spin text-stone-400 mx-2" />
                       ) : (
                         <>
                           <button
                             onClick={() => setStockFor(p)}
                             aria-label={`Mouvements de stock de ${p.nom}`} title="Stock & mouvements"
-                            className="p-1.5 text-stone-300 hover:text-sage rounded-md hover:bg-sage/10 transition-all cursor-pointer"
+                            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
                           >
                             <ArrowDownUp size={14} />
                           </button>
@@ -242,8 +242,8 @@ export default function ProduitsClient() {
                             onClick={() => toggleActive(p)}
                             aria-label={p.active ? `Masquer ${p.nom}` : `Afficher ${p.nom}`}
                             title={p.active ? 'Masquer de la caisse' : 'Afficher dans la caisse'}
-                            className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded transition-all cursor-pointer ${
-                              p.active ? 'text-sage hover:bg-sage/10' : 'text-stone-400 hover:bg-stone-100'
+                            className={`text-[12px] font-semibold px-2 py-1 rounded transition-all cursor-pointer ${
+                              p.active ? 'text-sage hover:bg-sage/10' : 'text-stone-500 hover:bg-stone-100'
                             }`}
                           >
                             {p.active ? 'Actif' : 'Off'}
@@ -251,14 +251,14 @@ export default function ProduitsClient() {
                           <button
                             onClick={() => setEditing(p)}
                             aria-label={`Modifier ${p.nom}`} title="Modifier"
-                            className="p-1.5 text-stone-300 hover:text-sage rounded-md hover:bg-sage/10 transition-all cursor-pointer"
+                            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
                           >
                             <Pencil size={14} />
                           </button>
                           <button
                             onClick={() => handleDelete(p)}
                             aria-label={`Supprimer ${p.nom}`} title="Supprimer"
-                            className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                            className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -300,10 +300,10 @@ function StatCard({ label, value, hint, tone }: {
 }) {
   const color = tone === 'alert' ? 'text-red-600' : tone === 'warn' ? 'text-amber-600' : 'text-stone-900';
   return (
-    <div className="bg-white border border-stone-100 rounded-2xl shadow-sm px-4 py-3.5">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400">{label}</p>
+    <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] px-4 py-3.5">
+      <p className="text-[12.5px] font-medium text-stone-700">{label}</p>
       <p className={`text-lg font-semibold tabular-nums mt-1 ${color}`}>{value}</p>
-      {hint && <p className="text-[10px] text-stone-300 mt-0.5">{hint}</p>}
+      {hint && <p className="text-[12px] text-stone-500 mt-0.5">{hint}</p>}
     </div>
   );
 }
@@ -409,62 +409,62 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
           <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
             <Package size={14} className="text-sage" /> {product ? 'Modifier le produit' : 'Nouveau produit'}
           </h3>
-          <button onClick={onClose} aria-label="Fermer" className="p-1 text-stone-400 hover:text-stone-700 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
 
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label htmlFor="prd-nom" className="block text-[11px] font-medium text-stone-500 mb-1">Nom *</label>
+            <label htmlFor="prd-nom" className="block text-[12.5px] font-medium text-stone-700 mb-1">Nom *</label>
             <input
               id="prd-nom" type="text" value={nom} onChange={e => setNom(e.target.value)} required autoFocus
               placeholder="Sérum vitamine C — 30 ml"
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="prd-marque" className="block text-[11px] font-medium text-stone-500 mb-1">
-                Marque <span className="text-stone-300">(facultatif)</span>
+              <label htmlFor="prd-marque" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+                Marque <span className="text-stone-500">(facultatif)</span>
               </label>
               <input
                 id="prd-marque" type="text" value={marque} onChange={e => setMarque(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
               />
             </div>
             <div>
-              <label htmlFor="prd-ref" className="block text-[11px] font-medium text-stone-500 mb-1">
-                Référence <span className="text-stone-300">(facultatif)</span>
+              <label htmlFor="prd-ref" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+                Référence <span className="text-stone-500">(facultatif)</span>
               </label>
               <input
                 id="prd-ref" type="text" value={reference} onChange={e => setReference(e.target.value)}
                 placeholder="Code fournisseur"
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all font-mono"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors font-mono"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="prd-achat" className="block text-[11px] font-medium text-stone-500 mb-1">
+              <label htmlFor="prd-achat" className="block text-[12.5px] font-medium text-stone-700 mb-1">
                 Prix d&apos;achat (CHF)
               </label>
               <input
                 id="prd-achat" type="text" inputMode="decimal" value={achat} onChange={e => setAchat(e.target.value)}
                 placeholder="18.00"
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all tabular-nums"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
               />
             </div>
             <div>
-              <label htmlFor="prd-vente" className="block text-[11px] font-medium text-stone-500 mb-1">
+              <label htmlFor="prd-vente" className="block text-[12.5px] font-medium text-stone-700 mb-1">
                 Prix de vente TTC (CHF) *
               </label>
               <input
                 id="prd-vente" type="text" inputMode="decimal" value={vente} onChange={e => setVente(e.target.value)} required
                 placeholder="45.00"
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all tabular-nums"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
               />
             </div>
           </div>
@@ -479,11 +479,11 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
               <p className={`text-sm font-semibold tabular-nums ${marge >= 0 ? 'text-stone-900' : 'text-red-600'}`}>
                 {formatCHF(marge)}
               </p>
-              {pct !== null && <p className="text-[10px] text-stone-400 tabular-nums">{formatAmount(pct)} % du prix de vente</p>}
+              {pct !== null && <p className="text-[12px] text-stone-500 tabular-nums">{formatAmount(pct)} % du prix de vente</p>}
             </div>
           </div>
           {tvaActive && (
-            <p className="text-[10px] text-stone-400 leading-relaxed -mt-1">
+            <p className="text-[12px] text-stone-500 leading-relaxed -mt-1">
               La marge compare la vente <strong>hors taxe</strong> au prix d&apos;achat : saisis donc un
               prix d&apos;achat HT, l&apos;impôt préalable étant récupérable.
             </p>
@@ -491,48 +491,48 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="prd-tva" className="block text-[11px] font-medium text-stone-500 mb-1">TVA par défaut</label>
+              <label htmlFor="prd-tva" className="block text-[12.5px] font-medium text-stone-700 mb-1">TVA par défaut</label>
               <select
                 id="prd-tva" value={taux} onChange={e => setTaux(Number(e.target.value))}
                 disabled={!tvaActive}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all disabled:bg-stone-50 disabled:text-stone-400 cursor-pointer"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors disabled:bg-stone-50 disabled:text-stone-500 cursor-pointer"
               >
                 {TAUX_TVA_CH.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div>
-              <label htmlFor="prd-seuil" className="block text-[11px] font-medium text-stone-500 mb-1">Seuil d&apos;alerte</label>
+              <label htmlFor="prd-seuil" className="block text-[12.5px] font-medium text-stone-700 mb-1">Seuil d&apos;alerte</label>
               <input
                 id="prd-seuil" type="text" inputMode="decimal" value={seuil} onChange={e => setSeuil(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all tabular-nums"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
               />
-              <p className="text-[10px] text-stone-400 mt-1">Signalé en orange sous cette quantité.</p>
+              <p className="text-[12px] text-stone-500 mt-1">Signalé en orange sous cette quantité.</p>
             </div>
           </div>
 
           {!product && (
             <div>
-              <label htmlFor="prd-stock0" className="block text-[11px] font-medium text-stone-500 mb-1">
-                Stock de départ <span className="text-stone-300">(facultatif)</span>
+              <label htmlFor="prd-stock0" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+                Stock de départ <span className="text-stone-500">(facultatif)</span>
               </label>
               <input
                 id="prd-stock0" type="text" inputMode="decimal" value={stockInitial} onChange={e => setStockInitial(e.target.value)}
                 placeholder="0"
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all tabular-nums"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
               />
-              <p className="text-[10px] text-stone-400 mt-1">
+              <p className="text-[12px] text-stone-500 mt-1">
                 Enregistré comme une réception datée — le stock n&apos;est jamais posé à la main.
               </p>
             </div>
           )}
 
           <div>
-            <label htmlFor="prd-desc" className="block text-[11px] font-medium text-stone-500 mb-1">
-              Description <span className="text-stone-300">(facultatif)</span>
+            <label htmlFor="prd-desc" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+              Description <span className="text-stone-500">(facultatif)</span>
             </label>
             <textarea
               id="prd-desc" rows={2} value={description} onChange={e => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all resize-y"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors resize-y"
             />
           </div>
 
@@ -557,7 +557,7 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
             </button>
             <button
               type="submit" disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-sage transition-colors disabled:opacity-40 cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               {saving ? 'Enregistrement…' : 'Enregistrer'}
@@ -660,12 +660,12 @@ function StockDialog({ product, onClose, onUpdated }: {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-stone-900 truncate">{product.nom}</h3>
-            <p className="text-xs text-stone-400 mt-0.5">
+            <p className="text-[12.5px] text-stone-500 mt-0.5">
               Stock actuel <span className="tabular-nums font-medium text-stone-600">{qte(product.stock)}</span>
               {' · '}valeur {formatCHF(Number(product.stock) * Number(product.prix_achat_chf))}
             </p>
           </div>
-          <button onClick={onClose} aria-label="Fermer" className="shrink-0 p-1 text-stone-400 hover:text-stone-700 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="shrink-0 rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -703,25 +703,25 @@ function StockDialog({ product, onClose, onUpdated }: {
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-stone-400 -mt-1">
+            <p className="text-[12px] text-stone-500 -mt-1">
               {STOCK_MOVEMENTS_MANUELS.find(m => m.value === type)?.help}
               {type === 'perte' && ' — la quantité sortira du stock.'}
             </p>
 
             <div className={`grid gap-3 ${type === 'reception' ? 'grid-cols-2' : 'grid-cols-1'}`}>
               <div>
-                <label htmlFor="mv-qte" className="block text-[11px] font-medium text-stone-500 mb-1">Quantité *</label>
+                <label htmlFor="mv-qte" className="block text-[12.5px] font-medium text-stone-700 mb-1">Quantité *</label>
                 <input
                   id="mv-qte" type="text" inputMode="decimal" value={quantite} onChange={e => setQuantite(e.target.value)} required
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all tabular-nums"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
                 />
               </div>
               {type === 'reception' && (
                 <div>
-                  <label htmlFor="mv-prix" className="block text-[11px] font-medium text-stone-500 mb-1">Prix d&apos;achat unitaire</label>
+                  <label htmlFor="mv-prix" className="block text-[12.5px] font-medium text-stone-700 mb-1">Prix d&apos;achat unitaire</label>
                   <input
                     id="mv-prix" type="text" inputMode="decimal" value={prixAchat} onChange={e => setPrixAchat(e.target.value)}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all tabular-nums"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
                   />
                 </div>
               )}
@@ -735,7 +735,7 @@ function StockDialog({ product, onClose, onUpdated }: {
                 />
                 <span className="text-xs text-stone-500 leading-relaxed">
                   Mettre à jour le prix d&apos;achat de la fiche
-                  <span className="block text-[10px] text-stone-400">
+                  <span className="block text-[12px] text-stone-500">
                     Sans cette case, la réception est archivée à son prix mais la marge de référence ne bouge pas.
                   </span>
                 </span>
@@ -743,13 +743,13 @@ function StockDialog({ product, onClose, onUpdated }: {
             )}
 
             <div>
-              <label htmlFor="mv-motif" className="block text-[11px] font-medium text-stone-500 mb-1">
-                Motif <span className="text-stone-300">(facultatif)</span>
+              <label htmlFor="mv-motif" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+                Motif <span className="text-stone-500">(facultatif)</span>
               </label>
               <input
                 id="mv-motif" type="text" value={motif} onChange={e => setMotif(e.target.value)}
                 placeholder={type === 'perte' ? 'Flacon cassé, produit périmé…' : 'Livraison du 12 août…'}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
               />
             </div>
 
@@ -757,7 +757,7 @@ function StockDialog({ product, onClose, onUpdated }: {
 
             <button
               type="submit" disabled={saving}
-              className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-sage transition-colors disabled:opacity-40 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               Enregistrer le mouvement
@@ -765,17 +765,17 @@ function StockDialog({ product, onClose, onUpdated }: {
           </form>
         ) : (
           <form onSubmit={submitInventaire} className="space-y-3">
-            <p className="text-[11px] text-stone-400 leading-relaxed">
+            <p className="text-[12.5px] text-stone-500 leading-relaxed">
               Saisis ce que tu as <strong>compté</strong> dans le tiroir. L&apos;écart est archivé comme
               mouvement daté et motivé — le compteur n&apos;est jamais écrasé, c&apos;est ce qui rend
               l&apos;écart explicable plus tard.
             </p>
             <div>
-              <label htmlFor="inv-compte" className="block text-[11px] font-medium text-stone-500 mb-1">Quantité comptée *</label>
+              <label htmlFor="inv-compte" className="block text-[12.5px] font-medium text-stone-700 mb-1">Quantité comptée *</label>
               <input
                 id="inv-compte" type="text" inputMode="decimal" value={compte} onChange={e => setCompte(e.target.value)} required autoFocus
                 placeholder={qte(product.stock)}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all tabular-nums"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
               />
             </div>
 
@@ -792,13 +792,13 @@ function StockDialog({ product, onClose, onUpdated }: {
             )}
 
             <div>
-              <label htmlFor="inv-motif" className="block text-[11px] font-medium text-stone-500 mb-1">
-                Motif <span className="text-stone-300">(facultatif)</span>
+              <label htmlFor="inv-motif" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+                Motif <span className="text-stone-500">(facultatif)</span>
               </label>
               <input
                 id="inv-motif" type="text" value={motif} onChange={e => setMotif(e.target.value)}
                 placeholder="Inventaire de fin de mois…"
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-300 focus:border-sage focus:ring-1 focus:ring-sage/20 outline-none transition-all"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
               />
             </div>
 
@@ -806,7 +806,7 @@ function StockDialog({ product, onClose, onUpdated }: {
 
             <button
               type="submit" disabled={saving}
-              className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-sage transition-colors disabled:opacity-40 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />}
               Enregistrer l&apos;inventaire
@@ -815,16 +815,16 @@ function StockDialog({ product, onClose, onUpdated }: {
         )}
 
         <div className="pt-3 border-t border-stone-100">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-2">Journal des mouvements</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-2">Journal des mouvements</p>
           {loadingHistory ? (
-            <p className="text-xs text-stone-300 italic py-2">Chargement…</p>
+            <p className="text-xs text-stone-600 py-2">Chargement…</p>
           ) : history.length === 0 ? (
-            <p className="text-xs text-stone-300 italic py-2">Aucun mouvement enregistré.</p>
+            <p className="text-xs text-stone-600 py-2">Aucun mouvement enregistré.</p>
           ) : (
             <ul className="space-y-1 max-h-56 overflow-y-auto pr-1">
               {history.map(m => (
                 <li key={m.id} className="flex items-baseline gap-2 text-xs py-1 border-b border-stone-50 last:border-0">
-                  <span className="text-stone-400 tabular-nums shrink-0 w-20">
+                  <span className="text-stone-500 tabular-nums shrink-0 w-20">
                     {new Date(m.created_at).toLocaleDateString('fr-CH')}
                   </span>
                   <span className="text-stone-600 shrink-0 w-20">{STOCK_MOVEMENT_LABELS[m.type]}</span>
@@ -833,7 +833,7 @@ function StockDialog({ product, onClose, onUpdated }: {
                   }`}>
                     {Number(m.quantite) > 0 ? '+' : ''}{qte(m.quantite)}
                   </span>
-                  <span className="text-stone-400 truncate flex-1 min-w-0">{m.motif ?? ''}</span>
+                  <span className="text-stone-500 truncate flex-1 min-w-0">{m.motif ?? ''}</span>
                 </li>
               ))}
             </ul>

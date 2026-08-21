@@ -187,8 +187,11 @@ async function getPost(slug: string) {
         dateIso: data.created_at,
         updatedAtIso: data.updated_at || data.created_at,
         author: SITE_CONFIG.owner,
-        category: data.category || "Beauté & bien-être",
-        image: proxyUrl(data.cover_image) || "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1000&auto=format&fit=crop",
+        // Un article sans catégorie ni visuel n'en invente pas : « Beauté &
+        // bien-être » et une photo Unsplash étaient le thème du site d'origine,
+        // servis en Open Graph sur les articles de n'importe quel autre site.
+        category: data.category || "",
+        image: proxyUrl(data.cover_image) || "",
         // Temps de lecture calculé (~200 mots/min) au lieu d'une valeur figée :
         // signal de profondeur de contenu pour le SEO/GEO (cf. timeRequired JSON-LD).
         readTime: `${Math.max(1, Math.ceil(estimateWordCount(data.content || '') / 200))} min`
@@ -419,13 +422,6 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
               <div className="bg-stone-900 text-white rounded-2xl p-5 space-y-3">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Aller plus loin</p>
                 <Link
-                  href="/soins"
-                  className="block bg-sage/15 hover:bg-sage/25 border border-sage/30 rounded-xl p-4 transition-colors"
-                >
-                  <p className="font-serif text-base font-bold text-white mb-1">Les soins</p>
-                  <p className="text-xs text-stone-300 leading-relaxed">Soins du visage, Head Spa et massages, dans un cocon à domicile à Palézieux.</p>
-                </Link>
-                <Link
                   href="/contact"
                   className="block bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors"
                 >
@@ -454,12 +450,20 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
               <p className="text-[10px] font-bold uppercase tracking-widest text-sage">À propos de l'auteur</p>
               <p className="font-serif text-lg font-bold text-stone-900">{author.name}</p>
               <p className="text-stone-500 text-sm leading-relaxed">{author.bio}</p>
-              <Link
-                href={author.link}
-                className="inline-flex items-center gap-1.5 text-sm text-sage font-semibold hover:gap-3 transition-all"
-              >
-                En savoir plus <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+              {/*
+                Le lien pointait sur `/a-propos` par défaut — page du site
+                d'origine, absente d'un site neuf : un « En savoir plus » vers
+                un 404 au bas de chaque article. Il ne s'affiche que si une
+                adresse est saisie dans Paramètres.
+              */}
+              {author.link && (
+                <Link
+                  href={author.link}
+                  className="inline-flex items-center gap-1.5 text-sm text-sage font-semibold hover:gap-3 transition-all"
+                >
+                  En savoir plus <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
             </div>
           </div>
         </div>

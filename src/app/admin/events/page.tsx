@@ -8,7 +8,7 @@ import ModuleDisabledBanner from '../../../components/admin/ModuleDisabledBanner
 export default function Page() {
   const moduleFlags = useModuleFlags();
   return (
-    <Suspense fallback={<div className="p-8 text-stone-500 italic">Chargement...</div>}>
+    <Suspense fallback={<div className="p-8 text-sm text-stone-600">Chargement...</div>}>
       {!moduleFlags.events && <ModuleDisabledBanner moduleLabel="Événements" />}
       <EventListClient />
     </Suspense>

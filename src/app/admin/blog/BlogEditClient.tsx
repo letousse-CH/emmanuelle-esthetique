@@ -18,7 +18,7 @@ const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false }) as a
 import { SITE_CONFIG } from '../../../config/site';
 import MediaLibrary from '../../../components/MediaLibrary';
 import SeoAnalyzer from '../../../components/SeoAnalyzer';
-import { SeoIdea, CATEGORIES, CATEGORY_EMOJIS } from '../../../data/seoIdeas';
+import { SeoIdea, CATEGORIES } from '../../../data/seoIdeas';
 import { injectInternalLinks } from '../../../utils/internalLinks';
 import { sanitizeEditorHtml } from '../../../utils/sanitizeHtml';
 import SocialContentGenerator from '../../../components/admin/SocialContentGenerator';
@@ -236,13 +236,20 @@ export default function BlogEdit() {
       suggestedIntro: '',
       relatedQuestions: [],
       secondaryKeywords: [],
+      /*
+        Consignes volontairement génériques : « situations vécues en cabine »,
+        « gestes, techniques et ingrédients » décrivaient le métier du site
+        d'origine et orientaient la rédaction de n'importe quel autre site.
+        L'activité réelle vient des réglages Éditorial & Marque, lus par la
+        route de génération.
+      */
       contentTips: [
         'Respecter scrupuleusement le ton de voix réglé dans Paramètres > Éditorial & Marque',
-        'Ancrer le propos dans des situations concrètes vécues en cabine',
+        'Ancrer le propos dans des situations concrètes vécues par le lecteur',
         'Inclure une méthode actionnable en étapes numérotées',
-        'Nommer précisément les gestes, les techniques et les ingrédients',
+        'Nommer précisément les termes du métier, sans jargon inutile',
       ],
-      cta: 'Pour aller plus loin, découvrez les soins proposés à l\'institut.',
+      cta: '',
       opportunity: '',
     };
     setAiStatus('generating');
@@ -472,7 +479,7 @@ export default function BlogEdit() {
       {/* ── Topbar sticky ─────────────────────────────── */}
       <div className="sticky top-0 z-30 bg-white border-b border-stone-100 shadow-sm">
         <div className="flex items-center gap-3 px-6 h-14">
-          <Link href="/admin/blog" className="shrink-0 text-stone-400 hover:text-stone-700 transition-colors">
+          <Link href="/admin/blog" className="shrink-0 text-stone-500 hover:text-stone-700 transition-colors">
             <ArrowLeft size={18} />
           </Link>
 
@@ -485,12 +492,12 @@ export default function BlogEdit() {
               onChange={handleChange}
               onBlur={() => !isEditing && !formData.slug && generateSlug()}
               placeholder="Titre de l'article…"
-              className="w-full text-base font-medium text-stone-900 bg-transparent border-none outline-none placeholder:text-stone-300 truncate"
+              className="w-full text-base font-medium text-stone-900 bg-transparent border-none outline-none placeholder:text-stone-400 truncate"
             />
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${
+            <span className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full ${
               publishMode === 'published' ? 'bg-green-50 text-green-700'
               : publishMode === 'scheduled' ? 'bg-amber-50 text-amber-700'
               : 'bg-stone-100 text-stone-500'
@@ -502,7 +509,7 @@ export default function BlogEdit() {
             {seoBrief && (
               <Link
                 href="/admin/seo"
-                className="hidden md:flex items-center gap-1.5 text-[10px] bg-amber-50 border border-amber-200 text-amber-700 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors font-bold"
+                className="hidden md:flex items-center gap-1.5 text-[12px] bg-amber-50 border border-amber-200 text-amber-700 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors font-bold"
               >
                 💡 Brief SEO
               </Link>
@@ -521,16 +528,16 @@ export default function BlogEdit() {
 
         {/* Slug row */}
         <div className="flex items-center gap-2 px-6 pb-3">
-          <span className="text-[11px] text-stone-400">{SITE_CONFIG.url.replace(/^https?:\/\//i, '')}/blog/</span>
+          <span className="text-[12.5px] text-stone-500">{SITE_CONFIG.url.replace(/^https?:\/\//i, '')}/blog/</span>
           <input
             type="text"
             name="slug"
             required
             value={formData.slug || ''}
             onChange={handleChange}
-            className="flex-1 text-[11px] font-mono px-2 py-0.5 border border-stone-200 focus:border-sage rounded outline-none bg-stone-50 focus:bg-white lowercase max-w-xs"
+            className="flex-1 text-[11px] font-mono px-2 py-0.5 border border-stone-200 focus:border-stone-900 rounded outline-none bg-stone-50 focus:bg-white lowercase max-w-xs"
           />
-          <button type="button" onClick={generateSlug} className="text-[10px] text-sage hover:underline font-bold">
+          <button type="button" onClick={generateSlug} className="text-[12px] text-sage hover:underline font-bold">
             Générer
           </button>
         </div>
@@ -545,10 +552,10 @@ export default function BlogEdit() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-widest border-b-2 transition-all ${
+                className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold border-b-2 transition-all ${
                   isActive
-                    ? 'border-sage text-sage bg-sage/5'
-                    : 'border-transparent text-stone-400 hover:text-stone-700 hover:bg-stone-50'
+                    ? 'border-stone-900 text-stone-900 bg-sage/5'
+                    : 'border-transparent text-stone-500 hover:text-stone-700 hover:bg-stone-50'
                 }`}
               >
                 <Icon size={13} />
@@ -568,8 +575,8 @@ export default function BlogEdit() {
 
             {/* Cover + catégorie */}
             <div className="grid sm:grid-cols-2 gap-4">
-              <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-5 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-stone-500">Image de couverture</h3>
+              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5 space-y-3">
+                <h3 className="text-[13px] font-medium text-stone-800">Image de couverture</h3>
                 {formData.cover_image ? (
                   <div className="relative group">
                     <img src={formData.cover_image} alt="Couverture" className="w-full aspect-video object-cover rounded-xl border border-stone-100" />
@@ -583,7 +590,7 @@ export default function BlogEdit() {
                   </div>
                 ) : (
                   <div className="aspect-video bg-stone-50 border-2 border-dashed border-stone-200 rounded-xl flex items-center justify-center">
-                    <ImageIcon size={24} className="text-stone-300" />
+                    <ImageIcon size={24} className="text-stone-500" />
                   </div>
                 )}
                 <div className="flex gap-2">
@@ -593,43 +600,43 @@ export default function BlogEdit() {
                     value={formData.cover_image || ''}
                     onChange={handleChange}
                     placeholder="https://…"
-                    className="flex-1 px-3 py-2 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage/20 rounded-lg outline-none bg-stone-50 focus:bg-white text-xs"
+                    className="flex-1 px-3 py-2 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-lg outline-none bg-stone-50 focus:bg-white text-xs"
                   />
                   <button
                     type="button"
                     onClick={() => { setMediaTarget('cover'); setShowMediaLibrary(true); }}
-                    className="shrink-0 p-2 border border-stone-200 rounded-lg text-stone-500 hover:text-sage hover:border-sage transition-colors"
+                    className="shrink-0 p-2 border border-stone-200 rounded-lg text-stone-500 hover:text-stone-900 hover:border-sage transition-colors"
                   >
                     <ImageIcon size={14} />
                   </button>
                 </div>
               </div>
 
-              <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-5 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-stone-500">Catégorie</h3>
+              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5 space-y-3">
+                <h3 className="text-[13px] font-medium text-stone-800">Catégorie</h3>
                 <select
                   name="category"
                   value={formData.category || ''}
                   onChange={handleChange}
-                  className="w-full px-3 py-2.5 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage/20 rounded-lg outline-none bg-stone-50 focus:bg-white text-sm"
+                  className="w-full px-3 py-2.5 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-lg outline-none bg-stone-50 focus:bg-white text-sm"
                 >
                   <option value="">— Choisir une catégorie —</option>
                   {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{CATEGORY_EMOJIS[cat]} {cat}</option>
+                    <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
 
                 <div className="pt-2 space-y-1.5">
                   <div className="flex items-baseline justify-between">
                     <span className={`text-xs font-bold tabular-nums ${
-                      wordCount === 0 ? 'text-stone-400'
+                      wordCount === 0 ? 'text-stone-500'
                       : wordCount >= 2000 && wordCount <= 2800 ? 'text-green-600'
                       : wordCount >= 1500 ? 'text-orange-500'
                       : 'text-red-500'
                     }`}>
                       {wordCount.toLocaleString('fr-FR')} mots
                     </span>
-                    <span className="text-[10px] text-stone-400">Cible : 2000–2800</span>
+                    <span className="text-[12px] text-stone-500">Cible : 2000–2800</span>
                   </div>
                   <div className="w-full bg-stone-100 rounded-full h-1">
                     <div
@@ -647,9 +654,9 @@ export default function BlogEdit() {
             </div>
 
             {/* Éditeur */}
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
               <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-stone-500">Contenu</h2>
+                <h2 className="text-[13px] font-medium text-stone-800">Contenu</h2>
                 <div className="flex items-center gap-4">
                   <button
                     type="button"
@@ -685,7 +692,7 @@ export default function BlogEdit() {
         {/* ════ ONGLET SEO ════ */}
         {activeTab === 'seo' && (
           <div className="space-y-6">
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 space-y-6">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-6">
               <div className="flex items-center justify-between pb-3 border-b border-stone-100">
                 <h2 className="text-sm font-bold text-stone-900 flex items-center gap-2">
                   <Search size={15} className="text-sage" /> Balises méta
@@ -694,7 +701,7 @@ export default function BlogEdit() {
                   type="button"
                   onClick={() => generateMeta()}
                   disabled={generatingMeta || !formData.title}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sage/10 hover:bg-sage/20 text-sage font-bold text-[10px] uppercase tracking-widest rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sage/10 hover:bg-sage/20 text-sage font-bold text-[12px] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Sparkles size={12} className={generatingMeta ? 'animate-spin' : ''} />
                   {generatingMeta ? 'Génération…' : 'Générer avec l\'IA'}
@@ -703,17 +710,17 @@ export default function BlogEdit() {
 
               <div className="space-y-1.5">
                 <div className="flex justify-between items-baseline">
-                  <label htmlFor="meta_title" className="text-xs font-bold uppercase tracking-widest text-stone-500">Meta Titre</label>
+                  <label htmlFor="meta_title" className="text-[13px] font-medium text-stone-800">Meta Titre</label>
                   {(() => {
                     const len = (formData.meta_title || '').length;
-                    return <span className={`text-xs font-bold tabular-nums ${len === 0 ? 'text-stone-400' : len <= 60 ? 'text-green-500' : 'text-red-500'}`}>{len}/60</span>;
+                    return <span className={`text-xs font-bold tabular-nums ${len === 0 ? 'text-stone-500' : len <= 60 ? 'text-green-500' : 'text-red-500'}`}>{len}/60</span>;
                   })()}
                 </div>
                 <input
                   id="meta_title" type="text" name="meta_title" maxLength={70}
                   value={formData.meta_title || ''} onChange={handleChange}
                   placeholder="Titre Google…"
-                  className="w-full px-3 py-2.5 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage/20 rounded-xl outline-none bg-stone-50 focus:bg-white text-sm"
+                  className="w-full px-3 py-2.5 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-xl outline-none bg-stone-50 focus:bg-white text-sm"
                 />
                 <div className="w-full bg-stone-100 rounded-full h-0.5">
                   <div className={`h-0.5 rounded-full transition-all ${(formData.meta_title || '').length <= 60 ? 'bg-green-400' : 'bg-red-400'}`}
@@ -723,11 +730,11 @@ export default function BlogEdit() {
 
               <div className="space-y-1.5">
                 <div className="flex justify-between items-baseline">
-                  <label htmlFor="meta_description" className="text-xs font-bold uppercase tracking-widest text-stone-500">Meta Description</label>
+                  <label htmlFor="meta_description" className="text-[13px] font-medium text-stone-800">Meta Description</label>
                   {(() => {
                     const len = (formData.meta_description || '').length;
                     return <span className={`text-xs font-bold tabular-nums ${
-                      len === 0 ? 'text-stone-400' : len >= 150 && len <= 160 ? 'text-green-500' : len > 160 ? 'text-red-500' : 'text-orange-400'
+                      len === 0 ? 'text-stone-500' : len >= 150 && len <= 160 ? 'text-green-500' : len > 160 ? 'text-red-500' : 'text-orange-400'
                     }`}>{len}/160</span>;
                   })()}
                 </div>
@@ -735,7 +742,7 @@ export default function BlogEdit() {
                   id="meta_description" name="meta_description" rows={3} maxLength={170}
                   value={formData.meta_description || ''} onChange={handleChange}
                   placeholder="Description Google & réseaux…"
-                  className="w-full px-3 py-2.5 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage/20 rounded-xl outline-none bg-stone-50 focus:bg-white text-sm resize-none"
+                  className="w-full px-3 py-2.5 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-xl outline-none bg-stone-50 focus:bg-white text-sm resize-none"
                 />
                 <div className="w-full bg-stone-100 rounded-full h-0.5">
                   <div className={`h-0.5 rounded-full transition-all ${
@@ -747,20 +754,20 @@ export default function BlogEdit() {
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="meta_keywords" className="text-xs font-bold uppercase tracking-widest text-stone-500">Mots-clés méta</label>
+                <label htmlFor="meta_keywords" className="text-[13px] font-medium text-stone-800">Mots-clés méta</label>
                 <textarea
                   id="meta_keywords" name="meta_keywords" rows={2}
                   value={formData.meta_keywords || ''} onChange={handleChange}
                   placeholder="ex : rêve éveillé libre, alexithymie, empathie cognitive…"
-                  className="w-full px-3 py-2.5 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage/20 rounded-xl outline-none bg-stone-50 focus:bg-white text-sm resize-none"
+                  className="w-full px-3 py-2.5 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-xl outline-none bg-stone-50 focus:bg-white text-sm resize-none"
                 />
-                <p className="text-[11px] text-stone-400">Séparés par des virgules. Laissez vide pour utiliser la catégorie par défaut.</p>
+                <p className="text-[12.5px] text-stone-500">Séparés par des virgules. Laissez vide pour utiliser la catégorie par défaut.</p>
               </div>
             </div>
 
             {/* SEO Cluster Checklist */}
             {seoTotalKws > 0 && (
-              <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 space-y-4">
+              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-stone-100">
                   <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
                     <Target size={15} className="text-sage" /> Cluster SEO
@@ -769,7 +776,7 @@ export default function BlogEdit() {
                     <span className={`text-lg font-bold tabular-nums ${seoScore >= 75 ? 'text-green-600' : seoScore >= 50 ? 'text-orange-500' : 'text-red-500'}`}>
                       {seoScore}%
                     </span>
-                    <span className="text-xs text-stone-400">{seoFoundKws.length}/{seoTotalKws}</span>
+                    <span className="text-[12.5px] text-stone-500">{seoFoundKws.length}/{seoTotalKws}</span>
                   </div>
                 </div>
                 <div className="w-full bg-stone-100 rounded-full h-2">
@@ -777,17 +784,17 @@ export default function BlogEdit() {
                     style={{ width: `${seoScore}%` }} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">Requête focus</p>
+                  <p className="text-[12.5px] font-medium text-stone-700 mb-1">Requête focus</p>
                   <p className="font-mono text-xs bg-stone-50 border border-stone-100 px-2.5 py-1.5 rounded-lg text-stone-700">🔍 {seoBrief!.keyword}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">Mots-clés secondaires</p>
+                  <p className="text-[12.5px] font-medium text-stone-700 mb-2">Mots-clés secondaires</p>
                   <div className="grid sm:grid-cols-2 gap-1.5 max-h-72 overflow-y-auto">
                     {seoKeywords.map((kw, i) => {
                       const found = seoFoundKws.includes(kw);
                       return (
-                        <div key={i} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg transition-colors ${found ? 'bg-green-50 text-green-700' : 'bg-stone-50 text-stone-400'}`}>
-                          <span className={`w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-[9px] font-bold ${found ? 'bg-green-500 text-white' : 'bg-stone-200'}`}>
+                        <div key={i} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg transition-colors ${found ? 'bg-green-50 text-green-700' : 'bg-stone-50 text-stone-500'}`}>
+                          <span className={`w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-[11.5px] font-bold ${found ? 'bg-green-500 text-white' : 'bg-stone-200'}`}>
                             {found ? '✓' : ''}
                           </span>
                           <span className="font-mono truncate">{kw}</span>
@@ -809,7 +816,7 @@ export default function BlogEdit() {
 
             {/* Brief SEO */}
             {seoBrief && (
-              <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
@@ -817,13 +824,13 @@ export default function BlogEdit() {
                     </div>
                     <div>
                       <p className="text-sm font-bold text-stone-900">Brief SEO</p>
-                      <p className="text-xs text-stone-400 font-mono">{seoBrief.keyword}</p>
+                      <p className="text-[12.5px] text-stone-500 font-mono">{seoBrief.keyword}</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowBrief(b => !b)}
-                    className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-700 transition-colors"
+                    className="flex items-center gap-1 text-[12.5px] text-stone-500 hover:text-stone-700 transition-colors"
                   >
                     {showBrief ? <><ChevronUp size={13} /> Masquer</> : <><ChevronDown size={13} /> Voir le brief</>}
                   </button>
@@ -835,13 +842,13 @@ export default function BlogEdit() {
                     {/* Ligne 1 — keyword + catégorie */}
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">Requête cible</p>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Requête cible</p>
                         <p className="font-mono bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-100 text-stone-700">🔍 {seoBrief.keyword}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">Catégorie & intent</p>
-                        <p className="text-stone-700">{seoBrief.category} — <span className="text-stone-400">{seoBrief.intent}</span>
-                          {seoBrief.difficulty && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">{seoBrief.difficulty}</span>}
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Catégorie & intent</p>
+                        <p className="text-stone-700">{seoBrief.category} — <span className="text-stone-500">{seoBrief.intent}</span>
+                          {seoBrief.difficulty && <span className="ml-2 text-[12px] font-bold px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">{seoBrief.difficulty}</span>}
                         </p>
                       </div>
                     </div>
@@ -849,7 +856,7 @@ export default function BlogEdit() {
                     {/* Question reformulée */}
                     {seoBrief.question && (
                       <div>
-                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">Question reformulée (H2 candidat)</p>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Question reformulée (H2 candidat)</p>
                         <p className="text-stone-700 bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-100 italic">{seoBrief.question}</p>
                       </div>
                     )}
@@ -857,7 +864,7 @@ export default function BlogEdit() {
                     {/* Opportunité éditoriale */}
                     {seoBrief.opportunity && (
                       <div>
-                        <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-1">Opportunité éditoriale</p>
+                        <p className="text-[12px] font-bold text-amber-500 mb-1">Opportunité éditoriale</p>
                         <p className="text-stone-600 bg-amber-50 border border-amber-100 px-3 py-2 rounded-xl text-xs">{seoBrief.opportunity}</p>
                       </div>
                     )}
@@ -865,7 +872,7 @@ export default function BlogEdit() {
                     {/* Accroche suggérée */}
                     {seoBrief.suggestedIntro && (
                       <div>
-                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">Accroche suggérée</p>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Accroche suggérée</p>
                         <p className="text-stone-600 italic bg-stone-50 px-3 py-2 rounded-xl border border-stone-100 text-xs leading-relaxed">"{seoBrief.suggestedIntro}"</p>
                       </div>
                     )}
@@ -873,10 +880,10 @@ export default function BlogEdit() {
                     {/* Cluster sémantique */}
                     {seoBrief.secondaryKeywords?.length ? (
                       <div>
-                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">Cluster sémantique ({seoBrief.secondaryKeywords.length} termes)</p>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-2">Cluster sémantique ({seoBrief.secondaryKeywords.length} termes)</p>
                         <div className="flex flex-wrap gap-1.5">
                           {seoBrief.secondaryKeywords.map((kw, i) => (
-                            <span key={i} className="text-[10px] font-mono bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{kw}</span>
+                            <span key={i} className="text-[12px] font-mono bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{kw}</span>
                           ))}
                         </div>
                       </div>
@@ -885,7 +892,7 @@ export default function BlogEdit() {
                     {/* PAA */}
                     {seoBrief.relatedQuestions.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">Questions Google (PAA)</p>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-2">Questions Google (PAA)</p>
                         <ul className="space-y-1">
                           {seoBrief.relatedQuestions.map((q, i) => (
                             <li key={i} className="flex items-start gap-2 text-stone-600 text-xs"><span className="text-sage mt-0.5">›</span> {q}</li>
@@ -896,7 +903,7 @@ export default function BlogEdit() {
 
                     {/* Conseils de rédaction */}
                     <div>
-                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">Conseils de rédaction</p>
+                      <p className="text-[12.5px] font-medium text-stone-700 mb-2">Conseils de rédaction</p>
                       <ul className="space-y-1">
                         {seoBrief.contentTips.map((t, i) => (
                           <li key={i} className="flex items-start gap-2 text-stone-600 text-xs"><span className="text-wood mt-0.5">•</span> {t}</li>
@@ -906,7 +913,7 @@ export default function BlogEdit() {
 
                     {/* CTA */}
                     <div>
-                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">CTA suggéré</p>
+                      <p className="text-[12.5px] font-medium text-stone-700 mb-1">CTA suggéré</p>
                       <p className="text-stone-600 italic bg-sage/5 px-3 py-2 rounded-xl border border-sage/10 text-xs">{seoBrief.cta}</p>
                     </div>
                   </div>
@@ -915,7 +922,7 @@ export default function BlogEdit() {
             )}
 
             {/* Génération article */}
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 border-b border-stone-100">
                 <div className="w-8 h-8 rounded-xl bg-stone-900 flex items-center justify-center">
                   <Wand2 size={15} className="text-white" />
@@ -924,7 +931,7 @@ export default function BlogEdit() {
                   <p className="text-sm font-bold text-stone-900">
                     {seoBrief ? 'Rédaction IA — article complet' : 'Régénérer l\'article'}
                   </p>
-                  <p className="text-xs text-stone-400">
+                  <p className="text-[12.5px] text-stone-500">
                     {seoBrief ? `Basé sur le brief : ${seoBrief.keyword}` : 'Génère depuis le titre et la catégorie actuels'}
                   </p>
                 </div>
@@ -935,7 +942,7 @@ export default function BlogEdit() {
                   <button
                     type="button"
                     onClick={generateArticle}
-                    className="flex items-center gap-3 bg-stone-900 hover:bg-sage text-white px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-widest transition-colors"
+                    className="flex items-center gap-3 bg-stone-900 hover:bg-stone-700 text-white px-6 py-3 rounded-xl font-bold text-sm transition-colors"
                   >
                     <Wand2 size={16} />
                     {isEditing ? 'Régénérer l\'article (~2400 mots)' : 'Générer l\'article complet (~2400 mots)'}
@@ -946,7 +953,7 @@ export default function BlogEdit() {
                   <div className="space-y-4">
                     <div className="flex items-center gap-3 text-sm text-stone-600">
                       <div className="w-4 h-4 rounded-full border-2 border-sage border-t-transparent animate-spin" />
-                      <span>Rédaction en cours… <span className="text-stone-400 font-mono">{Math.round(aiPreview.length / 5)} mots</span></span>
+                      <span>Rédaction en cours… <span className="text-stone-500 font-mono">{Math.round(aiPreview.length / 5)} mots</span></span>
                     </div>
                     {aiPreview && (
                       <div
@@ -1011,10 +1018,12 @@ export default function BlogEdit() {
                   content={formData.content}
                   keyword={seoBrief?.keyword || ''}
                   coverImage={formData.cover_image || undefined}
+                  sourceType="article"
+                  sourceRef={id}
                 />
               ) : (
                 <div className="bg-stone-50 border-2 border-dashed border-stone-200 rounded-2xl p-8 text-center">
-                  <p className="text-stone-400 text-sm">Générez ou rédigez d'abord le contenu pour accéder à la génération de posts réseaux sociaux.</p>
+                  <p className="text-stone-500 text-sm">Générez ou rédigez d'abord le contenu pour accéder à la génération de posts réseaux sociaux.</p>
                 </div>
               )
             )}
@@ -1024,7 +1033,7 @@ export default function BlogEdit() {
         {/* ════ ONGLET PROGRAMMATION ════ */}
         {activeTab === 'programmation' && (
           <div className="space-y-6 max-w-lg">
-            <div className="bg-white border border-stone-100 rounded-2xl shadow-sm p-6 space-y-5">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-5">
               <h2 className="text-sm font-bold text-stone-900 flex items-center gap-2 pb-3 border-b border-stone-100">
                 <CalendarClock size={15} className="text-sage" /> Mode de publication
               </h2>
@@ -1040,7 +1049,7 @@ export default function BlogEdit() {
                     type="button"
                     onClick={() => setPublishMode(mode)}
                     className={`flex items-center gap-4 px-5 py-4 border-2 rounded-xl transition-all text-left ${
-                      publishMode === mode ? `${activeBg} ${color}` : 'border-stone-100 text-stone-400 hover:border-stone-200 bg-stone-50'
+                      publishMode === mode ? `${activeBg} ${color}` : 'border-stone-200 text-stone-600 hover:border-stone-200 bg-stone-50'
                     }`}
                   >
                     <Icon className="w-5 h-5 shrink-0" />
@@ -1055,7 +1064,7 @@ export default function BlogEdit() {
 
               {publishMode === 'scheduled' && (
                 <div className="space-y-2 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <label className="text-xs font-bold uppercase tracking-widest text-amber-700 flex items-center gap-1.5">
+                  <label className="text-[13px] font-medium text-amber-800 flex items-center gap-1.5">
                     <Clock size={12} /> Date et heure de publication
                   </label>
                   <input
@@ -1072,7 +1081,7 @@ export default function BlogEdit() {
               <button
                 type="submit"
                 disabled={saving}
-                className={`w-full flex items-center justify-center gap-2 py-3.5 font-bold text-sm uppercase tracking-widest rounded-xl transition-colors disabled:opacity-50 ${saveButtonClass}`}
+                className={`w-full flex items-center justify-center gap-2 py-3.5 font-bold text-sm rounded-xl transition-colors disabled:opacity-50 ${saveButtonClass}`}
               >
                 {publishMode === 'published' ? <Globe size={15} /> : publishMode === 'scheduled' ? <Clock size={15} /> : <FileText size={15} />}
                 {saveButtonLabel}
@@ -1117,7 +1126,7 @@ export default function BlogEdit() {
                 type="button"
                 onClick={() => setShowYoutubeModal(false)}
                 aria-label="Fermer"
-                className="text-stone-400 hover:text-stone-700 transition-colors cursor-pointer"
+                className="text-stone-500 hover:text-stone-700 transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -1133,9 +1142,9 @@ export default function BlogEdit() {
                 onChange={(e) => { setYoutubeInput(e.target.value); setYoutubeError(''); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmYoutubeInsert(); } }}
                 placeholder="https://www.youtube.com/watch?v=… ou code <iframe>"
-                className="w-full px-3 py-2.5 border border-stone-200 focus:border-sage focus:ring-1 focus:ring-sage/20 rounded-lg outline-none bg-stone-50 focus:bg-white text-sm"
+                className="w-full px-3 py-2.5 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-lg outline-none bg-stone-50 focus:bg-white text-sm"
               />
-              <p className="text-[11px] text-stone-400">Collez un lien YouTube ou le code d'intégration &lt;iframe&gt; fourni par YouTube.</p>
+              <p className="text-[12.5px] text-stone-500">Collez un lien YouTube ou le code d'intégration &lt;iframe&gt; fourni par YouTube.</p>
               {youtubeError && (
                 <p className="text-xs text-red-500 flex items-center gap-1.5 pt-1">
                   <AlertCircle size={12} /> {youtubeError}
@@ -1154,7 +1163,7 @@ export default function BlogEdit() {
               <button
                 type="button"
                 onClick={confirmYoutubeInsert}
-                className="px-4 py-2 bg-stone-900 hover:bg-sage text-white text-xs font-bold rounded-lg transition-colors"
+                className="px-4 py-2 bg-stone-900 hover:bg-stone-700 text-white text-xs font-bold rounded-lg transition-colors"
               >
                 Insérer
               </button>

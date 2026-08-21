@@ -8,23 +8,23 @@ import EventsClient from './EventsClient';
 import { SITE_CONFIG } from '../../../config/site';
 
 const ATELIERS_DESCRIPTION =
-  "Ateliers d'auto-soin en petit comité à Palézieux : Gua Sha, auto-massage du visage, Glowing Face. Apprenez les gestes pour prendre soin de votre peau au quotidien.";
+  "";
 
 export const metadata = {
-  title: `Ateliers bien-être à Palézieux | ${SITE_CONFIG.name}`,
+  title: `Ateliers | ${SITE_CONFIG.name}`,
   description: ATELIERS_DESCRIPTION,
-  keywords: "atelier gua sha Vaud, atelier auto-massage visage Palézieux, atelier bien-être Lavaux-Oron, glowing face Suisse",
+  keywords: "",
   alternates: {
     canonical: `${SITE_CONFIG.url}/ateliers`,
   },
   openGraph: {
-    title: `Ateliers bien-être à Palézieux | ${SITE_CONFIG.name}`,
+    title: `Ateliers | ${SITE_CONFIG.name}`,
     description: ATELIERS_DESCRIPTION,
     url: `${SITE_CONFIG.url}/ateliers`,
     images: [
       {
         url: SITE_CONFIG.seoDefaults.ogImage,
-        alt: `Ateliers ${SITE_CONFIG.name} à Palézieux`,
+        alt: `Ateliers ${SITE_CONFIG.name}`,
       }
     ]
   }

@@ -103,11 +103,11 @@ export default function PromotionsClient() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Audience</p>
+          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Audience</p>
           <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
             <Megaphone size={20} className="text-sage" /> Promotions
           </h1>
-          <p className="text-stone-400 text-sm mt-1">
+          <p className="mt-1 text-sm text-stone-600">
             Offres envoyées par e-mail ou WhatsApp aux clientes et aux abonnés du site.
             {total > 0 && ` ${total} envoi${total > 1 ? 's' : ''} au total.`}
           </p>
@@ -145,15 +145,15 @@ export default function PromotionsClient() {
         </div>
       )}
 
-      <div className="bg-white border border-stone-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-8 text-stone-400 text-sm">
-            <div className="w-4 h-4 rounded-full border border-stone-200 border-t-sage animate-spin" /> Chargement…
+          <div className="flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+            <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : promotions.length === 0 ? (
           <div className="p-10 text-center space-y-2">
-            <p className="text-stone-400 text-sm italic">Aucune promotion.</p>
-            <p className="text-stone-400 text-xs">
+            <p className="text-sm text-stone-600">Aucune promotion.</p>
+            <p className="text-stone-500 text-xs">
               Une remise de saison, un mot aux clientes qu&apos;on n&apos;a pas vues depuis six mois,
               une attention pour les anniversaires du mois.
             </p>
@@ -168,10 +168,10 @@ export default function PromotionsClient() {
                     onClick={() => setEditing(p)}
                     className="flex-1 min-w-0 text-left cursor-pointer"
                   >
-                    <p className="text-sm font-medium text-stone-900 truncate hover:text-sage transition-colors">
+                    <p className="text-sm font-medium text-stone-900 truncate hover:text-stone-900 transition-colors">
                       {p.nom}
                     </p>
-                    <p className="text-xs text-stone-400 truncate">
+                    <p className="truncate text-[12.5px] text-stone-500">
                       {CANAL_LABELS[p.canal]} · {segmentLabel(p.segment)} · {dateCH(p.created_at)}
                     </p>
                   </button>
@@ -179,26 +179,26 @@ export default function PromotionsClient() {
                   <div className="hidden sm:flex items-center gap-2 shrink-0">
                     {(n?.email ?? 0) > 0 && (
                       <span className="inline-flex items-center gap-1 text-[11px] text-stone-500 tabular-nums" title="E-mails envoyés">
-                        <Mail size={11} className="text-stone-300" /> {n!.email}
+                        <Mail size={11} className="text-stone-500" /> {n!.email}
                       </span>
                     )}
                     {(n?.whatsapp ?? 0) > 0 && (
                       <span className="inline-flex items-center gap-1 text-[11px] text-stone-500 tabular-nums" title="Conversations WhatsApp ouvertes">
-                        <MessageCircle size={11} className="text-stone-300" /> {n!.whatsapp}
+                        <MessageCircle size={11} className="text-stone-500" /> {n!.whatsapp}
                       </span>
                     )}
                     {!n?.email && !n?.whatsapp && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-stone-300">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-stone-500">
                         <Users size={11} /> aucun envoi
                       </span>
                     )}
                   </div>
 
                   <span
-                    className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded ${
+                    className={`shrink-0 inline-flex items-center gap-1 text-[12px] font-semibold px-2 py-1 rounded ${
                       p.status === 'envoyee' ? 'text-sage bg-sage/10'
                       : p.status === 'en_cours' ? 'text-amber-700 bg-amber-50'
-                      : 'text-stone-400 bg-stone-100'
+                      : 'text-stone-500 bg-stone-100'
                     }`}
                   >
                     {p.status === 'envoyee' && <Check size={9} />}
@@ -207,20 +207,20 @@ export default function PromotionsClient() {
 
                   <div className="flex items-center gap-1 shrink-0">
                     {busyId === p.id ? (
-                      <Loader2 size={14} className="animate-spin text-stone-300 mx-2" />
+                      <Loader2 size={14} className="animate-spin text-stone-400 mx-2" />
                     ) : (
                       <>
                         <button
                           onClick={() => setEditing(p)}
                           aria-label={`Ouvrir ${p.nom}`} title="Ouvrir"
-                          className="p-1.5 text-stone-300 hover:text-sage rounded-md hover:bg-sage/10 transition-all cursor-pointer"
+                          className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
                         >
                           <Pencil size={14} />
                         </button>
                         <button
                           onClick={() => supprimer(p)}
                           aria-label={`Supprimer ${p.nom}`} title="Supprimer"
-                          className="p-1.5 text-stone-300 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                          className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
                         >
                           <Trash2 size={14} />
                         </button>

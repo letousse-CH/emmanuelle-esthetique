@@ -16,9 +16,9 @@ export default function Page() {
       {!moduleFlags.social && <ModuleDisabledBanner moduleLabel="Réseaux Sociaux" />}
 
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Audience</p>
+        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Audience</p>
         <h1 className="text-2xl font-semibold text-stone-900">Réseaux Sociaux</h1>
-        <p className="text-stone-400 text-sm mt-1">Contenu Instagram, LinkedIn et Facebook généré depuis vos articles, vos flux RSS et vos suggestions SEO.</p>
+        <p className="mt-1 text-sm text-stone-600">Contenu Instagram, LinkedIn et Facebook généré depuis vos articles, vos flux RSS et vos suggestions SEO.</p>
       </div>
 
       <div role="tablist" aria-label="Sections réseaux sociaux" className="flex gap-2 overflow-x-auto border-b border-stone-200">
@@ -27,7 +27,7 @@ export default function Page() {
           aria-selected={tab === 'calendrier'}
           onClick={() => setTab('calendrier')}
           className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${
-            tab === 'calendrier' ? 'border-sage text-sage' : 'border-transparent text-stone-400 hover:text-stone-600'
+            tab === 'calendrier' ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-500 hover:text-stone-600'
           }`}
         >
           <CalendarDays size={14} /> Calendrier
@@ -37,7 +37,7 @@ export default function Page() {
           aria-selected={tab === 'sources'}
           onClick={() => setTab('sources')}
           className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${
-            tab === 'sources' ? 'border-sage text-sage' : 'border-transparent text-stone-400 hover:text-stone-600'
+            tab === 'sources' ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-500 hover:text-stone-600'
           }`}
         >
           <Rss size={14} /> Sources

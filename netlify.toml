@@ -2,6 +2,12 @@
   command = "npm run build"
   publish = ".next"
 
+[functions]
+  # Fonctions planifiées : elles ne font qu'appeler /api/cron/* avec
+  # CRON_SECRET. Sans elles, la publication différée, la pré-génération des
+  # posts et les automatisations « planifiées » n'étaient jamais déclenchées.
+  directory = "netlify/functions"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 

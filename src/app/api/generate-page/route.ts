@@ -2,54 +2,105 @@ import { NextResponse, NextRequest } from 'next/server';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { callClaude } from '../../../utils/ai';
 import { getSettingsServer } from '../../../services/settingsServer';
+import { getAnthropicKey } from '../../../services/secrets';
+import { SECTION_META, type SectionTypeName } from '../../../components/pagebuilder/sectionMeta';
 
-const AVAILABLE_TYPES = [
-  'hero_1', 'hero_2', 'hero_3', 'hero_4', 'hero_5', 'intro_1',
-  'features_1', 'features_2', 'features_3',
-  'cta_1', 'testimonial_1', 'text_1',
-  'gallery_grid', 'gallery_carousel', 'gallery_masonry',
-  'faq_1', 'stats_1', 'timeline_1', 'logos_1'
-] as const;
+/**
+ * Génération d'une page par le modèle.
+ *
+ * Le catalogue proposé au modèle est **dérivé de `SECTION_META`**, comme celui
+ * de l'import de site. Il était auparavant recopié à la main : dix-neuf types
+ * sur trente-trois, avec un schéma de champs maintenu en double. Toute section
+ * ajoutée au constructeur restait donc invisible pour la génération, et un type
+ * hors liste était silencieusement rétrogradé en `text_1`.
+ */
 
-type SectionType = typeof AVAILABLE_TYPES[number];
+/** Réglages d'apparence : ils relèvent du design system, pas du contenu. */
+const STYLE_FIELDS = [
+  'bg_image',
+  'bg_image_opacity',
+  'bg_image_position',
+  'bg_color',
+  'density',
+  'width',
+  'align',
+  'animation',
+];
 
-const SYSTEM_PROMPT = `Tu es un UX Designer et copywriter expert en persuasion.
-Ta mission : générer le contenu d'une landing page en répondant UNIQUEMENT avec un tableau JSON valide.
-AUCUN texte avant ou après le JSON. Pas de markdown. Juste le tableau JSON brut.
+const AVAILABLE_TYPES = Object.keys(SECTION_META) as SectionTypeName[];
 
-Sections disponibles et leur schéma attendu :
-1. hero_1 : { eyebrow?, title, title_italic?, description?, cta_primary_text?, cta_primary_href?, cta_secondary_text?, cta_secondary_href?, image_url?, image_opacity?, button_style?, theme? }
-2. hero_2 : { eyebrow?, title, description?, cta_text?, cta_href?, button_style?, theme?, bg_image?, bg_image_opacity? }
-3. hero_3 : { eyebrow?, title, title_italic?, description?, items?: string[], cta_primary_text?, cta_primary_href?, cta_secondary_text?, cta_secondary_href?, image_url?, button_style?, theme? } (titre centré puis portrait en arche ; items = 2 à 4 mots-clés courts affichés en pastilles)
-4. hero_4 : { eyebrow?, title, title_italic?, description?, image_url?, image_opacity?, card_title?, card_text?, cta_text?, cta_href?, button_style?, theme? } (photo plein cadre, titre en bas, petite carte d'informations pratiques)
-5. hero_5 : { eyebrow?, title, description?, align?: 'center' | 'left', cta_text?, cta_href?, image_url?, min_height?, theme? } (bandeau compact de page intérieure, à préférer aux autres hero pour une page secondaire)
-6. intro_1 : { eyebrow?, quote, text, cta_text?, cta_href?, image_url?, image_position?, theme?, bg_image?, bg_image_opacity? }
-7. features_1 : { eyebrow?, title, description?, quote?, items?: string[], cta_text?, cta_href?, theme?, bg_image?, bg_image_opacity? }
-8. features_2 : { eyebrow?, title, description?, cards: [{ title, description, icon? }], theme?, bg_image?, bg_image_opacity? }
-9. features_3 : { eyebrow?, title, description?, cards: [{ title, description, items?: string[], cta_text?, cta_href?, badge? }], button_style?, theme?, bg_image?, bg_image_opacity? }
-10. cta_1 : { eyebrow?, title, description?, cta_text, cta_href?, button_style?, theme?, bg_image?, bg_image_opacity? }
-11. testimonial_1 : { quote, author?, role?, theme?, bg_image?, bg_image_opacity? }
-12. text_1 : { eyebrow?, title?, content, theme?, bg_image?, bg_image_opacity? }
-13. gallery_grid : { eyebrow?, title?, description?, cards: [{ title?, description?, image, link? }], columns?: '2' | '3' | '4', theme?, bg_image?, bg_image_opacity? }
-14. gallery_carousel : { eyebrow?, title?, description?, cards: [{ title?, description?, image, link? }], theme?, bg_image?, bg_image_opacity? }
-15. gallery_masonry : { eyebrow?, title?, description?, cards: [{ title?, description?, image, link? }], theme?, bg_image?, bg_image_opacity? }
-16. faq_1 : { eyebrow?, title, description?, cards: [{ question, answer }], theme?, bg_image?, bg_image_opacity? }
-17. stats_1 : { eyebrow?, title?, cards: [{ value, label }] } (3 à 4 chiffres clés, ex: value "500+", label "Personnes accompagnées")
-18. timeline_1 : { eyebrow?, title?, description?, cards: [{ title, description? }] } (3 à 4 étapes d'un processus)
-19. logos_1 : { eyebrow?, cards: [{ image, alt? }] } (ne génère cette section QUE si le prompt mentionne explicitement des logos/partenaires/presse, sinon ne l'utilise pas)
+function sectionMenu(): string {
+  return AVAILABLE_TYPES.map((type, i) => {
+    const meta = SECTION_META[type];
+    const fields = Object.entries(meta.dataSchema)
+      .filter(([field]) => !STYLE_FIELDS.includes(field))
+      .map(([field, shape]) => `${field}: ${shape}`)
+      .join(', ');
+    return `${i + 1}. ${type} — ${meta.description}\n   { ${fields} }`;
+  }).join('\n');
+}
 
-Règles :
-- Commence toujours par une section hero (hero_1 à hero_5) : hero_5 pour une page intérieure, hero_1, hero_3 ou hero_4 quand une photo est pertinente, hero_2 sans image
-- Termine toujours par cta_1
-- Utilise 4 à 7 sections au total
-- Pour les href/links, utilise "#" (ou "/contact" pour les boutons d'appel à l'action principaux)
-- Contenu en français sauf si le prompt est dans une autre langue. Les textes doivent respecter le contexte d'activité et le ton de voix fournis ci-dessus.
-- N'invente jamais le nom d'une offre, d'un produit, d'un service, d'un tarif ou d'un horaire : n'utilise que ce qui figure dans le contexte fourni.
-- Pour les images/galleries, utilise des URLs d'images d'ambiance de qualité depuis Unsplash, cohérentes avec l'activité décrite ci-dessus.
+const NICHE_IMAGE_POOLS = {
+  web_digital: [
+    'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1522542550221-31fd19575a2d?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1200&q=80',
+  ],
+  beauty_wellness: [
+    'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1512290900673-7002004118df?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1600334129128-685c5582fd35?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1598256989800-fe5f95da9787?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=1200&q=80',
+  ],
+  general_business: [
+    'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80',
+  ],
+};
+
+function selectImagePoolForNiche(activityText: string, promptText: string) {
+  const combined = `${activityText} ${promptText}`.toLowerCase();
+  
+  if (/web|site|agence|digital|code|dev|informatique|design|marketing|seo|studio|app|logiciel/.test(combined)) {
+    return { nicheName: 'Agence Web & Numérique', pool: NICHE_IMAGE_POOLS.web_digital };
+  }
+  if (/soin|esthétic|massage|spa|visage|beauté|head spa|coiffure|institut|bien-être|relaxation/.test(combined)) {
+    return { nicheName: 'Esthétique & Bien-être', pool: NICHE_IMAGE_POOLS.beauty_wellness };
+  }
+  return { nicheName: 'Entreprise & Services', pool: NICHE_IMAGE_POOLS.general_business };
+}
+
+const SYSTEM_PROMPT = `Tu es un web designer expert. Je te fournis le texte d'une page et la structure des options de mon propre web builder. Ton but est de construire la mise en page en automatique pour que le design soit sympa, dynamique et avec du caractère dès la création.
+
+Pour donner du rythme, tu dois appliquer ces règles de style :
+1. Alterne systématiquement les couleurs de fond et thèmes d'une section à l'autre (ex: theme: "light" puis theme: "dark" puis theme: "sage" ou theme: "sand") pour créer du contraste.
+2. Varie les types de sections (texte seul, médias, colonnes, grilles, témoignages, hero, cta) tout au long de la page pour casser la monotonie.
+3. Joue sur la hauteur et la densité des sections (density: "compact" | "comfortable" | "spacious") selon l'importance du contenu pour faire respirer la page.
+4. Utilise toutes les options de design présentes dans mon builder de manière créative (eyebrows/badges, icônes, animations, alignements width, align, animation, visual cards, photo copyrights).
+5. Règle de diversité des images : attribue des URLs d'images HD Unsplash uniques et variées à chaque section. INTERDICTION STRICTE d'utiliser la même photo deux fois sur la page !
+6. Règle de copyright photo : ajoute systématiquement image_credit: "Photo : Unsplash" sous chaque photo.
+
+CONSIGNE DE RESTRICTION STRICTE :
+- Ne jamais inventer de nouveaux paramètres, de nouvelles couleurs ou de nouvelles classes qui ne sont pas explicitement listés dans le dictionnaire ci-dessous.
+- Exige de répondre uniquement avec un tableau d'objets JSON valide sans texte ni explications avant ou après.
+
+Dictionnaire d'options de mon Web Builder :
+${sectionMenu()}
 
 Format de réponse (tableau JSON strictement) :
 [
-  { "type": "hero_1", "data": { "title": "...", "description": "..." } },
+  { "type": "hero_1", "data": { "title": "...", "description": "...", "image_url": "...", "image_credit": "Photo : Unsplash" } },
   { "type": "features_2", "data": { "title": "...", "cards": [...] } },
   { "type": "cta_1", "data": { "title": "...", "cta_text": "..." } }
 ]`;
@@ -63,7 +114,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = await getAnthropicKey();
   if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY non configurée.' }, { status: 503 });
   }
@@ -83,20 +134,30 @@ export async function POST(req: NextRequest) {
   try {
     const settings = await getSettingsServer([
       'site_activity_context',
+      'site_target_persona',
       'site_tone_of_voice',
       'site_brand_tone',
     ]);
 
     const activityContext = settings.site_activity_context || "";
+    const targetPersona   = settings.site_target_persona || "";
     const toneOfVoice     = settings.site_tone_of_voice || "";
     const brandTone       = settings.site_brand_tone || "";
 
+    const { nicheName, pool: activePool } = selectImagePoolForNiche(activityContext, prompt);
+
     const dynamicSystemPrompt = `${SYSTEM_PROMPT}
 
-━━━ ACTIVITÉ & TON DU SITE ━━━
+━━━ ACTIVITÉ & SECTEUR DU SITE ━━━
+Secteur détecté : ${nicheName}
 Activité : ${activityContext}
-${toneOfVoice ? `Ton de voix : ${toneOfVoice}\n` : ''}${brandTone ? `Branding & Positionnement : ${brandTone}\n` : ''}
-Règle : Rédaction alignée avec l'activité du site et le ton ci-dessus.`;
+${targetPersona ? `Persona cible : ${targetPersona}\n` : ''}${toneOfVoice ? `Ton de voix : ${toneOfVoice}\n` : ''}${brandTone ? `Branding & Positionnement : ${brandTone}\n` : ''}
+
+RÈGLE ABSOLUE D'ILLUSTRATION CONTEXTUELLE :
+- Utilise EXCLUSIVEMENT des photos correspondant au secteur "${nicheName}".
+- Interdiction absolue de mettre des visuels hors-sujet (ex: pas de photos de spa/massage pour une entreprise informatique ou agence web).
+- Liste des photos HD ciblées pour "${nicheName}" :
+${activePool.map((url, i) => `${i + 1}. "${url}"`).join('\n')}`;
 
     const response = await callClaude({
       feature: 'page',
@@ -117,7 +178,7 @@ Règle : Rédaction alignée avec l'activité du site et le ton ci-dessus.`;
     const start = raw.indexOf('[');
     const end = raw.lastIndexOf(']');
     if (start === -1 || end === -1) {
-      console.error('[generate-page] No JSON array found in Gemini response:', raw);
+      console.error('[generate-page] Aucun tableau JSON dans la réponse du modèle :', raw);
       return NextResponse.json({ error: 'Aucun tableau JSON trouvé dans la réponse.' }, { status: 502 });
     }
     
@@ -135,14 +196,24 @@ Règle : Rédaction alignée avec l'activité du site et le ton ci-dessus.`;
       return NextResponse.json({ error: 'Le format généré doit être un tableau non vide.' }, { status: 502 });
     }
 
-    // Basic structure validation
-    const validatedSections = rawSections.map((section: any) => {
-      const type = AVAILABLE_TYPES.includes(section.type as SectionType) ? section.type : 'text_1';
-      return {
-        type,
+    /*
+      Une section d'un type inconnu est écartée, pas convertie : la rétrograder
+      en `text_1` fabriquait un bloc vide que l'utilisateur devait deviner et
+      supprimer. Mieux vaut une page plus courte qu'une page fausse.
+    */
+    const validatedSections = rawSections
+      .filter((section: any) => section && typeof section === 'object' && section.type in SECTION_META)
+      .map((section: any) => ({
+        type: section.type as SectionTypeName,
         data: section.data && typeof section.data === 'object' ? section.data : {},
-      };
-    });
+      }));
+
+    if (validatedSections.length === 0) {
+      return NextResponse.json(
+        { error: "Aucune section exploitable n'a été produite. Reformulez la demande." },
+        { status: 502 },
+      );
+    }
 
     return NextResponse.json({ sections: validatedSections });
 
