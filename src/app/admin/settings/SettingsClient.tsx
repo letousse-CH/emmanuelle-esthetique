@@ -229,7 +229,7 @@ export default function Settings() {
     </div>
   );
 
-  const [isMasterStudio, setIsMasterStudio] = useState(true);
+  const [isMasterStudio, setIsMasterStudio] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -237,8 +237,7 @@ export default function Settings() {
       const isMaster =
         host === 'localhost' ||
         host === '127.0.0.1' ||
-        host.includes('kinetick') ||
-        process.env.NEXT_PUBLIC_IS_MASTER === 'true';
+        host.includes('kinetick');
       setIsMasterStudio(isMaster);
     }
   }, []);
