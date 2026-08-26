@@ -57,6 +57,7 @@ export default function SectionEditorModal({
 
   const TABS = [
     { id: 'contenu' as const, label: 'Contenu', icon: Type, hint: 'Modifier les textes, titres, listes et images' },
+    { id: 'ia' as const, label: 'Assistant IA', icon: Sparkles, hint: 'Réécrire, raccourcir ou booster la conversion avec l’IA' },
     { id: 'variante' as const, label: 'Variante', icon: RefreshCw, hint: 'Changer la variante tout en gardant le contenu' },
     { id: 'fond' as const, label: 'Fond', icon: Layers, hint: 'Image, couleur, clair ou foncé' },
     { id: 'style' as const, label: 'Apparence', icon: Wand2, hint: 'Espacement, largeur, alignement' },
