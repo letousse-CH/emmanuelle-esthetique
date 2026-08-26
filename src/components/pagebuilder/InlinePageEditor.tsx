@@ -197,6 +197,17 @@ export default function InlinePageEditor({ pageId, initialSections, onExit }: Pr
           </>
         )}
 
+        <div className="h-4 w-px bg-zinc-700 my-auto" />
+
+        {/* Bouton Retour Admin */}
+        <a
+          href="/admin"
+          className="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white rounded-full text-xs font-bold transition-all hover:scale-105 cursor-pointer"
+          title="Retourner au tableau de bord d'administration"
+        >
+          <span>Admin</span>
+        </a>
+
         {saveStatus === 'saved' && (
           <span className="flex items-center gap-1 text-emerald-400 text-xs font-extrabold animate-fade-in pl-1">
             <Check size={13} /> Enregistré !

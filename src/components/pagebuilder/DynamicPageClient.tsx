@@ -143,15 +143,27 @@ export default function DynamicPageClient({ initialPage, slug, fallback, forceSh
         <>
           <DynamicPageRenderer sections={page.sections} />
           {isAdmin && !isEditMode && (
-            <button
-              type="button"
-              onClick={() => setIsEditMode(true)}
-              className="fixed bottom-6 left-6 z-[9990] flex items-center gap-2 bg-zinc-900/90 hover:bg-zinc-900 text-white px-4 py-2.5 rounded-full shadow-2xl border border-zinc-700/80 backdrop-blur-md text-xs font-bold transition-all hover:scale-105 cursor-pointer select-none"
-              title="Réactiver l'édition en direct sur cette page"
-            >
-              <Pencil size={13} className="text-amber-400" />
-              <span>Mode Édition</span>
-            </button>
+            <div className="fixed bottom-6 left-6 z-[9990] flex items-center gap-2 bg-zinc-900/95 text-white px-3.5 py-2 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.4)] border border-zinc-700/80 backdrop-blur-md text-xs font-bold select-none animate-in slide-in-from-bottom duration-300">
+              <button
+                type="button"
+                onClick={() => setIsEditMode(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white rounded-full transition-all hover:scale-105 cursor-pointer shadow-xs"
+                title="Réactiver l'édition en direct sur cette page"
+              >
+                <Pencil size={12} className="text-white" />
+                <span>Mode Édition</span>
+              </button>
+
+              <div className="h-4 w-px bg-zinc-700 my-auto" />
+
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white rounded-full transition-all hover:scale-105 cursor-pointer font-bold"
+                title="Retourner au tableau de bord d'administration"
+              >
+                <span>Admin</span>
+              </Link>
+            </div>
           )}
         </>
       )}
