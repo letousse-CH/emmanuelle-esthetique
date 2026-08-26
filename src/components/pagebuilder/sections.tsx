@@ -1084,12 +1084,26 @@ export function Intro1({ data, sectionIndex }: { data: Intro1Data, sectionIndex?
               <EditableText sectionIndex={sectionIndex} fieldPath="text" value={data.text} />
             </motion.p>
 
-            {data.cta_text && (
-              <motion.a variants={anim.item} data-btn={buttonVariantOf(data.button_style)} href={data.cta_href ?? '#'}
-                className="group inline-flex items-center gap-3 font-bold uppercase tracking-widest text-xs text-sage transition-all duration-300 cursor-pointer">
-                <EditableText sectionIndex={sectionIndex} fieldPath="cta_text" value={data.cta_text} as="span" />
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
-              </motion.a>
+            {(data.cta_text !== undefined ? data.cta_text : 'En savoir plus') && (
+              <motion.div variants={anim.item} className="mt-8">
+                <a
+                  data-btn={buttonVariantOf(data.button_style)}
+                  href={data.cta_href || '#'}
+                  className={`group inline-flex items-center gap-3 px-8 py-3.5 rounded-full font-bold text-xs uppercase tracking-widest transition-all duration-300 shadow-md hover:scale-[1.02] cursor-pointer ${
+                    buttonVariantOf(data.button_style) !== 'primary'
+                      ? 'bg-white text-stone-900 hover:bg-stone-100 border border-stone-200'
+                      : 'bg-sage text-white hover:bg-sage/90'
+                  }`}
+                >
+                  <EditableText
+                    sectionIndex={sectionIndex}
+                    fieldPath="cta_text"
+                    value={data.cta_text ?? 'En savoir plus'}
+                    as="span"
+                  />
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
+                </a>
+              </motion.div>
             )}
           </div>
         </motion.div>
