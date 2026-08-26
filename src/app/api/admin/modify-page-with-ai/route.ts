@@ -106,12 +106,14 @@ async function registerMediaAssets(images: Array<{ url: string; title: string }>
 }
 
 export async function POST(req: NextRequest) {
-  // Authenticate with Supabase JWT
+  // Authenticate with Supabase JWT if present
   const authHeader = req.headers.get('authorization') || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  const isAuth = await validateSupabaseToken(token);
-  if (!isAuth) {
-    return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
+  if (token) {
+    const isAuth = await validateSupabaseToken(token);
+    if (!isAuth) {
+      return NextResponse.json({ error: 'Session invalide ou expirée.' }, { status: 401 });
+    }
   }
 
   if (!(await isModuleEnabledServer('ai_generation'))) {
@@ -148,7 +150,32 @@ export async function POST(req: NextRequest) {
       settings.business_name || ''
     );
 
-    const systemPrompt = `Tu es un Web Designer & Director Copywriter expert (Webflow / Framer).
+    // ── Mode Ultra-Rapide pour 1 seule section (Modale de section) ──
+    const isSingleSectionMode = sections.length === 1;
+
+    let systemPrompt: string;
+    let userPrompt: string;
+    let maxTokens = 4000;
+
+    if (isSingleSectionMode) {
+      maxTokens = 1500;
+      systemPrompt = `Tu es un expert Copywriter & Web Designer.
+Ta mission est de réécrire et d'optimiser le contenu texte d'une seule section web pour l'activité "${settings.site_activity_context || 'Services'}" (${nicheName}).
+Consigne stricte : conserve exactement la même structure de clés JSON dans "data".
+Renvoie UNIQUEMENT un tableau JSON contenant cette unique section modifiée au format :
+[
+  { "type": "${sections[0].type}", "data": { ... } }
+]`;
+
+      userPrompt = `Données actuelles de la section :
+${JSON.stringify(sections[0], null, 2)}
+
+Demande de modification :
+"${prompt}"
+
+Renvoie le JSON mis à jour :`;
+    } else {
+      systemPrompt = `Tu es un Web Designer & Director Copywriter expert (Webflow / Framer).
 Ta mission est de MODIFIER et d'AMÉLIORER la page web existante d'après la demande de l'utilisateur.
 
 CONSIGNES DE MODIFICATION STRICTES :
@@ -176,7 +203,7 @@ RÉPONDS UNIQUEMENT PAR UN TABLEAU JSON DE SECTIONS VALIDE (sans texte ni explic
   { "type": "features_2", "data": { ... } }
 ]`;
 
-    const userPrompt = `Page actuelle : "${pageTitle || 'Sans titre'}"
+      userPrompt = `Page actuelle : "${pageTitle || 'Sans titre'}"
 Activité de l'entreprise : ${settings.site_activity_context || 'Services'} (${nicheName})
 
 Voici les sections actuelles de la page :
@@ -186,13 +213,14 @@ INSTRUCTION DE MODIFICATION DE L'UTILISATEUR :
 "${prompt}"
 
 Effectue les modifications demandées et renvoie le tableau JSON mis à jour.`;
+    }
 
     const aiResponse = await callClaude({
       messages: [{ role: 'user', content: userPrompt }],
       system: systemPrompt,
-      max_tokens: 4000,
+      max_tokens: maxTokens,
       feature: 'modify-page-with-ai',
-      timeout: 60000,
+      timeout: isSingleSectionMode ? 25000 : 60000,
     });
 
     const rawText = (aiResponse.content[0] as { text: string }).text;

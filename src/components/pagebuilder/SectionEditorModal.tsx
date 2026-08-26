@@ -101,32 +101,49 @@ export default function SectionEditorModal({
 
   const currentCategory = SECTION_CATALOG.find((cat) => cat.types.includes(section.type as SectionType));
 
+  const [modalAiSuccess, setModalAiSuccess] = useState(false);
+  const [modalAiError, setModalAiError] = useState('');
+
   const handleModalAi = async (preset?: string) => {
     const instruction = preset || modalAiPrompt;
     if (!instruction) return;
 
     setModalAiLoading(true);
+    setModalAiSuccess(false);
+    setModalAiError('');
+
     try {
+      const sessionRes = await (await import('../../services/supabase')).supabase.auth.getSession();
+      const token = sessionRes.data.session?.access_token;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/admin/modify-page-with-ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
-          instruction: `Pour la section de type "${section.type}", applique cette modification au texte : "${instruction}". Conserve la même structure de données.`,
-          currentSections: [section],
+          prompt: `Pour la section de type "${section.type}", applique cette modification au texte : "${instruction}". Conserve la même structure de données.`,
+          sections: [section],
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.sections && data.sections[0]?.data) {
-          const newData = data.sections[0].data;
-          Object.keys(newData).forEach((key) => {
-            onUpdate(sectionIndex, key, newData[key]);
-          });
-        }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de la génération IA.');
+
+      if (data.sections && data.sections[0]?.data) {
+        const newData = data.sections[0].data;
+        Object.keys(newData).forEach((key) => {
+          onUpdate(sectionIndex, key, newData[key]);
+        });
+        setModalAiSuccess(true);
+        setTimeout(() => setModalAiSuccess(false), 3000);
+      } else {
+        throw new Error('Le format de la section renvoyée est invalide.');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Erreur IA:', e);
+      setModalAiError(e.message || 'Erreur lors de la génération IA.');
+      setTimeout(() => setModalAiError(''), 5000);
     } finally {
       setModalAiLoading(false);
       setModalAiPrompt('');
@@ -309,6 +326,21 @@ export default function SectionEditorModal({
                     onTranscript={(text) => setModalAiPrompt((prev) => prev ? `${prev} ${text}` : text)}
                   />
                 </div>
+
+                {modalAiSuccess && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
+                    <Check size={16} className="text-emerald-600 shrink-0" />
+                    <span>Texte réécrit et appliqué avec succès !</span>
+                  </div>
+                )}
+
+                {modalAiError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-center gap-2 animate-in fade-in duration-200">
+                    <X size={16} className="text-red-500 shrink-0" />
+                    <span>{modalAiError}</span>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   disabled={modalAiLoading || !modalAiPrompt.trim()}
@@ -316,7 +348,10 @@ export default function SectionEditorModal({
                   className="w-full flex items-center justify-center gap-2 py-3 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-stone-800 transition-all cursor-pointer disabled:opacity-50 shadow-md"
                 >
                   {modalAiLoading ? (
-                    <span>Réécriture IA en cours…</span>
+                    <span className="flex items-center gap-2">
+                      <Sparkles size={14} className="animate-spin text-amber-300" />
+                      Réécriture IA ultra-rapide en cours…
+                    </span>
                   ) : (
                     <>
                       <Wand2 size={14} />
