@@ -208,7 +208,7 @@ export default function GlobalStyles() {
   let applied = '';
   if (get('style_color_primary')) {
     applied += `${SCOPE} .text-primary, ${SCOPE} a.text-primary, ${SCOPE} .text-sage, ${SCOPE} .text-wood, ${SCOPE} .text-copper, ${SCOPE} .hover\\:text-sage:hover, ${SCOPE} .hover\\:text-wood:hover { color: var(--brand-primary) !important; }\n`;
-    applied += `${SCOPE} .bg-primary, ${SCOPE} .bg-sage, ${SCOPE} .bg-wood, ${SCOPE} .bg-copper, ${SCOPE} .hover\\:bg-sage:hover, ${SCOPE} .hover\\:bg-wood:hover { background-color: var(--brand-primary) !important; }\n`;
+    applied += `${SCOPE} .bg-primary, ${SCOPE} .bg-sage, ${SCOPE} .bg-wood, ${SCOPE} .bg-copper, ${SCOPE} button[type="submit"]:not([data-no-theme]), ${SCOPE} a.bg-stone-900, ${SCOPE} button.bg-stone-900, ${SCOPE} .hover\\:bg-sage:hover, ${SCOPE} .hover\\:bg-wood:hover { background-color: var(--brand-primary) !important; }\n`;
     applied += `${SCOPE} .border-primary, ${SCOPE} .border-sage, ${SCOPE} .border-wood, ${SCOPE} .border-copper, ${SCOPE} .focus\\:border-sage:focus { border-color: var(--brand-primary) !important; }\n`;
     applied += `${SCOPE} :focus-visible { outline-color: var(--brand-primary) !important; }\n`;
     applied += `${SCOPE} ::selection { background-color: color-mix(in srgb, var(--brand-primary) 25%, transparent); }\n`;

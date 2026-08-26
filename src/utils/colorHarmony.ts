@@ -210,7 +210,7 @@ export function generatePalette(
   );
 
   return {
-    style_color_primary: hslToHex(primary),
+    style_color_primary: baseHex.toUpperCase(),
     style_color_bg: bgHex,
     style_color_surface: hslToHex(surface),
     style_color_text: hslToHex(text),
