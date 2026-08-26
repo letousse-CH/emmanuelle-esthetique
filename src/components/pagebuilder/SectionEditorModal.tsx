@@ -56,12 +56,12 @@ export default function SectionEditorModal({
   const [modalAiLoading, setModalAiLoading] = useState(false);
 
   const TABS = [
-    { id: 'structure' as const, label: 'Sections', icon: LayoutList, hint: 'Gérer et réordonner les sections de la page' },
-    { id: 'contenu' as const, label: 'Contenu', icon: Type, hint: 'Les textes et les images' },
+    { id: 'contenu' as const, label: 'Contenu', icon: Type, hint: 'Modifier les textes, titres, listes et images' },
     { id: 'variante' as const, label: 'Variante', icon: RefreshCw, hint: 'Changer la variante tout en gardant le contenu' },
     { id: 'fond' as const, label: 'Fond', icon: Layers, hint: 'Image, couleur, clair ou foncé' },
     { id: 'style' as const, label: 'Apparence', icon: Wand2, hint: 'Espacement, largeur, alignement' },
     { id: 'animation' as const, label: 'Animation', icon: Sparkles, hint: "L'effet d'apparition" },
+    { id: 'structure' as const, label: 'Sections', icon: LayoutList, hint: 'Gérer et réordonner toutes les sections de la page' },
   ];
 
   const visibleTypes = React.useMemo(() => {

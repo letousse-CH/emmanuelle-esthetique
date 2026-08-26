@@ -412,6 +412,21 @@ export default function PageBuilderClient() {
     } catch (e: unknown) { setErrorMsg(e instanceof Error ? e.message : 'Erreur inconnue'); setStatus('error'); }
   };
 
+  /** Insère après la section sélectionnée, sinon à la fin. */
+  const handleAddSection = React.useCallback((type: SectionType) => {
+    const at = activeSection !== null ? activeSection + 1 : sections.length;
+    add(type, at);
+    setActiveSection(at);
+    setEditorOpen(true);
+  }, [activeSection, sections.length, add]);
+
+  const handleRemoveSection = React.useCallback((i: number) => {
+    const label = SECTION_LABELS[sections[i]?.type] ?? sections[i]?.type;
+    if (!window.confirm(`Supprimer la section « ${label} » ?`)) return;
+    remove(i);
+    setActiveSection(null);
+  }, [sections, remove]);
+
   const editorContext = React.useMemo(
     () => ({
       updateField,
@@ -421,9 +436,14 @@ export default function PageBuilderClient() {
         setEditorOpen(true);
       },
       swapType,
+      moveSection: move,
+      moveToSection: moveTo,
+      removeSection: handleRemoveSection,
+      duplicateSection: duplicate,
+      addSection: add,
       isEditing: !preview,
     }),
-    [updateField, preview, save, swapType],
+    [updateField, preview, save, swapType, move, moveTo, handleRemoveSection, duplicate, add],
   );
 
   const generateSeoMeta = async () => {
@@ -467,21 +487,6 @@ export default function PageBuilderClient() {
       setGenMetaStatus('error');
       setTimeout(() => setGenMetaStatus('idle'), 5000);
     }
-  };
-
-  /** Insère après la section sélectionnée, sinon à la fin. */
-  const handleAddSection = (type: SectionType) => {
-    const at = activeSection !== null ? activeSection + 1 : sections.length;
-    add(type, at);
-    setActiveSection(at);
-    setEditorOpen(true);
-  };
-
-  const handleRemoveSection = (i: number) => {
-    const label = SECTION_LABELS[sections[i].type] ?? sections[i].type;
-    if (!window.confirm(`Supprimer la section « ${label} » ?`)) return;
-    remove(i);
-    setActiveSection(null);
   };
 
   // ── Réordonnancement et insertion par glisser-déposer ──
