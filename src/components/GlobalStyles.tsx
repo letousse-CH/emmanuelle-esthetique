@@ -204,7 +204,7 @@ export default function GlobalStyles() {
     layout += `${SCOPE} [data-block-stack] > * + * {\n  margin-top: var(--block-gap) !important;\n}\n`;
   }
 
-  // ── Couleurs appliquées ───────────────────────────────────────────────────
+  // ── Couleurs appliquées (Mode clair & Thème global) ──────────────────────
   let applied = '';
   if (get('style_color_primary')) {
     applied += `${SCOPE} .text-primary, ${SCOPE} a.text-primary, ${SCOPE} .text-sage, ${SCOPE} .text-wood, ${SCOPE} .text-copper, ${SCOPE} .hover\\:text-sage:hover, ${SCOPE} .hover\\:text-wood:hover { color: var(--brand-primary) !important; }\n`;
@@ -214,16 +214,16 @@ export default function GlobalStyles() {
     applied += `${SCOPE} ::selection { background-color: color-mix(in srgb, var(--brand-primary) 25%, transparent); }\n`;
   }
   if (get('style_color_bg')) {
-    applied += `${SCOPE}, ${SCOPE} .bg-paper { background-color: var(--brand-bg) !important; }\n`;
+    applied += `${SCOPE}, ${SCOPE} body, ${SCOPE} .bg-paper { background-color: var(--brand-bg) !important; }\n`;
   }
   if (get('style_color_text')) {
-    applied += `${SCOPE}, ${SCOPE} .text-stone-deep { color: var(--brand-text) !important; }\n`;
+    applied += `${SCOPE}, ${SCOPE} .text-stone-deep, ${SCOPE} .text-stone-900, ${SCOPE} .text-stone-800, ${SCOPE} .text-stone-700 { color: var(--brand-text) !important; }\n`;
   }
   if (get('style_color_surface')) {
-    applied += `${SCOPE} [data-surface], ${SCOPE} .bg-surface, ${SCOPE} .bg-stone-muted, ${SCOPE} .bg-stone-50, ${SCOPE} .bg-stone-100 { background-color: var(--brand-surface) !important; }\n`;
+    applied += `${SCOPE} [data-surface], ${SCOPE} .bg-surface, ${SCOPE} .bg-white, ${SCOPE} .bg-stone-50, ${SCOPE} .bg-stone-100 { background-color: var(--brand-surface) !important; }\n`;
   }
   if (get('style_color_text_muted')) {
-    applied += `${SCOPE} [data-muted], ${SCOPE} .text-muted, ${SCOPE} .text-stone-600, ${SCOPE} .text-stone-500, ${SCOPE} .text-stone-400 { color: var(--brand-text-muted) !important; }\n`;
+    applied += `${SCOPE} [data-muted], ${SCOPE} .text-muted, ${SCOPE} .text-stone-600, ${SCOPE} .text-stone-500, ${SCOPE} .text-stone-400, ${SCOPE} .text-stone-300 { color: var(--brand-text-muted) !important; }\n`;
   }
   if (get('style_color_border')) {
     applied += `${SCOPE} [data-bordered], ${SCOPE} .border-muted, ${SCOPE} .border-stone-200, ${SCOPE} .border-stone-300, ${SCOPE} .border-stone-100 { border-color: var(--brand-border) !important; }\n`;
