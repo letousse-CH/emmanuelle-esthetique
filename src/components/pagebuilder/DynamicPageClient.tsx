@@ -129,12 +129,32 @@ export default function DynamicPageClient({ initialPage, slug, fallback, forceSh
     );
   }
 
+  const [isEditMode, setIsEditMode] = useState(true);
+
   return (
     <>
-      {isAdmin
-        ? <InlinePageEditor pageId={page.id} initialSections={page.sections} />
-        : <DynamicPageRenderer sections={page.sections} />
-      }
+      {isAdmin && isEditMode ? (
+        <InlinePageEditor
+          pageId={page.id}
+          initialSections={page.sections}
+          onExit={() => setIsEditMode(false)}
+        />
+      ) : (
+        <>
+          <DynamicPageRenderer sections={page.sections} />
+          {isAdmin && !isEditMode && (
+            <button
+              type="button"
+              onClick={() => setIsEditMode(true)}
+              className="fixed bottom-6 left-6 z-[9990] flex items-center gap-2 bg-zinc-900/90 hover:bg-zinc-900 text-white px-4 py-2.5 rounded-full shadow-2xl border border-zinc-700/80 backdrop-blur-md text-xs font-bold transition-all hover:scale-105 cursor-pointer select-none"
+              title="Réactiver l'édition en direct sur cette page"
+            >
+              <Pencil size={13} className="text-amber-400" />
+              <span>Mode Édition</span>
+            </button>
+          )}
+        </>
+      )}
     </>
   );
 }

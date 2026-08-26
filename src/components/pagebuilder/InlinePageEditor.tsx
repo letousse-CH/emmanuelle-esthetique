@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Save, Loader2, CheckCircle2, AlertCircle,
+  Save, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, LogOut, Check
 } from 'lucide-react';
 import DynamicPageRenderer from './DynamicPageRenderer';
 import { WIREFRAME_REGISTRY, AVAILABLE_SECTION_TYPES } from './wireframes.config';
@@ -18,16 +18,18 @@ import FloatingPanel from './FloatingPanel';
 interface Props {
   pageId: string;
   initialSections: PageSection[];
+  onExit?: () => void;
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-export default function InlinePageEditor({ pageId, initialSections }: Props) {
+export default function InlinePageEditor({ pageId, initialSections, onExit }: Props) {
   const [active, setActive] = useState<number | null>(null);
   const [modalSectionIndex, setModalSectionIndex] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [autoSaveTick, setAutoSaveTick] = useState(0);
+  const [isExiting, setIsExiting] = useState(false);
 
   const { sections, move, remove, duplicate, add, swapType, updateField, undo, canUndo, dirty, markClean, moveTo, replaceAll } =
     usePageEditor(initialSections);
@@ -40,9 +42,11 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
       markClean();
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus((s) => (s === 'saved' ? 'idle' : s)), 2500);
+      return true;
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Erreur inconnue');
       setSaveStatus('error');
+      return false;
     }
   }, [pageId, markClean]);
 
@@ -52,6 +56,20 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
 
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
+
+  const handleExitWithAutoSave = async () => {
+    setIsExiting(true);
+    if (dirty) {
+      setSaveStatus('saving');
+      const ok = await persist(sectionsRef.current);
+      if (ok && onExit) {
+        onExit();
+      }
+    } else if (onExit) {
+      onExit();
+    }
+    setIsExiting(false);
+  };
 
   useEffect(() => {
     if (autoSaveTick === 0) return;
@@ -127,43 +145,65 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
         </PageEditorContext.Provider>
       </div>
 
-      {/* Barre de Sauvegarde Front-End Lumineuse & Colorée IA */}
-      <div className="fixed bottom-6 left-6 z-[9990] bg-gradient-to-r from-white via-purple-50/95 to-amber-50/95 text-zinc-900 px-4 py-2.5 rounded-full shadow-[0_4px_25px_rgba(168,85,247,0.25)] border border-purple-200 backdrop-blur-md flex items-center gap-3 select-none animate-in slide-in-from-bottom duration-300">
+      {/* Barre de Contrôle Front-End Flottante Lumineuse avec Sortie Automatique */}
+      <div className="fixed bottom-6 left-6 z-[9990] bg-zinc-900/95 text-white px-4 py-2 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.4)] border border-zinc-700/80 backdrop-blur-md flex items-center gap-3 select-none animate-in slide-in-from-bottom duration-300">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          <span className="text-xs font-extrabold text-zinc-900">Édition en direct</span>
+          <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400">Édition active</span>
         </div>
 
-        <div className="h-4 w-px bg-zinc-700" />
+        <div className="h-4 w-px bg-zinc-700 my-auto" />
 
-        {/* Bouton Sauvegarder la page Front-End */}
+        {/* Bouton Sauvegarder la page */}
         <button
+          type="button"
           onClick={save}
-          disabled={saveStatus === 'saving'}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-extrabold transition-all cursor-pointer shadow-sm ${
+          disabled={saveStatus === 'saving' || isExiting}
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-xs ${
             dirty || saveStatus === 'error'
-              ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-600/30 ring-2 ring-emerald-300'
-              : 'bg-white text-zinc-900 hover:bg-zinc-100 font-bold'
+              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_2px_10px_rgba(16,185,129,0.3)] hover:scale-105'
+              : 'bg-white/10 hover:bg-white/20 text-zinc-200'
           } disabled:opacity-50`}
         >
           {saveStatus === 'saving' ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={13} className="animate-spin text-emerald-300" />
           ) : (
-            <Save size={14} />
+            <Save size={13} />
           )}
-          <span>{saveStatus === 'saving' ? 'Sauvegarde…' : 'Sauvegarder la page'}</span>
+          <span>{saveStatus === 'saving' ? 'Enregistrement…' : 'Enregistrer'}</span>
         </button>
 
+        {/* Bouton Sortir du mode édition avec enregistrement automatique */}
+        {onExit && (
+          <>
+            <div className="h-4 w-px bg-zinc-700 my-auto" />
+            <button
+              type="button"
+              onClick={handleExitWithAutoSave}
+              disabled={saveStatus === 'saving' || isExiting}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-[0_2px_10px_rgba(249,115,22,0.3)] hover:scale-105 disabled:opacity-50"
+              title="Enregistre automatiquement toutes les modifications et quitte le mode édition"
+            >
+              {isExiting ? (
+                <Loader2 size={13} className="animate-spin text-white" />
+              ) : (
+                <Eye size={13} />
+              )}
+              <span>{isExiting ? 'Sortie en cours…' : 'Sortir du mode édition'}</span>
+            </button>
+          </>
+        )}
+
         {saveStatus === 'saved' && (
-          <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold animate-fade-in">
-            <CheckCircle2 size={13} /> Enregistré !
+          <span className="flex items-center gap-1 text-emerald-400 text-xs font-extrabold animate-fade-in pl-1">
+            <Check size={13} /> Enregistré !
           </span>
         )}
         {saveStatus === 'error' && (
-          <span className="flex items-center gap-1 text-red-600 text-xs font-bold" title={errorMsg}>
+          <span className="flex items-center gap-1 text-red-400 text-xs font-bold" title={errorMsg}>
             <AlertCircle size={13} /> Échec
           </span>
         )}
