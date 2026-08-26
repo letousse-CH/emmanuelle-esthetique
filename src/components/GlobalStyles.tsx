@@ -128,12 +128,29 @@ export default function GlobalStyles() {
 
   // ── Variables globales ────────────────────────────────────────────────────
   let root = `${SCOPE} {\n`;
-  root += decl('--brand-primary', get('style_color_primary'));
-  root += decl('--brand-bg', get('style_color_bg'));
-  root += decl('--brand-surface', get('style_color_surface'));
-  root += decl('--brand-text', get('style_color_text'));
+  if (get('style_color_primary')) {
+    root += decl('--brand-primary', get('style_color_primary'));
+    root += `  --color-sage: var(--brand-primary);\n`;
+    root += `  --color-wood: var(--brand-primary);\n`;
+    root += `  --color-copper: var(--brand-primary);\n`;
+  }
+  if (get('style_color_bg')) {
+    root += decl('--brand-bg', get('style_color_bg'));
+    root += `  --color-paper: var(--brand-bg);\n`;
+  }
+  if (get('style_color_surface')) {
+    root += decl('--brand-surface', get('style_color_surface'));
+    root += `  --color-stone-muted: var(--brand-surface);\n`;
+  }
+  if (get('style_color_text')) {
+    root += decl('--brand-text', get('style_color_text'));
+    root += `  --color-stone-deep: var(--brand-text);\n`;
+  }
   root += decl('--brand-text-muted', get('style_color_text_muted'));
-  root += decl('--brand-border', get('style_color_border'));
+  if (get('style_color_border')) {
+    root += decl('--brand-border', get('style_color_border'));
+    root += `  --color-border: var(--brand-border);\n`;
+  }
 
   root += decl('--section-py', get('style_section_padding_y'));
   root += decl('--section-py-mobile', get('style_section_padding_y_mobile'));
@@ -170,15 +187,6 @@ export default function GlobalStyles() {
   }
 
   // ── Rythme vertical et gabarit ────────────────────────────────────────────
-  // Les sections du constructeur de pages portent `data-section` : c'est le
-  // point d'accroche unique du rythme vertical, réglable d'un seul endroit.
-  //
-  // ⚠️ Ces réglages sont des **valeurs par défaut du site**, pas des ordres.
-  // Une section dont l'utilisateur a explicitement choisi la densité ou la
-  // largeur porte `data-density` / `data-width` : elle est alors exclue de la
-  // règle globale. Sans cette exclusion, le réglage « Aéré » ou « Étroit » du
-  // constructeur n'aurait aucun effet visible — c'est le style global, chargé
-  // plus tard et marqué `!important`, qui gagnait systématiquement.
   let layout = '';
   if (get('style_section_padding_y_mobile')) {
     layout += `${SCOPE} [data-section]:not([data-density]) {\n  padding-block: var(--section-py-mobile) !important;\n}\n`;
@@ -190,8 +198,6 @@ export default function GlobalStyles() {
     layout += `${SCOPE} [data-container]:not([data-width]) {\n  max-width: var(--container-max) !important;\n}\n`;
   }
   if (get('style_gutter')) {
-    // `:not([data-gutter])` : une section réglée sur « aucun espacement » ne doit
-    // pas se voir réimposer la marge latérale du gabarit.
     layout += `${SCOPE} [data-container]:not([data-gutter]) {\n  padding-inline: var(--gutter) !important;\n}\n`;
   }
   if (get('style_block_gap')) {
@@ -201,27 +207,26 @@ export default function GlobalStyles() {
   // ── Couleurs appliquées ───────────────────────────────────────────────────
   let applied = '';
   if (get('style_color_primary')) {
-    applied += `${SCOPE} .bg-sage, ${SCOPE} .text-sage, ${SCOPE} .border-sage { --color-sage: var(--brand-primary) !important; }\n`;
-    applied += `${SCOPE} .text-primary, ${SCOPE} a.text-primary, ${SCOPE} .text-sage { color: var(--brand-primary) !important; }\n`;
-    applied += `${SCOPE} .bg-primary, ${SCOPE} .bg-sage { background-color: var(--brand-primary) !important; }\n`;
-    applied += `${SCOPE} .border-primary, ${SCOPE} .border-sage { border-color: var(--brand-primary) !important; }\n`;
+    applied += `${SCOPE} .text-primary, ${SCOPE} a.text-primary, ${SCOPE} .text-sage, ${SCOPE} .text-wood, ${SCOPE} .text-copper, ${SCOPE} .hover\\:text-sage:hover, ${SCOPE} .hover\\:text-wood:hover { color: var(--brand-primary) !important; }\n`;
+    applied += `${SCOPE} .bg-primary, ${SCOPE} .bg-sage, ${SCOPE} .bg-wood, ${SCOPE} .bg-copper, ${SCOPE} .hover\\:bg-sage:hover, ${SCOPE} .hover\\:bg-wood:hover { background-color: var(--brand-primary) !important; }\n`;
+    applied += `${SCOPE} .border-primary, ${SCOPE} .border-sage, ${SCOPE} .border-wood, ${SCOPE} .border-copper, ${SCOPE} .focus\\:border-sage:focus { border-color: var(--brand-primary) !important; }\n`;
+    applied += `${SCOPE} :focus-visible { outline-color: var(--brand-primary) !important; }\n`;
     applied += `${SCOPE} ::selection { background-color: color-mix(in srgb, var(--brand-primary) 25%, transparent); }\n`;
   }
-  if (get('style_color_bg')) applied += `${SCOPE} { background-color: var(--brand-bg) !important; }\n`;
-  // Surface : les cartes et blocs posés sur le fond. Les sections du
-  // constructeur les marquent `data-surface` ; la classe `.bg-surface` reste
-  // disponible pour un contenu HTML libre.
-  if (get('style_color_surface')) {
-    applied += `${SCOPE} [data-surface], ${SCOPE} .bg-surface { background-color: var(--brand-surface) !important; }\n`;
+  if (get('style_color_bg')) {
+    applied += `${SCOPE}, ${SCOPE} .bg-paper { background-color: var(--brand-bg) !important; }\n`;
   }
-  // Texte secondaire : les sections du constructeur l'expriment avec les
-  // nuances neutres de Tailwind. On les redirige vers le jeton plutôt que
-  // d'imposer un attribut sur chaque paragraphe d'accompagnement.
+  if (get('style_color_text')) {
+    applied += `${SCOPE}, ${SCOPE} .text-stone-deep { color: var(--brand-text) !important; }\n`;
+  }
+  if (get('style_color_surface')) {
+    applied += `${SCOPE} [data-surface], ${SCOPE} .bg-surface, ${SCOPE} .bg-stone-muted, ${SCOPE} .bg-stone-50, ${SCOPE} .bg-stone-100 { background-color: var(--brand-surface) !important; }\n`;
+  }
   if (get('style_color_text_muted')) {
-    applied += `${SCOPE} [data-muted], ${SCOPE} .text-muted, ${SCOPE} .text-stone-500, ${SCOPE} .text-stone-400 { color: var(--brand-text-muted) !important; }\n`;
+    applied += `${SCOPE} [data-muted], ${SCOPE} .text-muted, ${SCOPE} .text-stone-600, ${SCOPE} .text-stone-500, ${SCOPE} .text-stone-400 { color: var(--brand-text-muted) !important; }\n`;
   }
   if (get('style_color_border')) {
-    applied += `${SCOPE} [data-bordered], ${SCOPE} .border-muted { border-color: var(--brand-border) !important; }\n`;
+    applied += `${SCOPE} [data-bordered], ${SCOPE} .border-muted, ${SCOPE} .border-stone-200, ${SCOPE} .border-stone-300, ${SCOPE} .border-stone-100 { border-color: var(--brand-border) !important; }\n`;
   }
   if (get('style_border_radius_base')) {
     applied += `${SCOPE} [data-radius-base] { border-radius: var(--radius-base); }\n`;

@@ -359,11 +359,15 @@ function PaletteSection({
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {PALETTE_PRESETS.map((preset) => {
                 const active = activePreset?.name === preset.name;
+                const applyPreset = () => {
+                  const btns = generateButtonStyles(paletteInput(preset.colors), 'plein');
+                  onSetMany({ ...preset.colors, ...btns });
+                };
                 return (
                   <li key={preset.name}>
                     <button
                       type="button"
-                      onClick={() => onSetMany(preset.colors)}
+                      onClick={applyPreset}
                       aria-pressed={active}
                       className={`w-full overflow-hidden rounded-xl border text-left transition-colors cursor-pointer
                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
@@ -519,7 +523,11 @@ function PaletteSection({
                       Texte et texte secondaire sont ajustés pour rester lisibles sur ce fond
                       {primaryAdjusted && <> ; la couleur d’accent a été {dark ? 'éclaircie' : 'assombrie'} pour la même raison</>}.
                     </p>
-                    <Button variant="primary" size="sm" icon={Check} onClick={() => onSetMany(generated)}>
+                    <Button variant="primary" size="sm" icon={Check} onClick={() => {
+                      if (!generated) return;
+                      const btns = generateButtonStyles(paletteInput(generated), 'plein');
+                      onSetMany({ ...generated, ...btns });
+                    }}>
                       Appliquer cette palette
                     </Button>
                   </div>
