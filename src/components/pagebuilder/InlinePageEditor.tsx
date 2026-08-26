@@ -134,7 +134,7 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          <span className="text-xs font-bold text-zinc-200">Édition en direct</span>
+          <span className="text-xs font-extrabold text-zinc-900">Édition en direct</span>
         </div>
 
         <div className="h-4 w-px bg-zinc-700" />

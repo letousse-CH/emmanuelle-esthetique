@@ -120,7 +120,8 @@ export default function PageBuilderClient() {
     usePageEditor([]);
 
   const selectSection = (i: number) => {
-    setActiveSection(prev => prev === i ? null : i);
+    setActiveSection(i);
+    setEditorOpen(true);
     const scope: ParentNode = previewDocRef.current ?? previewRef.current ?? document;
     const el = scope.querySelector(`#section-${i}`) as HTMLElement | null;
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -473,6 +474,7 @@ export default function PageBuilderClient() {
     const at = activeSection !== null ? activeSection + 1 : sections.length;
     add(type, at);
     setActiveSection(at);
+    setEditorOpen(true);
   };
 
   const handleRemoveSection = (i: number) => {
