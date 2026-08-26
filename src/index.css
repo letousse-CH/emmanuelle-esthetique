@@ -7,15 +7,12 @@
   --font-sans: var(--font-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-serif), "Cormorant Garamond", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   
-  /* Repli neutre — volontairement sans parti pris.
-     Ces valeurs ne s'appliquent que tant que rien n'est réglé dans
-     Paramètres > Design & Style ; GlobalStyles les remplace dès qu'un jeton
-     est renseigné. Ne pas y remettre la palette d'un client. */
-  --color-sage: #4A4A4A;        /* primaire — gris neutre */
+  --color-sage: #4A4A4A;
   --color-wood: #4A4A4A;
-  --color-stone-deep: #1F1F1F;  /* texte */
-  --color-paper: #FFFFFF;       /* fond */
-  --color-stone-muted: #EFEFEF; /* surfaces */
+  --color-stone-deep: #1F1F1F;
+  --color-paper: #FFFFFF;
+  --color-stone-muted: #EFEFEF;
+  --color-border: #E7E5E4;
   --color-darkblue: #2E2E2E;
   --color-copper: #4A4A4A;
 }
@@ -23,15 +20,6 @@
 @layer base {
   body {
     @apply bg-paper text-stone-deep font-sans antialiased;
-  }
-  p {
-    font-size: 1rem;
-    line-height: 1.5rem;
-  }
-  p.text-xs,
-  p.text-sm {
-    font-size: 1rem;
-    line-height: 1.5rem;
   }
 }
 
@@ -331,7 +319,7 @@ main section .rounded-3xl.border {
 
 /* Séparateurs / lignes HR */
 main section hr,
-main section [class*="border-b"]:not(*) {
+main section [class*="border-b"] {
   transform-origin: left;
   transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.7s ease;
 }
@@ -380,3 +368,41 @@ main section [class*="border-b"]:not(*) {
 [data-cards-text-size] [data-cards] :is(p, li):not([data-card-title]) {
   font-size: var(--cards-text) !important;
 }
+
+/* ── UI Blocks & Modern Tailwind Utilities ── */
+.ui-glass {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.ui-glass-dark {
+  background: rgba(24, 24, 27, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.ui-card-hover {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+.ui-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.08);
+}
+
+/* Subtle scrollbar for modern admin overflow lists */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(160, 160, 160, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 120, 0.5);
+}
+

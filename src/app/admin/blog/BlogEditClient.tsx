@@ -518,7 +518,7 @@ export default function BlogEdit() {
             <button
               type="submit"
               disabled={saving}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors disabled:opacity-50 ${saveButtonClass}`}
+              className="flex items-center gap-2 px-5 py-2 text-xs font-extrabold rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
             >
               <Save size={14} />
               <span className="hidden sm:inline">{saveButtonLabel}</span>
@@ -922,20 +922,21 @@ export default function BlogEdit() {
             )}
 
             {/* Génération article */}
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-              <div className="flex items-center gap-3 px-6 py-4 border-b border-stone-100">
-                <div className="w-8 h-8 rounded-xl bg-stone-900 flex items-center justify-center">
-                  <Wand2 size={15} className="text-white" />
+            {moduleFlags.ai_generation && (
+              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+                <div className="flex items-center gap-3 px-6 py-4 border-b border-stone-100">
+                  <div className="w-8 h-8 rounded-xl bg-stone-900 flex items-center justify-center">
+                    <Wand2 size={15} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-stone-900">
+                      {seoBrief ? 'Rédaction IA — article complet' : 'Régénérer l\'article'}
+                    </p>
+                    <p className="text-[12.5px] text-stone-500">
+                      {seoBrief ? `Basé sur le brief : ${seoBrief.keyword}` : 'Génère depuis le titre et la catégorie actuels'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-stone-900">
-                    {seoBrief ? 'Rédaction IA — article complet' : 'Régénérer l\'article'}
-                  </p>
-                  <p className="text-[12.5px] text-stone-500">
-                    {seoBrief ? `Basé sur le brief : ${seoBrief.keyword}` : 'Génère depuis le titre et la catégorie actuels'}
-                  </p>
-                </div>
-              </div>
 
               <div className="px-6 py-5">
                 {aiStatus === 'idle' && (
@@ -1009,6 +1010,7 @@ export default function BlogEdit() {
                 )}
               </div>
             </div>
+            )}
 
             {/* Social Generator */}
             {moduleFlags.social && (

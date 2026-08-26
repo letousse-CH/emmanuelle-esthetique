@@ -77,9 +77,8 @@ export async function callClaude(params: ClaudeCallParams): Promise<ClaudeCallRe
         ...(params.system ? { system: params.system } : {}),
         messages: params.messages,
       },
-      // Sur une route bornée en temps, une seule tentative : les retries du SDK
-      // feraient dépasser le budget de la fonction serverless.
-      params.timeout ? { timeout: params.timeout, maxRetries: 0 } : undefined,
+      // Sur une route bornée en temps, jusqu'à 1 tentative de réessai.
+      params.timeout ? { timeout: params.timeout, maxRetries: 1 } : { timeout: 60000, maxRetries: 1 },
     );
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {

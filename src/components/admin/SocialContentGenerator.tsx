@@ -9,6 +9,7 @@ import { fetchBrandTokens, BrandTokens } from '../../utils/socialCards';
 import { addDaysToKey, todayKey } from '../../utils/dateKey';
 import type { SocialGenerationResult } from '../../utils/socialGeneration';
 import SocialResultDisplay from './SocialResultDisplay';
+import { useModuleFlags } from '../../hooks/useModuleFlags';
 
 interface Props {
   title: string;
@@ -30,9 +31,14 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 export default function SocialContentGenerator({
   title, content, intro, keyword, coverImage, sourceType, sourceRef,
 }: Props) {
+  const moduleFlags = useModuleFlags();
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [result, setResult] = useState<SocialGenerationResult | null>(null);
   const [error, setError] = useState('');
+
+  if (!moduleFlags.ai_generation) {
+    return null;
+  }
   const [brand, setBrand] = useState<BrandTokens | null>(null);
 
   // ── Planification ──

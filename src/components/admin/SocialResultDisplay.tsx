@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Loader2, Download, Instagram, Linkedin, Facebook } from 'lucide-react';
+import { Sparkles, Loader2, Download, Instagram, Linkedin, Facebook, Send, CheckCircle2 } from 'lucide-react';
 import {
   renderCarouselSlide, renderHookCard, downloadCanvas, downloadImageFromUrl,
   FORMAT_LABELS, BrandTokens, SocialCardFormat,
@@ -56,6 +56,63 @@ const PLATFORMS = [
   { id: 'facebook' as const, label: 'Facebook', icon: Facebook },
 ];
 
+export function DirectPublishButton({
+  platform,
+  title,
+  caption,
+  imageUrl,
+}: {
+  platform: 'linkedin' | 'instagram' | 'facebook';
+  title: string;
+  caption: string;
+  imageUrl?: string;
+}) {
+  const [publishing, setPublishing] = useState(false);
+  const [status, setStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+
+  const handlePublish = async () => {
+    setPublishing(true);
+    setStatus(null);
+    try {
+      const res = await fetch('/api/admin/social-publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform, title, caption, imageUrl }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStatus({ success: true, message: data.result?.message || 'Publication postée en direct avec succès !' });
+      } else {
+        setStatus({ success: false, message: data.error || 'Erreur lors de la publication' });
+      }
+    } catch (e: any) {
+      setStatus({ success: false, message: e.message || 'Erreur réseau' });
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-start gap-1.5 my-2">
+      <button
+        type="button"
+        onClick={handlePublish}
+        disabled={publishing}
+        className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs sm:text-sm font-black shadow-lg shadow-emerald-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+      >
+        {publishing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+        <span>{publishing ? 'Publication en direct…' : '🚀 Poster la publication en direct'}</span>
+      </button>
+
+      {status && (
+        <div className={`p-2.5 rounded-xl text-xs font-bold border ${status.success ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+          {status.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Affichage (onglets Instagram/LinkedIn/Facebook + téléchargements) d'un contenu déjà généré. */
 export default function SocialResultDisplay({ result, brand, coverImage, onRegenerate, initialPlatform }: Props) {
   const [platform, setPlatform] = useState<SocialPlatformId>(initialPlatform ?? 'instagram');
@@ -97,6 +154,19 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
       {/* ── Instagram ────────────────────────────────────── */}
       {platform === 'instagram' && (
         <div className="space-y-6">
+          <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4">
+            <div>
+              <h4 className="text-sm font-bold text-stone-900">Publication Instagram Directe</h4>
+              <p className="text-xs text-stone-600">Publiez directement le visuel et la légende sur votre compte connecté.</p>
+            </div>
+            <DirectPublishButton
+              platform="instagram"
+              title="Post Instagram"
+              caption={`${result.instagram.caption.hook}\n\n${result.instagram.caption.body}\n\n${result.instagram.caption.cta}`}
+              imageUrl={coverImage}
+            />
+          </div>
+
           <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-[13px] font-medium text-stone-800">
@@ -156,6 +226,19 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
       {/* ── LinkedIn ─────────────────────────────────────── */}
       {platform === 'linkedin' && (
         <div className="space-y-6">
+          <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4">
+            <div>
+              <h4 className="text-sm font-bold text-stone-900">Publication LinkedIn Directe</h4>
+              <p className="text-xs text-stone-600">Publiez immédiatement ce post sur votre profil ou page entreprise LinkedIn.</p>
+            </div>
+            <DirectPublishButton
+              platform="linkedin"
+              title="Post LinkedIn"
+              caption={result.linkedin.hashtags ? `${result.linkedin.post}\n\n${result.linkedin.hashtags}` : result.linkedin.post}
+              imageUrl={coverImage}
+            />
+          </div>
+
           <HookCardBlock
             format="linkedin-square"
             brand={brand}
@@ -196,6 +279,19 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
       {/* ── Facebook ─────────────────────────────────────── */}
       {platform === 'facebook' && (
         <div className="space-y-6">
+          <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4">
+            <div>
+              <h4 className="text-sm font-bold text-stone-900">Publication Facebook Directe</h4>
+              <p className="text-xs text-stone-600">Publiez directement le post sur votre page Facebook connectée.</p>
+            </div>
+            <DirectPublishButton
+              platform="facebook"
+              title="Post Facebook"
+              caption={result.facebook.post}
+              imageUrl={coverImage}
+            />
+          </div>
+
           <HookCardBlock
             format="facebook-landscape"
             brand={brand}

@@ -4,16 +4,9 @@ import { callClaude } from '../../../utils/ai';
 import { getSettingsServer } from '../../../services/settingsServer';
 import { getAnthropicKey } from '../../../services/secrets';
 import { SECTION_META, type SectionTypeName } from '../../../components/pagebuilder/sectionMeta';
-
-/**
- * Génération d'une page par le modèle.
- *
- * Le catalogue proposé au modèle est **dérivé de `SECTION_META`**, comme celui
- * de l'import de site. Il était auparavant recopié à la main : dix-neuf types
- * sur trente-trois, avec un schéma de champs maintenu en double. Toute section
- * ajoutée au constructeur restait donc invisible pour la génération, et un type
- * hors liste était silencieusement rétrogradé en `text_1`.
- */
+import { getSupabaseAdmin } from '../../../utils/supabaseAdmin';
+import { supabase } from '../../../services/supabase';
+import { isModuleEnabledServer } from '../../../config/modules';
 
 /** Réglages d'apparence : ils relèvent du design system, pas du contenu. */
 const STYLE_FIELDS = [
@@ -81,19 +74,54 @@ function selectImagePoolForNiche(activityText: string, promptText: string) {
   return { nicheName: 'Entreprise & Services', pool: NICHE_IMAGE_POOLS.general_business };
 }
 
-const SYSTEM_PROMPT = `Tu es un web designer expert. Je te fournis le texte d'une page et la structure des options de mon propre web builder. Ton but est de construire la mise en page en automatique pour que le design soit sympa, dynamique et avec du caractère dès la création.
+/** Register images in Supabase media_assets so they show up in Media Library */
+async function registerMediaAssets(images: Array<{ url: string; title: string }>) {
+  const dbClient = getSupabaseAdmin() || supabase;
+  for (const img of images) {
+    if (!img.url || typeof img.url !== 'string' || !img.url.startsWith('http')) continue;
+    try {
+      const { data: existing } = await dbClient
+        .from('media_assets')
+        .select('id')
+        .eq('url', img.url)
+        .maybeSingle();
 
-Pour donner du rythme, tu dois appliquer ces règles de style :
-1. Alterne systématiquement les couleurs de fond et thèmes d'une section à l'autre (ex: theme: "light" puis theme: "dark" puis theme: "sage" ou theme: "sand") pour créer du contraste.
-2. Varie les types de sections (texte seul, médias, colonnes, grilles, témoignages, hero, cta) tout au long de la page pour casser la monotonie.
-3. Joue sur la hauteur et la densité des sections (density: "compact" | "comfortable" | "spacious") selon l'importance du contenu pour faire respirer la page.
-4. Utilise toutes les options de design présentes dans mon builder de manière créative (eyebrows/badges, icônes, animations, alignements width, align, animation, visual cards, photo copyrights).
-5. Règle de diversité des images : attribue des URLs d'images HD Unsplash uniques et variées à chaque section. INTERDICTION STRICTE d'utiliser la même photo deux fois sur la page !
-6. Règle de copyright photo : ajoute systématiquement image_credit: "Photo : Unsplash" sous chaque photo.
+      if (!existing) {
+        await dbClient.from('media_assets').insert({
+          file_name: img.title || 'Photo Unsplash HD',
+          url: img.url,
+          alt_text: img.title || 'Photo Unsplash',
+        });
+      }
+    } catch (e) {
+      console.warn('[registerMediaAssets] Warning:', e);
+    }
+  }
+}
+
+const SYSTEM_PROMPT = `Tu es un Web Designer & Copywriter d'élite spécialisé dans les landing pages à haute conversion (Style Webflow / Framer).
+Ton but est de construire la mise en page d'une landing page idéale et parfaitement rythmée dès sa création.
+
+ARCHITECTURE "COPY-FIRST" À HAUTE CONVERSION STRICTEMENT RESPECTÉE :
+1. Hero Section (hero_1, hero_4 ou hero_5) :
+   - Titre d'accroche puissant (Résultat désiré + délai / payoff émotionnel).
+   - Sous-titre explicatif avec méthode claire.
+   - Boutons d'action visibles (CTA principal et secondaire).
+2. Preuve Sociale OU Agitation du problème (testimonials_1, reviews_1, intro_1, logos_1).
+3. Propositions de Valeur & Bénéfices (features_1, features_2, features_3 ou bento_grid_1) : 4 à 6 avantages réels fusionnant bénéfice client et preuve technique.
+4. Méthode / Processus "Comment ça marche" (steps_1, timeline_1) : parcours étape par étape fluide et rassurance.
+5. Le Closer & FAQ / Offre (pricing_1, pricing_2, faq_1, cta_1 ou cta_2) : levers de doutes, tarification claire et appel à l'action final.
+
+RÈGLES D'OPTIMISATION DE STYLE ET DE RYTHME VISUEL :
+1. Alterne systématiquement les thèmes (theme: "light" puis theme: "dark") d'une section à l'autre pour découper la page avec contraste.
+2. Alterne la position des images sur les sections à 2 colonnes (image_side: "left" puis image_side: "right") pour créer un Z-pattern naturel.
+3. Varie les densités (density: "compact" | "normal" | "airy") et les animations (animation: "rise" | "fade" | "stagger").
+4. Règle de diversité des images : attribue des URLs d'images HD Unsplash uniques. INTERDICTION STRICTE d'utiliser la même photo deux fois sur la page !
+5. Règle de copyright photo : ajoute systématiquement image_credit: "Photo : Unsplash" sous chaque photo.
 
 CONSIGNE DE RESTRICTION STRICTE :
-- Ne jamais inventer de nouveaux paramètres, de nouvelles couleurs ou de nouvelles classes qui ne sont pas explicitement listés dans le dictionnaire ci-dessous.
-- Exige de répondre uniquement avec un tableau d'objets JSON valide sans texte ni explications avant ou après.
+- Ne jamais inventer de nouveaux types de section ou de paramètres hors du dictionnaire ci-dessous.
+- Réponds UNIQUEMENT avec un tableau d'objets JSON valide sans texte avant ni après.
 
 Dictionnaire d'options de mon Web Builder :
 ${sectionMenu()}
@@ -112,6 +140,13 @@ export async function POST(req: NextRequest) {
   const isAuth = await validateSupabaseToken(token);
   if (!isAuth) {
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
+  }
+
+  if (!(await isModuleEnabledServer('ai_generation'))) {
+    return NextResponse.json(
+      { error: "Le module 'Génération IA & Rédaction' est désactivé dans les paramètres du Studio." },
+      { status: 403 }
+    );
   }
 
   const apiKey = await getAnthropicKey();
@@ -137,18 +172,21 @@ export async function POST(req: NextRequest) {
       'site_target_persona',
       'site_tone_of_voice',
       'site_brand_tone',
+      'business_name',
     ]);
 
     const activityContext = settings.site_activity_context || "";
     const targetPersona   = settings.site_target_persona || "";
     const toneOfVoice     = settings.site_tone_of_voice || "";
     const brandTone       = settings.site_brand_tone || "";
+    const businessName    = settings.business_name || "";
 
     const { nicheName, pool: activePool } = selectImagePoolForNiche(activityContext, prompt);
 
     const dynamicSystemPrompt = `${SYSTEM_PROMPT}
 
 ━━━ ACTIVITÉ & SECTEUR DU SITE ━━━
+Entreprise : ${businessName || 'Entreprise'}
 Secteur détecté : ${nicheName}
 Activité : ${activityContext}
 ${targetPersona ? `Persona cible : ${targetPersona}\n` : ''}${toneOfVoice ? `Ton de voix : ${toneOfVoice}\n` : ''}${brandTone ? `Branding & Positionnement : ${brandTone}\n` : ''}
@@ -166,10 +204,10 @@ ${activePool.map((url, i) => `${i + 1}. "${url}"`).join('\n')}`;
       messages: [
         {
           role: 'user',
-          content: `Crée une landing page pour : ${prompt}\n\nRéponds UNIQUEMENT avec le tableau JSON, commence directement par [`,
+          content: `Crée une landing page haute conversion respectant l'architecture idéale pour : ${prompt}\n\nRéponds UNIQUEMENT avec le tableau JSON, commence directement par [`,
         },
       ],
-      timeout: 25000
+      timeout: 60000
     });
 
     const raw = (response.content[0] as { type: string; text: string }).text.trim();
@@ -196,11 +234,6 @@ ${activePool.map((url, i) => `${i + 1}. "${url}"`).join('\n')}`;
       return NextResponse.json({ error: 'Le format généré doit être un tableau non vide.' }, { status: 502 });
     }
 
-    /*
-      Une section d'un type inconnu est écartée, pas convertie : la rétrograder
-      en `text_1` fabriquait un bloc vide que l'utilisateur devait deviner et
-      supprimer. Mieux vaut une page plus courte qu'une page fausse.
-    */
     const validatedSections = rawSections
       .filter((section: any) => section && typeof section === 'object' && section.type in SECTION_META)
       .map((section: any) => ({
@@ -215,7 +248,23 @@ ${activePool.map((url, i) => `${i + 1}. "${url}"`).join('\n')}`;
       );
     }
 
-    return NextResponse.json({ sections: validatedSections });
+    // Extract all image URLs from final sections and register them in Supabase media_assets
+    const imagesToRegister: Array<{ url: string; title: string }> = [];
+    const extractUrls = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return;
+      for (const [key, val] of Object.entries(obj)) {
+        if (typeof val === 'string' && val.startsWith('http') && (key.includes('image') || key.includes('url') || key.includes('src'))) {
+          imagesToRegister.push({ url: val, title: prompt || 'Photo Unsplash' });
+        } else if (typeof val === 'object') {
+          extractUrls(val);
+        }
+      }
+    };
+    extractUrls(validatedSections);
+
+    await registerMediaAssets(imagesToRegister);
+
+    return NextResponse.json({ sections: validatedSections, registeredImagesCount: imagesToRegister.length });
 
   } catch (err: any) {
     console.error('[generate-page] unexpected error:', err);

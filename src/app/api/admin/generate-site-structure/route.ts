@@ -4,6 +4,7 @@ import { getSettingsServer } from '../../../../services/settingsServer';
 import { getSupabaseAdmin } from '../../../../utils/supabaseAdmin';
 import { supabase } from '../../../../services/supabase';
 import { SECTION_META, type SectionTypeName } from '../../../../components/pagebuilder/sectionMeta';
+import { isModuleEnabledServer } from '../../../../config/modules';
 
 export const runtime = 'nodejs';
 
@@ -105,6 +106,13 @@ async function registerMediaAssets(images: Array<{ url: string; title: string }>
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await isModuleEnabledServer('ai_generation'))) {
+    return NextResponse.json(
+      { error: "Le module 'Génération IA & Rédaction' est désactivé dans les paramètres du Studio." },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { action } = body;

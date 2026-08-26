@@ -257,10 +257,10 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
           <Link
             data-btn="primary"
             href={registerLink}
-            className={`shrink-0 px-8 py-3 text-xs uppercase tracking-widest font-bold transition-all duration-300 ${
+            className={`shrink-0 px-7 py-3 rounded-full text-xs uppercase tracking-widest font-bold transition-all duration-200 shadow-xs hover:shadow-md hover:scale-[1.02] ${
               lightMode
-                ? 'bg-white/15 backdrop-blur-sm text-white border border-white/30 hover:bg-white/25'
-                : 'bg-stone-deep text-paper hover:bg-stone-deep/90'
+                ? 'bg-white/20 backdrop-blur-md text-white border border-white/30 hover:bg-white/30'
+                : 'bg-stone-900 text-white hover:bg-stone-800'
             }`}
           >
             Prendre rendez-vous
@@ -269,9 +269,9 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
 
         {/* Mobile Toggle */}
         <button
-          className={`${variant === 'minimal' ? '' : 'xl:hidden'} p-2 transition-colors duration-300 ${
+          className={`${variant === 'minimal' ? '' : 'xl:hidden'} p-2.5 rounded-full transition-colors duration-300 ${
             variant === 'centre' ? 'absolute right-6 top-6' : ''
-          } ${lightMode ? 'text-white' : 'text-stone-deep'}`}
+          } ${lightMode ? 'text-white hover:bg-white/10' : 'text-stone-deep hover:bg-stone-100'}`}
           onClick={() => setIsOpen(!isOpen)}
           aria-label={isOpen ? "Fermer le menu" : "Ouvrir le menu"}
           aria-expanded={isOpen}
@@ -287,7 +287,7 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className={`${variant === 'minimal' ? '' : 'xl:hidden'} bg-white border-t border-stone-100 overflow-hidden`}
+            className={`${variant === 'minimal' ? '' : 'xl:hidden'} bg-white/95 backdrop-blur-md border-t border-stone-100 overflow-hidden shadow-xl`}
           >
             <div className="flex flex-col p-6 gap-6">
               {menuItems.map((item, idx) => {
@@ -296,7 +296,7 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
                 if (isDropdown) {
                   const children = item.children || [];
                   return (
-                    <div key={idx} className="space-y-4 border-l-2 border-stone-100 pl-4 py-2">
+                    <div key={idx} className="space-y-4 border-l-2 border-stone-200 pl-4 py-2">
                       <p className="text-xs uppercase tracking-widest text-stone-400 font-bold">{item.name}</p>
                       {children.map((child: any, cidx: number) => (
                         <Link
@@ -325,7 +325,7 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
               <Link 
                 data-btn="primary"
                 href={registerLink} 
-                className="bg-sage text-white py-4 text-center font-bold uppercase tracking-widest"
+                className="bg-stone-900 text-white py-4 text-center font-bold uppercase tracking-widest rounded-2xl shadow-md hover:bg-stone-800 transition-all"
               >
                 Prendre rendez-vous
               </Link>

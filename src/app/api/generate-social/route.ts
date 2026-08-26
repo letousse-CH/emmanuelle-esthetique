@@ -8,11 +8,19 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { generateSocialContent } from '../../../utils/socialGeneration';
+import { isModuleEnabledServer } from '../../../config/modules';
 
 export async function POST(req: NextRequest) {
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   if (!(await validateSupabaseToken(token))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!(await isModuleEnabledServer('ai_generation'))) {
+    return NextResponse.json(
+      { error: "Le module 'Génération IA & Rédaction' est désactivé dans les paramètres du Studio." },
+      { status: 403 }
+    );
   }
 
   let title = '';

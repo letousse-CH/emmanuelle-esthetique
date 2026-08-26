@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';

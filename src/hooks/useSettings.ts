@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { proxyUrl } from '../utils/media';
@@ -43,12 +45,16 @@ export function useSettings(keys: SettingKey[]): Record<SettingKey, string> {
   );
 
   useEffect(() => {
-    fetchAllSettings().then(() => {
-      const updates = Object.fromEntries(
-        keys.map(k => [k, settingsCache.get(k) ?? SETTINGS_DEFAULTS[k] ?? ''])
-      );
-      setValues(updates);
-    });
+    fetchAllSettings()
+      .then(() => {
+        const updates = Object.fromEntries(
+          keys.map(k => [k, settingsCache.get(k) ?? SETTINGS_DEFAULTS[k] ?? ''])
+        );
+        setValues(updates);
+      })
+      .catch(() => {
+        // En cas d'échec (base hors-ligne ou clés fictives), garder les valeurs par défaut
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

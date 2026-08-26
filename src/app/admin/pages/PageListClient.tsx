@@ -24,8 +24,11 @@ import AutoGenerateSiteModal from '../../../components/pagebuilder/AutoGenerateS
 const HOME_SLUG_KEY = 'home_page_slug';
 const LEGACY_HOME_SLUGS = ['home', 'accueil'];
 
+import { useModuleFlags } from '../../../hooks/useModuleFlags';
+
 export default function PageList() {
   const router = useRouter();
+  const moduleFlags = useModuleFlags();
   const [importOpen, setImportOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [autoGenerateOpen, setAutoGenerateOpen] = useState(false);
@@ -118,40 +121,42 @@ export default function PageList() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-zinc-200/90 shadow-2xs">
         <div>
-          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Site</p>
-          <h1 className="text-2xl font-semibold text-stone-900">Pages dynamiques</h1>
-          <p className="mt-1 text-sm text-stone-600">Créez et gérez vos pages CMS.</p>
+          <span className="px-3 py-1 rounded-full bg-purple-100/80 text-purple-900 border border-purple-200 text-[10.5px] font-extrabold uppercase tracking-wider">Site & Contenus</span>
+          <h1 className="text-2xl font-extrabold text-zinc-900 mt-2">Pages dynamiques</h1>
+          <p className="mt-1 text-xs text-zinc-600 font-medium">Créez et gérez vos pages CMS facilement.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={handleSeed} disabled={seeding}
-            className="flex items-center gap-2 border border-stone-200 text-stone-500 hover:border-stone-300 hover:text-stone-800 px-4 py-2 rounded-lg text-sm transition-all disabled:opacity-50 cursor-pointer">
-            {seeding ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+            className="flex items-center gap-2 border border-purple-200 bg-white text-zinc-700 hover:bg-purple-50 hover:text-purple-900 px-4 py-2.5 rounded-full text-xs font-extrabold transition-all disabled:opacity-50 cursor-pointer shadow-2xs">
+            {seeding ? <Loader2 size={14} className="animate-spin text-purple-600" /> : <Database size={14} className="text-purple-600" />}
             Pages par défaut
           </button>
           <button
             type="button"
             onClick={() => setImportOpen(true)}
-            className="flex items-center gap-2 border border-stone-200 text-stone-500 hover:border-stone-300 hover:text-stone-800 px-4 py-2 rounded-lg text-sm transition-all cursor-pointer"
+            className="flex items-center gap-2 border border-purple-200 bg-white text-zinc-700 hover:bg-purple-50 hover:text-purple-900 px-4 py-2.5 rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-2xs"
           >
-            <Globe size={14} /> Importer un site
+            <Globe size={14} className="text-purple-600" /> Importer un site
           </button>
           <button
             type="button"
             onClick={() => setTemplateOpen(true)}
-            className="flex items-center gap-2 border border-stone-200 text-stone-500 hover:border-stone-300 hover:text-stone-800 px-4 py-2 rounded-lg text-sm transition-all cursor-pointer"
+            className="flex items-center gap-2 border border-purple-200 bg-white text-zinc-700 hover:bg-purple-50 hover:text-purple-900 px-4 py-2.5 rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-2xs"
           >
-            <LayoutTemplate size={14} /> Partir d'une structure
+            <LayoutTemplate size={14} className="text-purple-600" /> Partir d'une structure
           </button>
-          <button
-            type="button"
-            onClick={() => setAutoGenerateOpen(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-md transition-all cursor-pointer"
-          >
-            <Sparkles size={15} /> Créer le site automatiquement
-          </button>
-          <Link href="/admin/pages/new" className="flex items-center gap-2 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors">
+          {moduleFlags.ai_generation && (
+            <button
+              type="button"
+              onClick={() => setAutoGenerateOpen(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white px-5 py-2.5 rounded-full text-xs font-extrabold shadow-[0_4px_14px_rgba(249,115,22,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Sparkles size={15} className="text-white animate-pulse" /> Créer le site automatiquement
+            </button>
+          )}
+          <Link href="/admin/pages/new" className="flex items-center gap-2 bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white px-5 py-2.5 rounded-full text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all">
             <Plus size={15} /> Nouvelle page
           </Link>
         </div>

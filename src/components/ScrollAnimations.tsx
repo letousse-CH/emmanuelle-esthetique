@@ -33,15 +33,21 @@ export default function ScrollAnimations() {
       // Pulse on hovering interactive elements
       const onEnter = () => glow.classList.add('sde-cursor-active');
       const onLeave = () => glow.classList.remove('sde-cursor-active');
+      const hoverCleanups: (() => void)[] = [];
       document.querySelectorAll('a, button, [role="button"]').forEach(el => {
         el.addEventListener('mouseenter', onEnter);
         el.addEventListener('mouseleave', onLeave);
+        hoverCleanups.push(() => {
+          el.removeEventListener('mouseenter', onEnter);
+          el.removeEventListener('mouseleave', onLeave);
+        });
       });
 
       // Cleanup stored on element for return
       (glow as any)._cleanup = () => {
         document.removeEventListener('mousemove', onMove);
         cancelAnimationFrame(raf);
+        hoverCleanups.forEach(fn => fn());
         glow.remove();
       };
     }

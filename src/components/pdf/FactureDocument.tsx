@@ -111,13 +111,18 @@ function chf(value: number | string | null | undefined): string {
 }
 
 function dateCH(value: string): string {
-  return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString('fr-CH', {
+  if (!value) return '';
+  const d = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (isNaN(d.getTime())) return value || '';
+  return d.toLocaleDateString('fr-CH', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   });
 }
 
 function dateTimeCH(iso: string): string {
+  if (!iso) return '';
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso || '';
   const date = d.toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Zurich' });
   const time = d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zurich' });
   return `${date} à ${time}`;

@@ -99,7 +99,16 @@ async function main() {
   // Copie des fichiers en préservant .env.local du client
   copyDirRecursive(ROOT_DIR, targetDir);
 
+  // Vérification explicite du dépôt Git cible
+  let targetRemote = 'Aucun dépôt Git distant configuré';
+  try {
+    targetRemote = execSync('git remote get-url origin', { cwd: targetDir, encoding: 'utf8' }).trim();
+  } catch {
+    // Si aucun remote origin n'est configuré
+  }
+
   console.log('✓ Code mis à jour avec succès.');
+  console.log(`✓ Dépôt GitHub distant cible : ${targetRemote}`);
   console.log('✓ Fichier .env.local du client conservé intact (aucune modification des clés Supabase).');
 
   rl.close();
@@ -108,10 +117,13 @@ async function main() {
   console.log('🎉 MISE À JOUR TERMINÉE AVEC SUCCÈS !');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   console.log(`Chemin du site mis à jour : ${targetDir}`);
+  console.log(`Dépôt GitHub du site mis à jour : ${targetRemote}`);
   console.log('\n📌 Prochaines étapes :\n');
-  console.log('1️⃣  Déploiement du code :');
+  console.log('1️⃣  Déploiement du code vers le BON dépôt GitHub :');
   console.log(`    cd "${targetDir}"`);
-  console.log('    git add . && git commit -m "feat: mise à jour système & SIO" && git push');
+  console.log(`    # Vérifiez que vous êtes sur le bon dépôt (${targetRemote}) :`);
+  console.log('    git remote -v');
+  console.log('    git add . && git commit -m "feat: mise à jour système & multi-sites" && git push origin main');
   console.log('\n2️⃣  Migration de la base Supabase (Automatique) :');
   console.log('    - Connectez-vous sur l\'admin du site mis à jour.');
   console.log('    - La base se synchronise automatiquement (ou via Réglages > Sécurité > Auto-Migration).\n');

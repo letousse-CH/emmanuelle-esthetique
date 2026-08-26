@@ -50,12 +50,17 @@ export default function SectionLibrary({
   const Row = ({ type }: { type: any }) => {
     const added = justAdded === type;
     return (
-      <button
-        type="button"
+      <div
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('application/json', JSON.stringify({ type: 'new_section', sectionType: type }));
+          e.dataTransfer.effectAllowed = 'copy';
+        }}
         onClick={() => insert(type)}
-        className={`flex w-full items-center gap-3 border p-2 text-left transition-colors cursor-pointer ${
+        className={`flex w-full items-center gap-3 border p-2 text-left transition-colors cursor-grab active:cursor-grabbing ${
           added ? 'border-stone-900 bg-stone-50' : 'border-stone-200 hover:border-stone-900'
         }`}
+        title="Cliquer pour ajouter ou glisser-déposer directement sur la page"
       >
         <span className="w-16 shrink-0 overflow-hidden border border-stone-100 bg-stone-50">
           <SectionPreview type={type} />
@@ -69,7 +74,7 @@ export default function SectionLibrary({
           </span>
         </span>
         <Plus size={15} className={`shrink-0 ${added ? 'text-stone-900' : 'text-stone-500'}`} />
-      </button>
+      </div>
     );
   };
 

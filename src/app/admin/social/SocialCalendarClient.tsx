@@ -375,13 +375,13 @@ export default function SocialCalendarClient() {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setShowPlanDialog(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-stone-300 bg-white text-stone-800 text-xs font-semibold hover:bg-stone-50 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white text-xs font-extrabold hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-[0_4px_14px_rgba(249,115,22,0.3)]"
           >
-            <CalendarRange size={14} className="text-stone-500" /> Planifier une série
+            <Sparkles size={14} className="text-amber-200 animate-pulse" /> Planifier une série IA
           </button>
           <button
             onClick={() => handleOpenNewPost()}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-stone-900 text-white text-xs font-semibold hover:bg-stone-800 transition-colors cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white text-xs font-extrabold hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-[0_4px_14px_rgba(168,85,247,0.3)]"
           >
             <Plus size={14} /> Nouveau post
           </button>
@@ -389,21 +389,21 @@ export default function SocialCalendarClient() {
       </div>
 
       {/* Lentille par réseau social */}
-      <div className="flex items-center gap-2 bg-stone-50 p-2.5 rounded-xl border border-stone-200">
-        <span className="text-xs font-semibold text-stone-600 mr-1">Filtre Réseau :</span>
+      <div className="flex items-center gap-2 bg-white p-3 rounded-2xl border border-zinc-200/90 shadow-2xs">
+        <span className="text-xs font-extrabold text-zinc-900 ml-1 mr-1">Filtre Réseau :</span>
         <div role="group" aria-label="Plateforme affichée" className="flex flex-wrap gap-1.5">
           {PLATFORM_LENSES.map(({ id, label, icon: Icon, color }) => (
             <button
               key={id}
               aria-pressed={lens === id}
               onClick={() => setLens(id)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-extrabold border transition-all cursor-pointer ${
                 lens === id
-                  ? 'bg-white border-stone-300 text-stone-900 shadow-xs font-bold'
-                  : 'bg-transparent border-transparent text-stone-500 hover:text-stone-800'
+                  ? 'bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white border-transparent shadow-[0_2px_10px_rgba(168,85,247,0.3)]'
+                  : 'bg-zinc-100/80 border-zinc-200 text-zinc-700 hover:bg-purple-50 hover:text-purple-900'
               }`}
             >
-              <Icon size={14} className={color} /> {label}
+              <Icon size={14} className={lens === id ? 'text-white' : color} /> {label}
             </button>
           ))}
         </div>

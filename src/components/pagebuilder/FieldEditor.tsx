@@ -9,6 +9,9 @@ import {
   Moon,
   Pipette,
   Sun,
+  ChevronDown,
+  ChevronRight,
+  HelpCircle,
 } from 'lucide-react';
 
 import { useThemePalette } from './useThemePalette';
@@ -126,7 +129,7 @@ function RichTextarea({
   };
 
   const btn =
-    'px-1.5 py-0.5 border border-stone-200 rounded text-[10px] font-bold text-stone-600 hover:bg-stone-100 transition-colors';
+    'px-2 py-1 border border-zinc-300 rounded-[5px] text-[11px] font-semibold text-zinc-800 bg-white hover:bg-zinc-900 hover:text-white transition-all cursor-pointer shadow-2xs';
 
   return (
     <div>
@@ -244,6 +247,36 @@ const FIELD_LABELS: Record<string, string> = {
   title: 'Titre',
   title_italic: 'Titre — suite en italique',
   title_bold: 'Titre — suite en gras',
+  title_highlight: 'Titre — partie mise en valeur',
+  personas: 'Profils clients cibles',
+  painPoints: 'Comparatif Avant vs. Solution',
+  voiceFeatures: 'Fonctionnalités vocales',
+  inclusions: 'Prestations incluses',
+  faqs: 'Questions & réponses FAQ',
+  speechExample: 'Exemple vocal dicté',
+  aiResult: 'Résultat IA généré',
+  beforeTitle: 'Avant — Titre du problème',
+  beforeDesc: 'Avant — Description du problème',
+  afterTitle: 'Avec la Solution — Titre de l\'avantage',
+  afterDesc: 'Avec la Solution — Description de l\'avantage',
+  subtitle: 'Sous-titre',
+  stepNumber: 'Numéro d\'étape',
+  invoiceNumber: 'N° Facture Caisse',
+  invoiceClient: 'Nom de la cliente',
+  invoiceAmount: 'Montant encaissé',
+  card1_title: 'Carte 1 — Titre',
+  card1_desc: 'Carte 1 — Description',
+  card2_title: 'Carte 2 — Titre',
+  card2_desc: 'Carte 2 — Description',
+  card3_title: 'Carte 3 — Titre',
+  card3_desc: 'Carte 3 — Description',
+  card4_title: 'Carte 4 — Titre',
+  card4_desc: 'Carte 4 — Description',
+  card5_title: 'Carte 5 — Titre',
+  card5_desc: 'Carte 5 — Description',
+  q: 'Question',
+  a: 'Réponse',
+  desc: 'Description',
   description: 'Description',
   content: 'Contenu',
   text: 'Texte',
@@ -321,6 +354,21 @@ const FIELD_LABELS: Record<string, string> = {
   tag: 'Tag / Badge de carte',
 };
 
+const FIELD_TOOLTIPS: Record<string, string> = {
+  eyebrow: 'Texte d\'accroche au-dessus du titre principal.',
+  title: 'Titre principal de la section.',
+  description: 'Paragraphe de présentation détaillé.',
+  cta_primary_href: 'Lien de destination du bouton principal (ex: /contact).',
+  cta_primary_text: 'Texte affiché sur le bouton principal.',
+  cta_secondary_href: 'Lien de destination du bouton secondaire.',
+  cta_secondary_text: 'Texte affiché sur le bouton secondaire.',
+  image_url: 'URL ou image importée depuis la médiathèque.',
+  image_opacity: 'Réglage de la transparence de l\'image de fond (0% à 100%).',
+  bg_color: 'Couleur de fond spécifique pour cette section.',
+  theme: 'Bascule entre thème clair, foncé, surface ou primaire.',
+  bg_pattern: 'Motif géométrique vectoriel discret en arrière-plan.',
+};
+
 function labelFor(key: string): string {
   if (FIELD_LABELS[key]) return FIELD_LABELS[key];
   const pretty = key.replace(/_/g, ' ');
@@ -342,6 +390,7 @@ const ENUM_LABELS: Record<string, string> = {
 
 /** Extrait les valeurs d'une union littérale du schéma : "'2' | '3' | '4'". */
 function parseEnumHint(hint: string): string[] | null {
+  if (!hint) return null;
   const matches = hint.match(/'([^']*)'/g);
   if (!matches || matches.length < 2) return null;
   return matches.map((m) => m.slice(1, -1));
@@ -687,6 +736,65 @@ interface Props {
   compact?: boolean;
 }
 
+function AccordionGroup({
+  title,
+  hint,
+  defaultOpen = false,
+  isOpenState,
+  onToggle,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  defaultOpen?: boolean;
+  isOpenState?: boolean;
+  onToggle?: () => void;
+  children: React.ReactNode;
+}) {
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const isOpen = isOpenState !== undefined ? isOpenState : internalOpen;
+
+  const handleToggle = () => {
+    if (onToggle) {
+      onToggle();
+    } else {
+      setInternalOpen(!internalOpen);
+    }
+  };
+
+  return (
+    <div className="border border-zinc-200 rounded-xl overflow-hidden shadow-2xs transition-all bg-white mb-3 hover:border-zinc-300">
+      <button
+        type="button"
+        onClick={handleToggle}
+        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-all cursor-pointer select-none ${
+          isOpen
+            ? 'bg-zinc-900 text-white font-extrabold border-b border-zinc-800'
+            : 'bg-zinc-100/80 hover:bg-zinc-200 text-zinc-900 font-bold'
+        }`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="text-xs font-bold uppercase tracking-wider truncate">{title}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {hint && (
+            <span className={`text-[11px] hidden sm:inline ${isOpen ? 'text-zinc-300' : 'text-zinc-600'}`}>
+              {hint}
+            </span>
+          )}
+          {isOpen ? <ChevronDown size={15} className="text-amber-300" /> : <ChevronRight size={15} className="text-zinc-600" />}
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="p-0 divide-y divide-zinc-200 border-t border-zinc-200">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FieldEditor({
   section,
   sectionIndex: i,
@@ -698,13 +806,18 @@ export default function FieldEditor({
   const data = section.data as unknown as Record<string, unknown>;
   const schema = WIREFRAME_REGISTRY[section.type]?.dataSchema ?? {};
   const [mediaPickerKey, setMediaPickerKey] = useState<string | null>(null);
+  const [openCardIdx, setOpenCardIdx] = useState<number | null>(null);
+  const [openGroupKeys, setOpenGroupKeys] = useState<Record<string, boolean>>({});
 
   const px = compact ? 'px-2 py-1' : 'px-3 py-2';
   const sz = compact ? 'text-xs' : 'text-sm';
-  const inputCls = `w-full border border-stone-200 rounded-lg ${px} ${sz} focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900`;
+  const inputCls = `w-full border border-zinc-300 rounded-[5px] ${px} ${sz} focus:outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 font-medium leading-relaxed bg-white shadow-2xs`;
 
   const cardsKey = Array.isArray(data.plans) ? 'plans' : 'cards';
   const cards = Array.isArray(data[cardsKey]) ? (data[cardsKey] as Record<string, unknown>[]) : null;
+  const customArrayKeys = Object.keys(data).filter(
+    (k) => Array.isArray(data[k]) && k !== 'items[]' && !k.endsWith('[]') && k !== cardsKey
+  );
 
   /*
     Rendu d'un champ. Extrait de la boucle pour pouvoir ranger les champs par
@@ -721,7 +834,7 @@ export default function FieldEditor({
     if (key === 'bg_color') return null; // idem — évitait un doublon sur marquee_1 / pricing_1
 
     const val = data[key];
-    const hint = typeHint as string;
+    const hint = (typeHint || '') as string;
     const isImage = hint === 'image (optionnel)' || hint.startsWith('image');
     const isArray = hint.startsWith('string[]') || hint.startsWith('array');
 
@@ -1197,7 +1310,14 @@ export default function FieldEditor({
     const isSingleLine = SINGLE_LINE_RE.test(key);
     return (
       <div key={key}>
-        <label className="block text-[12.5px] font-medium text-stone-700 mb-1">{labelFor(key)}</label>
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <label className="block text-sm font-extrabold text-zinc-900 tracking-tight">{labelFor(key)}</label>
+          {FIELD_TOOLTIPS[key] && (
+            <span title={FIELD_TOOLTIPS[key]} className="inline-flex cursor-help text-zinc-400 hover:text-zinc-900 transition-colors">
+              <HelpCircle size={13} />
+            </span>
+          )}
+        </div>
         {isLong ? (
           <RichTextarea
             className={inputCls}
@@ -1225,50 +1345,111 @@ export default function FieldEditor({
     );
   };
 
-  /** Champs pilotés ailleurs : cartes, ambiance et fond ont leur propre bloc. */
-  const scalarKeys = Object.keys(schema).filter(
-    (key) => !key.includes('[]') && key !== 'cards' && key !== 'theme' && key !== 'bg_color',
+  /** Champs pilotés ailleurs : cartes, ambiance et fond ont leur propre bloc.
+   * On combine toutes les clés du schéma ET de data pour qu'absolument n'importe quel texte ou option de la section soit éditable.
+   */
+  const allDataKeys = Object.keys(data || {});
+  const allSchemaKeys = Object.keys(schema || {});
+  const combinedKeys = Array.from(new Set([...allSchemaKeys, ...allDataKeys]));
+
+  const scalarKeys = combinedKeys.filter(
+    (key) =>
+      !key.includes('[]') &&
+      key !== 'cards' &&
+      key !== 'plans' &&
+      key !== 'personas' &&
+      key !== 'painPoints' &&
+      key !== 'voiceFeatures' &&
+      key !== 'faqs' &&
+      key !== 'inclusions' &&
+      key !== 'features' &&
+      key !== 'theme' &&
+      key !== 'bg_color' &&
+      key !== 'bg_pattern' &&
+      key !== 'bg_pattern_scale' &&
+      key !== 'bg_pattern_repeat' &&
+      key !== 'bg_pattern_opacity' &&
+      !Array.isArray(data[key]) &&
+      (typeof data[key] !== 'object' || data[key] === null)
   );
 
   return (
     <div className="space-y-3">
-      {/* ── Couleur de fond ── (masquée en mode contenu : elle vit dans l'onglet Style) */}
+      {/* ── Barre Tout ouvrir / Tout fermer ── */}
+      <div className="flex items-center justify-between pb-2 border-b border-zinc-200 select-none">
+        <span className="text-[11px] font-extrabold text-zinc-500 uppercase tracking-wider">
+          Réglages de section
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              const all: Record<string, boolean> = { bg: true, cards: true };
+              FIELD_GROUPS.forEach((g) => { all[g.id] = true; });
+              all['autres'] = true;
+              setOpenGroupKeys(all);
+            }}
+            className="text-[11px] font-bold text-zinc-800 hover:text-white bg-zinc-100 hover:bg-zinc-900 border border-zinc-300 px-2 py-0.5 rounded-[5px] transition-all cursor-pointer"
+          >
+            Tout ouvrir
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpenGroupKeys({});
+            }}
+            className="text-[11px] font-bold text-zinc-800 hover:text-white bg-zinc-100 hover:bg-zinc-900 border border-zinc-300 px-2 py-0.5 rounded-[5px] transition-all cursor-pointer"
+          >
+            Tout fermer
+          </button>
+        </div>
+      </div>
+      {/* ── Couleur, Ambiance & Motif de Fond ── */}
       {(scope === 'background' || (scope === 'all' && !contentOnly)) && (
-        <ThemeColorField
-          label="Fond de la section"
-          hint="« Automatique » suit le thème clair ou foncé choisi ci-dessous."
-          value={(data.bg_color as string | undefined) || ''}
-          onChange={(v) => onUpdate(i, 'bg_color', v)}
-        />
+        <AccordionGroup
+          title="Couleurs, Ambiance & Motif de Fond"
+          hint="Couleur, thème clair/foncé et texture vectorielle"
+          defaultOpen={false}
+          isOpenState={openGroupKeys['bg']}
+          onToggle={() => setOpenGroupKeys((prev) => ({ ...prev, bg: !prev.bg }))}
+        >
+          <div className="px-4 py-5 bg-zinc-100/80 border-0 rounded-none">
+            <ThemeColorField
+              label="Fond de la section"
+              hint="« Automatique » suit le thème clair ou foncé choisi ci-dessous."
+              value={(data.bg_color as string | undefined) || ''}
+              onChange={(v) => onUpdate(i, 'bg_color', v)}
+            />
+          </div>
+
+          {'theme' in schema && (
+            <div className="px-4 py-5 bg-white border-0 rounded-none">
+              <ThemeChoice
+                label="Ambiance & Thème"
+                hint="Alterner clair, sauge, sable et foncé d'une section à l'autre découpe la page avec harmonie."
+                value={(data.theme as string | undefined) ?? (section.type === 'cta_1' ? 'dark' : 'light')}
+                onChange={(v) => onUpdate(i, 'theme', v)}
+              />
+            </div>
+          )}
+
+          <div className="px-4 py-5 bg-zinc-100/80 border-0 rounded-none">
+            <PatternChoice
+              pattern={(data.bg_pattern as string | undefined) || 'none'}
+              scale={(data.bg_pattern_scale as string | undefined) || 'normal'}
+              repeat={(data.bg_pattern_repeat as string | undefined) || 'repeat'}
+              opacity={data.bg_pattern_opacity !== undefined ? Number(data.bg_pattern_opacity) : 12}
+              onChangePattern={(v) => onUpdate(i, 'bg_pattern', v)}
+              onChangeScale={(v) => onUpdate(i, 'bg_pattern_scale', v)}
+              onChangeRepeat={(v) => onUpdate(i, 'bg_pattern_repeat', v)}
+              onChangeOpacity={(v) => onUpdate(i, 'bg_pattern_opacity', v)}
+            />
+          </div>
+        </AccordionGroup>
       )}
 
-      {/* ── Clair / foncé / sauge / sable / ardoise — uniquement pour les sections qui le gèrent ── */}
-      {(scope === 'background' || (scope === 'all' && !contentOnly)) && 'theme' in schema && (
-        <ThemeChoice
-          label="Ambiance & Thème"
-          hint="Alterner clair, sauge, sable et foncé d'une section à l'autre découpe la page avec harmonie."
-          value={(data.theme as string | undefined) ?? (section.type === 'cta_1' ? 'dark' : 'light')}
-          onChange={(v) => onUpdate(i, 'theme', v)}
-        />
-      )}
-
-      {/* ── Motif de fond SVG ── */}
-      {(scope === 'background' || (scope === 'all' && !contentOnly)) && (
-        <PatternChoice
-          pattern={(data.bg_pattern as string | undefined) || 'none'}
-          scale={(data.bg_pattern_scale as string | undefined) || 'normal'}
-          repeat={(data.bg_pattern_repeat as string | undefined) || 'repeat'}
-          opacity={data.bg_pattern_opacity !== undefined ? Number(data.bg_pattern_opacity) : 12}
-          onChangePattern={(v) => onUpdate(i, 'bg_pattern', v)}
-          onChangeScale={(v) => onUpdate(i, 'bg_pattern_scale', v)}
-          onChangeRepeat={(v) => onUpdate(i, 'bg_pattern_repeat', v)}
-          onChangeOpacity={(v) => onUpdate(i, 'bg_pattern_opacity', v)}
-        />
-      )}
-
-      {/* ── Champs du schéma, rangés par rôle ── */}
+      {/* ── Champs du schéma, rangés par rôle et pliés en accordéons (fermés par défaut) ── */}
       {[...FIELD_GROUPS, { id: 'autres', title: 'Autres réglages', hint: '', match: () => false }]
-        // L'onglet « Fond » ne montre que l'arrière-plan ; « Contenu », tout le reste.
         .filter((group) =>
           scope === 'all'
             ? true
@@ -1281,26 +1462,41 @@ export default function FieldEditor({
           const keys = scalarKeys.filter((key) => groupOf(key) === group.id);
           if (keys.length === 0) return null;
           return (
-            <section
+            <AccordionGroup
               key={group.id}
-              className="space-y-3 border-t border-stone-200 pt-4 first:border-t-0 first:pt-0"
+              title={group.title}
+              hint={group.hint}
+              defaultOpen={false}
+              isOpenState={openGroupKeys[group.id]}
+              onToggle={() => setOpenGroupKeys((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
             >
-              <div>
-                <h3 className="text-[13px] font-semibold text-stone-900">{group.title}</h3>
-                {group.hint && <p className="mt-0.5 text-[12.5px] text-stone-600">{group.hint}</p>}
-              </div>
-              <div className="space-y-3">
-                {keys.map((key) => renderScalarField(key, schema[key] as string))}
-              </div>
-            </section>
+                {keys.map((key, keyIdx) => (
+                  <div
+                    key={key}
+                    className={`px-4 py-5 border-0 rounded-none ${
+                      keyIdx % 2 === 0
+                        ? 'bg-indigo-50/50 text-zinc-900'
+                        : 'bg-white text-zinc-900'
+                    }`}
+                  >
+                    {renderScalarField(key, (schema[key] || '') as string)}
+                  </div>
+                ))}
+            </AccordionGroup>
           );
         },
       )}
       {cards && scope !== 'background' && (
-        <div>
+        <AccordionGroup
+          title={cardsKey === 'plans' ? 'Gestion des Formules' : 'Gestion des Cartes & Éléments'}
+          hint="Ajoutez, réordonnez ou éditez chaque carte"
+          defaultOpen={false}
+          isOpenState={openGroupKeys['cards']}
+          onToggle={() => setOpenGroupKeys((prev) => ({ ...prev, cards: !prev.cards }))}
+        >
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[12.5px] font-medium text-stone-700">
-              {cardsKey === 'plans' ? 'Formules' : 'Cartes'} ({cards.length})
+            <p className="text-[12px] font-bold text-zinc-900 uppercase tracking-wider">
+              Éléments
             </p>
             <button
               onClick={() => {
@@ -1329,66 +1525,92 @@ export default function FieldEditor({
                 }
                 onUpdate(i, cardsKey, [...cards, tpl]);
               }}
-              className="text-xs text-stone-900 hover:underline font-bold cursor-pointer"
+              className="text-xs text-zinc-900 hover:underline font-extrabold cursor-pointer"
             >
-              + {cardsKey === 'plans' ? 'Formule' : 'Carte'}
+              + {cardsKey === 'plans' ? 'Ajouter une formule' : 'Ajouter une carte'}
             </button>
           </div>
-          {cards.map((card, j) => (
-            <div key={j} className="bg-stone-50 rounded-xl p-3 mb-2 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-[12px] font-bold text-stone-500 uppercase">
-                  {cardsKey === 'plans' ? 'Formule' : 'Carte'} {j + 1}
-                </p>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    title="Monter"
-                    disabled={j === 0}
-                    onClick={() => onUpdate(i, cardsKey, moveInArray(cards, j, j - 1))}
-                    className="text-[12px] text-stone-500 hover:text-stone-800 disabled:opacity-20 cursor-pointer"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    title="Descendre"
-                    disabled={j === cards.length - 1}
-                    onClick={() => onUpdate(i, cardsKey, moveInArray(cards, j, j + 1))}
-                    className="text-[12px] text-stone-500 hover:text-stone-800 disabled:opacity-20 cursor-pointer"
-                  >
-                    ▼
-                  </button>
-                  <button
-                    type="button"
-                    title="Dupliquer cet élément"
-                    onClick={() =>
-                      onUpdate(i, cardsKey, [
-                        ...cards.slice(0, j + 1),
-                        JSON.parse(JSON.stringify(card)),
-                        ...cards.slice(j + 1),
-                      ])
-                    }
-                    className="text-[12px] text-stone-500 hover:text-stone-900 cursor-pointer"
-                  >
-                    ⧉
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!window.confirm(`Supprimer ${cardsKey === 'plans' ? 'la formule' : 'la carte'} ${j + 1} ?`)) return;
-                      onUpdate(
-                        i,
-                        cardsKey,
-                        cards.filter((_: unknown, k: number) => k !== j),
-                      );
-                    }}
-                    className="text-[12px] text-stone-500 hover:text-red-500 cursor-pointer"
-                  >
-                    ✕ Supprimer
-                  </button>
+          {cards.map((card, j) => {
+            const isCardOpen = openCardIdx === j;
+            const cardTitle = (card.title || card.name || card.question || card.label || card.metric || '') as string;
+            const displayTitle = cardTitle ? cardTitle : (cardsKey === 'plans' ? 'Formule' : 'Carte');
+            return (
+              <div key={j} className="border border-zinc-300 mb-2 bg-white overflow-hidden rounded-none">
+                {/* Header de carte cliquable */}
+                <div
+                  onClick={() => setOpenCardIdx(isCardOpen ? null : j)}
+                  className={`flex items-center justify-between px-3 py-2.5 cursor-pointer select-none transition-colors ${
+                    isCardOpen ? 'bg-zinc-900 text-white font-extrabold' : 'bg-zinc-50 hover:bg-zinc-100 text-zinc-900 font-bold'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs uppercase tracking-wider font-extrabold truncate">
+                      {displayTitle}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      title="Monter"
+                      disabled={j === 0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdate(i, cardsKey, moveInArray(cards, j, j - 1));
+                      }}
+                      className="p-1 hover:bg-white/20 rounded text-[11px] disabled:opacity-20 cursor-pointer"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      title="Descendre"
+                      disabled={j === cards.length - 1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdate(i, cardsKey, moveInArray(cards, j, j + 1));
+                      }}
+                      className="p-1 hover:bg-white/20 rounded text-[11px] disabled:opacity-20 cursor-pointer"
+                    >
+                      ▼
+                    </button>
+                    <button
+                      type="button"
+                      title="Dupliquer cet élément"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdate(i, cardsKey, [
+                          ...cards.slice(0, j + 1),
+                          JSON.parse(JSON.stringify(card)),
+                          ...cards.slice(j + 1),
+                        ]);
+                      }}
+                      className="p-1 hover:bg-white/20 rounded text-[11px] cursor-pointer"
+                    >
+                      ⧉
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!window.confirm(`Supprimer ${cardsKey === 'plans' ? 'la formule' : 'la carte'} ${j + 1} ?`)) return;
+                        onUpdate(
+                          i,
+                          cardsKey,
+                          cards.filter((_: unknown, k: number) => k !== j),
+                        );
+                      }}
+                      className="p-1 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded text-[11px] cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                    {isCardOpen ? <ChevronDown size={14} className="text-amber-300" /> : <ChevronRight size={14} className="text-zinc-500" />}
+                  </div>
                 </div>
-              </div>
+
+                {/* Corps de la carte visible seulement quand sélectionnée */}
+                {isCardOpen && (
+                  <div className="py-2.5 px-0 divide-y divide-zinc-200 border-t border-zinc-200">
               {(CARD_FIELDS_BY_TYPE[section.type] || Object.keys(card)).map((field) => {
                 const isCardImage =
                   field !== 'icon_image_bleed' && (field === 'image' || field.includes('image'));
@@ -1396,17 +1618,17 @@ export default function FieldEditor({
                 const val = card[field] ?? (field === 'features' || field === 'items' ? [] : undefined);
                 if (CARD_BOOLEAN_FIELDS.has(field)) {
                   return (
-                    <div key={field} className="flex items-center gap-2 py-1">
+                    <div key={field} className="flex items-center gap-2 px-4 py-3 bg-white">
                       <input
                         type="checkbox"
                         id={`card-${i}-${j}-${field}`}
                         checked={!!val}
                         onChange={(e) => onUpdate(i, `${cardsKey}[${j}].${field}`, e.target.checked)}
-                        className="w-4 h-4 cursor-pointer accent-stone-900 rounded border-stone-300 focus:ring-stone-900"
+                        className="w-4 h-4 cursor-pointer accent-zinc-900 rounded border-zinc-300 focus:ring-zinc-900"
                       />
                       <label
                         htmlFor={`card-${i}-${j}-${field}`}
-                        className="text-xs font-bold text-stone-700 cursor-pointer select-none"
+                        className="text-xs font-bold text-zinc-900 cursor-pointer select-none"
                       >
                         {labelFor(field)}
                       </label>
@@ -1414,8 +1636,8 @@ export default function FieldEditor({
                   );
                 }
                 return (
-                  <div key={field}>
-                    <label className="text-[12px] text-stone-500 block mb-0.5">
+                  <div key={field} className="px-4 py-3 bg-white">
+                    <label className="text-[12px] font-bold text-zinc-900 block mb-1">
                       {labelFor(field)}
                     </label>
                     {field === 'rating' ? (
@@ -1455,7 +1677,7 @@ export default function FieldEditor({
                           <div key={k} className="flex gap-1 mb-1">
                             <div className="flex-1">
                               <RichTextarea
-                                className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900"
+                                className="w-full border border-stone-200 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 text-stone-900 leading-relaxed"
                                 value={item}
                                 onChange={(v) => {
                                   const next = [...(val as string[])];
@@ -1492,7 +1714,7 @@ export default function FieldEditor({
                             <img
                               src={val}
                               alt=""
-                              className="w-full h-16 object-cover rounded-lg border border-stone-200"
+                              className="w-full h-16 object-cover rounded-xl border border-stone-200"
                             />
                             <button
                               onClick={() => onUpdate(i, `${cardsKey}[${j}].${field}`, '')}
@@ -1504,7 +1726,7 @@ export default function FieldEditor({
                         ) : null}
                         <button
                           onClick={() => setMediaPickerKey(`${cardsKey}[${j}].${field}`)}
-                          className="w-full flex items-center justify-center gap-1 border-2 border-dashed border-stone-200 rounded-lg py-1.5 text-[12px] text-stone-500 hover:border-stone-400 hover:text-stone-900 transition-colors font-medium cursor-pointer"
+                          className="w-full flex items-center justify-center gap-1 border-2 border-dashed border-stone-200 rounded-xl py-2 text-[12px] text-stone-500 hover:border-stone-400 hover:text-stone-900 transition-colors font-medium cursor-pointer"
                         >
                           <ImageIcon size={12} />
                           {val ? "Changer l'image" : 'Choisir une image'}
@@ -1521,14 +1743,14 @@ export default function FieldEditor({
                       </div>
                     ) : isLongCardField ? (
                       <RichTextarea
-                        className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900"
+                        className="w-full border border-stone-200 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 text-stone-900 leading-relaxed"
                         minRows={2}
                         value={String(val ?? '')}
                         onChange={(v) => onUpdate(i, `cards[${j}].${field}`, v)}
                       />
                     ) : (
                       <input
-                        className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900"
+                        className="w-full border border-stone-200 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 text-stone-900"
                         value={String(val ?? '')}
                         onChange={(e) => onUpdate(i, `cards[${j}].${field}`, e.target.value)}
                       />
@@ -1536,10 +1758,171 @@ export default function FieldEditor({
                   </div>
                 );
               })}
-            </div>
-          ))}
-        </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </AccordionGroup>
       )}
+      {scope !== 'background' && customArrayKeys.map((arrKey) => {
+        const arrItems = data[arrKey] as Record<string, unknown>[];
+        if (!Array.isArray(arrItems) || arrItems.length === 0) return null;
+        const groupTitle = labelFor(arrKey);
+
+        return (
+          <AccordionGroup
+            key={arrKey}
+            title={`Gestion : ${groupTitle} (${arrItems.length})`}
+            hint="Ajoutez, réordonnez ou éditez chaque élément"
+            defaultOpen={false}
+            isOpenState={openGroupKeys[arrKey]}
+            onToggle={() => setOpenGroupKeys((prev) => ({ ...prev, [arrKey]: !prev[arrKey] }))}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[12px] font-bold text-zinc-900 uppercase tracking-wider">
+                {groupTitle}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  let tpl: any = { title: '', description: '' };
+                  if (arrKey === 'personas') {
+                    tpl = { title: 'Nouveau profil', description: '', badge: 'Secteur' };
+                  } else if (arrKey === 'painPoints') {
+                    tpl = { beforeTitle: 'Contrainte', beforeDesc: '', afterTitle: 'Avantage solution', afterDesc: '' };
+                  } else if (arrKey === 'voiceFeatures') {
+                    tpl = { title: 'Nouvelle commande vocale', subtitle: '', description: '', speechExample: '', aiResult: '', badge: 'Vocal' };
+                  } else if (arrKey === 'inclusions') {
+                    tpl = { title: 'Nouvel élément inclus', desc: '' };
+                  } else if (arrKey === 'faqs') {
+                    tpl = { q: 'Question ?', a: 'Réponse...' };
+                  } else if (arrItems.length > 0 && typeof arrItems[0] === 'object' && arrItems[0] !== null) {
+                    tpl = Object.keys(arrItems[0]).reduce((acc, k) => ({ ...acc, [k]: '' }), {});
+                  }
+                  onUpdate(i, arrKey, [...arrItems, tpl]);
+                }}
+                className="text-xs text-zinc-900 hover:underline font-extrabold cursor-pointer"
+              >
+                + Ajouter ({groupTitle})
+              </button>
+            </div>
+
+            {arrItems.map((item, j) => {
+              const uniqueIndex = (j + 100);
+              const isItemOpen = openCardIdx === uniqueIndex;
+              const itemTitle = (typeof item === 'object' && item !== null ? (item.title || item.name || item.q || item.question || item.beforeTitle || item.label || '') : String(item)) as string;
+              const displayTitle = itemTitle ? itemTitle : `${groupTitle} #${j + 1}`;
+
+              return (
+                <div key={j} className="border border-zinc-300 mb-2 bg-white overflow-hidden rounded-none">
+                  {/* Header */}
+                  <div
+                    onClick={() => setOpenCardIdx(isItemOpen ? null : uniqueIndex)}
+                    className={`flex items-center justify-between px-3 py-2.5 cursor-pointer select-none transition-colors ${
+                      isItemOpen ? 'bg-zinc-900 text-white font-extrabold' : 'bg-zinc-50 hover:bg-zinc-100 text-zinc-900 font-bold'
+                    }`}
+                  >
+                    <span className="text-xs uppercase tracking-wider font-extrabold truncate">
+                      {displayTitle}
+                    </span>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        title="Monter"
+                        disabled={j === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdate(i, arrKey, moveInArray(arrItems, j, j - 1));
+                        }}
+                        className="p-1 hover:bg-white/20 rounded text-[11px] disabled:opacity-20 cursor-pointer"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        title="Descendre"
+                        disabled={j === arrItems.length - 1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdate(i, arrKey, moveInArray(arrItems, j, j + 1));
+                        }}
+                        className="p-1 hover:bg-white/20 rounded text-[11px] disabled:opacity-20 cursor-pointer"
+                      >
+                        ▼
+                      </button>
+                      <button
+                        type="button"
+                        title="Dupliquer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdate(i, arrKey, [
+                            ...arrItems.slice(0, j + 1),
+                            JSON.parse(JSON.stringify(item)),
+                            ...arrItems.slice(j + 1),
+                          ]);
+                        }}
+                        className="p-1 hover:bg-white/20 rounded text-[11px] cursor-pointer"
+                      >
+                        ⧉
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!window.confirm(`Supprimer cet élément ?`)) return;
+                          onUpdate(
+                            i,
+                            arrKey,
+                            arrItems.filter((_: unknown, k: number) => k !== j),
+                          );
+                        }}
+                        className="p-1 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded text-[11px] cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                      {isItemOpen ? <ChevronDown size={14} className="text-amber-300" /> : <ChevronRight size={14} className="text-zinc-500" />}
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  {isItemOpen && typeof item === 'object' && item !== null && (
+                    <div className="py-2.5 px-0 divide-y divide-zinc-200 border-t border-zinc-200">
+                      {Object.keys(item).map((field) => {
+                        const val = (item as any)[field];
+                        const isLong = ['description', 'desc', 'a', 'answer', 'speechExample', 'aiResult', 'beforeDesc', 'afterDesc'].includes(field);
+                        return (
+                          <div key={field} className="px-4 py-3 bg-white space-y-1">
+                            <label className="block text-xs font-bold text-zinc-900">
+                              {labelFor(field)}
+                            </label>
+                            {isLong ? (
+                              <RichTextarea
+                                className={inputCls}
+                                value={String(val ?? '')}
+                                onChange={(v) => onUpdate(i, `${arrKey}[${j}].${field}`, v)}
+                                minRows={2}
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                className={inputCls}
+                                value={String(val ?? '')}
+                                onChange={(e) => onUpdate(i, `${arrKey}[${j}].${field}`, e.target.value)}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </AccordionGroup>
+        );
+      })}
     </div>
   );
 }

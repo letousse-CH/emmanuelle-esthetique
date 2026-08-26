@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, X, ZoomIn, ChevronDown, ShieldCheck } from 'lucide-react';

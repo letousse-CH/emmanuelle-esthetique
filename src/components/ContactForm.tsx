@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Send, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Send, ArrowRight, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 
 import { useSettings } from '../hooks/useSettings';
 import { SETTINGS_DEFAULTS } from '../constants/settings';
@@ -47,8 +47,20 @@ export default function ContactForm({ light = false }: { light?: boolean }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.name.trim() || !formData.email.trim() || !formData.message.trim()) {
+      setError('Veuillez remplir tous les champs obligatoires.');
+      return;
+    }
+
+    if (!emailRegex.test(formData.email.trim())) {
+      setError('Veuillez renseigner une adresse e-mail valide (ex: contact@exemple.ch).');
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const response = await fetch('/api/contact', {
@@ -56,7 +68,7 @@ export default function ContactForm({ light = false }: { light?: boolean }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...formData, subject: currentSubject }),
+        body: JSON.stringify({ ...formData, email: formData.email.trim(), subject: currentSubject }),
       });
 
       const data = await response.json();
@@ -72,7 +84,7 @@ export default function ContactForm({ light = false }: { light?: boolean }) {
         subject: '',
         message: ''
       });
-      setTimeout(() => setSubmitted(false), 10000);
+      setTimeout(() => setSubmitted(false), 12000);
     } catch (err) {
       console.error('Form submission error:', err);
       setError(err instanceof Error ? err.message : 'Une erreur inattendue est survenue.');
@@ -123,9 +135,12 @@ export default function ContactForm({ light = false }: { light?: boolean }) {
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
-            className="p-4 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 italic mb-4"
+            role="alert"
+            aria-live="polite"
+            className="p-4 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200 flex items-start gap-3 mb-4"
           >
-            {error}
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <span>{error}</span>
           </motion.div>
         )}
         <div className="grid md:grid-cols-2 gap-6">
@@ -186,8 +201,17 @@ export default function ContactForm({ light = false }: { light?: boolean }) {
           disabled={loading}
           className={`w-full bg-stone-deep text-paper py-5 font-bold uppercase tracking-[0.2em] hover:bg-stone-deep/90 transition-all shadow-lg flex items-center justify-center gap-4 group ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
-          {loading ? 'Envoi en cours...' : 'Envoyer le message'}
-          {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
+          {loading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin text-paper" />
+              <span>Envoi en cours…</span>
+            </>
+          ) : (
+            <>
+              <span>Envoyer le message</span>
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+            </>
+          )}
         </motion.button>
       </motion.form>
     </div>

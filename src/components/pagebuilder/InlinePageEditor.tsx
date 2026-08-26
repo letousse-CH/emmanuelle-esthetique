@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Pencil, X, Save, ChevronUp, ChevronDown, Trash2, Copy, Undo2,
-  Loader2, CheckCircle2, AlertCircle,
+  Save, Loader2, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import DynamicPageRenderer from './DynamicPageRenderer';
 import { WIREFRAME_REGISTRY, AVAILABLE_SECTION_TYPES } from './wireframes.config';
@@ -10,6 +9,7 @@ import { SECTION_LABELS, SectionPreview } from './sectionPreviews';
 import { usePageEditor } from './usePageEditor';
 import FieldEditor from './FieldEditor';
 import SectionEditorModal from './SectionEditorModal';
+import AiPageModal from './AiPageModal';
 import { updatePage } from '../../services/dynamicPages';
 import { PageEditorContext } from '../../contexts/PageEditorContext';
 
@@ -23,25 +23,13 @@ interface Props {
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 export default function InlinePageEditor({ pageId, initialSections }: Props) {
-  const [open, setOpen] = useState(false);
   const [active, setActive] = useState<number | null>(null);
   const [modalSectionIndex, setModalSectionIndex] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [autoSaveTick, setAutoSaveTick] = useState(0);
-  const [query, setQuery] = useState('');
 
-  const visibleTypes = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return AVAILABLE_SECTION_TYPES;
-    return AVAILABLE_SECTION_TYPES.filter((type) =>
-      `${SECTION_LABELS[type] ?? ''} ${type} ${WIREFRAME_REGISTRY[type]?.description ?? ''}`
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [query]);
-
-  const { sections, move, remove, duplicate, add, swapType, updateField, undo, canUndo, dirty, markClean } =
+  const { sections, move, remove, duplicate, add, swapType, updateField, undo, canUndo, dirty, markClean, moveTo, replaceAll } =
     usePageEditor(initialSections);
 
   const persist = useCallback(async (payload: PageSection[]) => {
@@ -58,13 +46,6 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
     }
   }, [pageId, markClean]);
 
-  /**
-   * `EditableText` / `EditableImage` appellent `updateField` puis `savePage`
-   * dans le même tick : lire `sections` à ce moment-là renvoyait l'état
-   * *d'avant* la modification, qui était donc écrasé en base (la pastille
-   * « Enregistré » s'affichait pourtant). On ne fait ici que demander un
-   * enregistrement ; l'effet ci-dessous l'exécute une fois l'état appliqué.
-   */
   const requestSave = useCallback(async () => {
     setAutoSaveTick((n) => n + 1);
   }, []);
@@ -78,14 +59,11 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
     return () => clearTimeout(timer);
   }, [autoSaveTick, sections, persist]);
 
-  // Marqueur lu par UniversalPageEditor : sur une page du page builder, c'est
-  // cet éditeur-ci qui gère l'édition en ligne, pas le balayage du DOM.
   useEffect(() => {
     document.body.dataset.pageEditor = 'inline';
     return () => { delete document.body.dataset.pageEditor; };
   }, []);
 
-  // Garde-fou : ne pas quitter la page avec des modifications non enregistrées.
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
@@ -95,10 +73,10 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && open) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void persist(sectionsRef.current);
-      } else if (e.key === 'z' && !e.shiftKey && open) {
+      } else if (e.key === 'z' && !e.shiftKey) {
         const el = e.target as HTMLElement | null;
         if (el && (el.isContentEditable || /^(INPUT|TEXTAREA)$/.test(el.tagName))) return;
         e.preventDefault();
@@ -107,7 +85,7 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [persist, undo, open]);
+  }, [persist, undo]);
 
   const save = () => persist(sectionsRef.current);
 
@@ -117,9 +95,14 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
       savePage: requestSave,
       openSectionEditor: (idx: number) => setModalSectionIndex(idx),
       swapType,
+      moveSection: move,
+      moveToSection: moveTo,
+      removeSection: remove,
+      duplicateSection: duplicate,
+      addSection: add,
       isEditing: true,
     }),
-    [updateField, requestSave, swapType],
+    [updateField, requestSave, swapType, move, moveTo, remove, duplicate, add],
   );
 
   const handleSectionClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -144,15 +127,47 @@ export default function InlinePageEditor({ pageId, initialSections }: Props) {
         </PageEditorContext.Provider>
       </div>
 
-      {/* Bouton flottant d'édition */}
-      {modalSectionIndex === null && (
+      {/* Barre de Sauvegarde Front-End Lumineuse & Colorée IA */}
+      <div className="fixed bottom-6 left-6 z-[9990] bg-gradient-to-r from-white via-purple-50/95 to-amber-50/95 text-zinc-900 px-4 py-2.5 rounded-full shadow-[0_4px_25px_rgba(168,85,247,0.25)] border border-purple-200 backdrop-blur-md flex items-center gap-3 select-none animate-in slide-in-from-bottom duration-300">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="text-xs font-bold text-zinc-200">Édition en direct</span>
+        </div>
+
+        <div className="h-4 w-px bg-zinc-700" />
+
+        {/* Bouton Sauvegarder la page Front-End */}
         <button
-          onClick={() => setModalSectionIndex(active ?? 0)}
-          className="fixed bottom-6 left-6 z-[9990] flex items-center gap-2 bg-stone-900 text-white px-5 py-3 rounded-full shadow-2xl text-sm font-bold hover:bg-stone-800 hover:scale-[1.02] transition-all duration-300 cursor-pointer"
+          onClick={save}
+          disabled={saveStatus === 'saving'}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-extrabold transition-all cursor-pointer shadow-sm ${
+            dirty || saveStatus === 'error'
+              ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-600/30 ring-2 ring-emerald-300'
+              : 'bg-white text-zinc-900 hover:bg-zinc-100 font-bold'
+          } disabled:opacity-50`}
         >
-          <Pencil size={15} /> Modifier la page
+          {saveStatus === 'saving' ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Save size={14} />
+          )}
+          <span>{saveStatus === 'saving' ? 'Sauvegarde…' : 'Sauvegarder la page'}</span>
         </button>
-      )}
+
+        {saveStatus === 'saved' && (
+          <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold animate-fade-in">
+            <CheckCircle2 size={13} /> Enregistré !
+          </span>
+        )}
+        {saveStatus === 'error' && (
+          <span className="flex items-center gap-1 text-red-600 text-xs font-bold" title={errorMsg}>
+            <AlertCircle size={13} /> Échec
+          </span>
+        )}
+      </div>
 
       {/* Modale unique déplaçable sur tout l'écran */}
       {modalSectionIndex !== null && sections[modalSectionIndex] && (

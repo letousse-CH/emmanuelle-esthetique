@@ -1,28 +1,82 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   AlignCenter,
   AlignLeft,
-  Moon,
-  Sun,
+  ChevronDown,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Type,
+  Layout,
+  Sliders,
 } from 'lucide-react';
 
 import {
   CARD_TEXT_SIZE_PRESETS, CARD_TITLE_SIZE_PRESETS, LAYOUT_DEFAULTS, LAYOUT_OPTIONS,
 } from './sectionLayout';
 import SizeInput from '../admin/SizeInput';
-import { useThemePalette } from './useThemePalette';
 
-/**
- * Réglages d'apparence d'une section.
- *
- * Chaque réglage est un **choix parmi trois ou quatre**, jamais un champ
- * libre : c'est ce qui garantit qu'une page reste présentable et responsive
- * quoi que fasse la personne qui l'édite. Chaque groupe porte une phrase qui
- * dit ce qu'il fait — un libellé seul (« Densité ») ne suffit pas à quelqu'un
- * qui découvre.
- */
+function ApparenceAccordion({
+  title,
+  icon: Icon,
+  hint,
+  isOpenState,
+  onToggle,
+  children,
+}: {
+  title: string;
+  icon?: React.ElementType;
+  hint?: string;
+  isOpenState?: boolean;
+  onToggle?: () => void;
+  children: React.ReactNode;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = isOpenState !== undefined ? isOpenState : internalOpen;
+
+  const handleToggle = () => {
+    if (onToggle) {
+      onToggle();
+    } else {
+      setInternalOpen(!internalOpen);
+    }
+  };
+
+  return (
+    <div className="border border-zinc-300 rounded-lg overflow-hidden shadow-2xs bg-white mb-3 transition-all">
+      <button
+        type="button"
+        onClick={handleToggle}
+        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-all cursor-pointer select-none ${
+          isOpen
+            ? 'bg-zinc-900 text-white font-extrabold border-b border-zinc-800'
+            : 'bg-zinc-100/80 hover:bg-zinc-200 text-zinc-900 font-bold'
+        }`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          {Icon && <Icon size={15} className={isOpen ? 'text-amber-300' : 'text-zinc-500'} />}
+          <span className="text-xs font-bold uppercase tracking-wider truncate">{title}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {hint && (
+            <span className={`text-[11px] hidden sm:inline ${isOpen ? 'text-zinc-300' : 'text-zinc-600'}`}>
+              {hint}
+            </span>
+          )}
+          {isOpen ? <ChevronDown size={15} className="text-amber-300" /> : <ChevronRight size={15} className="text-zinc-600" />}
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="p-0 divide-y divide-zinc-200 border-t border-zinc-200">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Segmented({
   label,
@@ -33,7 +87,7 @@ function Segmented({
   icons,
 }: {
   label: string;
-  hint: string;
+  hint?: string;
   options: readonly { value: string; label: string }[];
   value: string;
   onChange: (value: string) => void;
@@ -41,9 +95,9 @@ function Segmented({
 }) {
   return (
     <div>
-      <p className="text-[13px] font-medium text-stone-800">{label}</p>
-      <p className="mb-2 mt-0.5 text-[12.5px] leading-snug text-stone-600">{hint}</p>
-      <div className="flex flex-wrap gap-1.5">
+      <p className="text-xs font-extrabold text-zinc-900 mb-0.5">{label}</p>
+      {hint && <p className="mb-2 text-[11.5px] leading-snug text-zinc-500">{hint}</p>}
+      <div className="flex flex-wrap gap-1.5 mt-1">
         {options.map((option) => {
           const active = value === option.value;
           return (
@@ -52,71 +106,14 @@ function Segmented({
               type="button"
               aria-pressed={active}
               onClick={() => onChange(option.value)}
-              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[13px] font-medium transition-colors cursor-pointer
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
-                  active
-                    ? 'border-stone-900 bg-stone-900 text-white'
-                    : 'border-stone-300 text-stone-700 hover:border-stone-400 hover:bg-stone-50'
-                }`}
+              className={`flex items-center gap-1.5 rounded-[5px] border px-3 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${
+                active
+                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                  : 'border-zinc-300 text-zinc-800 bg-white hover:bg-zinc-100'
+              }`}
             >
               {icons?.[option.value]}
               {option.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Clair ou foncé, montré avec les couleurs réellement enregistrées.
- *
- * Les deux vignettes étaient un blanc et un `stone-900` en dur : on choisissait
- * une ambiance sans voir ce qu'elle donnerait sur ce site-ci.
- */
-export function ThemeControl({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const { swatches } = useThemePalette();
-  const light = swatches.find((s) => s.key === 'style_color_bg')?.value ?? '#FFFFFF';
-  const dark = swatches.find((s) => s.key === 'style_color_text')?.value ?? '#1C1917';
-
-  return (
-    <div>
-      <p className="text-[13px] font-medium text-stone-800">Ambiance</p>
-      <p className="mb-2 mt-0.5 text-[12.5px] leading-snug text-stone-600">
-        Alterner clair et foncé d&apos;une section à l&apos;autre découpe la page
-        et évite l&apos;effet « long document ».
-      </p>
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          { value: 'light', label: 'Clair', icon: <Sun size={15} />, bg: light, fg: dark },
-          { value: 'dark', label: 'Foncé', icon: <Moon size={15} />, bg: dark, fg: light },
-        ].map((option) => {
-          const active = (value || 'light') === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onChange(option.value)}
-              className={`flex items-center gap-3 rounded-lg border p-2.5 text-left transition-colors cursor-pointer
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
-                  active ? 'border-stone-900 ring-1 ring-stone-900' : 'border-stone-300 hover:border-stone-400'
-                }`}
-            >
-              <span
-                className="grid size-9 shrink-0 place-items-center rounded-md border border-stone-300"
-                style={{ backgroundColor: option.bg, color: option.fg }}
-              >
-                {option.icon}
-              </span>
-              <span className="text-[13px] font-medium text-stone-800">{option.label}</span>
             </button>
           );
         })}
@@ -132,98 +129,159 @@ export default function LayoutControls({
 }: {
   data: Record<string, unknown>;
   onChange: (field: string, value: unknown) => void;
-  /** La section contient-elle une grille de cartes ? */
   hasCards?: boolean;
 }) {
   const get = (key: keyof typeof LAYOUT_DEFAULTS): string =>
     String((data[key] as string | number | undefined) ?? LAYOUT_DEFAULTS[key]);
 
+  const [openBlocks, setOpenBlocks] = useState<Record<string, boolean>>({});
+
   return (
-    <div className="space-y-7">
-      {/* Le clair / foncé a rejoint l'onglet « Fond », avec le reste de
-          l'arrière-plan : il n'a plus rien à faire ici. */}
-      <Segmented
-        label="Espacement"
-        hint="La hauteur de la section. « Aéré » donne un rendu plus haut de gamme, « serré » densifie une page longue."
-        options={LAYOUT_OPTIONS.density}
-        value={get('density')}
-        onChange={(v) => onChange('density', v)}
-      />
+    <div className="space-y-3">
+      {/* Barre Tout ouvrir / Tout fermer */}
+      <div className="flex items-center justify-between pb-2 border-b border-zinc-200 select-none">
+        <span className="text-[11px] font-extrabold text-zinc-500 uppercase tracking-wider">
+          Réglages d'Apparence
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setOpenBlocks({ spacing: true, typo: true, layout: true })}
+            className="text-[11px] font-bold text-zinc-800 hover:text-white bg-zinc-100 hover:bg-zinc-900 border border-zinc-300 px-2 py-0.5 rounded-[5px] transition-all cursor-pointer"
+          >
+            Tout ouvrir
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpenBlocks({})}
+            className="text-[11px] font-bold text-zinc-800 hover:text-white bg-zinc-100 hover:bg-zinc-900 border border-zinc-300 px-2 py-0.5 rounded-[5px] transition-all cursor-pointer"
+          >
+            Tout fermer
+          </button>
+        </div>
+      </div>
 
-      <Segmented
-        label="Largeur du contenu"
-        hint="Un texte trop large fatigue à la lecture. « Étroit » convient aux paragraphes, « large » aux grilles."
-        options={LAYOUT_OPTIONS.width}
-        value={get('width')}
-        onChange={(v) => onChange('width', v)}
-      />
-
-      {hasCards && (
-        <div className="space-y-5 rounded-lg border border-stone-200 bg-stone-50 p-4">
-          <p className="text-[13px] font-medium text-stone-800">Textes des cartes</p>
-          <CardSize
-            label="Taille du titre"
-            hint="Vide : le titre suit la taille du texte."
-            presets={CARD_TITLE_SIZE_PRESETS}
-            value={String(data.cards_title_size ?? '')}
-            onChange={(v) => onChange('cards_title_size', v)}
-          />
-          <CardSize
-            label="Taille du texte"
-            hint="N’agit que sur les cartes — pas sur le titre de la section."
-            presets={CARD_TEXT_SIZE_PRESETS}
-            value={String(data.cards_text_size ?? '')}
-            onChange={(v) => onChange('cards_text_size', v)}
+      {/* ── 1. Espacement & Dimensions ── */}
+      <ApparenceAccordion
+        title="Espacement & Dimensions"
+        icon={Maximize2}
+        hint="Hauteur de la section et largeur du texte"
+        isOpenState={openBlocks['spacing']}
+        onToggle={() => setOpenBlocks((prev) => ({ ...prev, spacing: !prev.spacing }))}
+      >
+        <div className="px-4 py-5 bg-indigo-50/50 border-0 rounded-none">
+          <Segmented
+            label="Espacement vertical (Densité)"
+            hint="Aéré donne un rendu haut de gamme ; serré densifie une page."
+            options={LAYOUT_OPTIONS.density}
+            value={get('density')}
+            onChange={(v) => onChange('density', v)}
           />
         </div>
-      )}
 
-      <Segmented
-        label="Taille du titre principal"
-        hint="Personnalisez la taille de la police du titre de la section."
-        options={LAYOUT_OPTIONS.title_size}
-        value={String(data.title_size || data.title_font_size || '')}
-        onChange={(v) => {
-          onChange('title_size', v);
-          onChange('title_font_size', v);
-        }}
-      />
+        <div className="px-4 py-5 bg-white border-0 rounded-none">
+          <Segmented
+            label="Largeur du contenu"
+            hint="Étroit convient aux paragraphes, large aux grilles d'éléments."
+            options={LAYOUT_OPTIONS.width}
+            value={get('width')}
+            onChange={(v) => onChange('width', v)}
+          />
+        </div>
+      </ApparenceAccordion>
 
-      <Segmented
-        label="Taille du texte / description"
-        hint="Personnalisez la taille de la police du paragraphe ou de la description."
-        options={LAYOUT_OPTIONS.content_size}
-        value={String(data.content_size || data.content_font_size || '')}
-        onChange={(v) => {
-          onChange('content_size', v);
-          onChange('content_font_size', v);
-        }}
-      />
+      {/* ── 2. Typographie & Tailles de Texte ── */}
+      <ApparenceAccordion
+        title="Typographie & Tailles de Texte"
+        icon={Type}
+        hint="Taille des titres et descriptions"
+        isOpenState={openBlocks['typo']}
+        onToggle={() => setOpenBlocks((prev) => ({ ...prev, typo: !prev.typo }))}
+      >
+        <div className="px-4 py-5 bg-indigo-50/50 border-0 rounded-none">
+          <Segmented
+            label="Taille du titre principal"
+            hint="Personnalisez l'échelle typographique du grand titre de la section."
+            options={LAYOUT_OPTIONS.title_size}
+            value={String(data.title_size || data.title_font_size || '')}
+            onChange={(v) => {
+              onChange('title_size', v);
+              onChange('title_font_size', v);
+            }}
+          />
+        </div>
 
-      {('image_url' in data || 'image_side' in data || 'image_position' in data || 'show_image' in data) && (
-        <Segmented
-          label="Position de l'image"
-          hint="Place l'image principale à gauche ou à droite du texte."
-          options={LAYOUT_OPTIONS.image_side}
-          value={String(data.image_side || data.image_position || 'right')}
-          onChange={(v) => {
-            onChange('image_side', v);
-            onChange('image_position', v);
-          }}
-        />
-      )}
+        <div className="px-4 py-5 bg-white border-0 rounded-none">
+          <Segmented
+            label="Taille du texte / description"
+            hint="Ajuste la taille du paragraphe principal."
+            options={LAYOUT_OPTIONS.content_size}
+            value={String(data.content_size || data.content_font_size || '')}
+            onChange={(v) => {
+              onChange('content_size', v);
+              onChange('content_font_size', v);
+            }}
+          />
+        </div>
 
-      <Segmented
-        label="Alignement"
-        hint="Centré attire l'œil sur une section courte ; à gauche se lit mieux dès qu'il y a du texte."
-        options={LAYOUT_OPTIONS.align}
-        value={get('align')}
-        onChange={(v) => onChange('align', v)}
-        icons={{
-          left: <AlignLeft size={14} />,
-          center: <AlignCenter size={14} />,
-        }}
-      />
+        {hasCards && (
+          <div className="px-4 py-5 bg-indigo-50/50 border-0 rounded-none space-y-3">
+            <p className="text-xs font-extrabold text-zinc-900 uppercase tracking-wider">Tailles dans les Cartes</p>
+            <CardSize
+              label="Taille du titre de carte"
+              hint="Par défaut, suit la taille de la grille."
+              presets={CARD_TITLE_SIZE_PRESETS}
+              value={String(data.cards_title_size ?? '')}
+              onChange={(v) => onChange('cards_title_size', v)}
+            />
+            <CardSize
+              label="Taille du texte de carte"
+              hint="N'agit que sur les éléments internes des cartes."
+              presets={CARD_TEXT_SIZE_PRESETS}
+              value={String(data.cards_text_size ?? '')}
+              onChange={(v) => onChange('cards_text_size', v)}
+            />
+          </div>
+        )}
+      </ApparenceAccordion>
+
+      {/* ── 3. Disposition & Alignement ── */}
+      <ApparenceAccordion
+        title="Disposition & Alignement"
+        icon={Layout}
+        hint="Cadrage de l'image et alignement du texte"
+        isOpenState={openBlocks['layout']}
+        onToggle={() => setOpenBlocks((prev) => ({ ...prev, layout: !prev.layout }))}
+      >
+        {('image_url' in data || 'image_side' in data || 'image_position' in data || 'show_image' in data) && (
+          <div className="px-4 py-5 bg-indigo-50/50 border-0 rounded-none">
+            <Segmented
+              label="Position de l'image"
+              hint="Place l'image principale à gauche ou à droite du texte."
+              options={LAYOUT_OPTIONS.image_side}
+              value={String(data.image_side || data.image_position || 'right')}
+              onChange={(v) => {
+                onChange('image_side', v);
+                onChange('image_position', v);
+              }}
+            />
+          </div>
+        )}
+
+        <div className="px-4 py-5 bg-white border-0 rounded-none">
+          <Segmented
+            label="Alignement du texte"
+            hint="Centré attire l'œil sur les sections courtes ; à gauche se lit mieux avec du texte."
+            options={LAYOUT_OPTIONS.align}
+            value={get('align')}
+            onChange={(v) => onChange('align', v)}
+            icons={{
+              left: <AlignLeft size={14} />,
+              center: <AlignCenter size={14} />,
+            }}
+          />
+        </div>
+      </ApparenceAccordion>
     </div>
   );
 }
@@ -238,32 +296,24 @@ export function AnimationControls({
   const value = (data.animation as string | undefined) ?? LAYOUT_DEFAULTS.animation;
 
   return (
-    <div className="space-y-6">
-      <Segmented
-        label="Apparition"
-        hint="Comment la section se révèle quand le visiteur y arrive. En cascade, les éléments entrent l'un après l'autre."
-        options={LAYOUT_OPTIONS.animation}
-        value={value}
-        onChange={(v) => onChange('animation', v)}
-      />
+    <div className="space-y-4">
+      <div className="p-3.5 bg-zinc-50 border border-zinc-200 rounded-none">
+        <Segmented
+          label="Apparition au défilement"
+          hint="Effet d'apparition quand le visiteur fait défiler la page."
+          options={LAYOUT_OPTIONS.animation}
+          value={value}
+          onChange={(v) => onChange('animation', v)}
+        />
+      </div>
 
-      <p className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-[12.5px] leading-relaxed text-stone-600">
-        Les animations sont coupées pour les visiteurs qui ont demandé à leur
-        système de réduire les mouvements — une exigence d&apos;accessibilité, et
-        un réglage courant chez les personnes sujettes au mal des transports.
+      <p className="rounded-none border border-zinc-200 bg-white p-3 text-[11.5px] leading-relaxed text-zinc-500">
+        Les animations sont désactivées pour les visiteurs ayant configuré la réduction des mouvements dans leur système d'exploitation (norme WCAG/accessibilité).
       </p>
     </div>
   );
 }
 
-/**
- * Une taille de carte : trois crans courants, ou la valeur de votre choix.
- *
- * Le réglage a d'abord agi sur toute la section — grossir une grille d'atouts
- * grossissait aussi son titre. Il ne touche plus que les cartes, et le titre a
- * sa propre taille, parce qu'agrandir un intitulé sans agrandir le paragraphe
- * est justement ce qu'on cherche à faire la plupart du temps.
- */
 function CardSize({
   label,
   hint,
@@ -283,8 +333,8 @@ function CardSize({
 
   return (
     <div>
-      <p className="text-[12.5px] font-medium text-stone-800">{label}</p>
-      <p className="mb-2 mt-0.5 text-[12px] leading-snug text-stone-600">{hint}</p>
+      <p className="text-xs font-bold text-zinc-900">{label}</p>
+      <p className="mb-2 text-[11.5px] text-zinc-500">{hint}</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {presets.map((preset) => {
           const active = !libre && current === preset.value;
@@ -294,12 +344,11 @@ function CardSize({
               type="button"
               aria-pressed={active}
               onClick={() => { setLibre(false); onChange(preset.value); }}
-              className={`rounded-lg border px-2.5 py-1 text-[12.5px] font-medium transition-colors cursor-pointer
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
-                  active
-                    ? 'border-stone-900 bg-stone-900 text-white'
-                    : 'border-stone-300 text-stone-700 hover:border-stone-400 hover:bg-white'
-                }`}
+              className={`rounded-[5px] border px-2.5 py-1 text-xs font-bold transition-all cursor-pointer ${
+                active
+                  ? 'border-zinc-900 bg-zinc-900 text-white'
+                  : 'border-zinc-300 text-zinc-800 bg-white hover:bg-zinc-100'
+              }`}
             >
               {preset.label}
             </button>
@@ -309,12 +358,11 @@ function CardSize({
           type="button"
           aria-pressed={libre}
           onClick={() => setLibre((l) => !l)}
-          className={`rounded-lg border px-2.5 py-1 text-[12.5px] font-medium transition-colors cursor-pointer
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
-              libre
-                ? 'border-stone-900 bg-stone-900 text-white'
-                : 'border-stone-300 text-stone-700 hover:border-stone-400 hover:bg-white'
-            }`}
+          className={`rounded-[5px] border px-2.5 py-1 text-xs font-bold transition-all cursor-pointer ${
+            libre
+              ? 'border-zinc-900 bg-zinc-900 text-white'
+              : 'border-zinc-300 text-zinc-800 bg-white hover:bg-zinc-100'
+          }`}
         >
           Taille précise
         </button>
@@ -329,8 +377,8 @@ function CardSize({
             ariaLabel={label}
             className="w-32"
           />
-          <span className="text-[12px] leading-snug text-stone-600">
-            En <code>rem</code> ou en <code>px</code>. Les flèches ajustent d&apos;un pixel.
+          <span className="text-[11.5px] text-zinc-500">
+            En <code>rem</code> ou <code>px</code>.
           </span>
         </div>
       )}

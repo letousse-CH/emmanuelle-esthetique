@@ -29,12 +29,18 @@ const KEEP_VISIBLE = 80;
 
 function clampToViewport(box: Box): Box {
   if (typeof window === 'undefined') return box;
-  const maxX = window.innerWidth - KEEP_VISIBLE;
-  const maxY = window.innerHeight - KEEP_VISIBLE;
+  const margin = 16;
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const clampedWidth = Math.min(box.width, viewportWidth - margin * 2);
+  const clampedHeight = Math.min(box.height, viewportHeight - margin * 2);
+  const maxX = Math.max(margin, viewportWidth - clampedWidth - margin);
+  const maxY = Math.max(margin, viewportHeight - clampedHeight - margin);
   return {
-    ...box,
-    x: Math.min(Math.max(box.x, KEEP_VISIBLE - box.width), maxX),
-    y: Math.min(Math.max(box.y, 0), maxY),
+    width: clampedWidth,
+    height: clampedHeight,
+    x: Math.min(Math.max(box.x, margin), maxX),
+    y: Math.min(Math.max(box.y, margin), maxY),
   };
 }
 
@@ -60,23 +66,21 @@ export default function FloatingPanel({
 
   // Position initiale : centrée sur l'écran et facilement déplaçable.
   useEffect(() => {
-    const width = 540;
-    const height = Math.min(window.innerHeight - 100, 720);
+    const viewportWidth = window.innerWidth;
+    const targetWidth = Math.min(540, viewportWidth - 32);
+    const targetHeight = Math.min(window.innerHeight - 64, 720);
+
     const fallback: Box = {
-      width,
-      height,
-      x: Math.max(32, Math.floor((window.innerWidth - width) / 2)),
-      y: Math.max(40, Math.floor((window.innerHeight - height) / 2)),
+      width: targetWidth,
+      height: targetHeight,
+      x: Math.max(16, Math.floor((viewportWidth - targetWidth) / 2)),
+      y: Math.max(16, Math.floor((window.innerHeight - targetHeight) / 2)),
     };
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Si la position enregistrée est collée tout à droite, recentrer la modale
-        if (parsed.x && parsed.x > window.innerWidth - 480) {
-          parsed.x = Math.max(32, Math.floor((window.innerWidth - width) / 2));
-        }
-        setBox(clampToViewport({ ...fallback, ...parsed }));
+        setBox(clampToViewport({ ...fallback, ...parsed, width: Math.min(parsed.width || targetWidth, viewportWidth - 32) }));
       } else {
         setBox(fallback);
       }
@@ -167,18 +171,18 @@ export default function FloatingPanel({
       role="dialog"
       aria-label={ariaLabel}
       style={{ left: box.x, top: box.y, width: box.width, height: box.height }}
-      className="fixed z-[60] flex flex-col border border-stone-200/90 bg-white/95 backdrop-blur-2xl shadow-2xl rounded-3xl overflow-hidden ring-1 ring-stone-900/5 transition-all duration-150"
+      className="fixed z-[60] flex flex-col border border-zinc-300 bg-white shadow-2xl rounded-2xl overflow-hidden ring-1 ring-zinc-900/5 transition-all duration-150"
     >
       <div
         onPointerDown={start('move')}
-        className="shrink-0 cursor-grab touch-none border-b border-stone-100 bg-stone-50/50 active:cursor-grabbing"
+        className="shrink-0 cursor-grab touch-none border-b border-zinc-200 bg-white text-zinc-900 active:cursor-grabbing rounded-t-2xl overflow-hidden"
       >
         {header}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-white">{children}</div>
 
-      {footer && <div className="shrink-0 border-t border-stone-200">{footer}</div>}
+      {footer && <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/90 rounded-b-2xl overflow-hidden">{footer}</div>}
 
       {/* Poignée de redimensionnement */}
       <div

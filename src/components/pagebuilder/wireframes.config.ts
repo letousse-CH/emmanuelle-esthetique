@@ -41,6 +41,18 @@ import {
   Stats3, type Stats3Data,
   Newsletter1, type Newsletter1Data,
   BentoGrid1, type BentoGrid1Data,
+  BlogGrid1, type BlogGrid1Data,
+  HeroSplitBadge, type HeroSplitBadgeData,
+  FeaturesGridOffset, type FeaturesGridOffsetData,
+  PricingCardsModern, type PricingCardsModernData,
+  FaqAccordionModern, type FaqAccordionModernData,
+  AdminShowcaseHero,
+  ClientNeedsSection,
+  VoiceFeaturesSection,
+  AdminMockupsGallery,
+  TurnkeyBentoGrid,
+  TurnkeyOfferSection,
+  TurnkeyFaq,
 } from './sections.extra';
 
 import { SECTION_META } from './sectionMeta';
@@ -83,47 +95,23 @@ export type SectionType =
   | 'pricing_2'
   | 'stats_3'
   | 'newsletter_1'
-  | 'bento_grid_1';
+  | 'bento_grid_1'
+  | 'blog_grid_1'
+  | 'hero_split_badge'
+  | 'features_grid_offset'
+  | 'pricing_cards_modern'
+  | 'faq_accordion_modern'
+  | 'hero_turnkey_voice'
+  | 'client_needs_matrix'
+  | 'voice_showcase_1'
+  | 'admin_mockups_gallery'
+  | 'turnkey_bento_grid'
+  | 'turnkey_offer_pricing'
+  | 'turnkey_faq_accordion'
+  | 'turnkey_steps_1'
+  | 'turnkey_testimonials_1';
 
-export type SectionData =
-  | Hero1Data
-  | Hero2Data
-  | Hero3Data
-  | Hero4Data
-  | Hero5Data
-  | Intro1Data
-  | Features1Data
-  | Features2Data
-  | Features3Data
-  | Cta1Data
-  | Testimonial1Data
-  | Text1Data
-  | TextImage1Data
-  | GalleryGridData
-  | GalleryCarouselData
-  | GalleryMasonryData
-  | Faq1Data
-  | Reviews1Data
-  | Marquee1Data
-  | Pricing1Data
-  | Stats1Data
-  | Timeline1Data
-  | Logos1Data
-  | Cta2Data
-  | Cta3Data
-  | Testimonial2Data
-  | Team1Data
-  | Contact1Data
-  | Steps1Data
-  | Stats2Data
-  | Faq2Data
-  | Compare1Data
-  | Banner1Data
-  | HeroVideoData
-  | Pricing2Data
-  | Stats3Data
-  | Newsletter1Data
-  | BentoGrid1Data;
+export type SectionData = any;
 
 export interface PageSection {
   type: SectionType;
@@ -136,19 +124,9 @@ interface WireframeEntry {
   dataSchema: Record<string, string>;
 }
 
-/**
- * Association type de section → composant.
- *
- * ⚠️ La description et le schéma de champs de chaque section **ne sont plus
- * écrits ici**. Ils vivaient en double, dans ce fichier et dans
- * `sectionMeta.ts` : cinq cents lignes recopiées, que rien ne tenait
- * synchronisées. Modifier un champ dans l'un laissait l'autre en arrière — et
- * comme l'éditeur lit ce registre tandis que les routes IA lisent les
- * métadonnées, l'écran de configuration et le modèle ne voyaient déjà plus les
- * mêmes champs.
- *
- * Ce fichier ne décide plus que d'une chose : quel composant rend quel type.
- */
+import HowItWorksSection from '../showcase/HowItWorksSection';
+import TurnkeyTestimonialsSection from '../showcase/TurnkeyTestimonialsSection';
+
 const SECTION_COMPONENTS: Record<SectionType, ComponentType<{ data: any; sectionIndex?: number }>> = {
   hero_1: Hero1,
   hero_2: Hero2,
@@ -188,15 +166,30 @@ const SECTION_COMPONENTS: Record<SectionType, ComponentType<{ data: any; section
   stats_3: Stats3,
   newsletter_1: Newsletter1,
   bento_grid_1: BentoGrid1,
+  blog_grid_1: BlogGrid1,
+  hero_split_badge: HeroSplitBadge,
+  features_grid_offset: FeaturesGridOffset,
+  pricing_cards_modern: PricingCardsModern,
+  faq_accordion_modern: FaqAccordionModern,
+  hero_turnkey_voice: AdminShowcaseHero,
+  client_needs_matrix: ClientNeedsSection,
+  voice_showcase_1: VoiceFeaturesSection,
+  admin_mockups_gallery: AdminMockupsGallery,
+  turnkey_bento_grid: TurnkeyBentoGrid,
+  turnkey_offer_pricing: TurnkeyOfferSection,
+  turnkey_faq_accordion: TurnkeyFaq,
+  turnkey_steps_1: HowItWorksSection,
+  turnkey_testimonials_1: TurnkeyTestimonialsSection,
 };
 
 export const WIREFRAME_REGISTRY = (() => {
   const registry = {} as Record<SectionType, WireframeEntry>;
   for (const type of Object.keys(SECTION_COMPONENTS) as SectionType[]) {
+    const meta = SECTION_META[type as keyof typeof SECTION_META] as any;
     registry[type] = {
       component: SECTION_COMPONENTS[type],
-      description: SECTION_META[type].description,
-      dataSchema: SECTION_META[type].dataSchema,
+      description: meta?.description || type,
+      dataSchema: meta?.dataSchema || {},
     };
   }
   return registry;

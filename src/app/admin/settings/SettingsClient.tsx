@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import AiKeyPanel from './AiKeyPanel';
+import ApiKeysPanel from './ApiKeysPanel';
 import DesignSystemPanel from './DesignSystemPanel';
 import EditorialVoiceInterviewModal from './EditorialVoiceInterviewModal';
 import FleetManagerPanel from './FleetManagerPanel';
 import { supabase } from '../../../services/supabase';
-import { Save, Lock, Tag, Image, X, Check, Sun, Moon, Palette, Type, Sliders, Eye, RefreshCw, Share2, Puzzle, Building2, Sparkles, AlertTriangle, BookOpen, CreditCard, Mic, ShieldCheck, Server } from 'lucide-react';
+import { Save, Lock, Tag, Image, X, Check, Sun, Moon, Palette, Type, Sliders, Eye, RefreshCw, Share2, Puzzle, Building2, Sparkles, AlertTriangle, BookOpen, CreditCard, Mic, ShieldCheck, Server, ExternalLink, KeyRound } from 'lucide-react';
 import { settingsCache } from '../../../hooks/useSettings';
 import { SETTINGS_DEFAULTS } from '../../../constants/settings';
 import { AI_EFFORT_LEVELS, AI_MODELS, AiEffort, AiModelSpec, DEFAULT_AI_EFFORT, DEFAULT_AI_MODEL } from '../../../constants/aiModels';
@@ -21,17 +22,17 @@ import { PageHeader, SideNav, type TabItem } from '../../../components/admin/ui'
  */
 const SETTINGS_SECTIONS: TabItem[] = [
   { id: 'business', label: 'Entreprise', icon: Building2,
-    description: "Nom, adresse, téléphone, e-mail — repris sur le site et dans les factures." },
+    description: "Nom, adresse, téléphone, e-mail et code promo de bienvenue." },
   { id: 'general', label: 'Identité visuelle', icon: Image,
-    description: 'Logos, favicon, visuels du pied de page.' },
+    description: 'Logos (principal & footer), visuel de pied de page et favicon.' },
   { id: 'style', label: 'Design & style', icon: Palette,
-    description: 'Couleurs, polices, rythme des pages et boutons.' },
+    description: 'Couleurs, polices, visuel du Hero, bouton du menu et rythme.' },
   { id: 'editorial', label: 'Éditorial & marque', icon: BookOpen,
     description: "Ce que l'IA doit savoir de votre activité et de votre ton." },
   { id: 'modules', label: 'Modules', icon: Puzzle,
     description: 'Activez ou masquez les grandes fonctions du site.' },
-  { id: 'ai', label: 'IA & budget', icon: Sparkles,
-    description: 'Modèle utilisé, niveau de réflexion, plafond de dépense.' },
+  { id: 'keys', label: 'Clés API & Services', icon: KeyRound,
+    description: 'Anthropic Claude, Resend E-mails, Cloudflare R2, Bing IndexNow.' },
   { id: 'caisse', label: 'Caisse & TVA', icon: CreditCard,
     description: 'Taux de TVA, IBAN, mentions de facture et bons cadeaux.' },
   { id: 'fleet', label: 'Flotte Multi-Sites', icon: Server,
@@ -98,14 +99,25 @@ export default function Settings() {
   const [logoMessage, setLogoMessage]         = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [activePicker, setActivePicker]       = useState<'hero' | 'logo' | 'footerLogo' | 'footerImage' | 'favicon' | null>(null);
 
-  // ── Réseaux sociaux ──────────────────────────────────────
-  const [socialInstagram, setSocialInstagram] = useState('');
-  const [socialLinkedin, setSocialLinkedin]   = useState('');
-  const [socialYoutube, setSocialYoutube]     = useState('');
-  const [socialSpotify, setSocialSpotify]     = useState('');
-  const [socialLoading, setSocialLoading]     = useState(false);
-  const [socialFetching, setSocialFetching]   = useState(true);
-  const [socialMessage, setSocialMessage]     = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  // ── Réseaux sociaux & Automatisations ────────────────────────
+  const [socialInstagram, setSocialInstagram]                 = useState('');
+  const [socialLinkedin, setSocialLinkedin]                   = useState('');
+  const [socialYoutube, setSocialYoutube]                     = useState('');
+  const [socialSpotify, setSocialSpotify]                     = useState('');
+  const [socialWebhookUrl, setSocialWebhookUrl]               = useState('');
+  const [socialLinkedinToken, setSocialLinkedinToken]         = useState('');
+  const [socialLinkedinClientId, setSocialLinkedinClientId]   = useState('770flq5kanpk35');
+  const [socialLinkedinClientSecret, setSocialLinkedinClientSecret] = useState('WPL_AP1.DWjJmw1gavYrqZ');
+  const [socialLinkedinPageId, setSocialLinkedinPageId]       = useState('');
+  const [socialMetaToken, setSocialMetaToken]                 = useState('');
+  const [socialInstagramAccountId, setSocialInstagramAccountId] = useState('');
+  const [socialFacebookPageId, setSocialFacebookPageId]       = useState('');
+  const [aiLeadResponderEnabled, setAiLeadResponderEnabled]   = useState(true);
+  const [webhookTestStatus, setWebhookTestStatus]             = useState<string | null>(null);
+  const [webhookTesting, setWebhookTesting]                   = useState(false);
+  const [socialLoading, setSocialLoading]                     = useState(false);
+  const [socialFetching, setSocialFetching]                   = useState(true);
+  const [socialMessage, setSocialMessage]                     = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // ── Auteur ────────────────────────────────────────────────
   const [authorBio, setAuthorBio]         = useState('');
@@ -201,7 +213,7 @@ export default function Settings() {
   const [editorialMessage, setEditorialMessage]       = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isEditorialVoiceModalOpen, setIsEditorialVoiceModalOpen] = useState(false);
 
-  const [activeTab, setActiveTab]                     = useState<'general' | 'business' | 'editorial' | 'modules' | 'caisse' | 'ai' | 'style' | 'fleet' | 'security'>('general');
+  const [activeTab, setActiveTab]                     = useState<'general' | 'business' | 'editorial' | 'modules' | 'caisse' | 'ai' | 'style' | 'fleet' | 'security' | 'keys'>('general');
 
   // Preview button hovers
 
@@ -248,6 +260,13 @@ export default function Settings() {
   });
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['general', 'business', 'editorial', 'modules', 'caisse', 'ai', 'style', 'fleet', 'security', 'keys'].includes(tabParam)) {
+        setActiveTab(tabParam as any);
+      }
+    }
     loadHero();
     loadPromo();
     loadSocials();
@@ -638,15 +657,86 @@ export default function Settings() {
     const { data } = await supabase
       .from('settings')
       .select('key, value')
-      .in('key', ['social_instagram', 'social_linkedin', 'social_youtube', 'social_spotify']);
+      .in('key', [
+        'social_instagram', 'social_linkedin', 'social_youtube', 'social_spotify',
+        'social_webhook_url', 'social_linkedin_token', 'social_linkedin_client_id', 'social_linkedin_client_secret', 'social_linkedin_page_id',
+        'social_meta_token', 'social_instagram_account_id', 'social_facebook_page_id',
+        'ai_lead_responder_enabled'
+      ]);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.social_instagram) setSocialInstagram(map.social_instagram);
       if (map.social_linkedin)  setSocialLinkedin(map.social_linkedin);
       if (map.social_youtube)   setSocialYoutube(map.social_youtube);
       if (map.social_spotify)   setSocialSpotify(map.social_spotify);
+      if (map.social_webhook_url) setSocialWebhookUrl(map.social_webhook_url);
+      if (map.social_linkedin_token) setSocialLinkedinToken(map.social_linkedin_token);
+      if (map.social_linkedin_client_id) setSocialLinkedinClientId(map.social_linkedin_client_id);
+      if (map.social_linkedin_client_secret) setSocialLinkedinClientSecret(map.social_linkedin_client_secret);
+      if (map.social_linkedin_page_id) setSocialLinkedinPageId(map.social_linkedin_page_id);
+      if (map.social_meta_token) setSocialMetaToken(map.social_meta_token);
+      if (map.social_instagram_account_id) setSocialInstagramAccountId(map.social_instagram_account_id);
+      if (map.social_facebook_page_id) setSocialFacebookPageId(map.social_facebook_page_id);
+      if (map.ai_lead_responder_enabled !== undefined) setAiLeadResponderEnabled(map.ai_lead_responder_enabled !== 'false');
     }
     setSocialFetching(false);
+  };
+
+  const handleTestWebhook = async () => {
+    setWebhookTesting(true);
+    setWebhookTestStatus(null);
+    try {
+      const res = await fetch('/api/admin/social-publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: 'linkedin',
+          title: 'Test Publication LinkedIn',
+          caption: 'Ceci est un post de test envoyé depuis Studio pour vérifier la connexion LinkedIn.',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setWebhookTestStatus(data.result?.message || 'Publication LinkedIn réussie !');
+      } else {
+        setWebhookTestStatus(`Erreur : ${data.error || data.result?.message || 'Impossible de publier sur LinkedIn'}`);
+      }
+    } catch (e: any) {
+      setWebhookTestStatus(`Erreur : ${e.message}`);
+    } finally {
+      setWebhookTesting(false);
+    }
+  };
+
+  const handleSaveSocials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSocialMessage(null);
+    setSocialLoading(true);
+    const { error } = await supabase
+      .from('settings')
+      .upsert([
+        { key: 'social_instagram',              value: socialInstagram.trim() },
+        { key: 'social_linkedin',               value: socialLinkedin.trim() },
+        { key: 'social_youtube',                value: socialYoutube.trim() },
+        { key: 'social_spotify',                value: socialSpotify.trim() },
+        { key: 'social_webhook_url',            value: socialWebhookUrl.trim() },
+        { key: 'social_linkedin_token',          value: socialLinkedinToken.trim() },
+        { key: 'social_linkedin_client_id',      value: socialLinkedinClientId.trim() },
+        { key: 'social_linkedin_client_secret',  value: socialLinkedinClientSecret.trim() },
+        { key: 'social_linkedin_page_id',        value: socialLinkedinPageId.trim() },
+        { key: 'social_meta_token',              value: socialMetaToken.trim() },
+        { key: 'social_instagram_account_id',   value: socialInstagramAccountId.trim() },
+        { key: 'social_facebook_page_id',       value: socialFacebookPageId.trim() },
+        { key: 'ai_lead_responder_enabled',     value: aiLeadResponderEnabled ? 'true' : 'false' },
+      ], { onConflict: 'key' });
+    if (error) {
+      setSocialMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
+    } else {
+      setSocialMessage({ type: 'success', text: 'Paramètres réseaux & clés d\'accès enregistrés !' });
+      settingsCache.set('social_webhook_url', socialWebhookUrl.trim());
+      settingsCache.set('ai_lead_responder_enabled', aiLeadResponderEnabled ? 'true' : 'false');
+    }
+    setSocialLoading(false);
   };
 
   const loadAuthor = async () => {
@@ -677,26 +767,6 @@ export default function Settings() {
       setAuthorMessage({ type: 'success', text: 'Auteur mis à jour !' });
     }
     setAuthorLoading(false);
-  };
-
-  const handleSaveSocials = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSocialMessage(null);
-    setSocialLoading(true);
-    const { error } = await supabase
-      .from('settings')
-      .upsert([
-        { key: 'social_instagram', value: socialInstagram.trim() },
-        { key: 'social_linkedin',  value: socialLinkedin.trim() },
-        { key: 'social_youtube',   value: socialYoutube.trim() },
-        { key: 'social_spotify',   value: socialSpotify.trim() },
-      ], { onConflict: 'key' });
-    if (error) {
-      setSocialMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
-    } else {
-      setSocialMessage({ type: 'success', text: 'Réseaux sociaux mis à jour !' });
-    }
-    setSocialLoading(false);
   };
 
   const loadPromo = async () => {
@@ -1107,12 +1177,12 @@ export default function Settings() {
                     <button
                       type="submit"
                       disabled={logoLoading || !logoImage.trim()}
-                      className="flex items-center gap-2 bg-stone-900 hover:bg-stone-700 text-white px-8 py-4 text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                      className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
                     >
                       {logoLoading ? (
                         <>Enregistrement…</>
                       ) : (
-                        <><Save size={14} /> Enregistrer le logo</>
+                        <><Save size={14} /> Enregistrer l'identité visuelle</>
                       )}
                     </button>
                   </div>
@@ -1120,109 +1190,6 @@ export default function Settings() {
               )}
             </div>
 
-            {/* Code Promo */}
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
-              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
-                <Tag size={16} /> Email de bienvenue — Code promo
-              </h2>
-
-              {promoFetching ? (
-                <p className="text-stone-600 text-sm">Chargement…</p>
-              ) : (
-                <form onSubmit={handleSavePromo} className="space-y-6">
-                  {promoMessage && (
-                    <div className={`p-4 text-sm ${promoMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                      {promoMessage.text}
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    <label htmlFor="promo-code" className="block text-[13px] font-medium text-stone-800">
-                      Code promo
-                    </label>
-                    <input
-                      id="promo-code"
-                      type="text"
-                      value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 font-mono text-lg tracking-widest uppercase"
-                      placeholder="BIENVENUE"
-                    />
-                    <p className="text-[12.5px] text-stone-500">Le code sera automatiquement mis en majuscules.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="promo-amount" className="block text-[13px] font-medium text-stone-800">
-                      Montant de la réduction
-                    </label>
-                    <input
-                      id="promo-amount"
-                      type="text"
-                      value={promoAmount}
-                      onChange={(e) => setPromoAmount(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
-                      placeholder="20 CHF"
-                    />
-                    <p className="text-[12.5px] text-stone-500">Exemples : 20 CHF, 15 €, 10%</p>
-                  </div>
-                  <div className="border-2 border-dashed border-stone-300 bg-stone-50 rounded-lg p-5 text-center space-y-1">
-                    <p className="text-[12.5px] font-medium text-stone-700">Aperçu dans l'email</p>
-                    <p className="font-mono text-2xl font-bold text-stone-900 tracking-widest">{promoCode || 'BIENVENUE'}</p>
-                    <p className="text-sm text-stone-500">Réduction de <strong>{promoAmount || '20 CHF'}</strong> sur la première séance individuelle</p>
-                  </div>
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={promoLoading}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                    >
-                      <Save size={16} />
-                      {promoLoading ? 'Sauvegarde…' : 'Sauvegarder'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-            {/* Bouton S'inscrire */}
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
-              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
-                <Sliders size={16} /> Bouton d'action du Menu (Header)
-              </h2>
-
-              {headerRegisterFetching ? (
-                <p className="text-stone-600 text-sm">Chargement…</p>
-              ) : (
-                <form onSubmit={handleSaveHeaderRegisterLink} className="space-y-6">
-                  {headerRegisterMessage && (
-                    <div className={`p-4 text-sm ${headerRegisterMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                      {headerRegisterMessage.text}
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    <label htmlFor="header-register-link" className="block text-[13px] font-medium text-stone-800">
-                      Lien du bouton "S'inscrire" (Menu principal)
-                    </label>
-                    <input
-                      id="header-register-link"
-                      type="text"
-                      value={headerRegisterLink}
-                      onChange={(e) => setHeaderRegisterLink(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
-                      placeholder="/contact"
-                    />
-                    <p className="text-[12.5px] text-stone-500">Exemple : /contact, /programme-complet, ou un lien externe complet https://...</p>
-                  </div>
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={headerRegisterLoading}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                    >
-                      <Save size={16} />
-                      {headerRegisterLoading ? 'Sauvegarde…' : 'Sauvegarder le lien'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
 
             {/* Réseaux sociaux */}
             <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
@@ -1232,38 +1199,70 @@ export default function Settings() {
               {socialFetching ? (
                 <p className="text-stone-600 text-sm">Chargement…</p>
               ) : (
-                <form onSubmit={handleSaveSocials} className="space-y-5">
+                <form onSubmit={handleSaveSocials} className="space-y-6">
                   {socialMessage && (
-                    <div className={`p-4 text-sm ${socialMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                    <div className={`p-4 rounded-xl text-sm ${socialMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                       {socialMessage.text}
                     </div>
                   )}
-                  {[
-                    { label: 'Instagram', value: socialInstagram, setter: setSocialInstagram, placeholder: 'https://www.instagram.com/votre-compte/' },
-                    { label: 'LinkedIn',  value: socialLinkedin,  setter: setSocialLinkedin,  placeholder: 'https://www.linkedin.com/in/votre-profil/' },
-                    { label: 'YouTube',   value: socialYoutube,   setter: setSocialYoutube,   placeholder: 'https://www.youtube.com/@votre-chaine' },
-                    { label: 'Spotify',   value: socialSpotify,   setter: setSocialSpotify,   placeholder: 'https://open.spotify.com/show/...' },
-                  ].map(({ label, value, setter, placeholder }) => (
-                    <div key={label} className="space-y-1.5">
-                      <label htmlFor={`settings-social-${label.toLowerCase()}`} className="block text-[13px] font-medium text-stone-800">{label}</label>
+
+                  {/* Profils Publics Réseaux */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b border-stone-100 pb-1">
+                      Liens Publics des Profils
+                    </h3>
+                    {[
+                      { label: 'Instagram', value: socialInstagram, setter: setSocialInstagram, placeholder: 'https://www.instagram.com/votre-compte/' },
+                      { label: 'LinkedIn',  value: socialLinkedin,  setter: setSocialLinkedin,  placeholder: 'https://www.linkedin.com/in/votre-profil/' },
+                      { label: 'YouTube',   value: socialYoutube,   setter: setSocialYoutube,   placeholder: 'https://www.youtube.com/@votre-chaine' },
+                      { label: 'Spotify',   value: socialSpotify,   setter: setSocialSpotify,   placeholder: 'https://open.spotify.com/show/...' },
+                    ].map(({ label, value, setter, placeholder }) => (
+                      <div key={label} className="space-y-1">
+                        <label htmlFor={`settings-social-${label.toLowerCase()}`} className="block text-[13px] font-medium text-stone-800">{label}</label>
+                        <input
+                          id={`settings-social-${label.toLowerCase()}`}
+                          type="url"
+                          value={value}
+                          onChange={(e) => setter(e.target.value)}
+                          placeholder={placeholder}
+                          className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Auto-Publication Native Directe (Sans tiers ni Zapier/Make) */}
+                  {/* Auto-Répondeur IA Lead */}
+                  <div className="space-y-3 pt-2 border-t border-stone-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b border-stone-100 pb-1">
+                      Auto-Répondeur IA Lead (Formulaires de Contact)
+                    </h3>
+                    <label className="flex items-center gap-3 p-3 bg-stone-50 border border-stone-200 rounded-xl cursor-pointer">
                       <input
-                        id={`settings-social-${label.toLowerCase()}`}
-                        type="url"
-                        value={value}
-                        onChange={(e) => setter(e.target.value)}
-                        placeholder={placeholder}
-                        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
+                        type="checkbox"
+                        checked={aiLeadResponderEnabled}
+                        onChange={(e) => setAiLeadResponderEnabled(e.target.checked)}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
                       />
-                    </div>
-                  ))}
-                  <div className="pt-2">
+                      <div>
+                        <span className="text-xs font-bold text-stone-900 block">
+                          Activer l'Auto-Répondeur IA sur tous les formulaires
+                        </span>
+                        <span className="text-[11.5px] text-stone-500 block">
+                          Répond instantanément aux prospects par e-mail en adoptant votre ton de voix éditorial.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="pt-3 border-t border-stone-100">
                     <button
                       type="submit"
                       disabled={socialLoading}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
                     >
-                      <Save size={16} />
-                      {socialLoading ? 'Sauvegarde…' : 'Sauvegarder les réseaux'}
+                      <Save size={15} />
+                      {socialLoading ? 'Sauvegarde…' : 'Sauvegarder les réseaux sociaux'}
                     </button>
                   </div>
                 </form>
@@ -1308,10 +1307,10 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={authorLoading}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
                   >
-                    <Save size={16} />
-                    {authorLoading ? 'Sauvegarde…' : 'Sauvegarder'}
+                    <Save size={15} />
+                    {authorLoading ? 'Sauvegarde…' : 'Sauvegarder l’auteur'}
                   </button>
                 </div>
               </form>
@@ -1332,7 +1331,54 @@ export default function Settings() {
           silencieusement l'autre. Il ne reste que le panneau, qui porte
           désormais son propre aperçu.
         */}
-        {activeTab === 'style' && <DesignSystemPanel />}
+        {activeTab === 'style' && (
+          <div className="space-y-8 animate-fadein">
+            <DesignSystemPanel />
+
+            {/* Bouton S'inscrire / Action du Header */}
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
+                <Sliders size={16} /> Bouton d'action du Menu (Header)
+              </h2>
+
+              {headerRegisterFetching ? (
+                <p className="text-stone-600 text-sm">Chargement…</p>
+              ) : (
+                <form onSubmit={handleSaveHeaderRegisterLink} className="space-y-6">
+                  {headerRegisterMessage && (
+                    <div className={`p-4 text-sm ${headerRegisterMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                      {headerRegisterMessage.text}
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <label htmlFor="header-register-link" className="block text-[13px] font-medium text-stone-800">
+                      Lien du bouton d'action (Menu principal)
+                    </label>
+                    <input
+                      id="header-register-link"
+                      type="text"
+                      value={headerRegisterLink}
+                      onChange={(e) => setHeaderRegisterLink(e.target.value)}
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
+                      placeholder="/contact"
+                    />
+                    <p className="text-[12.5px] text-stone-500">Exemple : /contact, /programme-complet, ou un lien externe complet https://...</p>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={headerRegisterLoading}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    >
+                      <Save size={16} />
+                      {headerRegisterLoading ? 'Sauvegarde…' : 'Sauvegarder le lien'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
 
 
         {activeTab === 'business' && (
@@ -1464,7 +1510,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={bizLoading}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 px-6 text-xs font-extrabold text-white shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                   >
                     <Save size={16} />
                     {bizLoading ? 'Enregistrement…' : 'Enregistrer les coordonnées'}
@@ -1472,6 +1518,68 @@ export default function Settings() {
                 </div>
               </form>
             )}
+
+            {/* Code Promo de Bienvenue */}
+            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 mt-8">
+              <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
+                <Tag size={16} /> Email de bienvenue — Code promo
+              </h2>
+
+              {promoFetching ? (
+                <p className="text-stone-600 text-sm">Chargement…</p>
+              ) : (
+                <form onSubmit={handleSavePromo} className="space-y-6">
+                  {promoMessage && (
+                    <div className={`p-4 text-sm ${promoMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                      {promoMessage.text}
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <label htmlFor="promo-code" className="block text-[13px] font-medium text-stone-800">
+                      Code promo
+                    </label>
+                    <input
+                      id="promo-code"
+                      type="text"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value)}
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 font-mono text-lg tracking-widest uppercase"
+                      placeholder="BIENVENUE"
+                    />
+                    <p className="text-[12.5px] text-stone-500">Le code sera automatiquement mis en majuscules.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="promo-amount" className="block text-[13px] font-medium text-stone-800">
+                      Montant de la réduction
+                    </label>
+                    <input
+                      id="promo-amount"
+                      type="text"
+                      value={promoAmount}
+                      onChange={(e) => setPromoAmount(e.target.value)}
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                      placeholder="20 CHF"
+                    />
+                    <p className="text-[12.5px] text-stone-500">Exemples : 20 CHF, 15 €, 10%</p>
+                  </div>
+                  <div className="border-2 border-dashed border-stone-300 bg-stone-50 rounded-lg p-5 text-center space-y-1">
+                    <p className="text-[12.5px] font-medium text-stone-700">Aperçu dans l'email</p>
+                    <p className="font-mono text-2xl font-bold text-stone-900 tracking-widest">{promoCode || 'BIENVENUE'}</p>
+                    <p className="text-sm text-stone-500">Réduction de <strong>{promoAmount || '20 CHF'}</strong> sur la première prestation</p>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={promoLoading}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    >
+                      <Save size={16} />
+                      {promoLoading ? 'Sauvegarde…' : 'Sauvegarder le code promo'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         )}
 
@@ -1591,7 +1699,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={editorialLoading}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 px-6 text-xs font-extrabold text-white shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 w-full sm:w-auto cursor-pointer"
                   >
                     <Save size={16} />
                     {editorialLoading ? 'Enregistrement…' : 'Enregistrer la ligne éditoriale'}
@@ -1625,13 +1733,13 @@ export default function Settings() {
 
                 {[
                   { label: 'Blog / Articles', desc: 'Pages /blog, admin Articles et publication programmée.', value: moduleBlogEnabled, setter: setModuleBlogEnabled },
-                  { label: "Génération IA d'article", desc: "Bouton de rédaction assistée par IA dans l'éditeur d'articles.", value: moduleAiEnabled, setter: setModuleAiEnabled },
+                  { label: "Génération & Assistant IA (Builder, Pages, Articles & Réseaux)", desc: "Contrôle toute la couche IA du Studio : assistant de section du builder de pages, générateur de structure de site, rédaction assistée d'articles et création de posts réseaux.", value: moduleAiEnabled, setter: setModuleAiEnabled },
                   { label: 'Événements / Ateliers', desc: 'Pages /ateliers, admin Événements et inscriptions/paiement.', value: moduleEventsEnabled, setter: setModuleEventsEnabled },
                   { label: 'Newsletter', desc: "Admin Newsletter (envoi d'e-mails), formulaires d'inscription et bannière sur le site.", value: moduleNewsletterEnabled, setter: setModuleNewsletterEnabled },
                   { label: 'Réseaux Sociaux', desc: "Génération de contenu Instagram/LinkedIn/Facebook (articles, flux RSS, suggestions), calendrier et automatisation.", value: moduleSocialEnabled, setter: setModuleSocialEnabled },
                   { label: 'Caisse & facturation', desc: "Encaissement, fichier clientes, quittances PDF, journal des recettes et export pour la fiducie. Module interne : rien n'apparaît sur le site public.", value: moduleCaisseEnabled, setter: setModuleCaisseEnabled },
                   { label: 'Mots-clés & SEO', desc: 'Espace SEO : recherche de mots-clés, suggestions de sujets et clusters sémantiques.', value: moduleKeywordsEnabled, setter: setModuleKeywordsEnabled },
-                  { label: 'Agents IA', desc: "Widget de conversation sur le site public et suivi des échanges dans l'admin.", value: moduleAgentsEnabled, setter: setModuleAgentsEnabled },
+                  { label: 'Agent IA', desc: "Widget de conversation sur le site public et suivi des échanges dans l'admin.", value: moduleAgentsEnabled, setter: setModuleAgentsEnabled },
                   { label: 'Automatisations', desc: 'Déclencheurs planifiés et événements applicatifs (webhook, e-mail, génération de contenu).', value: moduleAutomationsEnabled, setter: setModuleAutomationsEnabled },
                 ].map((mod) => (
                   <div key={mod.label} className="flex items-start gap-4 py-3 border-b border-stone-50 last:border-0">
@@ -1641,13 +1749,13 @@ export default function Settings() {
                       aria-checked={mod.value}
                       aria-label={`${mod.value ? 'Désactiver' : 'Activer'} le module ${mod.label}`}
                       onClick={() => mod.setter(!mod.value)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-0.5 cursor-pointer ${mod.value ? 'bg-stone-900' : 'bg-stone-200'}`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-0.5 cursor-pointer ${mod.value ? 'bg-purple-600' : 'bg-stone-200'}`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${mod.value ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                     <span>
-                      <span className="block text-sm font-medium text-stone-800">{mod.label}</span>
-                      <span className="block text-[12.5px] text-stone-500">{mod.desc}</span>
+                      <span className="block text-sm font-semibold text-stone-900">{mod.label}</span>
+                      <span className="block text-[12.5px] text-stone-500 mt-0.5">{mod.desc}</span>
                     </span>
                   </div>
                 ))}
@@ -1656,9 +1764,9 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={modulesLoading}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
                   >
-                    <Save size={16} />
+                    <Save size={15} />
                     {modulesLoading ? 'Enregistrement…' : 'Enregistrer les modules'}
                   </button>
                 </div>
@@ -1851,6 +1959,11 @@ export default function Settings() {
               </form>
             )}
           </div>
+        )}
+
+        {/* ── Onglet Clés API & Services ─────────────────────────── */}
+        {activeTab === 'keys' && (
+          <ApiKeysPanel />
         )}
 
         {/* ── Onglet IA & Budget ──────────────────────────────────── */}

@@ -9,7 +9,21 @@ const FR_STOP = new Set([
 ]);
 
 const normalize = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z\s]/g, ' ');
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z\s]/g, ' ');
+
+function normalizeWithMap(text: string): { norm: string; indexMap: number[] } {
+  let norm = '';
+  const indexMap: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const clean = char.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const mapped = /^[a-z0-9]$/.test(clean) ? clean : ' ';
+    norm += mapped;
+    indexMap.push(i);
+  }
+  indexMap.push(text.length);
+  return { norm, indexMap };
+}
 
 export function titleToSearchPhrases(title: string): string[] {
   const words = normalize(title.split(/[:|—–]/)[0])
@@ -99,6 +113,8 @@ function injectAt(
   expand: boolean
 ): void {
   const original = textNode.textContent || '';
+  if (matchStart < 0 || matchEnd > original.length) return;
+
   const { start, end } = expand
     ? expandToPhrase(original, matchStart, matchEnd)
     : { start: matchStart, end: matchEnd };
@@ -107,7 +123,9 @@ function injectAt(
   if (start > 0) frag.appendChild(doc.createTextNode(original.slice(0, start)));
   frag.appendChild(createLink(doc, href, original.slice(start, end)));
   if (end < original.length) frag.appendChild(doc.createTextNode(original.slice(end)));
-  textNode.parentNode!.replaceChild(frag, textNode);
+  if (textNode.parentNode) {
+    textNode.parentNode.replaceChild(frag, textNode);
+  }
 }
 
 /** Phrases fixes vers les pages clés du site. */
@@ -163,14 +181,16 @@ export function injectInternalLinks(
   for (const textNode of getTextNodes(doc)) {
     if (articleLinks >= 5) break;
     const original = textNode.textContent || '';
-    const norm = normalize(original);
+    const { norm, indexMap } = normalizeWithMap(original);
 
     for (const { phrase, slug } of candidates) {
       if (linkedSlugs.has(slug) || articleLinks >= 5) continue;
       const idx = norm.indexOf(phrase);
       if (idx === -1) continue;
 
-      injectAt(textNode, doc, idx, idx + phrase.length, `/blog/${slug}`, true);
+      const origStart = indexMap[idx];
+      const origEnd = indexMap[idx + phrase.length];
+      injectAt(textNode, doc, origStart, origEnd, `/blog/${slug}`, true);
       linkedSlugs.add(slug);
       articleLinks++;
       break;
@@ -200,12 +220,14 @@ export function injectInternalLinks(
     for (const textNode of getTextNodes(doc)) {
       if (linkedPages.has(href)) break;
       const original = textNode.textContent || '';
-      const norm = normalize(original);
+      const { norm, indexMap } = normalizeWithMap(original);
 
       for (const phrase of phrases) {
         const idx = norm.indexOf(normalize(phrase));
         if (idx === -1) continue;
-        injectAt(textNode, doc, idx, idx + phrase.length, href, false);
+        const origStart = indexMap[idx];
+        const origEnd = indexMap[idx + phrase.length];
+        injectAt(textNode, doc, origStart, origEnd, href, false);
         linkedPages.add(href);
         break;
       }

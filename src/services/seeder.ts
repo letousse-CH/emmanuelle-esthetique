@@ -26,40 +26,41 @@ const DEFAULT_PAGES: DefaultPageSeed[] = [
     published: true,
     sections: [
       {
-        type: "hero_1",
+        type: "hero_turnkey_voice",
         data: {
-          theme: "light",
-          eyebrow: "",
-          title: "Votre titre principal",
-          title_italic: "",
-          description: "Décrivez en une phrase ce que vous faites et pour qui.",
-          cta_primary_text: "Nous contacter",
-          cta_primary_href: "/contact",
-          cta_secondary_text: "",
-          cta_secondary_href: "",
-          image_url: "",
-          image_alt: "",
-          image_opacity: 100
+          eyebrow: "Solution Clé en Main Tout-en-Un & Commandes Vocales",
+          title: "Votre Activité Déployée & Pilotée en Toute Simplicité",
+          title_highlight: "Même à la Voix, Sans Rien Taper au Clavier.",
+          description: "Découvrez la solution clé en main complète conçue pour vous faciliter la vie d'un point de vue pratique et efficace : site web dynamique, caisse conforme au droit suisse, fichier clients, réservations et assistant IA réactif à votre voix.",
+          cta_primary_text: "Explorer les Outils Admin",
+          cta_primary_href: "#maquettes",
+          cta_secondary_text: "Demander une Démonstration",
+          cta_secondary_href: "/contact",
         }
       },
       {
-        type: "features_1",
-        data: {
-          theme: "light",
-          title: "Ce que nous proposons",
-          description: "",
-          items: ["Première prestation", "Deuxième prestation", "Troisième prestation"]
-        }
+        type: "client_needs_matrix",
+        data: { theme: "dark" }
       },
       {
-        type: "cta_1",
-        data: {
-          theme: "light",
-          title: "Parlons de votre projet",
-          description: "",
-          cta_primary_text: "Nous contacter",
-          cta_primary_href: "/contact"
-        }
+        type: "voice_showcase_1",
+        data: { theme: "dark" }
+      },
+      {
+        type: "admin_mockups_gallery",
+        data: { theme: "dark" }
+      },
+      {
+        type: "turnkey_bento_grid",
+        data: { theme: "dark" }
+      },
+      {
+        type: "turnkey_offer_pricing",
+        data: { theme: "dark" }
+      },
+      {
+        type: "turnkey_faq_accordion",
+        data: { theme: "dark" }
       }
     ]
   },

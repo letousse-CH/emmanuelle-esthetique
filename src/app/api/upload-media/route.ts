@@ -1,40 +1,41 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
-
-const ACCOUNT_ID  = process.env.R2_ACCOUNT_ID || '';
-const ACCESS_KEY  = process.env.R2_ACCESS_KEY_ID || '';
-const SECRET_KEY  = process.env.R2_SECRET_ACCESS_KEY || '';
-const BUCKET      = process.env.R2_BUCKET_NAME || '';
-const PUBLIC_URL  = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || process.env.VITE_R2_PUBLIC_URL || '';
+import { supabase } from '../../../services/supabase';
 
 /**
- * Le stockage n'est pas obligatoire pour faire tourner le site : tant qu'il
- * n'est pas configuré, les images peuvent être renseignées par URL depuis la
- * bibliothèque médias. On vérifie donc la configuration avant d'instancier le
- * client S3, pour renvoyer un message actionnable plutôt qu'une erreur AWS.
+ * Récupération DYNAMIQUE des identifiants Cloudflare R2 :
+ * 1. Essaie d'abord les variables d'environnement process.env
+ * 2. Bascule automatiquement sur la table Supabase `settings` (modifiable depuis l'Admin > Paramètres > Clés API)
  */
-function missingConfig(): string[] {
-  return [
-    !ACCOUNT_ID && 'R2_ACCOUNT_ID',
-    !ACCESS_KEY && 'R2_ACCESS_KEY_ID',
-    !SECRET_KEY && 'R2_SECRET_ACCESS_KEY',
-    !BUCKET && 'R2_BUCKET_NAME',
-    !PUBLIC_URL && 'NEXT_PUBLIC_R2_PUBLIC_URL',
-  ].filter(Boolean) as string[];
-}
+async function getR2Config() {
+  let accountId = process.env.R2_ACCOUNT_ID || '';
+  let accessKey = process.env.R2_ACCESS_KEY_ID || '';
+  let secretKey = process.env.R2_SECRET_ACCESS_KEY || '';
+  let bucket = process.env.R2_BUCKET_NAME || '';
+  let publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || process.env.VITE_R2_PUBLIC_URL || '';
 
-let s3Client: S3Client | null = null;
-function getS3Client(): S3Client {
-  if (!s3Client) {
-    s3Client = new S3Client({
-      region: 'auto',
-      endpoint: `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: { accessKeyId: ACCESS_KEY, secretAccessKey: SECRET_KEY },
-      forcePathStyle: true,
-    });
+  if (!accountId || !accessKey || !secretKey || !bucket || !publicUrl) {
+    try {
+      const { data } = await supabase.from('settings').select('key, value').in('key', [
+        'r2_account_id',
+        'r2_access_key_id',
+        'r2_secret_access_key',
+        'r2_bucket_name',
+        'r2_public_url',
+      ]);
+      const map = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value ?? '']));
+      accountId = accountId || map.r2_account_id || '';
+      accessKey = accessKey || map.r2_access_key_id || '';
+      secretKey = secretKey || map.r2_secret_access_key || '';
+      bucket = bucket || map.r2_bucket_name || '';
+      publicUrl = publicUrl || map.r2_public_url || '';
+    } catch (e) {
+      console.error("Erreur lecture settings R2 Supabase:", e);
+    }
   }
-  return s3Client;
+
+  return { accountId, accessKey, secretKey, bucket, publicUrl };
 }
 
 export async function POST(req: NextRequest) {
@@ -47,14 +48,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
 
-    const missing = missingConfig();
+    const { accountId, accessKey, secretKey, bucket, publicUrl } = await getR2Config();
+
+    const missing = [
+      !accountId && 'R2_ACCOUNT_ID / r2_account_id',
+      !accessKey && 'R2_ACCESS_KEY_ID / r2_access_key_id',
+      !secretKey && 'R2_SECRET_ACCESS_KEY / r2_secret_access_key',
+      !bucket && 'R2_BUCKET_NAME / r2_bucket_name',
+      !publicUrl && 'NEXT_PUBLIC_R2_PUBLIC_URL / r2_public_url',
+    ].filter(Boolean) as string[];
+
     if (missing.length > 0) {
       return NextResponse.json(
         {
           error:
             "Stockage des médias non configuré : l'upload de fichiers est indisponible. " +
-            "En attendant, ajoutez vos images par URL depuis la bibliothèque médias. " +
-            `Variables manquantes : ${missing.join(', ')}.`,
+            "Veuillez renseigner vos clés Cloudflare R2 dans Admin > Paramètres > Clés API & Services. " +
+            `Paramètres manquants : ${missing.join(', ')}.`,
           missing,
         },
         { status: 501 }
@@ -70,23 +80,45 @@ export async function POST(req: NextRequest) {
 
     const fileBytes = Buffer.from(fileBase64, 'base64');
     
-    // Nettoyer le nom de fichier (retirer espaces et caractères non sûrs pour éviter des bugs d'URL)
+    // Nettoyer le nom de fichier
     const safeFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '-');
     const key = `${Date.now()}-${safeFileName}`;
 
+    // Client S3 instancié dynamiquement
+    const s3Client = new S3Client({
+      region: 'auto',
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
+      forcePathStyle: true,
+    });
+
     const command = new PutObjectCommand({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Key: key,
       Body: fileBytes,
       ContentType: contentType,
     });
 
-    await getS3Client().send(command);
+    await s3Client.send(command);
 
-    const publicUrl = `${PUBLIC_URL.replace(/\/+$/, '')}/${key}`;
-    return NextResponse.json({ url: publicUrl, key });
+    const finalUrl = `${publicUrl.replace(/\/+$/, '')}/${key}`;
+
+    // Enregistrer l'asset dans la bibliothèque médias Supabase (table media_library ou media_assets)
+    try {
+      await supabase.from('media_library').insert({
+        url: finalUrl,
+        alt_text: safeFileName,
+        filename: safeFileName,
+        file_size: fileBytes.length,
+        mime_type: contentType,
+      });
+    } catch (dbErr) {
+      // Ignorer si la table utilise une structure alternative
+    }
+
+    return NextResponse.json({ url: finalUrl, key });
   } catch (err: any) {
-    console.error("Erreur S3:", err);
+    console.error("Erreur S3 R2 Upload:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

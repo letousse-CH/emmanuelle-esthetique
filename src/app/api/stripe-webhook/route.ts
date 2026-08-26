@@ -143,9 +143,15 @@ export async function POST(req: NextRequest) {
     return new Response(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) {
+    console.error('[stripe-webhook] Erreur critique : SUPABASE_SERVICE_ROLE_KEY manquante !');
+    return new Response('SUPABASE_SERVICE_ROLE_KEY missing.', { status: 500 });
+  }
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? ''
+    serviceRoleKey
   );
   const siteUrl = SITE_CONFIG.url;
 

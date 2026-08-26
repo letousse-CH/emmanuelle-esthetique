@@ -201,9 +201,10 @@ export default function GlobalStyles() {
   // ── Couleurs appliquées ───────────────────────────────────────────────────
   let applied = '';
   if (get('style_color_primary')) {
-    applied += `${SCOPE} .text-primary, ${SCOPE} a.text-primary { color: var(--brand-primary) !important; }\n`;
-    applied += `${SCOPE} .bg-primary { background-color: var(--brand-primary) !important; }\n`;
-    applied += `${SCOPE} .border-primary { border-color: var(--brand-primary) !important; }\n`;
+    applied += `${SCOPE} .bg-sage, ${SCOPE} .text-sage, ${SCOPE} .border-sage { --color-sage: var(--brand-primary) !important; }\n`;
+    applied += `${SCOPE} .text-primary, ${SCOPE} a.text-primary, ${SCOPE} .text-sage { color: var(--brand-primary) !important; }\n`;
+    applied += `${SCOPE} .bg-primary, ${SCOPE} .bg-sage { background-color: var(--brand-primary) !important; }\n`;
+    applied += `${SCOPE} .border-primary, ${SCOPE} .border-sage { border-color: var(--brand-primary) !important; }\n`;
     applied += `${SCOPE} ::selection { background-color: color-mix(in srgb, var(--brand-primary) 25%, transparent); }\n`;
   }
   if (get('style_color_bg')) applied += `${SCOPE} { background-color: var(--brand-bg) !important; }\n`;
@@ -223,7 +224,7 @@ export default function GlobalStyles() {
     applied += `${SCOPE} [data-bordered], ${SCOPE} .border-muted { border-color: var(--brand-border) !important; }\n`;
   }
   if (get('style_border_radius_base')) {
-    applied += `${SCOPE} [class*="rounded"]:not([class*="btn-"]):not([data-btn]) { border-radius: var(--radius-base) !important; }\n`;
+    applied += `${SCOPE} [data-radius-base] { border-radius: var(--radius-base); }\n`;
   }
   if (headingFont) applied += `${SCOPE} h1, ${SCOPE} h2, ${SCOPE} h3, ${SCOPE} h4, ${SCOPE} h5, ${SCOPE} h6 { font-family: var(--font-serif) !important; }\n`;
   if (bodyFont) applied += `${SCOPE}, ${SCOPE} p, ${SCOPE} li, ${SCOPE} button, ${SCOPE} input, ${SCOPE} textarea, ${SCOPE} select { font-family: var(--font-sans) !important; }\n`;

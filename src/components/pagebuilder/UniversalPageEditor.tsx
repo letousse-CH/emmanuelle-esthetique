@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { supabase } from '../../services/supabase';
-import { Pencil, Check, Loader2, Image as ImageIcon, Lock, Globe, Power } from 'lucide-react';
+import { Pencil, Check, Loader2, Image as ImageIcon, Lock, Globe, Power, Save } from 'lucide-react';
 import MediaPickerModal from './MediaPickerModal';
 import { SITE_CONFIG } from '../../config/site';
 
@@ -438,6 +438,22 @@ export default function UniversalPageEditor() {
         >
           <Power size={13} />
           {isEditMode ? 'Actif' : 'Désactivé'}
+        </button>
+
+        <div className="h-4 w-px bg-white/10" />
+
+        <button
+          onClick={() => {
+            // Save all pending overrides
+            Object.entries(overrides).forEach(([k, v]) => {
+              saveOverride(k, v);
+            });
+          }}
+          disabled={saveStatus === 'saving'}
+          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-300 cursor-pointer shadow-md shadow-emerald-600/30"
+        >
+          {saveStatus === 'saving' ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+          <span>Sauvegarder</span>
         </button>
 
         <div className="h-4 w-px bg-white/10" />

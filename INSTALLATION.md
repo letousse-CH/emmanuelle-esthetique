@@ -78,17 +78,20 @@ accessible et explique ce qui est absent, au lieu de planter.
 
 ---
 
-## 4. Dupliquer pour un nouveau client
+## 4. Dupliquer et mettre à jour les sites clients (Multi-sites)
 
 ```bash
-npm run duplicate    # copie le projet vers un nouveau dossier
-npm run setup        # coordonnées, modules actifs, clés de service
+npm run duplicate      # clône le projet vers un nouveau dossier et réinitialise Git
+npm run setup          # coordonnées, modules actifs, clés de service
+npm run export-update  # déploie les mises à jour du code vers un site client existant
 ```
 
-Puis créer un nouveau projet Supabase pour ce client et lui appliquer les
-migrations (`supabase db push`). **Ne jamais faire pointer deux instances sur
-la même base** : plusieurs écrans font des `upsert` par slug et écraseraient
-les contenus de l'autre site.
+### ⚠️ Règle de sécurité Git & Multi-sites :
+Chaque site client possède **son propre dossier et son propre dépôt GitHub distant (`origin`)**.
+- Lors d'une mise à jour avec `npm run export-update`, l'outil affiche et vérifie automatiquement le dépôt distant du site cible (`git remote get-url origin`).
+- Avant d'effectuer un `git push` sur un site mis à jour, assurez-vous toujours d'être positionné dans le dossier du site client (`cd "../nom-du-site-client"`) et de vérifier l'adresse du dépôt avec `git remote -v`.
+
+Ne jamais faire pointer deux instances sur la même base Supabase ni pousser les modifications d'un client sur le dépôt d'un autre site.
 
 ---
 

@@ -9,6 +9,12 @@ import { getAiConfig, invalidateAiConfigCache } from '../../../../services/aiCon
 import { resolveModelSpec } from '../../../../constants/aiModels';
 import { getAnthropicKey } from '../../../../services/secrets';
 
+interface ServiceStatus {
+  ok: boolean;
+  label: string;
+  error: string | null;
+}
+
 let cachedStatus: {
   ok: boolean;
   configured: boolean;
@@ -17,6 +23,12 @@ let cachedStatus: {
   /** Modèle testé — celui choisi dans /admin/settings → IA & Budget. */
   model: string;
   modelLabel: string;
+  services?: {
+    ai: ServiceStatus;
+    resend: ServiceStatus;
+    r2: ServiceStatus;
+    database: ServiceStatus;
+  };
   checkedAt: number;
 } | null = null;
 
@@ -46,48 +58,54 @@ export async function GET(req: NextRequest) {
   }
 
   const apiKey = await getAnthropicKey();
-
-  if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') {
-    cachedStatus = {
-      ok: false,
-      configured: false,
-      working: false,
-      error: "ANTHROPIC_API_KEY non configurée dans le fichier d'environnement.",
-      model: '',
-      modelLabel: '',
-      checkedAt: now,
-    };
-    return NextResponse.json(cachedStatus);
-  }
-
-  // Ping léger sur le modèle réellement utilisé par les générations : un test
-  // sur un autre modèle pourrait passer au vert alors que celui-ci échoue.
-  // Réflexion désactivée : on ne veut qu'un aller-retour, pas une réponse.
-  const { model } = await getAiConfig(forceRefresh);
-  const spec = resolveModelSpec(model);
+  const resendKey = process.env.RESEND_API_KEY;
+  const r2Configured = Boolean(
+    process.env.R2_ACCOUNT_ID &&
+    process.env.R2_ACCESS_KEY_ID &&
+    process.env.R2_SECRET_ACCESS_KEY &&
+    process.env.R2_BUCKET_NAME
+  );
 
   let error: string | null = null;
-  try {
-    const client = new Anthropic({ apiKey });
-    await client.messages.create({
-      model: spec.id,
-      max_tokens: 8,
-      // Les modèles antérieurs à la 4.6 ne connaissent pas ce paramètre.
-      ...(spec.supportsAdaptiveThinking ? { thinking: { type: 'disabled' as const } } : {}),
-      messages: [{ role: 'user', content: 'Ping' }],
-    });
-  } catch (err: any) {
-    error = err?.message || String(err);
-    console.error('[ai-status] Anthropic check failed:', error);
+  let spec: { id: string; label: string; supportsAdaptiveThinking?: boolean } = { id: '', label: '' };
+
+  if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') {
+    error = "ANTHROPIC_API_KEY non configurée dans le fichier d'environnement.";
+  } else {
+    try {
+      const { model } = await getAiConfig(forceRefresh);
+      spec = resolveModelSpec(model);
+      const client = new Anthropic({ apiKey });
+      await client.messages.create({
+        model: spec.id,
+        max_tokens: 8,
+        ...(spec.supportsAdaptiveThinking ? { thinking: { type: 'disabled' as const } } : {}),
+        messages: [{ role: 'user', content: 'Ping' }],
+      });
+    } catch (err: any) {
+      error = err?.message || String(err);
+      console.error('[ai-status] Anthropic check failed:', error);
+    }
   }
 
+  const aiOk = error === null && Boolean(apiKey);
+  const resendOk = Boolean(resendKey);
+  const r2Ok = r2Configured;
+  const dbOk = true; // JWT validé avec succès à l'étape 1
+
   cachedStatus = {
-    ok: error === null,
-    configured: true,
-    working: error === null,
+    ok: aiOk,
+    configured: Boolean(apiKey),
+    working: aiOk,
     error,
     model: spec.id,
     modelLabel: spec.label,
+    services: {
+      ai: { ok: aiOk, label: 'Moteur IA (Claude)', error: aiOk ? null : (error || 'Clé API manquante') },
+      resend: { ok: resendOk, label: 'Service E-mails (Resend)', error: resendOk ? null : 'RESEND_API_KEY non configurée' },
+      r2: { ok: r2Ok, label: 'Stockage Médias (Cloudflare R2)', error: r2Ok ? null : 'Variables R2 non configurées' },
+      database: { ok: dbOk, label: 'Base de Données (Supabase)', error: null },
+    },
     checkedAt: now,
   };
 

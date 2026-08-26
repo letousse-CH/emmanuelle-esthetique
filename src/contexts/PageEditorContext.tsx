@@ -1,3 +1,5 @@
+"use client";
+
 import { createContext } from 'react';
 
 export interface PageEditorContextType {
@@ -5,6 +7,11 @@ export interface PageEditorContextType {
   savePage: () => Promise<void>;
   openSectionEditor?: (sectionIndex: number) => void;
   swapType?: (sectionIndex: number, newType: any) => void;
+  moveSection?: (index: number, dir: -1 | 1) => void;
+  moveToSection?: (fromIndex: number, toIndex: number) => void;
+  removeSection?: (index: number) => void;
+  duplicateSection?: (index: number) => void;
+  addSection?: (type: any, atIndex?: number) => void;
   isEditing: boolean;
 }
 

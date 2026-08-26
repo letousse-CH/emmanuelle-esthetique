@@ -2,19 +2,90 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Check, Clock, Mail, MapPin, Minus, Phone, Play, ShieldCheck, Sparkles, Star, Zap, Send } from 'lucide-react';
+import { ArrowRight, Check, Clock, Mail, MapPin, Minus, Phone, Play, ShieldCheck, Sparkles, Star, Zap, Send, Plus, Trash2 } from 'lucide-react';
 
 import EditableText from './EditableText';
 import EditableImage from './EditableImage';
 import { SectionWrapper } from './sections';
 import { useSectionAnimation } from './sectionAnimation';
 import { supabase } from '../../services/supabase';
+import { PageEditorContext } from '../../contexts/PageEditorContext';
 import {
   getTitleFontClass,
   getContentFontClass,
   getTitleFontStyle,
   getContentFontStyle,
 } from './sectionLayout';
+
+export function InlineItemDelete({
+  sectionIndex,
+  fieldPath,
+  array,
+  itemIndex,
+}: {
+  sectionIndex?: number;
+  fieldPath: string;
+  array: any[];
+  itemIndex: number;
+}) {
+  const ctx = React.useContext(PageEditorContext);
+  if (!ctx?.isEditing || sectionIndex === undefined) return null;
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newArray = array.filter((_, idx) => idx !== itemIndex);
+    ctx.updateField?.(sectionIndex, fieldPath, newArray);
+    ctx.savePage?.();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleDelete}
+      title="Supprimer cet élément"
+      className="absolute top-3 right-3 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-md z-30 cursor-pointer"
+    >
+      <Trash2 size={13} />
+    </button>
+  );
+}
+
+export function InlineItemAdd({
+  sectionIndex,
+  fieldPath,
+  array,
+  newItem,
+  label = 'Ajouter un élément',
+}: {
+  sectionIndex?: number;
+  fieldPath: string;
+  array: any[];
+  newItem: any;
+  label?: string;
+}) {
+  const ctx = React.useContext(PageEditorContext);
+  if (!ctx?.isEditing || sectionIndex === undefined) return null;
+
+  const handleAdd = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newArray = [...(array || []), newItem];
+    ctx.updateField?.(sectionIndex, fieldPath, newArray);
+    ctx.savePage?.();
+  };
+
+  return (
+    <div className="w-full flex justify-center pt-6 col-span-full">
+      <button
+        type="button"
+        onClick={handleAdd}
+        className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-stone-900 text-white hover:bg-stone-800 rounded-2xl text-xs font-bold transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95"
+      >
+        <Plus size={14} />
+        <span>{label}</span>
+      </button>
+    </div>
+  );
+}
 
 /**
  * Sections complémentaires.
@@ -1004,3 +1075,576 @@ export function BentoGrid1({ data, sectionIndex }: Props<BentoGrid1Data>) {
     </SectionWrapper>
   );
 }
+
+/* ═══ Boucle d'Articles de Blog Dynamique ══════════════════════════════════ */
+
+export interface BlogGrid1Data extends Base {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  limit?: number;
+  cta_text?: string;
+  cta_href?: string;
+}
+
+/** Section Boucle d'Articles de Blog — Charge dynamiquement les derniers articles du site. */
+export function BlogGrid1({ data, sectionIndex }: Props<BlogGrid1Data>) {
+  const anim = useSectionAnimation();
+  const dark = data.theme === 'dark';
+  const t = tone(dark);
+
+  const [articles, setArticles] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    async function loadArticles() {
+      try {
+        const limitCount = data.limit ? Number(data.limit) : 3;
+        const { data: rows } = await supabase
+          .from('articles')
+          .select('id, title, slug, meta_description, cover_image, category, created_at')
+          .eq('published', true)
+          .order('created_at', { ascending: false })
+          .limit(limitCount);
+
+        setArticles(rows || []);
+      } catch (err) {
+        console.warn('[BlogGrid1] Erreur de chargement des articles:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadArticles();
+  }, [data.limit]);
+
+  return (
+    <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-20">
+      <motion.div
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: '-80px' }}
+        variants={anim.container}
+        className="mx-auto max-w-6xl space-y-12"
+      >
+        <div className="text-center max-w-2xl mx-auto space-y-4">
+          {data.eyebrow && (
+            <motion.span variants={anim.item} className="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider">
+              <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} />
+            </motion.span>
+          )}
+          <motion.h2 variants={anim.item} style={getTitleFontStyle(data)} className={getTitleFontClass(data, `font-serif text-3xl md:text-4xl font-extrabold ${t.title}`)}>
+            <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} />
+          </motion.h2>
+          {data.description && (
+            <motion.p variants={anim.item} style={getContentFontStyle(data)} className={getContentFontClass(data, `text-base ${t.body}`)}>
+              <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
+            </motion.p>
+          )}
+        </div>
+
+        {/* Grille d'articles */}
+        {loading ? (
+          <div className="text-center py-12 text-stone-400 text-xs">Chargement des derniers articles…</div>
+        ) : articles.length === 0 ? (
+          <div className="text-center py-12 text-stone-400 text-xs">Aucun article publié pour le moment.</div>
+        ) : (
+          <motion.div variants={anim.item} className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {articles.map((art) => (
+              <a
+                key={art.id}
+                href={`/blog/${art.slug}`}
+                className={`group flex flex-col rounded-3xl overflow-hidden border transition-all hover:-translate-y-1 hover:shadow-xl ${t.card}`}
+              >
+                <div className="relative aspect-[16/10] overflow-hidden bg-stone-100">
+                  <img
+                    src={art.cover_image || 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80'}
+                    alt={art.title}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  {art.category && (
+                    <span className="absolute top-4 left-4 px-3 py-1 bg-white/90 backdrop-blur-md text-stone-900 text-[11px] font-extrabold rounded-full shadow-sm">
+                      {art.category}
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-6 flex flex-col flex-1 justify-between space-y-4">
+                  <div className="space-y-2">
+                    <span className={`text-[11.5px] font-bold ${t.faint}`}>
+                      {new Date(art.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </span>
+                    <h3 className={`text-lg font-bold group-hover:text-emerald-600 transition-colors line-clamp-2 ${t.title}`}>
+                      {art.title}
+                    </h3>
+                    <p className={`text-xs line-clamp-3 leading-relaxed ${t.body}`}>
+                      {art.meta_description || 'Découvrez nos réflexions et conseils d\'experts.'}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 flex items-center text-xs font-bold text-emerald-600 group-hover:translate-x-1 transition-transform">
+                    <span>Lire l'article</span>
+                    <ArrowRight size={14} className="ml-1" />
+                  </div>
+                </div>
+              </a>
+            ))}
+          </motion.div>
+        )}
+
+        {data.cta_text && (
+          <div className="text-center pt-4">
+            <a
+              href={data.cta_href || '/blog'}
+              className="inline-flex items-center gap-2 px-6 py-3.5 bg-stone-900 text-white text-xs font-extrabold rounded-2xl hover:bg-stone-800 transition-all shadow-md"
+            >
+              <EditableText sectionIndex={sectionIndex} fieldPath="cta_text" value={data.cta_text} />
+              <ArrowRight size={15} />
+            </a>
+          </div>
+        )}
+      </motion.div>
+    </SectionWrapper>
+  );
+}
+
+/* ═══ Tailwind UI Marketing Block 1 : Hero Split Badge & Glow ═════════════════ */
+
+export interface HeroSplitBadgeData extends Base {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  primary_cta_text?: string;
+  primary_cta_href?: string;
+  secondary_cta_text?: string;
+  secondary_cta_href?: string;
+  image_url?: string;
+}
+
+export function HeroSplitBadge({ data, sectionIndex }: Props<HeroSplitBadgeData>) {
+  const anim = useSectionAnimation();
+  const dark = data.theme === 'dark';
+  const t = tone(dark);
+
+  return (
+    <SectionWrapper data={data} sectionIndex={sectionIndex} className="relative overflow-hidden px-6 py-24 lg:py-32">
+      <div className="relative mx-auto max-w-7xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+          {/* Text Left */}
+          <motion.div
+            initial="hidden" whileInView="visible" viewport={{ once: true }}
+            variants={anim.container}
+            className="lg:col-span-7 space-y-6"
+          >
+            {data.eyebrow && (
+              <motion.div variants={anim.item} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs font-bold tracking-tight">
+                <Sparkles size={14} className="text-amber-600" />
+                <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} />
+              </motion.div>
+            )}
+
+            <motion.h1 variants={anim.item} style={getTitleFontStyle(data)} className={getTitleFontClass(data, `text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight ${t.title}`)}>
+              <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} />
+            </motion.h1>
+
+            {data.description && (
+              <motion.p variants={anim.item} style={getContentFontStyle(data)} className={getContentFontClass(data, `text-lg sm:text-xl leading-relaxed max-w-2xl ${t.body}`)}>
+                <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
+              </motion.p>
+            )}
+
+            <motion.div variants={anim.item} className="flex flex-wrap items-center gap-4 pt-2">
+              {data.primary_cta_text && (
+                <a
+                  href={data.primary_cta_href || '#'}
+                  className="inline-flex items-center gap-2 px-7 py-4 rounded-2xl bg-stone-900 text-white text-sm font-extrabold hover:bg-stone-800 transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95"
+                >
+                  <EditableText sectionIndex={sectionIndex} fieldPath="primary_cta_text" value={data.primary_cta_text} />
+                  <ArrowRight size={16} />
+                </a>
+              )}
+
+              {data.secondary_cta_text && (
+                <a
+                  href={data.secondary_cta_href || '#'}
+                  className="inline-flex items-center gap-2 px-6 py-4 rounded-2xl bg-white border border-stone-200 text-stone-800 text-sm font-extrabold hover:bg-stone-50 transition-all shadow-xs active:scale-95"
+                >
+                  <Play size={15} className="fill-current text-stone-700" />
+                  <EditableText sectionIndex={sectionIndex} fieldPath="secondary_cta_text" value={data.secondary_cta_text} />
+                </a>
+              )}
+            </motion.div>
+          </motion.div>
+
+          {/* Image / Media Right */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6 }}
+            viewport={{ once: true }}
+            className="lg:col-span-5 relative"
+          >
+            <div className="relative rounded-3xl overflow-hidden border border-stone-200/80 bg-white p-3 shadow-2xl">
+              <div className="aspect-[4/3] rounded-2xl overflow-hidden relative bg-stone-100">
+                <EditableImage
+                  sectionIndex={sectionIndex}
+                  fieldPath="image_url"
+                  src={data.image_url || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80'}
+                  alt={data.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    </SectionWrapper>
+  );
+}
+
+/* ═══ Tailwind UI Marketing Block 2 : Features 2x2 Offset Grid ═══════════════ */
+
+export interface FeatureItem {
+  icon?: string;
+  title: string;
+  description: string;
+}
+
+export interface FeaturesGridOffsetData extends Base {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  items?: FeatureItem[];
+}
+
+export function FeaturesGridOffset({ data, sectionIndex }: Props<FeaturesGridOffsetData>) {
+  const anim = useSectionAnimation();
+  const dark = data.theme === 'dark';
+  const t = tone(dark);
+
+  const defaultItems: FeatureItem[] = [
+    { title: 'Design Moderne 2026', description: 'Interfaces ultra-soignées, adaptées à tous les écrans avec animations fluides.' },
+    { title: 'Haute Performance', description: 'Temps de chargement instantané et optimisation SEO native pour Google.' },
+    { title: 'Sécurité Réseau', description: 'Cryptage de bout en bout et hébergement sécurisé sur infrastructure cloud.' },
+    { title: 'IA Autonome Intégrée', description: 'Génération de contenu et assistants intelligents à portée de clic.' },
+  ];
+
+  const items = data.items && data.items.length > 0 ? data.items : defaultItems;
+
+  return (
+    <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-24">
+      <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-3xl text-center mb-16 space-y-4">
+          {data.eyebrow && (
+            <span className="inline-block px-3.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider">
+              <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} />
+            </span>
+          )}
+          <h2 style={getTitleFontStyle(data)} className={getTitleFontClass(data, `text-3xl sm:text-4xl lg:text-5xl font-extrabold ${t.title}`)}>
+            <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} />
+          </h2>
+          {data.description && (
+            <p style={getContentFontStyle(data)} className={getContentFontClass(data, `text-base sm:text-lg leading-relaxed ${t.body}`)}>
+              <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
+            </p>
+          )}
+        </div>
+
+        <motion.div
+          initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }}
+          variants={anim.container}
+          className="grid grid-cols-1 md:grid-cols-2 gap-8"
+        >
+          {items.map((item, i) => (
+            <motion.div
+              key={i}
+              variants={anim.item}
+              className={`relative group p-8 rounded-3xl border transition-all hover:shadow-lg ${t.card}`}
+            >
+              <InlineItemDelete sectionIndex={sectionIndex} fieldPath="items" array={items} itemIndex={i} />
+
+              <div className="w-12 h-12 rounded-2xl bg-stone-900 text-amber-400 flex items-center justify-center mb-6 shadow-xs">
+                <Check size={22} />
+              </div>
+              <h3 className={`text-xl font-bold mb-3 ${t.title}`}>
+                <EditableText sectionIndex={sectionIndex} fieldPath={`items.${i}.title`} value={item.title} />
+              </h3>
+              <p className={`text-sm leading-relaxed ${t.body}`}>
+                <EditableText sectionIndex={sectionIndex} fieldPath={`items.${i}.description`} value={item.description} />
+              </p>
+            </motion.div>
+          ))}
+
+          <InlineItemAdd
+            sectionIndex={sectionIndex}
+            fieldPath="items"
+            array={items}
+            newItem={{ title: 'Nouvel atout 2026', description: 'Description de la fonctionnalité…' }}
+            label="Ajouter un atout"
+          />
+        </motion.div>
+      </div>
+    </SectionWrapper>
+  );
+}
+
+/* ═══ Tailwind UI Marketing Block 3 : Pricing 3-Tier Grid ═════════════════════ */
+
+export interface PricingTier {
+  name: string;
+  price: string;
+  period?: string;
+  description: string;
+  popular?: boolean;
+  features: string[];
+  cta_text: string;
+  cta_href?: string;
+}
+
+export interface PricingCardsModernData extends Base {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  tiers?: PricingTier[];
+}
+
+export function PricingCardsModern({ data, sectionIndex }: Props<PricingCardsModernData>) {
+  const anim = useSectionAnimation();
+  const dark = data.theme === 'dark';
+  const t = tone(dark);
+
+  const defaultTiers: PricingTier[] = [
+    {
+      name: 'Starter',
+      price: '29 €',
+      period: '/ mois',
+      description: 'Idéal pour démarrer votre activité en ligne sereinement.',
+      popular: false,
+      features: ['Page unique ou landing page', 'Hébergement haute vitesse', 'Support par email'],
+      cta_text: 'Démarrer avec Starter',
+    },
+    {
+      name: 'Professionnel',
+      price: '79 €',
+      period: '/ mois',
+      description: 'La solution complète pour développer votre visibilité et vos ventes.',
+      popular: true,
+      features: ['Site multi-pages complet', 'Pilote automatique IA', 'Module Caisse & Paiements', 'Support prioritaire 7j/7'],
+      cta_text: 'Choisir la formule Pro',
+    },
+    {
+      name: 'Sur-Mesure',
+      price: '199 €',
+      period: '/ mois',
+      description: 'Pour les entreprises exigeantes ayant des besoins personnalisés.',
+      popular: false,
+      features: ['Architecture dédiée', 'Agents IA personnalisés', 'Accompagnement VIP', 'SLA garanti 99.9%'],
+      cta_text: 'Contacter l\'équipe',
+    },
+  ];
+
+  const tiers = data.tiers && data.tiers.length > 0 ? data.tiers : defaultTiers;
+
+  return (
+    <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-24">
+      <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-3xl text-center mb-16 space-y-4">
+          {data.eyebrow && (
+            <span className="inline-block px-3.5 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold uppercase tracking-wider">
+              <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} />
+            </span>
+          )}
+          <h2 style={getTitleFontStyle(data)} className={getTitleFontClass(data, `text-3xl sm:text-4xl lg:text-5xl font-extrabold ${t.title}`)}>
+            <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} />
+          </h2>
+          {data.description && (
+            <p style={getContentFontStyle(data)} className={getContentFontClass(data, `text-base sm:text-lg ${t.body}`)}>
+              <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
+            </p>
+          )}
+        </div>
+
+        <motion.div
+          initial="hidden" whileInView="visible" viewport={{ once: true }}
+          variants={anim.container}
+          className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch"
+        >
+          {tiers.map((tier, i) => {
+            const isPop = tier.popular;
+            return (
+              <motion.div
+                key={i}
+                variants={anim.item}
+                className={`relative group flex flex-col justify-between p-8 rounded-3xl border transition-all ${
+                  isPop
+                    ? 'bg-stone-900 text-white border-stone-900 shadow-2xl scale-[1.02] z-10'
+                    : `bg-white text-stone-900 border-stone-200/80 shadow-xs hover:shadow-lg`
+                }`}
+              >
+                <InlineItemDelete sectionIndex={sectionIndex} fieldPath="tiers" array={tiers} itemIndex={i} />
+
+                {isPop && (
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 text-[11px] font-black uppercase tracking-wider shadow-md">
+                    Le plus populaire
+                  </span>
+                )}
+
+                <div className="space-y-6">
+                  <div>
+                    <h3 className={`text-xl font-bold ${isPop ? 'text-white' : 'text-stone-900'}`}>
+                      <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.name`} value={tier.name} />
+                    </h3>
+                    <p className={`mt-2 text-xs leading-relaxed ${isPop ? 'text-stone-300' : 'text-stone-500'}`}>
+                      <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.description`} value={tier.description} />
+                    </p>
+                  </div>
+
+                  <div className="flex items-baseline gap-1">
+                    <span className={`text-4xl font-extrabold tracking-tight ${isPop ? 'text-white' : 'text-stone-900'}`}>
+                      <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.price`} value={tier.price} />
+                    </span>
+                    {tier.period && (
+                      <span className={`text-xs font-semibold ${isPop ? 'text-stone-400' : 'text-stone-500'}`}>
+                        <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.period`} value={tier.period} />
+                      </span>
+                    )}
+                  </div>
+
+                  <ul className="space-y-3 pt-4 border-t border-stone-200/20 text-xs">
+                    {(tier.features || []).map((f, fi) => (
+                      <li key={fi} className="flex items-center gap-2.5">
+                        <Check size={16} className={isPop ? 'text-amber-400 shrink-0' : 'text-emerald-600 shrink-0'} />
+                        <span className={isPop ? 'text-stone-200' : 'text-stone-700'}>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="pt-8">
+                  <a
+                    href={tier.cta_href || '#'}
+                    className={`w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${
+                      isPop
+                        ? 'bg-amber-400 text-stone-950 hover:bg-amber-300 shadow-md'
+                        : 'bg-stone-900 text-white hover:bg-stone-800 shadow-xs'
+                    }`}
+                  >
+                    <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.cta_text`} value={tier.cta_text} />
+                  </a>
+                </div>
+              </motion.div>
+            );
+          })}
+
+          <InlineItemAdd
+            sectionIndex={sectionIndex}
+            fieldPath="tiers"
+            array={tiers}
+            newItem={{ name: 'Nouvelle Formule', price: '49 €', period: '/ mois', description: 'Description de l\'offre…', popular: false, features: ['Avantage 1', 'Avantage 2'], cta_text: 'Choisir' }}
+            label="Ajouter une formule tarifaire"
+          />
+        </motion.div>
+      </div>
+    </SectionWrapper>
+  );
+}
+
+/* ═══ Tailwind UI Marketing Block 5 : FAQ Accordion Modern ═════════════════════ */
+
+export interface FaqItem {
+  question: string;
+  answer: string;
+}
+
+export interface FaqAccordionModernData extends Base {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  items?: FaqItem[];
+}
+
+export function FaqAccordionModern({ data, sectionIndex }: Props<FaqAccordionModernData>) {
+  const dark = data.theme === 'dark';
+  const t = tone(dark);
+  const [openIndex, setOpenIndex] = React.useState<number | null>(0);
+
+  const defaultItems: FaqItem[] = [
+    { question: "Comment fonctionne l'éditeur en direct ?", answer: "Vous cliquez directement sur les textes et images dans l'aperçu pour les modifier en temps réel sans connaissances techniques." },
+    { question: "Le site est-il optimisé pour le référencement Google ?", answer: "Oui, la structure HTML5, le balisage Schema.org et les métadonnées SEO sont générés automatiquement pour un référencement optimal." },
+    { question: "Puis-je utiliser mon propre nom de domaine ?", answer: "Absolument. Vous pouvez lier votre propre nom de domaine personnalisé en quelques secondes depuis les paramètres." },
+  ];
+
+  const items = data.items && data.items.length > 0 ? data.items : defaultItems;
+
+  return (
+    <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-24">
+      <div className="mx-auto max-w-4xl">
+        <div className="text-center mb-16 space-y-4">
+          {data.eyebrow && (
+            <span className="inline-block px-3.5 py-1 rounded-full bg-sky-100 text-sky-800 text-xs font-bold uppercase tracking-wider">
+              <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} />
+            </span>
+          )}
+          <h2 style={getTitleFontStyle(data)} className={getTitleFontClass(data, `text-3xl sm:text-4xl font-extrabold ${t.title}`)}>
+            <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} />
+          </h2>
+          {data.description && (
+            <p style={getContentFontStyle(data)} className={getContentFontClass(data, `text-base ${t.body}`)}>
+              <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          {items.map((item, i) => {
+            const isOpen = openIndex === i;
+            return (
+              <div
+                key={i}
+                className={`relative group rounded-2xl border transition-all overflow-hidden ${t.card}`}
+              >
+                <InlineItemDelete sectionIndex={sectionIndex} fieldPath="items" array={items} itemIndex={i} />
+
+                <button
+                  type="button"
+                  onClick={() => setOpenIndex(isOpen ? null : i)}
+                  className="w-full flex items-center justify-between p-6 text-left font-bold text-sm sm:text-base cursor-pointer pr-12"
+                >
+                  <span className={t.title}>
+                    <EditableText sectionIndex={sectionIndex} fieldPath={`items.${i}.question`} value={item.question} />
+                  </span>
+                  <span className={`p-1 rounded-full border transition-transform duration-200 ${isOpen ? 'rotate-180 bg-stone-900 text-white' : 'text-stone-500'}`}>
+                    <Minus size={14} />
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <div className="px-6 pb-6 pt-0 text-xs sm:text-sm leading-relaxed border-t border-stone-100 mt-1 pt-4 text-stone-600">
+                    <EditableText sectionIndex={sectionIndex} fieldPath={`items.${i}.answer`} value={item.answer} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          <InlineItemAdd
+            sectionIndex={sectionIndex}
+            fieldPath="items"
+            array={items}
+            newItem={{ question: 'Nouvelle question FAQ ?', answer: 'Réponse à la question…' }}
+            label="Ajouter une question FAQ"
+          />
+        </div>
+      </div>
+    </SectionWrapper>
+  );
+}
+
+export { default as AdminShowcaseHero } from '../showcase/AdminShowcaseHero';
+export { default as ClientNeedsSection } from '../showcase/ClientNeedsSection';
+export { default as VoiceFeaturesSection } from '../showcase/VoiceFeaturesSection';
+export { default as AdminMockupsGallery } from '../showcase/AdminMockupsGallery';
+export { default as TurnkeyBentoGrid } from '../showcase/TurnkeyBentoGrid';
+export { default as TurnkeyOfferSection } from '../showcase/TurnkeyOfferSection';
+export { default as TurnkeyFaq } from '../showcase/TurnkeyFaq';
+
+

@@ -6,6 +6,12 @@ import { getModuleFlagsServer } from '../config/modules';
 
 export const revalidate = 3600; // Cache for 1 hour
 
+function parseSafeDate(d: any): Date {
+  if (!d) return new Date();
+  const date = new Date(d);
+  return isNaN(date.getTime()) ? new Date() : date;
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const BASE_URL = SITE_CONFIG.url;
   const moduleFlags = await getModuleFlagsServer();
@@ -34,7 +40,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (articles) {
       blogRoutes = articles.map(a => ({
         url: `/blog/${a.slug}`,
-        lastModified: new Date(a.updated_at),
+        lastModified: parseSafeDate(a.updated_at),
         priority: 0.8,
         changeFrequency: 'weekly',
       }));
@@ -43,7 +49,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (events) {
       eventRoutes = events.map(e => ({
         url: `/ateliers/${e.slug}`,
-        lastModified: new Date(e.updated_at),
+        lastModified: parseSafeDate(e.updated_at),
         priority: 0.8,
         changeFrequency: 'weekly',
       }));
@@ -58,7 +64,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .filter(p => !staticCoveredSlugs.includes(p.slug))
         .map(p => ({
           url: `/${p.slug}`,
-          lastModified: new Date(p.updated_at),
+          lastModified: parseSafeDate(p.updated_at),
           priority: 0.7,
           changeFrequency: 'monthly',
         }));

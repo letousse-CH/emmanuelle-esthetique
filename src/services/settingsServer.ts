@@ -12,7 +12,7 @@ export async function getSettingsServer(keys: SettingKey[]): Promise<Record<Sett
       .in('key', keys);
     
     if (error) {
-      console.error('[getSettingsServer] Supabase error:', error.message);
+      // Silencieusement ignoré en cas de base hors-ligne ou clés fictives en dev
     }
     
     const settingsMap = new Map<string, string>();
@@ -27,9 +27,20 @@ export async function getSettingsServer(keys: SettingKey[]): Promise<Record<Sett
       keys.map(k => [k, settingsMap.has(k) ? settingsMap.get(k)! : (SETTINGS_DEFAULTS[k] ?? '')])
     ) as Record<SettingKey, string>;
   } catch (err) {
-    console.error('[getSettingsServer] Error fetching settings:', err);
+    // Silencieusement ignoré si la connexion Supabase échoue
     return Object.fromEntries(
       keys.map(k => [k, SETTINGS_DEFAULTS[k] ?? ''])
     ) as Record<SettingKey, string>;
   }
+}
+
+export async function getEditorialSettings(): Promise<Record<string, string>> {
+  const keys: SettingKey[] = [
+    'site_activity_context',
+    'site_target_persona',
+    'site_tone_of_voice',
+    'site_brand_tone',
+    'site_blog_topics',
+  ];
+  return getSettingsServer(keys);
 }

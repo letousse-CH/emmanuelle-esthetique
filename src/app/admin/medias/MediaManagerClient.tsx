@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../../../services/supabase';
-import { Upload, Trash2, Copy, CheckCircle, Zap, Image as ImageIcon } from 'lucide-react';
+import { Upload, Trash2, Copy, CheckCircle, Zap, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import AddMediaByUrl from '../../../components/AddMediaByUrl';
 
 interface MediaAsset {
@@ -111,7 +111,36 @@ export default function MediaManager() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [upload, setUpload]     = useState<UploadState>({ stage: 'idle' });
   const [batch, setBatch]       = useState<BatchState | null>(null);
+  const [repatriating, setRepatriating] = useState(false);
+  const [repatriateNotice, setRepatriateNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleRepatriateImages = async () => {
+    setRepatriating(true);
+    setRepatriateNotice(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
+      const res = await fetch('/api/admin/repatriate-images', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRepatriateNotice({ kind: 'ok', text: data.message });
+        await fetchMedias();
+      } else {
+        setRepatriateNotice({ kind: 'error', text: data.error || 'Erreur lors du rapatriement' });
+      }
+    } catch (err: any) {
+      setRepatriateNotice({ kind: 'error', text: err?.message || 'Erreur réseau lors du rapatriement' });
+    } finally {
+      setRepatriating(false);
+    }
+  };
 
   useEffect(() => { fetchMedias(); }, []);
 
@@ -331,25 +360,47 @@ export default function MediaManager() {
   return (
     <div>
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 bg-white p-6 rounded-2xl border border-zinc-200/90 shadow-2xs">
         <div>
-          <h1 className="text-[26px] font-semibold tracking-tight text-stone-900">Médiathèque</h1>
-          <p className="text-stone-500 mt-2">Gérez vos images et optimisez leur référencement (SEO).</p>
+          <span className="px-3 py-1 rounded-full bg-purple-100/80 text-purple-900 border border-purple-200 text-[10.5px] font-extrabold uppercase tracking-wider">Stockage & Médias</span>
+          <h1 className="text-2xl font-extrabold text-zinc-900 mt-2">Médiathèque</h1>
+          <p className="text-xs text-zinc-600 font-medium mt-1">Gérez vos images et optimisez leur référencement (SEO).</p>
         </div>
-        <label className={`cursor-pointer bg-stone-900 text-white px-6 py-3 text-sm hover:bg-stone-700 transition-colors flex items-center gap-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-          <Upload size={16} />
-          {upload.stage === 'compressing' ? 'Compression…' : upload.stage === 'uploading' ? 'Envoi…' : 'Ajouter une image'}
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={handleUpload}
-            disabled={isUploading}
-          />
-        </label>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleRepatriateImages}
+            disabled={repatriating}
+            className="bg-white hover:bg-zinc-50 border border-zinc-300 text-zinc-800 px-5 py-3 rounded-full text-xs font-bold shadow-2xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={repatriating ? 'animate-spin' : ''} />
+            <span>{repatriating ? 'Rapatriement en cours…' : 'Rapatrier les images externes sur le CDN R2'}</span>
+          </button>
+
+          <label className={`cursor-pointer bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white px-6 py-3 rounded-full text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 shrink-0 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <Upload size={16} />
+            {upload.stage === 'compressing' ? 'Compression…' : upload.stage === 'uploading' ? 'Envoi…' : 'Ajouter une image'}
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleUpload}
+              disabled={isUploading}
+            />
+          </label>
+        </div>
       </div>
+
+      {repatriateNotice && (
+        <div className={`p-4 rounded-xl text-xs font-semibold flex items-center gap-2 mb-6 border ${
+          repatriateNotice.kind === 'ok' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-red-50 text-red-900 border-red-200'
+        }`}>
+          {repatriateNotice.kind === 'ok' ? <CheckCircle size={16} className="text-emerald-600 shrink-0" /> : <ImageIcon size={16} className="text-red-600 shrink-0" />}
+          <span>{repatriateNotice.text}</span>
+        </div>
+      )}
 
       {/* Ajout par URL — seul chemin disponible tant que R2 n'est pas
           configuré (l'upload de fichier répond alors 501). */}

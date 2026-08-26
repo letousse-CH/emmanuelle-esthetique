@@ -16,6 +16,7 @@ const inter = Inter({
   weight: ['300', '400', '500', '600'],
   variable: '--font-sans',
   display: 'swap',
+  adjustFontFallback: false,
 });
 
 const cormorant = Cormorant_Garamond({
@@ -24,6 +25,7 @@ const cormorant = Cormorant_Garamond({
   style: ['normal', 'italic'],
   variable: '--font-serif',
   display: 'swap',
+  adjustFontFallback: false,
 });
 
 export async function generateMetadata() {

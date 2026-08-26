@@ -44,6 +44,20 @@ export const SECTION_LABELS: Record<string, string> = {
   stats_3: 'Grille de métriques Bento',
   newsletter_1: "Capture d'email newsletter",
   bento_grid_1: 'Grille Bento moderne',
+  blog_grid_1: "Grille d'articles Blog (Boucle dynamique)",
+  hero_split_badge: 'Hero split moderne & badge (Tailwind UI)',
+  features_grid_offset: 'Grille d\'atouts 2x2 (Tailwind UI)',
+  pricing_cards_modern: 'Tarification 3-tiers (Tailwind UI)',
+  faq_accordion_modern: 'FAQ accordéon moderne (Tailwind UI)',
+  hero_turnkey_voice: 'Hero Clé en Main & Dictée Vocale',
+  client_needs_matrix: 'Vos Besoins vs Solution Clé en Main',
+  voice_showcase_1: 'Commandes Vocales & Interview IA',
+  admin_mockups_gallery: 'Galerie des Maquettes Admin (Caisse, CRM...)',
+  turnkey_bento_grid: 'Grille Bento Avantages Clé en Main',
+  turnkey_offer_pricing: 'Offre Clé en Main Tout Inclus',
+  turnkey_faq_accordion: 'FAQ Solution Clé en Main',
+  turnkey_steps_1: 'Procédure Didactique 1-2-3',
+  turnkey_testimonials_1: 'Témoignages & Confiance Indépendants',
 };
 
 /* ── Primitives de dessin ─────────────────────────────────────────────── */
@@ -498,6 +512,44 @@ export function SectionPreview({ type }: { type: SectionType | string }) {
           <rect x="0" y="44" width="160" height="16" className="fill-stone-100" />
           {L(38, 50, 58, 4)}
           {L(102, 50, 22, 4, 'fill-stone-400')}
+        </Frame>
+      );
+    case 'hero_split_badge':
+      return (
+        <Frame>
+          {L(14, 20, 26, 4, 'fill-amber-400')}
+          {L(14, 30, 68, 6, 'fill-stone-800')}
+          {L(14, 40, 54, 4, 'fill-stone-400')}
+          {Pill(14, 52, 28, 'fill-stone-900')}
+          <rect x="94" y="20" width="52" height="60" rx="6" className="fill-stone-200" />
+        </Frame>
+      );
+    case 'features_grid_offset':
+      return (
+        <Frame>
+          {L(50, 16, 60, 5, 'fill-stone-800')}
+          <rect x="14" y="32" width="60" height="26" rx="4" className="fill-stone-200/80" />
+          <rect x="86" y="32" width="60" height="26" rx="4" className="fill-stone-200/80" />
+          <rect x="14" y="64" width="60" height="26" rx="4" className="fill-stone-200/80" />
+          <rect x="86" y="64" width="60" height="26" rx="4" className="fill-stone-200/80" />
+        </Frame>
+      );
+    case 'pricing_cards_modern':
+      return (
+        <Frame>
+          {L(50, 14, 60, 5, 'fill-stone-800')}
+          <rect x="12" y="28" width="40" height="60" rx="4" className="fill-stone-200/60" />
+          <rect x="60" y="24" width="40" height="68" rx="4" className="fill-stone-900" />
+          <rect x="108" y="28" width="40" height="60" rx="4" className="fill-stone-200/60" />
+        </Frame>
+      );
+    case 'faq_accordion_modern':
+      return (
+        <Frame>
+          {L(50, 16, 60, 5, 'fill-stone-800')}
+          <rect x="20" y="30" width="120" height="18" rx="4" className="fill-stone-900" />
+          <rect x="20" y="52" width="120" height="16" rx="4" className="fill-stone-200/80" />
+          <rect x="20" y="72" width="120" height="16" rx="4" className="fill-stone-200/80" />
         </Frame>
       );
     default:

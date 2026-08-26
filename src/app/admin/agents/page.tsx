@@ -15,10 +15,10 @@ export default function Page() {
 
   return (
     <div className="max-w-6xl space-y-6">
-      {!moduleFlags.agents && <ModuleDisabledBanner moduleLabel="Agents IA" />}
+      {!moduleFlags.agents && <ModuleDisabledBanner moduleLabel="Agent IA" />}
 
       <PageHeader
-        title="Agents IA"
+        title="Agent IA"
         description="Un assistant qui répond aux visiteurs à partir du contenu réel de votre site, cadre leur demande et récupère de quoi les rappeler."
       />
 

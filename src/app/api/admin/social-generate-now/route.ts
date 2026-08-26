@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!(await isModuleEnabledServer('social'))) {
-    return NextResponse.json({ error: 'Module Réseaux Sociaux désactivé' }, { status: 403 });
+  if (!(await isModuleEnabledServer('social')) || !(await isModuleEnabledServer('ai_generation'))) {
+    return NextResponse.json({ error: "Le module Réseaux Sociaux ou Génération IA est désactivé dans les paramètres du Studio." }, { status: 403 });
   }
 
   try {

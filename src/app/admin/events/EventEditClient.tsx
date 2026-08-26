@@ -10,7 +10,7 @@ const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false }) as a
 import { supabase } from '../../../services/supabase';
 import { sanitizeEditorHtml } from '../../../utils/sanitizeHtml';
 import { SdeEvent, EventCategory, EventStatus, CATEGORY_LABELS } from '../../../types/events';
-import { Save, ArrowLeft, Eye, EyeOff, PauseCircle, Users, AlertCircle, Sparkles } from 'lucide-react';
+import { Save, ArrowLeft, Eye, EyeOff, PauseCircle, Users, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
 
 const EMPTY: Omit<SdeEvent, 'id' | 'created_at' | 'updated_at'> = {
   title: '',
@@ -63,6 +63,19 @@ export default function EventEdit() {
   const [error, setError] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
   const [generatingMeta, setGeneratingMeta] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   useEffect(() => {
     if (!id) return;
@@ -83,14 +96,19 @@ export default function EventEdit() {
       .then(({ data }) => setRegistrations(data || []));
   }, [id]);
 
-  const set = (field: string) => (val: any) =>
+  const set = (field: string) => (val: any) => {
+    setIsDirty(true);
     setForm(prev => ({ ...prev, [field]: val }));
+  };
 
-  const setInput = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+  const setInput = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setIsDirty(true);
     setForm(prev => ({ ...prev, [field]: e.target.value }));
+  };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const title = e.target.value;
+    setIsDirty(true);
     setForm(prev => ({
       ...prev,
       title,
@@ -112,6 +130,7 @@ export default function EventEdit() {
       });
       const data = await res.json();
       if (data.meta_title || data.meta_description || data.meta_keywords) {
+        setIsDirty(true);
         setForm(prev => ({
           ...prev,
           ...(data.meta_title       ? { meta_title: data.meta_title }             : {}),
@@ -131,6 +150,11 @@ export default function EventEdit() {
   const handleSave = async (status?: EventStatus) => {
     if (!form.title.trim()) { setError('Le titre est obligatoire.'); return; }
     if (!form.slug.trim())  { setError('Le slug est obligatoire.'); return; }
+    if (Number(form.price_chf) < 0) { setError('Le prix (CHF) ne peut pas être négatif.'); return; }
+    if (form.date_start && form.date_end && new Date(form.date_end) < new Date(form.date_start)) {
+      setError('La date de fin ne peut pas être antérieure à la date de début.');
+      return;
+    }
 
     setSaving(true);
     setError('');
@@ -156,7 +180,11 @@ export default function EventEdit() {
       if (err) { setError(err.message); setSaving(false); return; }
     }
 
-    router.push('/admin/events');
+    setIsDirty(false);
+    setSuccessMsg('Événement enregistré avec succès !');
+    setTimeout(() => {
+      router.push('/admin/events');
+    }, 800);
   };
 
   if (loading) return <div className="text-stone-600 p-6">Chargement…</div>;
@@ -208,6 +236,13 @@ export default function EventEdit() {
           </button>
         </div>
       </div>
+
+      {successMsg && (
+        <div className="mb-6 flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 text-sm font-semibold rounded-lg shadow-2xs animate-fadein">
+          <CheckCircle size={18} className="text-emerald-600 shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 px-4 py-3 text-sm">

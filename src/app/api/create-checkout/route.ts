@@ -114,6 +114,12 @@ export async function POST(req: NextRequest) {
 
     const isInstallment = paymentType === 'installment' && ev.price_chf > 250;
     const installmentAmount = isInstallment ? Math.ceil(ev.price_chf / 3) : ev.price_chf;
+    const unitAmountCents = Math.round((isInstallment ? installmentAmount : ev.price_chf) * 100);
+
+    if (isNaN(unitAmountCents) || unitAmountCents <= 0) {
+      return NextResponse.json({ error: 'Montant du tarif invalide.' }, { status: 400 });
+    }
+
     const { date2, date3 } = getInstallmentDates(ev.date_start);
 
     const { data: registration, error: regErr } = await supabase
@@ -155,7 +161,7 @@ export async function POST(req: NextRequest) {
         {
           price_data: {
             currency: 'chf',
-            unit_amount: installmentAmount * 100,
+            unit_amount: unitAmountCents,
             product_data: {
               name: isInstallment ? `${ev.title} — 1er versement (3×)` : ev.title,
               description,

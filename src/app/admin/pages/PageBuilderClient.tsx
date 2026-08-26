@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Sparkles, Save, Eye, EyeOff, Trash2, Plus, ChevronUp, ChevronDown, Loader2, CheckCircle2, AlertCircle, ExternalLink, GripVertical, ChevronRight, LayoutGrid, Wand2, Copy, Undo2, Redo2, LayoutTemplate, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Sparkles, Save, Eye, EyeOff, Trash2, Plus, ChevronUp, ChevronDown, Loader2, CheckCircle2, AlertCircle, ExternalLink, GripVertical, ChevronRight, LayoutGrid, Wand2, Copy, Undo2, Redo2, LayoutTemplate, RefreshCw, Mic, Edit3 } from 'lucide-react';
 import DynamicPageRenderer from '../../../components/pagebuilder/DynamicPageRenderer';
 import GlobalStyles from '../../../components/GlobalStyles';
 import PreviewFrame from '../../../components/pagebuilder/PreviewFrame';
@@ -13,6 +13,7 @@ import { SECTION_LABELS, SectionPreview } from '../../../components/pagebuilder/
 import SectionEditorModal from '../../../components/pagebuilder/SectionEditorModal';
 import TemplatePicker from '../../../components/pagebuilder/TemplatePicker';
 import SectionLibrary from '../../../components/pagebuilder/SectionLibrary';
+import AiPageModal from '../../../components/pagebuilder/AiPageModal';
 import { usePageEditor } from '../../../components/pagebuilder/usePageEditor';
 import { savePage, updatePage, fetchPageById, generateSlug } from '../../../services/dynamicPages';
 import { supabase } from '../../../services/supabase';
@@ -20,6 +21,7 @@ import { getSeoPrefix } from '../../../services/pageMeta';
 import MediaPickerModal from '../../../components/pagebuilder/MediaPickerModal';
 import { PageEditorContext } from '../../../contexts/PageEditorContext';
 import { SITE_CONFIG } from '../../../config/site';
+import { useModuleFlags } from '../../../hooks/useModuleFlags';
 
 type Status = 'idle' | 'generating' | 'saving' | 'success' | 'error';
 type Viewport = 'mobile' | 'tablet' | 'desktop';
@@ -67,8 +69,9 @@ function extractTextFromSections(sections: any[]): string {
   return text.slice(0, 4000);
 }
 
-export default function PageBuilder() {
+export default function PageBuilderClient() {
   const params = useParams();
+  const moduleFlags = useModuleFlags();
   const id = typeof params?.id === 'string' ? params.id : undefined;
   const router = useRouter();
   const isEditing = Boolean(id);
@@ -137,6 +140,7 @@ export default function PageBuilder() {
   /** Clic dans l'aperçu en mode édition → sélectionne la section visée. */
   const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement> | MouseEvent) => {
     const target = e.target as HTMLElement;
+    if (target.closest('[data-floating-panel="true"]') || target.closest('[data-img-buttons="true"]') || target.closest('button')) return;
     const section = target.closest('[id^="section-"]');
     if (!section) return;
     const idx = parseInt(section.id.replace('section-', ''), 10);
@@ -272,28 +276,76 @@ export default function PageBuilder() {
 
   const handleTitleChange = (v: string) => { setTitle(v); if (!isEditing) setSlug(generateSlug(v)); };
 
-  const generate = async () => {
-    if (!prompt.trim()) return;
-    if (sections.length > 0 && !window.confirm('La génération remplace toutes les sections existantes. Continuer ?')) return;
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+
+  const handleAiGenerate = async (promptText: string) => {
+    if (!promptText.trim()) return;
     setStatus('generating'); setErrorMsg('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/generate-page', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) }, body: JSON.stringify({ prompt }) });
+      const token = session?.access_token || '';
+      const res = await fetch('/api/generate-page', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ prompt: promptText })
+      });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erreur API');
+      if (!res.ok) throw new Error(json.error || 'Erreur API lors de la génération.');
       if (!Array.isArray(json.sections) || json.sections.length === 0) {
         throw new Error("La réponse de l'IA ne contient aucune section exploitable.");
       }
-      // Une section de type inconnu casse l'aperçu : on filtre avant d'injecter.
       const known = json.sections.filter((s: PageSection) => s && WIREFRAME_REGISTRY[s.type]);
-      if (known.length === 0) throw new Error("Aucune des sections générées n'est reconnue.");
+      if (known.length === 0) throw new Error("Aucune des sections générées n'est reconnue par le catalogue.");
       replaceAll(known);
       setActiveSection(null);
-      setStatus('idle');
-      if (known.length < json.sections.length) {
-        setErrorMsg(`${json.sections.length - known.length} section(s) de type inconnu ignorée(s).`);
+      setStatus('success');
+      setTimeout(() => setStatus(s => s === 'success' ? 'idle' : s), 2500);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur inconnue';
+      setErrorMsg(msg);
+      setStatus('error');
+      throw e;
+    }
+  };
+
+  const handleAiModify = async (promptText: string) => {
+    if (!promptText.trim()) return;
+    setStatus('generating'); setErrorMsg('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
+      const res = await fetch('/api/admin/modify-page-with-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          pageTitle: title || 'Page',
+          sections,
+          prompt: promptText
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erreur API lors de la modification.');
+      if (!Array.isArray(json.sections) || json.sections.length === 0) {
+        throw new Error("La réponse de l'IA ne contient aucune section modifiée.");
       }
-    } catch (e: unknown) { setErrorMsg(e instanceof Error ? e.message : 'Erreur inconnue'); setStatus('error'); }
+      const known = json.sections.filter((s: PageSection) => s && WIREFRAME_REGISTRY[s.type]);
+      if (known.length === 0) throw new Error("Aucune des sections modifiées n'est reconnue par le catalogue.");
+      replaceAll(known);
+      setActiveSection(null);
+      setStatus('success');
+      setTimeout(() => setStatus(s => s === 'success' ? 'idle' : s), 2500);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur inconnue';
+      setErrorMsg(msg);
+      setStatus('error');
+      throw e;
+    }
   };
 
   const [isOptimizingStyle, setIsOptimizingStyle] = useState(false);
@@ -430,8 +482,23 @@ export default function PageBuilder() {
     setActiveSection(null);
   };
 
-  // ── Réordonnancement par glisser-déposer ──
-  const handleDrop = (to: number) => {
+  // ── Réordonnancement et insertion par glisser-déposer ──
+  const handleDrop = (to: number, e?: React.DragEvent) => {
+    if (e) {
+      const rawJson = e.dataTransfer.getData('application/json');
+      if (rawJson) {
+        try {
+          const payload = JSON.parse(rawJson);
+          if (payload.type === 'new_section' && payload.sectionType) {
+            add(payload.sectionType, to);
+            setActiveSection(to);
+            setDragIndex(null);
+            setDropIndex(null);
+            return;
+          }
+        } catch {}
+      }
+    }
     if (dragIndex !== null && dragIndex !== to) {
       moveTo(dragIndex, to);
       setActiveSection(to);
@@ -504,6 +571,39 @@ export default function PageBuilder() {
               {slug === 'home' && <span className="text-stone-500 text-[12px] ml-1">(page d'accueil)</span>}
             </div>
           </div>
+
+          <div className="h-5 w-px bg-stone-200 hidden sm:block shrink-0" />
+
+          {/* Duo de Boutons d'Action IA - Grand Format, Colorés & Sexy */}
+          {moduleFlags.ai_generation && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setAiModalOpen(true)}
+                className="flex items-center gap-2 bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer border border-white/30 shrink-0"
+              >
+                <Wand2 size={16} className="text-amber-300 animate-pulse" />
+                <span>Assistant IA</span>
+                <span className="bg-white/25 text-white text-[10.5px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 hidden md:flex">
+                  Vocale <Mic size={10} />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOptimizeStyle}
+                disabled={isOptimizingStyle || sections.length === 0}
+                className="flex items-center gap-2 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer border border-white/30 shrink-0 disabled:opacity-40"
+              >
+                {isOptimizingStyle ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Sparkles size={16} className="text-amber-200 animate-pulse" />
+                )}
+                <span>{isOptimizingStyle ? 'Optimisation…' : 'Optimiser le style'}</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -567,23 +667,30 @@ export default function PageBuilder() {
             </a>
           )}
 
-          <button
-            type="button"
-            onClick={handleOptimizeStyle}
-            disabled={isOptimizingStyle || sections.length === 0}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0"
-          >
-            {isOptimizingStyle ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {isOptimizingStyle ? 'Optimisation…' : 'Optimiser le style'}
-          </button>
+          {moduleFlags.ai_generation && (
+            <button
+              type="button"
+              onClick={() => setAiModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-stone-100 hover:bg-stone-200 text-stone-900 border border-stone-200 transition-all cursor-pointer"
+              title="Générer ou modifier toute la page par IA"
+            >
+              <Sparkles size={14} className="text-amber-600" />
+              <span>Assistant IA</span>
+            </button>
+          )}
 
           <button
             onClick={save}
             disabled={status === 'saving'}
-            className="flex items-center gap-1.5 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50 shadow-sm"
+            title="Enregistrer la page (Raccourci ⌘ / Ctrl + S)"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer shadow-md ${
+              isDirty
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30 scale-105 animate-pulse-subtle ring-2 ring-emerald-400/50'
+                : 'bg-stone-900 hover:bg-stone-800 text-white'
+            } disabled:opacity-50`}
           >
-            {status === 'saving' ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-            Sauvegarder
+            {status === 'saving' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+            <span>{status === 'saving' ? 'Sauvegarde…' : 'Sauvegarder'}</span>
           </button>
         </div>
       </header>
@@ -603,8 +710,6 @@ export default function PageBuilder() {
               onInsert={(type) => {
                 const at = activeSection !== null ? activeSection + 1 : sections.length;
                 add(type, at);
-                // La cible avance : deux ajouts successifs se suivent au lieu
-                // de s'empiler à l'envers.
                 setActiveSection(at);
               }}
             />
@@ -635,31 +740,6 @@ export default function PageBuilder() {
 
           {activeTab === 'content' ? (
             <>
-              {/* Génération IA */}
-              <div className="p-4 border-b border-stone-100 shrink-0 bg-white">
-                <div className="flex items-center gap-2 mb-2.5">
-                  <Wand2 size={13} className="text-sage" />
-                  <p className="text-[12.5px] font-medium text-stone-700">Générer avec l'IA</p>
-                </div>
-                <textarea
-                  rows={3}
-                  placeholder="Décrivez la page souhaitée…"
-                  className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-stone-900 focus:border-stone-900/40 mb-2.5 placeholder:text-stone-400 leading-relaxed transition-all"
-                  value={prompt}
-                  onChange={e => setPrompt(e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={generate}
-                  disabled={status === 'generating' || !prompt.trim()}
-                  className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-xl text-xs font-semibold hover:bg-stone-700 transition-colors disabled:opacity-40 shadow-sm cursor-pointer"
-                >
-                  {status === 'generating'
-                    ? <><Loader2 size={13} className="animate-spin" /> Génération…</>
-                    : <><Sparkles size={13} /> Générer la page</>}
-                </button>
-              </div>
-
               {/* Liste des sections */}
               <div ref={sidebarRef} className="flex-1 overflow-y-auto">
                 <div className="px-4 pt-4 pb-2 flex items-center justify-between">
@@ -694,50 +774,68 @@ export default function PageBuilder() {
                           } ${dragIndex === i ? 'opacity-40' : ''}`}
                           onDragOver={e => { e.preventDefault(); setDropIndex(i); }}
                           onDragLeave={() => setDropIndex(prev => (prev === i ? null : prev))}
-                          onDrop={e => { e.preventDefault(); handleDrop(i); }}
+                          onDrop={e => { e.preventDefault(); handleDrop(i, e); }}
                           onDragEnd={() => { setDragIndex(null); setDropIndex(null); }}
                         >
-                          {/* Section header — seule poignée de glisser-déposer,
-                              pour ne pas gêner la saisie dans les champs. */}
+                          {/* Section header — seule poignée de glisser-déposer */}
                           <div
                             draggable
                             onDragStart={() => setDragIndex(i)}
                             onClick={() => { selectSection(i); setEditorOpen(true); }}
-                            className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer transition-all group/item ${isActive ? 'bg-sage/8 border border-sage/20' : isVisible ? 'bg-stone-100/80 border border-stone-200' : 'bg-stone-50 border border-stone-100 hover:border-stone-200 hover:bg-stone-100/60'} rounded-xl`}
+                            className={`p-3.5 cursor-pointer transition-all group/item ${
+                              isActive
+                                ? 'bg-gradient-to-r from-purple-50 via-fuchsia-50/60 to-amber-50/40 text-zinc-900 border-2 border-purple-500 shadow-[0_4px_15px_rgba(168,85,247,0.15)]'
+                                : isVisible
+                                ? 'bg-slate-50/90 border border-purple-200 hover:border-purple-400 hover:shadow-xs'
+                                : 'bg-white border border-zinc-200 hover:border-purple-300 hover:shadow-2xs'
+                            } rounded-xl`}
                           >
-                            <span title="Glisser pour réordonner" className="shrink-0 cursor-grab active:cursor-grabbing">
-                              <GripVertical size={13} className="text-stone-500" />
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-xs font-semibold truncate ${isActive ? 'text-sage' : 'text-stone-600'}`}>
-                                <span className="text-stone-500 font-mono mr-1">{i + 1}</span>
-                                {SECTION_LABELS[section.type] ?? section.type}
-                              </p>
-                              <p className="text-[12px] text-stone-500 truncate leading-tight mt-0.5">
-                                {sectionSummary(section) || WIREFRAME_REGISTRY[section.type]?.description}
-                              </p>
+                            {/* Ligne Haute : Poignée + Titre complet + Résumé complet sans truncate */}
+                            <div className="flex items-start gap-2.5">
+                              <span title="Glisser pour réordonner" className="shrink-0 cursor-grab active:cursor-grabbing mt-0.5">
+                                <GripVertical size={14} className={isActive ? 'text-purple-600' : 'text-zinc-400'} />
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-extrabold leading-snug break-words ${isActive ? 'text-purple-900 font-extrabold' : 'text-zinc-900'}`}>
+                                  {SECTION_LABELS[section.type] ?? section.type}
+                                </p>
+                                <p className={`text-xs font-medium leading-relaxed mt-1 break-words ${isActive ? 'text-purple-800/80' : 'text-zinc-600'}`}>
+                                  {sectionSummary(section) || WIREFRAME_REGISTRY[section.type]?.description}
+                                </p>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-0.5 shrink-0">
-                              <button type="button" title="Monter" onClick={e => { e.stopPropagation(); move(i, -1); }} disabled={i === 0}
-                                className="p-1 text-stone-500 hover:text-stone-900 hover:bg-white rounded-md disabled:opacity-20 transition-all cursor-pointer">
-                                <ChevronUp size={12} />
-                              </button>
-                              <button type="button" title="Descendre" onClick={e => { e.stopPropagation(); move(i, 1); }} disabled={i === sections.length - 1}
-                                className="p-1 text-stone-500 hover:text-stone-900 hover:bg-white rounded-md disabled:opacity-20 transition-all cursor-pointer">
-                                <ChevronDown size={12} />
-                              </button>
-                              <button type="button" title="Changer de variante" onClick={e => { e.stopPropagation(); selectSection(i); setEditorOpen(true); }}
-                                className="p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-md transition-all cursor-pointer">
-                                <RefreshCw size={11} />
-                              </button>
-                              <button type="button" title="Dupliquer" onClick={e => { e.stopPropagation(); duplicate(i); setActiveSection(i + 1); }}
-                                className="p-1 text-stone-500 hover:text-stone-900 hover:bg-white rounded-md transition-all cursor-pointer">
-                                <Copy size={11} />
-                              </button>
-                              <button type="button" title="Supprimer" onClick={e => { e.stopPropagation(); handleRemoveSection(i); }}
-                                className="p-1 text-stone-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-all cursor-pointer">
-                                <Trash2 size={11} />
-                              </button>
+
+                            {/* Ligne Basse DÉDIÉE : Boutons d'actions et numéro à la ligne */}
+                            <div
+                              className="mt-2.5 pt-2 border-t border-stone-200/80 flex items-center justify-between select-none"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <span className="text-[11px] font-mono font-bold text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded">
+                                #{i + 1} {section.type}
+                              </span>
+
+                              <div className="flex items-center gap-1">
+                                <button type="button" title="Monter" onClick={e => { e.stopPropagation(); move(i, -1); }} disabled={i === 0}
+                                  className="p-1 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-md disabled:opacity-20 transition-all cursor-pointer">
+                                  <ChevronUp size={13} />
+                                </button>
+                                <button type="button" title="Descendre" onClick={e => { e.stopPropagation(); move(i, 1); }} disabled={i === sections.length - 1}
+                                  className="p-1 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-md disabled:opacity-20 transition-all cursor-pointer">
+                                  <ChevronDown size={13} />
+                                </button>
+                                <button type="button" title="Changer de variante" onClick={e => { e.stopPropagation(); selectSection(i); setEditorOpen(true); }}
+                                  className="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded-md transition-all cursor-pointer">
+                                  <RefreshCw size={12} />
+                                </button>
+                                <button type="button" title="Dupliquer" onClick={e => { e.stopPropagation(); duplicate(i); setActiveSection(i + 1); }}
+                                  className="p-1 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-md transition-all cursor-pointer">
+                                  <Copy size={12} />
+                                </button>
+                                <button type="button" title="Supprimer" onClick={e => { e.stopPropagation(); handleRemoveSection(i); }}
+                                  className="p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-md transition-all cursor-pointer">
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
                             </div>
                           </div>
 
@@ -1046,6 +1144,14 @@ export default function PageBuilder() {
           }}
         />
       )}
+
+      <AiPageModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        onGenerate={handleAiGenerate}
+        onModify={handleAiModify}
+        currentSectionsCount={sections.length}
+      />
     </div>
   );
 }

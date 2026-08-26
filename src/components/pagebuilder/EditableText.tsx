@@ -190,7 +190,7 @@ export default function EditableText({
         className={`outline-none transition-all duration-200 ${
           isEditing ? 'ring-2 ring-stone-400 bg-stone-100/80 rounded px-1 text-stone-900' : 'hover:outline-dashed hover:outline-1 hover:outline-stone-300 rounded cursor-text'
         } ${className}`}
-        dangerouslySetInnerHTML={{ __html: (currentValue || '').replace(/\n/g, '<br/>') }}
+        {...(!isEditing ? { dangerouslySetInnerHTML: { __html: (currentValue || '').replace(/\n/g, '<br/>') } } : {})}
         data-no-edit="true"
       />
       {showSaved && (

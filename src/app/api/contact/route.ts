@@ -3,6 +3,8 @@ import { sendEmail } from '../../../services/email';
 import { checkRateLimit } from '../../../utils/rateLimit';
 import { SITE_CONFIG } from '../../../config/site';
 import { emitAutomationEvent } from '../../../services/automationRunner';
+import { generateAndSendAiLeadReply } from '../../../services/aiLeadResponder';
+import { trackAnalyticsEvent } from '../../../services/analytics';
 
 function escapeHtml(str: string): string {
   return str
@@ -70,10 +72,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Une demande reçue est l'événement `lead.created` du module
-  // Automatisations. `emitAutomationEvent` ne lève jamais : un webhook cassé
-  // ne doit pas faire échouer un formulaire de contact déjà envoyé.
+  // 1. Enregistrement Analytics de la soumission de formulaire
+  trackAnalyticsEvent({
+    event_type: 'form_submit',
+    page_slug: 'contact',
+    page_title: 'Formulaire de Contact',
+    metadata: { email: safeEmail, name: safeName },
+  }).catch(() => {});
+
+  // 2. Déclenchement de l'événement d'automatisation
   await emitAutomationEvent('lead.created', new URL(req.url).origin);
+
+  // 3. Déclenchement de l'Auto-Répondeur IA instantané en arrière-plan (non bloquant)
+  generateAndSendAiLeadReply({
+    name: safeName,
+    email: safeEmail,
+    subject: safeSubject,
+    message: safeMessage,
+  }).catch((err) => {
+    console.warn('[contact/route] Erreur auto-répondeur IA lead:', err);
+  });
 
   return NextResponse.json({ success: true, message: 'Message envoyé avec succès.' });
 }
