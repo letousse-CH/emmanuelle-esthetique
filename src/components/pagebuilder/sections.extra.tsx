@@ -103,15 +103,39 @@ export function InlineItemAdd({
 type Base = { theme?: 'light' | 'dark'; bg_image?: string; bg_image_opacity?: number };
 type Props<T> = { data: T; sectionIndex?: number };
 
-/* Couleurs dérivées du thème — factorisées pour rester cohérentes partout. */
-function tone(dark: boolean) {
+/**
+ * Couleurs dérivées du thème.
+ *
+ * Auparavant, la fonction ne prenait qu'un booléen `dark`, et les sections qui
+ * l'appelaient réduisaient `data.theme` à `theme === 'dark'`. Les deux thèmes
+ * intermédiaires du constructeur — `surface` (bloc posé clair) et `primary`
+ * (bandeau coloré, généralement sombre) — retombaient donc silencieusement sur
+ * la déclinaison claire, ce qui rendait notamment le texte des cartes et des
+ * réponses de FAQ illisible dès qu'on passait la section en `primary`.
+ *
+ * `tone()` accepte maintenant le thème complet et distingue explicitement le
+ * fond sombre-ish (dark ou primary) des fonds clairs (light ou surface).
+ */
+type ToneTheme = 'light' | 'dark' | 'surface' | 'primary' | undefined;
+function tone(themeOrDark: boolean | ToneTheme) {
+  const dark = typeof themeOrDark === 'boolean'
+    ? themeOrDark
+    : themeOrDark === 'dark' || themeOrDark === 'primary';
   return {
     title: dark ? 'text-white' : 'text-stone-900',
-    body: dark ? 'text-stone-300' : 'text-stone-500',
-    faint: dark ? 'text-stone-400' : 'text-stone-400',
+    body: dark ? 'text-stone-200' : 'text-stone-600',
+    faint: dark ? 'text-stone-300' : 'text-stone-400',
     card: dark ? 'bg-white/5 border-white/10' : 'bg-white border-stone-200',
     divide: dark ? 'divide-white/10' : 'divide-stone-200',
     border: dark ? 'border-white/10' : 'border-stone-200',
+    /** Puce éditoriale (« eyebrow »), reprend l'accent du thème global. */
+    chip: dark
+      ? 'bg-white/10 text-white border border-white/20'
+      : 'bg-sage/10 text-sage border border-sage/20',
+    /** Fond des puces de méta (« tag ») posées sur la carte. */
+    tagChip: dark ? 'bg-white/10 text-stone-100' : 'bg-stone-100 text-stone-700',
+    /** Bordure fine des séparateurs à l'intérieur d'une carte. */
+    innerBorder: dark ? 'border-white/10' : 'border-stone-200',
   };
 }
 
@@ -127,7 +151,7 @@ export interface Cta2Data extends Base {
 /** Bandeau pleine largeur — l'appel le plus insistant du catalogue. */
 export function Cta2({ data, sectionIndex }: Props<Cta2Data>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-24">
@@ -167,7 +191,7 @@ export interface Cta3Data extends Base {
 
 /** Texte à gauche, bouton à droite — discret, pour un bas de page. */
 export function Cta3({ data, sectionIndex }: Props<Cta3Data>) {
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-16">
@@ -203,7 +227,7 @@ export interface Testimonial2Data extends Base {
 /** Trois témoignages côte à côte — plus crédible qu'un seul isolé. */
 export function Testimonial2({ data, sectionIndex }: Props<Testimonial2Data>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-24">
@@ -253,7 +277,7 @@ export interface Team1Data extends Base {
 /** Portraits en grille. */
 export function Team1({ data, sectionIndex }: Props<Team1Data>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-24">
@@ -319,7 +343,7 @@ export interface Contact1Data extends Base {
 
 /** Coordonnées en colonnes — l'information pratique, sans détour. */
 export function Contact1({ data, sectionIndex }: Props<Contact1Data>) {
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
 
   const entries = [
@@ -370,7 +394,7 @@ export interface Steps1Data extends Base {
 /** Étapes numérotées en ligne — un parcours qui se lit de gauche à droite. */
 export function Steps1({ data, sectionIndex }: Props<Steps1Data>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-24">
@@ -413,7 +437,7 @@ export interface Stats2Data extends Base {
 
 /** Bandeau de chiffres, sans titre — sert de respiration entre deux sections. */
 export function Stats2({ data, sectionIndex }: Props<Stats2Data>) {
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-16">
@@ -443,7 +467,7 @@ export interface Faq2Data extends Base {
 
 /** FAQ sur deux colonnes, tout ouvert — se lit d'un coup, sans clic. */
 export function Faq2({ data, sectionIndex }: Props<Faq2Data>) {
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-24">
@@ -481,7 +505,7 @@ export interface Compare1Data extends Base {
 
 /** Tableau « avec / sans » — l'argumentaire le plus lisible qui soit. */
 export function Compare1({ data, sectionIndex }: Props<Compare1Data>) {
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 py-24">
@@ -569,7 +593,7 @@ export interface HeroVideoData extends Base {
 
 export function HeroVideo({ data, sectionIndex }: Props<HeroVideoData>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   const [isPlaying, setIsPlaying] = React.useState(false);
 
@@ -673,7 +697,7 @@ export interface Pricing2Data extends Base {
 
 export function Pricing2({ data, sectionIndex }: Props<Pricing2Data>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   const [isYearly, setIsYearly] = React.useState(false);
 
@@ -801,7 +825,7 @@ export interface Stats3Data extends Base {
 
 export function Stats3({ data, sectionIndex }: Props<Stats3Data>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
 
   return (
@@ -871,7 +895,7 @@ export interface Newsletter1Data extends Base {
 
 export function Newsletter1({ data, sectionIndex }: Props<Newsletter1Data>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   const [email, setEmail] = React.useState('');
   const [status, setStatus] = React.useState<'idle' | 'loading' | 'success' | 'duplicate' | 'error'>('idle');
@@ -997,7 +1021,7 @@ export interface BentoGrid1Data extends Base {
 
 export function BentoGrid1({ data, sectionIndex }: Props<BentoGrid1Data>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
 
   return (
@@ -1019,11 +1043,26 @@ export function BentoGrid1({ data, sectionIndex }: Props<BentoGrid1Data>) {
           )}
         </div>
 
-        {/* Layout Bento Asymétrique */}
+        {/*
+          Layout Bento Asymétrique.
+
+          Deux réglages qui étaient faux :
+          - `justify-between` sur des cartes à hauteur imposée par la grille
+            (les rangs sont à hauteur égale) poussait l'image tout en haut et
+            le texte tout en bas, avec un grand vide au milieu quand une
+            carte de la même ligne était plus haute.
+          - `mb-6` sous l'image ajoutait 24 px de gouttière, ce qui décollait
+            visuellement l'image du texte.
+
+          On empile désormais image + texte au fil du contenu (`justify-start`
+          par défaut) avec un `mt-6` réduit sur le bloc texte. `items-stretch`
+          reste en place pour que les cartes gardent la même hauteur ; l'image
+          prend son ratio 16/9 et le texte vient juste dessous.
+        */}
         <motion.div
           initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }}
           variants={anim.container}
-          className="grid gap-6 md:grid-cols-3"
+          className="grid gap-6 md:grid-cols-3 items-stretch"
         >
           {(data.cards ?? []).map((card, i) => {
             const isWide = i === 0 || i === 3;
@@ -1031,12 +1070,12 @@ export function BentoGrid1({ data, sectionIndex }: Props<BentoGrid1Data>) {
               <motion.div
                 key={i}
                 variants={anim.item}
-                className={`group relative flex flex-col justify-between overflow-hidden rounded-3xl border ${t.card} p-8 transition-all hover:shadow-xl ${
+                className={`group relative flex flex-col overflow-hidden rounded-3xl border ${t.card} p-6 transition-all hover:shadow-xl ${
                   isWide ? 'md:col-span-2' : 'md:col-span-1'
                 }`}
               >
                 {card.image_url && (
-                  <div className="mb-6 aspect-[16/9] overflow-hidden rounded-2xl">
+                  <div className="aspect-[16/9] overflow-hidden rounded-2xl">
                     <EditableImage
                       sectionIndex={sectionIndex}
                       fieldPath={`cards.${i}.image_url`}
@@ -1047,9 +1086,9 @@ export function BentoGrid1({ data, sectionIndex }: Props<BentoGrid1Data>) {
                   </div>
                 )}
 
-                <div>
+                <div className={card.image_url ? 'mt-4' : ''}>
                   {card.tag && (
-                    <span className="mb-3 inline-block rounded-full bg-stone-100 px-3 py-1 text-[11px] font-bold text-stone-600">
+                    <span className={`mb-3 inline-block rounded-full px-3 py-1 text-[11px] font-bold ${t.tagChip}`}>
                       <EditableText sectionIndex={sectionIndex} fieldPath={`cards.${i}.tag`} value={card.tag} as="span" />
                     </span>
                   )}
@@ -1090,7 +1129,7 @@ export interface BlogGrid1Data extends Base {
 /** Section Boucle d'Articles de Blog — Charge dynamiquement les derniers articles du site. */
 export function BlogGrid1({ data, sectionIndex }: Props<BlogGrid1Data>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
 
   const [articles, setArticles] = React.useState<any[]>([]);
@@ -1222,7 +1261,7 @@ export interface HeroSplitBadgeData extends Base {
 
 export function HeroSplitBadge({ data, sectionIndex }: Props<HeroSplitBadgeData>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
 
   return (
@@ -1236,8 +1275,8 @@ export function HeroSplitBadge({ data, sectionIndex }: Props<HeroSplitBadgeData>
             className="lg:col-span-7 space-y-6"
           >
             {data.eyebrow && (
-              <motion.div variants={anim.item} className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs font-bold tracking-tight">
-                <Sparkles size={14} className="text-amber-600" />
+              <motion.div variants={anim.item} className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-tight ${t.chip}`}>
+                <Sparkles size={14} className={dark ? 'text-white' : 'text-sage'} />
                 <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} />
               </motion.div>
             )}
@@ -1256,7 +1295,8 @@ export function HeroSplitBadge({ data, sectionIndex }: Props<HeroSplitBadgeData>
               {data.primary_cta_text && (
                 <a
                   href={data.primary_cta_href || '#'}
-                  className="inline-flex items-center gap-2 px-7 py-4 rounded-2xl bg-stone-900 text-white text-sm font-extrabold hover:bg-stone-800 transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95"
+                  data-btn="primary"
+                  className="btn-primary inline-flex items-center gap-2 px-7 py-4 text-sm font-extrabold transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95"
                 >
                   <EditableText sectionIndex={sectionIndex} fieldPath="primary_cta_text" value={data.primary_cta_text} />
                   <ArrowRight size={16} />
@@ -1266,9 +1306,10 @@ export function HeroSplitBadge({ data, sectionIndex }: Props<HeroSplitBadgeData>
               {data.secondary_cta_text && (
                 <a
                   href={data.secondary_cta_href || '#'}
-                  className="inline-flex items-center gap-2 px-6 py-4 rounded-2xl bg-white border border-stone-200 text-stone-800 text-sm font-extrabold hover:bg-stone-50 transition-all shadow-xs active:scale-95"
+                  data-btn="secondary"
+                  className="btn-secondary inline-flex items-center gap-2 px-6 py-4 text-sm font-extrabold transition-all shadow-xs active:scale-95"
                 >
-                  <Play size={15} className="fill-current text-stone-700" />
+                  <Play size={15} className="fill-current" />
                   <EditableText sectionIndex={sectionIndex} fieldPath="secondary_cta_text" value={data.secondary_cta_text} />
                 </a>
               )}
@@ -1318,7 +1359,7 @@ export interface FeaturesGridOffsetData extends Base {
 
 export function FeaturesGridOffset({ data, sectionIndex }: Props<FeaturesGridOffsetData>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
 
   const defaultItems: FeatureItem[] = [
@@ -1335,7 +1376,7 @@ export function FeaturesGridOffset({ data, sectionIndex }: Props<FeaturesGridOff
       <div className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-3xl text-center mb-16 space-y-4">
           {data.eyebrow && (
-            <span className="inline-block px-3.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider">
+            <span className={`inline-block px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${t.chip}`}>
               <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} />
             </span>
           )}
@@ -1362,7 +1403,7 @@ export function FeaturesGridOffset({ data, sectionIndex }: Props<FeaturesGridOff
             >
               <InlineItemDelete sectionIndex={sectionIndex} fieldPath="items" array={items} itemIndex={i} />
 
-              <div className="w-12 h-12 rounded-2xl bg-stone-900 text-amber-400 flex items-center justify-center mb-6 shadow-xs">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 shadow-xs ${dark ? 'bg-white/10 text-white' : 'bg-sage text-white'}`}>
                 <Check size={22} />
               </div>
               <h3 className={`text-xl font-bold mb-3 ${t.title}`}>
@@ -1409,7 +1450,7 @@ export interface PricingCardsModernData extends Base {
 
 export function PricingCardsModern({ data, sectionIndex }: Props<PricingCardsModernData>) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
 
   const defaultTiers: PricingTier[] = [
@@ -1449,7 +1490,7 @@ export function PricingCardsModern({ data, sectionIndex }: Props<PricingCardsMod
       <div className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-3xl text-center mb-16 space-y-4">
           {data.eyebrow && (
-            <span className="inline-block px-3.5 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold uppercase tracking-wider">
+            <span className={`inline-block px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${t.chip}`}>
               <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} />
             </span>
           )}
@@ -1463,6 +1504,13 @@ export function PricingCardsModern({ data, sectionIndex }: Props<PricingCardsMod
           )}
         </div>
 
+        {/*
+          Rappel : la carte « populaire » adopte le fond primaire du site
+          (bleu marin dans la palette Emmanuelle) et ses textes s'inversent.
+          Les couleurs `bg-sage`, `text-sage` sont pilotées par `GlobalStyles`
+          via `--brand-primary`, donc changer la palette dans l'admin met
+          automatiquement à jour cette carte.
+        */}
         <motion.div
           initial="hidden" whileInView="visible" viewport={{ once: true }}
           variants={anim.container}
@@ -1476,44 +1524,44 @@ export function PricingCardsModern({ data, sectionIndex }: Props<PricingCardsMod
                 variants={anim.item}
                 className={`relative group flex flex-col justify-between p-8 rounded-3xl border transition-all ${
                   isPop
-                    ? 'bg-stone-900 text-white border-stone-900 shadow-2xl scale-[1.02] z-10'
-                    : `bg-white text-stone-900 border-stone-200/80 shadow-xs hover:shadow-lg`
+                    ? 'bg-sage text-white border-sage shadow-2xl scale-[1.02] z-10'
+                    : `${t.card} shadow-xs hover:shadow-lg`
                 }`}
               >
                 <InlineItemDelete sectionIndex={sectionIndex} fieldPath="tiers" array={tiers} itemIndex={i} />
 
                 {isPop && (
-                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 text-[11px] font-black uppercase tracking-wider shadow-md">
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-white text-sage text-[11px] font-black uppercase tracking-wider shadow-md border border-white/40">
                     Le plus populaire
                   </span>
                 )}
 
                 <div className="space-y-6">
                   <div>
-                    <h3 className={`text-xl font-bold ${isPop ? 'text-white' : 'text-stone-900'}`}>
+                    <h3 className={`text-xl font-bold ${isPop ? 'text-white' : t.title}`}>
                       <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.name`} value={tier.name} />
                     </h3>
-                    <p className={`mt-2 text-xs leading-relaxed ${isPop ? 'text-stone-300' : 'text-stone-500'}`}>
+                    <p className={`mt-2 text-xs leading-relaxed ${isPop ? 'text-white/70' : t.body}`}>
                       <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.description`} value={tier.description} />
                     </p>
                   </div>
 
                   <div className="flex items-baseline gap-1">
-                    <span className={`text-4xl font-extrabold tracking-tight ${isPop ? 'text-white' : 'text-stone-900'}`}>
+                    <span className={`text-4xl font-extrabold tracking-tight ${isPop ? 'text-white' : t.title}`}>
                       <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.price`} value={tier.price} />
                     </span>
                     {tier.period && (
-                      <span className={`text-xs font-semibold ${isPop ? 'text-stone-400' : 'text-stone-500'}`}>
+                      <span className={`text-xs font-semibold ${isPop ? 'text-white/60' : t.faint}`}>
                         <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.period`} value={tier.period} />
                       </span>
                     )}
                   </div>
 
-                  <ul className="space-y-3 pt-4 border-t border-stone-200/20 text-xs">
+                  <ul className={`space-y-3 pt-4 border-t text-xs ${isPop ? 'border-white/20' : t.innerBorder}`}>
                     {(tier.features || []).map((f, fi) => (
                       <li key={fi} className="flex items-center gap-2.5">
-                        <Check size={16} className={isPop ? 'text-amber-400 shrink-0' : 'text-emerald-600 shrink-0'} />
-                        <span className={isPop ? 'text-stone-200' : 'text-stone-700'}>{f}</span>
+                        <Check size={16} className={`shrink-0 ${isPop ? 'text-white' : 'text-sage'}`} />
+                        <span className={isPop ? 'text-white/90' : t.body}>{f}</span>
                       </li>
                     ))}
                   </ul>
@@ -1522,10 +1570,11 @@ export function PricingCardsModern({ data, sectionIndex }: Props<PricingCardsMod
                 <div className="pt-8">
                   <a
                     href={tier.cta_href || '#'}
-                    className={`w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${
+                    data-btn={isPop ? 'secondary' : 'primary'}
+                    className={`w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 text-xs font-extrabold transition-all cursor-pointer ${
                       isPop
-                        ? 'bg-amber-400 text-stone-950 hover:bg-amber-300 shadow-md'
-                        : 'bg-stone-900 text-white hover:bg-stone-800 shadow-xs'
+                        ? 'bg-white text-sage hover:bg-white/90 shadow-md'
+                        : 'btn-primary shadow-xs'
                     }`}
                   >
                     <EditableText sectionIndex={sectionIndex} fieldPath={`tiers.${i}.cta_text`} value={tier.cta_text} />
@@ -1563,7 +1612,7 @@ export interface FaqAccordionModernData extends Base {
 }
 
 export function FaqAccordionModern({ data, sectionIndex }: Props<FaqAccordionModernData>) {
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const t = tone(dark);
   const [openIndex, setOpenIndex] = React.useState<number | null>(0);
 
@@ -1580,7 +1629,7 @@ export function FaqAccordionModern({ data, sectionIndex }: Props<FaqAccordionMod
       <div className="mx-auto max-w-4xl">
         <div className="text-center mb-16 space-y-4">
           {data.eyebrow && (
-            <span className="inline-block px-3.5 py-1 rounded-full bg-sky-100 text-sky-800 text-xs font-bold uppercase tracking-wider">
+            <span className={`inline-block px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${t.chip}`}>
               <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} />
             </span>
           )}
@@ -1612,13 +1661,15 @@ export function FaqAccordionModern({ data, sectionIndex }: Props<FaqAccordionMod
                   <span className={t.title}>
                     <EditableText sectionIndex={sectionIndex} fieldPath={`items.${i}.question`} value={item.question} />
                   </span>
-                  <span className={`p-1 rounded-full border transition-transform duration-200 ${isOpen ? 'rotate-180 bg-stone-900 text-white' : 'text-stone-500'}`}>
+                  <span className={`p-1 rounded-full border transition-transform duration-200 ${isOpen
+                    ? `rotate-180 ${dark ? 'bg-white text-sage border-white' : 'bg-sage text-white border-sage'}`
+                    : `${dark ? 'text-white/70 border-white/20' : 'text-stone-500 border-stone-300'}`}`}>
                     <Minus size={14} />
                   </span>
                 </button>
 
                 {isOpen && (
-                  <div className="px-6 pb-6 pt-0 text-xs sm:text-sm leading-relaxed border-t border-stone-100 mt-1 pt-4 text-stone-600">
+                  <div className={`px-6 pb-6 pt-4 text-xs sm:text-sm leading-relaxed border-t ${t.innerBorder} ${t.body}`}>
                     <EditableText sectionIndex={sectionIndex} fieldPath={`items.${i}.answer`} value={item.answer} />
                   </div>
                 )}

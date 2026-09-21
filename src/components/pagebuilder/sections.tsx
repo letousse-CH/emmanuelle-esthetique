@@ -439,7 +439,7 @@ export interface Hero1Data {
 
 export function Hero1({ data, sectionIndex }: { data: Hero1Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const hasImage = !!(data.image_url && !data.bg_image);
 
   /*
@@ -626,7 +626,7 @@ export interface Hero2Data {
 
 export function Hero2({ data, sectionIndex }: { data: Hero2Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 text-center overflow-hidden">
       <div style={{ minHeight: data.min_height ? `${data.min_height}px` : '100svh' }} className="flex flex-col items-center justify-center py-32 relative">
@@ -700,7 +700,7 @@ export interface Hero3Data {
 /** Titre centré puis portrait en arche — esprit institut / spa. */
 export function Hero3({ data, sectionIndex }: { data: Hero3Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
 
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="px-6 overflow-hidden">
@@ -819,7 +819,7 @@ export interface Hero4Data {
 /** Photo plein cadre, titre ancré en bas et carte d'informations flottante. */
 export function Hero4({ data, sectionIndex }: { data: Hero4Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   // Même règle que hero_1 : l'image de fond de section prend le pas sur la photo.
   const hasImage = !!(data.image_url && !data.bg_image);
   // Texte clair dès qu'il repose sur une photo, sinon selon le thème.
@@ -946,7 +946,7 @@ export interface Hero5Data {
 /** Bandeau compact pour les pages intérieures — hauteur mesurée, pas de plein écran. */
 export function Hero5({ data, sectionIndex }: { data: Hero5Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const hasImage = !!(data.image_url && !data.bg_image);
   const onDark = hasImage || dark;
   const centered = (data.align ?? 'center') === 'center';
@@ -1038,7 +1038,7 @@ export interface Intro1Data {
 
 export function Intro1({ data, sectionIndex }: { data: Intro1Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const isImageRight = (data as any).image_side === 'right' || data.image_position === 'right';
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="overflow-hidden">
@@ -1141,7 +1141,7 @@ export interface Features1Data {
 
 export function Features1({ data, sectionIndex }: { data: Features1Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const showImg = (data.show_image !== false) && !!data.image_url;
   const isImageRight = (data as any).image_side === 'right' || data.image_position === 'right';
   const stretchImg = !!data.stretch_image;
@@ -1254,7 +1254,7 @@ export interface Features2Data {
 
 export function Features2({ data, sectionIndex }: { data: Features2Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const showImg = (data.show_image !== false) && !!data.image_url;
   const isImageRight = (data as any).image_side === 'right' || data.image_position === 'right';
   const cardsTheme = data.cards_theme || (dark ? 'dark' : 'light');
@@ -1401,7 +1401,7 @@ export interface Features3Data {
 
 export function Features3({ data, sectionIndex }: { data: Features3Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="py-24 lg:py-32 px-6">
       <div className={`mx-auto ${data.cards.length >= 3 ? 'max-w-7xl' : 'max-w-5xl'}`}>
@@ -1528,7 +1528,7 @@ export function Cta1({ data, sectionIndex }: { data: Cta1Data, sectionIndex?: nu
           <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} />
         </motion.h2>
         {data.description && (
-          <motion.p variants={anim.item} className={`text-lg font-light mb-12 ${descWidth} leading-relaxed ${dark ? 'text-white/50' : 'text-stone-500'}`}>
+          <motion.p variants={anim.item} className={`text-lg font-light mb-12 ${descWidth} leading-relaxed ${dark ? 'text-white/80' : 'text-stone-500'}`}>
             <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
           </motion.p>
         )}
@@ -1556,7 +1556,7 @@ export interface Testimonial1Data {
 
 export function Testimonial1({ data, sectionIndex }: { data: Testimonial1Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="relative py-28 lg:py-36 px-6 text-center overflow-hidden">
       {/* Background glow */}
@@ -1618,7 +1618,7 @@ export interface Text1Data {
 
 export function Text1({ data, sectionIndex }: { data: Text1Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="py-20 lg:py-28 px-6">
       <motion.div className="max-w-2xl mx-auto" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={anim.container}>
@@ -1671,7 +1671,7 @@ const RATIO_IMAGE_FR: Record<NonNullable<TextImage1Data['ratio']>, string> = {
 
 export function TextImage1({ data, sectionIndex }: { data: TextImage1Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const isImageRight = (data as any).image_side === 'right' || data.image_position === 'right';
   const imgFr = RATIO_IMAGE_FR[data.ratio ?? 'half'];
   const imgWidth = typeof data.image_width === 'number' ? data.image_width : 100;
@@ -1757,7 +1757,7 @@ export interface GalleryGridData {
 export function GalleryGrid({ data, sectionIndex }: { data: GalleryGridData, sectionIndex?: number }) {
   const anim = useSectionAnimation();
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const cards = data.cards || [];
   const colCount = data.columns || '3';
   
@@ -1878,7 +1878,7 @@ export interface GalleryCarouselData {
 
 export function GalleryCarousel({ data, sectionIndex }: { data: GalleryCarouselData, sectionIndex?: number }) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const cards = data.cards || [];
   
   return (
@@ -1992,7 +1992,7 @@ export interface GalleryMasonryData {
 export function GalleryMasonry({ data, sectionIndex }: { data: GalleryMasonryData, sectionIndex?: number }) {
   const anim = useSectionAnimation();
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const cards = data.cards || [];
 
   return (
@@ -2131,7 +2131,7 @@ export function Reviews1({ data, sectionIndex }: { data: Reviews1Data; sectionIn
   const [current, setCurrent] = useState(0);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const cards = data.cards || [];
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const visible = 3;
   const total = cards.length;
   const canPrev = current > 0;
@@ -2306,7 +2306,7 @@ export interface Faq1Data {
 }
 
 export function Faq1({ data, sectionIndex }: { data: Faq1Data; sectionIndex?: number }) {
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const cards = data.cards || [];
   const [openIdx, setOpenIdx] = useState<number | null>(null);
 
@@ -2443,7 +2443,7 @@ export interface Pricing1Data {
 
 export function Pricing1({ data, sectionIndex }: { data: Pricing1Data; sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   const items = data.items || [];
 
   // ── Mode 2 offres ──────────────────────────────────────────────────────────
@@ -2669,7 +2669,7 @@ export interface Stats1Data {
 
 export function Stats1({ data, sectionIndex }: { data: Stats1Data; sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="py-20 lg:py-28 px-6">
       <div className="max-w-5xl mx-auto">
@@ -2729,7 +2729,7 @@ export interface Timeline1Data {
 
 export function Timeline1({ data, sectionIndex }: { data: Timeline1Data; sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="py-24 lg:py-32 px-6">
       <div className="max-w-5xl mx-auto">
@@ -2793,7 +2793,7 @@ export interface Logos1Data {
 
 export function Logos1({ data, sectionIndex }: { data: Logos1Data; sectionIndex?: number }) {
   const anim = useSectionAnimation();
-  const dark = data.theme === 'dark';
+  const dark = data.theme === 'dark' || (data.theme as string) === 'primary';
   return (
     <SectionWrapper data={data} sectionIndex={sectionIndex} className="py-14 px-6">
       <div className="max-w-5xl mx-auto">
