@@ -6,15 +6,25 @@
 @theme {
   --font-sans: var(--font-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-serif), "Cormorant Garamond", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  
-  --color-sage: #4A4A4A;
-  --color-wood: #4A4A4A;
-  --color-stone-deep: #1F1F1F;
+
+  /* ── Palette marine (inspiration Phytomer / mer d'Iroise) ──
+     Ces valeurs servent de repli neutre en attendant que « Design & Style »
+     n'ait rien enregistré. Une fois la palette éditée dans l'admin, elle prend
+     le pas sur ces couleurs via `GlobalStyles`. */
+  --color-sage: #12283A;           /* Bleu nuit abyssal — accent principal */
+  --color-wood: #12283A;
+  --color-stone-deep: #22252A;     /* Anthracite chaud pour la lecture */
   --color-paper: #FFFFFF;
-  --color-stone-muted: #EFEFEF;
-  --color-border: #E7E5E4;
-  --color-darkblue: #2E2E2E;
-  --color-copper: #4A4A4A;
+  --color-stone-muted: #F6F8F9;    /* Blanc écume, alterne les sections */
+  --color-border: #E7EBEE;
+  --color-darkblue: #2B4764;
+  --color-copper: #008494;         /* Lagon marin — hover / actif */
+
+  /* ── Largeur maxi de contenu et gouttière commune ──
+     Elles pilotent les utilitaires `mx-container` et `px-gutter` définis plus
+     bas, et servent de source unique pour tout le site. */
+  --container-max: 90rem;          /* 1440 px — plafond éditorial */
+  --gutter: clamp(1.25rem, 4vw, 3rem);
 }
 
 @layer base {

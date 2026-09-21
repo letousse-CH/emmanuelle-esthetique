@@ -167,11 +167,21 @@ export const DENSITY_CLASS: Record<Density, string> = {
   airy: 'py-32 md:py-44',
 };
 
-/** Largeur du contenu. `full` sert aux galeries et aux bandeaux. */
+/**
+ * Largeur du contenu. `full` sert aux galeries et aux bandeaux.
+ *
+ * `wide` cible désormais **1440 px** (90 rem) plutôt que 1280 px : c'est la
+ * largeur maximale négociée pour le site, et elle est portée par une valeur
+ * arbitraire Tailwind afin de garder la classe autonome — pas de dépendance à
+ * une variable CSS qui pourrait ne pas être chargée. Les sections qui posent
+ * elles-mêmes un `max-w-*` plus étroit dans leur `contentClassName` conservent
+ * leur retrait interne (grilles, blocs de lecture) parce qu'elles s'appliquent
+ * au même élément et gagnent par ordre CSS.
+ */
 export const WIDTH_CLASS: Record<Width, string> = {
   narrow: 'max-w-3xl mx-auto',
   contained: 'max-w-5xl mx-auto',
-  wide: 'max-w-7xl mx-auto',
+  wide: 'max-w-[90rem] mx-auto',
   full: 'max-w-none',
 };
 

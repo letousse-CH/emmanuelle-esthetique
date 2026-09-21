@@ -73,21 +73,152 @@ function knowsAboutFrom(raw: string): string[] {
   return raw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 12);
 }
 
+interface LocalExtras {
+  areaServedList: string[];        // "Palézieux-Gare, Oron, …"
+  openingHours: Array<{ days: string[]; opens: string; closes: string }>;
+  geoLat: string;
+  geoLng: string;
+  schemaType: string;              // ex: 'BeautySalon' — sous-type LocalBusiness
+}
+
+// Catalogue d'offres — signal riche pour Google Rich Results et un vrai
+// "menu de prestations" que les moteurs IA peuvent citer par soin. La liste
+// vit ici parce qu'elle est stable ; toute nouvelle URL/prix se met à jour
+// au même endroit que le seeder Emmanuelle.
+function buildOfferCatalog(siteUrl: string) {
+  const offers: Array<{
+    name: string;
+    url: string;
+    price: string;              // valeur brute (min)
+    category: string;
+  }> = [
+    // Soins du visage
+    {
+      name: 'Soin visage signature Phytomer',
+      url: `${siteUrl}/soin-visage-signature-palezieux`,
+      price: '130',
+      category: 'Soins du visage',
+    },
+    {
+      name: 'Soin visage anti-âge',
+      url: `${siteUrl}/soin-anti-age-palezieux`,
+      price: '170',
+      category: 'Soins du visage',
+    },
+    {
+      name: 'Soin visage peau sensible',
+      url: `${siteUrl}/soin-visage-peau-sensible-palezieux`,
+      price: '150',
+      category: 'Soins du visage',
+    },
+    // Soins du corps
+    {
+      name: 'Massage relaxant aux huiles chaudes',
+      url: `${siteUrl}/massage-relaxant-huiles-chaudes-palezieux`,
+      price: '120',
+      category: 'Soins du corps',
+    },
+    {
+      name: 'Head Spa · massage du cuir chevelu',
+      url: `${siteUrl}/head-spa-palezieux`,
+      price: '70',
+      category: 'Soins du corps',
+    },
+    // Beauté du regard
+    {
+      name: 'Mise en forme des sourcils',
+      url: `${siteUrl}/sourcils-mise-en-forme-palezieux`,
+      price: '35',
+      category: 'Beauté du regard',
+    },
+    {
+      name: 'Teinture cils & sourcils',
+      url: `${siteUrl}/teinture-cils-sourcils-palezieux`,
+      price: '30',
+      category: 'Beauté du regard',
+    },
+    {
+      name: 'Rehaussement de cils',
+      url: `${siteUrl}/rehaussement-cils-palezieux`,
+      price: '85',
+      category: 'Beauté du regard',
+    },
+    {
+      name: 'Cours de maquillage sur-mesure',
+      url: `${siteUrl}/cours-de-maquillage-palezieux`,
+      price: '110',
+      category: 'Beauté du regard',
+    },
+    // Épilation
+    {
+      name: 'Épilation à la cire au sucre',
+      url: `${siteUrl}/epilation-sucre-palezieux`,
+      price: '15',
+      category: 'Épilation',
+    },
+    // Ateliers
+    {
+      name: 'Atelier Gua Sha visage',
+      url: `${siteUrl}/atelier-gua-sha-palezieux`,
+      price: '90',
+      category: "Ateliers d'auto-soin",
+    },
+    {
+      name: 'Atelier Glowing Face',
+      url: `${siteUrl}/atelier-glowing-face-palezieux`,
+      price: '110',
+      category: "Ateliers d'auto-soin",
+    },
+  ];
+
+  return {
+    '@type': 'OfferCatalog',
+    name: 'Prestations · Emmanuelle Esthétique',
+    itemListElement: offers.map((o) => ({
+      '@type': 'Offer',
+      name: o.name,
+      url: o.url,
+      priceCurrency: 'CHF',
+      price: o.price,
+      priceSpecification: {
+        '@type': 'UnitPriceSpecification',
+        priceCurrency: 'CHF',
+        price: o.price,
+      },
+      category: o.category,
+      itemOffered: {
+        '@type': 'Service',
+        name: o.name,
+        url: o.url,
+        provider: { '@id': `${siteUrl}/#organization` },
+        areaServed: 'Palézieux-Gare',
+      },
+      availability: 'https://schema.org/InStock',
+      businessFunction: 'https://schema.org/ProvideService',
+      seller: { '@id': `${siteUrl}/#organization` },
+    })),
+  };
+}
+
 function buildStructuredData(
   sameAs: string[],
   business: BusinessInfo,
   editorial: { activity: string; jobTitle: string },
+  extras: LocalExtras,
 ) {
   const activity = editorial.activity;
   const knowsAbout = knowsAboutFrom(editorial.activity);
-  // Zone desservie déduite de l'adresse : ville puis canton, rien d'inventé.
-  const areaServed = [
-    business.addressCity && { '@type': 'City', name: business.addressCity },
-    business.addressRegion && {
-      '@type': 'AdministrativeArea',
-      name: business.addressRegion,
-    },
-  ].filter(Boolean);
+  // Zone desservie : la liste explicite du réglage `business_area_served`
+  // prend le pas ; sinon repli sur ville + canton déduits de l'adresse.
+  const areaServed = extras.areaServedList.length
+    ? extras.areaServedList.map((name) => ({ '@type': 'City', name }))
+    : [
+        business.addressCity && { '@type': 'City', name: business.addressCity },
+        business.addressRegion && {
+          '@type': 'AdministrativeArea',
+          name: business.addressRegion,
+        },
+      ].filter(Boolean);
 
   // Adresse de l'entité (E-E-A-T / SEO local) — coordonnées éditables depuis
   // l'admin (Paramètres > Entreprise), pas de rue/code postal inventés si non
@@ -102,6 +233,24 @@ function buildStructuredData(
   } as const;
 
   const phone = business.phone ? business.phone.replace(/\s+/g, '') : '';
+
+  const openingHoursSpecification = extras.openingHours.map((h) => ({
+    '@type': 'OpeningHoursSpecification',
+    dayOfWeek: h.days,
+    opens: h.opens,
+    closes: h.closes,
+  }));
+
+  const geo =
+    extras.geoLat && extras.geoLng
+      ? {
+          '@type': 'GeoCoordinates',
+          latitude: extras.geoLat,
+          longitude: extras.geoLng,
+        }
+      : undefined;
+
+  const localType = extras.schemaType || 'LocalBusiness';
 
   return {
     '@context': 'https://schema.org',
@@ -129,7 +278,9 @@ function buildStructuredData(
         worksFor: { '@id': `${SITE_URL}/#organization` },
       },
       {
-        '@type': 'LocalBusiness',
+        // BeautySalon quand renseigné : Google reconnaît explicitement le
+        // sous-type pour les rich results locaux "beauty & wellness".
+        '@type': localType,
         '@id': `${SITE_URL}/#organization`,
         name: business.name,
         ...(activity ? { description: activity } : {}),
@@ -137,6 +288,7 @@ function buildStructuredData(
         image: PHOTO_URL,
         founder: { '@id': `${SITE_URL}/#owner` },
         address: postalAddress,
+        ...(geo ? { geo } : {}),
         ...(phone
           ? {
               telephone: phone,
@@ -148,10 +300,15 @@ function buildStructuredData(
               },
             }
           : {}),
-        // Dérivée de l'adresse saisie dans les réglages : une liste de
-        // communes en dur suivrait le template d'installation en installation.
         ...(areaServed.length ? { areaServed } : {}),
+        ...(openingHoursSpecification.length
+          ? { openingHoursSpecification }
+          : {}),
         priceRange: business.priceRange,
+        // hasOfferCatalog : signal riche pour Google et menu de prestations
+        // exploitable directement par ChatGPT/Perplexity (URL par soin +
+        // prix). Ne dépend pas de settings pour rester source unique de vérité.
+        hasOfferCatalog: buildOfferCatalog(SITE_URL),
         ...(knowsAbout.length ? { knowsAbout } : {}),
         ...(sameAs.length ? { sameAs } : {}),
       },
@@ -189,11 +346,39 @@ export default async function RootLayout({
   const editorialSettings = await getSettingsServer([
     'site_activity_context',
     'business_job_title',
+    'business_area_served',
+    'business_opening_hours',
+    'business_geo_lat',
+    'business_geo_lng',
+    'business_schema_type',
   ]);
-  const structuredData = buildStructuredData(sameAs, business, {
-    activity: editorialSettings.site_activity_context || '',
-    jobTitle: editorialSettings.business_job_title || '',
-  });
+  const areaServedList = (editorialSettings.business_area_served || '')
+    .split(/[,;]+/)
+    .map((s: string) => s.trim())
+    .filter(Boolean);
+  let openingHours: Array<{ days: string[]; opens: string; closes: string }> = [];
+  try {
+    if (editorialSettings.business_opening_hours) {
+      openingHours = JSON.parse(editorialSettings.business_opening_hours);
+    }
+  } catch {
+    openingHours = [];
+  }
+  const structuredData = buildStructuredData(
+    sameAs,
+    business,
+    {
+      activity: editorialSettings.site_activity_context || '',
+      jobTitle: editorialSettings.business_job_title || '',
+    },
+    {
+      areaServedList,
+      openingHours,
+      geoLat: editorialSettings.business_geo_lat || '',
+      geoLng: editorialSettings.business_geo_lng || '',
+      schemaType: editorialSettings.business_schema_type || '',
+    },
+  );
 
   return (
     <html lang="fr" className={`${inter.variable} ${cormorant.variable}`}>

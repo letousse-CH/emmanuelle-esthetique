@@ -8,6 +8,7 @@ import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
 import { fetchPageBySlug } from '../../../services/dynamicPages';
 import { getSettingsServer } from '../../../services/settingsServer';
 import { buildMetadata, getPageMeta } from '../../../services/pageMeta';
+import { buildBreadcrumbJsonLd } from '../../../utils/pageJsonLd';
 
 /**
  * Page de contact.
@@ -49,8 +50,19 @@ export default async function ContactPage() {
   const page = await fetchPageBySlug(CONTACT_SLUG, false);
 
   if (page) {
+    const breadcrumbLd = buildBreadcrumbJsonLd({
+      slug: CONTACT_SLUG,
+      pageTitle: page.title,
+      siteUrl: SITE_CONFIG.url,
+    });
     return (
       <>
+        {breadcrumbLd && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+          />
+        )}
         {(!page.show_header || !page.show_footer) && (
           <PageChrome showHeader={page.show_header ?? true} showFooter={page.show_footer ?? true} />
         )}

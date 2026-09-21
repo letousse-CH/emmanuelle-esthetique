@@ -8,6 +8,7 @@ import PageChrome from '../../../components/PageChrome';
 
 import { getPageMeta, buildMetadata } from '../../../services/pageMeta';
 import { SITE_CONFIG } from '../../../config/site';
+import { buildBreadcrumbJsonLd } from '../../../utils/pageJsonLd';
 
 export async function generateStaticParams() {
   try {
@@ -49,8 +50,23 @@ export default async function Page({ params }: PageProps) {
   // Route attrape-tout : un slug inexistant doit renvoyer un vrai 404
   // (sinon soft-404 indexable). Voir generateMetadata pour le cas null.
   if (!page) notFound();
+
+  // Le FAQPage JSON-LD est émis par les sections faq_1 elles-mêmes.
+  // On ne re-génère ici que le fil d'Ariane.
+  const breadcrumbLd = buildBreadcrumbJsonLd({
+    slug,
+    pageTitle: page.title,
+    siteUrl: SITE_CONFIG.url,
+  });
+
   return (
     <>
+      {breadcrumbLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+        />
+      )}
       {page && (!page.show_header || !page.show_footer) && (
         <PageChrome showHeader={page.show_header ?? true} showFooter={page.show_footer ?? true} />
       )}

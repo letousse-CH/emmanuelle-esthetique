@@ -7,6 +7,7 @@ import EditableText from './EditableText';
 import EditableImage from './EditableImage';
 import {
   ALIGN_CLASS,
+  type Align,
   CARD_TITLE_RATIO,
   DENSITY_CLASS,
   EASE,
@@ -1485,25 +1486,39 @@ export interface Cta1Data {
   cta_text: string;
   cta_href?: string;
   button_style?: ButtonVariant | 'green' | 'white';
+  /** Alignement horizontal — 'left' par défaut, 'center' pour un CTA centré. */
+  align?: Align;
 }
 
 export function Cta1({ data, sectionIndex }: { data: Cta1Data, sectionIndex?: number }) {
   const anim = useSectionAnimation();
   const dark = data.theme !== 'light';
+  /*
+    Les éléments internes suivent l'alignement choisi dans le constructeur.
+    Auparavant, filet, description et bouton étaient centrés en dur
+    (`mx-auto`, `justify-center`) : quand la section était réglée sur « À
+    gauche », la description — plus étroite que le bloc — donnait cet effet
+    de retrait, alors que le titre partait bien du bord gauche.
+  */
+  const align = data.align ?? 'left';
+  const isCenter = align === 'center';
+  const stackAlign = isCenter ? 'mx-auto' : '';
+  const rowAlign = isCenter ? 'justify-center' : 'justify-start';
+  const descWidth = isCenter ? 'max-w-lg mx-auto' : 'max-w-lg';
   return (
-    <SectionWrapper data={{ ...data, theme: data.theme ?? 'dark' }} sectionIndex={sectionIndex} className="relative py-32 lg:py-40 px-6 text-center overflow-hidden">
+    <SectionWrapper data={{ ...data, theme: data.theme ?? 'dark' }} sectionIndex={sectionIndex} className={`relative py-32 lg:py-40 px-6 overflow-hidden ${isCenter ? 'text-center' : 'text-left'}`}>
       {/* Ambient glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-sage/8 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
       <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
 
-      <motion.div className="relative z-10 max-w-2xl mx-auto" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={anim.container}>
-        <motion.div variants={anim.item} className="flex justify-center mb-8">
+      <motion.div className={`relative z-10 max-w-2xl ${stackAlign}`} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={anim.container}>
+        <motion.div variants={anim.item} className={`flex mb-8 ${rowAlign}`}>
           <div className="h-px w-10 bg-sage/50" />
         </motion.div>
         <motion.div variants={anim.item}>
           {data.eyebrow && (
-            <span className="inline-flex items-center gap-2 text-sage font-bold tracking-[0.38em] uppercase text-[10px] mb-5 block justify-center">
+            <span className={`inline-flex items-center gap-2 text-sage font-bold tracking-[0.38em] uppercase text-[10px] mb-5 block ${rowAlign}`}>
               <span className="w-4 h-px bg-sage/60" />
               <EditableText sectionIndex={sectionIndex} fieldPath="eyebrow" value={data.eyebrow} as="span" />
             </span>
@@ -1513,7 +1528,7 @@ export function Cta1({ data, sectionIndex }: { data: Cta1Data, sectionIndex?: nu
           <EditableText sectionIndex={sectionIndex} fieldPath="title" value={data.title} />
         </motion.h2>
         {data.description && (
-          <motion.p variants={anim.item} className={`text-lg font-light mb-12 max-w-lg mx-auto leading-relaxed ${dark ? 'text-white/50' : 'text-stone-500'}`}>
+          <motion.p variants={anim.item} className={`text-lg font-light mb-12 ${descWidth} leading-relaxed ${dark ? 'text-white/50' : 'text-stone-500'}`}>
             <EditableText sectionIndex={sectionIndex} fieldPath="description" value={data.description} />
           </motion.p>
         )}
