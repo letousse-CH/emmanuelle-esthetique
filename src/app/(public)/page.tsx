@@ -2,9 +2,7 @@ export const revalidate = 60;
 import React from 'react';
 import { getPageMeta, buildMetadata } from '../../services/pageMeta';
 import { fetchHomePage } from '../../services/homePage';
-import DynamicPageClient from '../../components/pagebuilder/DynamicPageClient';
-import DynamicPageRenderer from '../../components/pagebuilder/DynamicPageRenderer';
-import type { PageSection } from '../../components/pagebuilder/wireframes.config';
+import BlockPage from '../../components/blocks/BlockPage';
 import { SITE_CONFIG } from '../../config/site';
 
 const SLUG = 'home';
@@ -17,62 +15,20 @@ const DEFAULTS = {
   keywords: SITE_CONFIG.seoDefaults.keywords,
 };
 
-const FALLBACK_SECTIONS: PageSection[] = [
-  {
-    type: "hero_turnkey_voice",
-    data: {
-      theme: "light",
-      eyebrow: "Solution Clé en Main Tout-en-Un & Commandes Vocales",
-      title: "Votre Activité Déployée & Pilotée en Toute Simplicité",
-      title_highlight: "Même à la Voix, Sans Rien Taper au Clavier.",
-      description: "Découvrez la solution clé en main complète conçue pour vous faciliter la vie d'un point de vue pratique et efficace : site web dynamique, caisse conforme au droit suisse, fichier clients, réservations et assistant IA réactif à votre voix.",
-      cta_primary_text: "Explorer les Outils Admin",
-      cta_primary_href: "#maquettes",
-      cta_secondary_text: "Demander une Démonstration",
-      cta_secondary_href: "/contact",
-    }
-  },
-  {
-    type: "client_needs_matrix",
-    data: { theme: "surface" }
-  },
-  {
-    type: "voice_showcase_1",
-    data: { theme: "light" }
-  },
-  {
-    type: "admin_mockups_gallery",
-    data: { theme: "surface" }
-  },
-  {
-    type: "turnkey_bento_grid",
-    data: { theme: "light" }
-  },
-  {
-    type: "turnkey_offer_pricing",
-    data: { theme: "surface" }
-  },
-  {
-    type: "turnkey_faq_accordion",
-    data: { theme: "light" }
-  }
-];
-
 export async function generateMetadata() {
   const meta = await getPageMeta(SLUG, DEFAULTS);
   return buildMetadata(SLUG, meta, `${SITE_CONFIG.url}/`);
 }
 
 export default async function Page() {
-  const { page: cmsPage, slug } = await fetchHomePage();
-
-  return (
-    <DynamicPageClient
-      initialPage={cmsPage}
-      slug={slug}
-      forceShow
-      fallback={<DynamicPageRenderer sections={FALLBACK_SECTIONS} />}
-    />
-  );
+  const { page } = await fetchHomePage();
+  if (!page) {
+    return (
+      <div className="py-32 text-center text-stone-500">
+        <p className="font-serif text-2xl">La page d&apos;accueil n&apos;existe pas encore.</p>
+        <p className="mt-3 text-sm">Créez une page avec le slug « home » depuis l&apos;admin.</p>
+      </div>
+    );
+  }
+  return <BlockPage page={page} />;
 }
-

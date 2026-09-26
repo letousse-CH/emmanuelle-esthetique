@@ -1,12 +1,11 @@
 "use client";
 
-import React, { Suspense } from 'react';
-import PageBuilderClient from '../../PageBuilderClient';
+import { useParams, useRouter } from 'next/navigation';
+import PageBuilder from '../../../../../components/blocks/editor/PageBuilder';
 
 export default function Page() {
-  return (
-    <Suspense fallback={<div className="p-8 text-sm text-stone-600">Chargement...</div>}>
-      <PageBuilderClient />
-    </Suspense>
-  );
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  if (!id) return null;
+  return <PageBuilder pageId={id} mode="page" onClose={() => router.push('/admin/pages')} />;
 }

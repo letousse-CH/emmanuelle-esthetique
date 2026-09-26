@@ -1,6 +1,6 @@
 import { Inter, Cormorant_Garamond } from 'next/font/google';
 import '../index.css';
-import UniversalPageEditor from '../components/pagebuilder/UniversalPageEditor';
+import UniversalPageEditorGate from '../components/pagebuilder/UniversalPageEditorGate';
 import ScrollAnimations from '../components/ScrollAnimations';
 import { getSettingsServer } from '../services/settingsServer';
 import { getBusinessInfoServer, BusinessInfo, SITE_CONFIG } from '../config/site';
@@ -388,7 +388,7 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
         <ScrollAnimations />
-        <UniversalPageEditor />
+        <UniversalPageEditorGate />
         {children}
       </body>
     </html>

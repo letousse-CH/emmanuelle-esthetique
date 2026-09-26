@@ -3,7 +3,7 @@ import React from 'react';
 import { notFound } from 'next/navigation';
 import { supabase } from '../../../services/supabase';
 import { fetchPageBySlug } from '../../../services/dynamicPages';
-import DynamicPageClient from '../../../components/pagebuilder/DynamicPageClient';
+import BlockPage from '../../../components/blocks/BlockPage';
 import PageChrome from '../../../components/PageChrome';
 
 import { getPageMeta, buildMetadata } from '../../../services/pageMeta';
@@ -47,12 +47,10 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function Page({ params }: PageProps) {
   const { slug } = await params;
   const page = await fetchPageBySlug(slug, false);
-  // Route attrape-tout : un slug inexistant doit renvoyer un vrai 404
-  // (sinon soft-404 indexable). Voir generateMetadata pour le cas null.
+  // Route attrape-tout : un slug inexistant doit renvoyer un vrai 404.
   if (!page) notFound();
 
-  // Le FAQPage JSON-LD est émis par les sections faq_1 elles-mêmes.
-  // On ne re-génère ici que le fil d'Ariane.
+  // Le JSON-LD FAQPage est émis par BlockPage à partir des blocs FAQ.
   const breadcrumbLd = buildBreadcrumbJsonLd({
     slug,
     pageTitle: page.title,
@@ -67,10 +65,10 @@ export default async function Page({ params }: PageProps) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
         />
       )}
-      {page && (!page.show_header || !page.show_footer) && (
+      {(!page.show_header || !page.show_footer) && (
         <PageChrome showHeader={page.show_header ?? true} showFooter={page.show_footer ?? true} />
       )}
-      <DynamicPageClient initialPage={page} slug={slug} />
+      <BlockPage page={page} />
     </>
   );
 }

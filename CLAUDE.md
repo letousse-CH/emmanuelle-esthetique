@@ -347,18 +347,61 @@ openssl rand -hex 32
 Ne jamais le faire tourner ensuite : cela invaliderait les liens des e-mails
 déjà partis.
 
-## Contenu des pages
+## Contenu des pages — page builder v2 (2026-09-26)
 
-Les pages publiques ne sont **pas** des composants React : elles vivent dans la
-table Supabase `dynamic_pages` et sont rendues par le page builder
-(`src/components/pagebuilder/`). `src/app/(public)/page.tsx` lit la page de slug
-`home` ; `(public)/[slug]/page.tsx` sert toutes les autres.
+Les pages publiques vivent dans la table Supabase `dynamic_pages`. Depuis le
+2026-09-26 elles sont rendues et éditées par le **page builder v2**
+(`src/components/blocks/`), fusion du builder de MatthieuLeTousse-Therapeute
+(sections > colonnes > blocs, canvas cliquable, glisser-déposer) et des
+fonctions de Studio (bibliothèque par intention, annuler/rétablir, IA, médias,
+dictée). Plan d'origine : `PLAN-PAGEBUILDER.md`.
 
-Le contenu de départ des pages (accueil, à propos, soins, bon cadeau, mentions
-légales) est défini dans `src/services/seeder.ts` et s'importe en base via
-`/admin/pages` → bouton **Pages par défaut**. Les sections disponibles et leur
-schéma de données sont listés dans
-`src/components/pagebuilder/wireframes.config.ts`.
+**Stockage.** Deux colonnes coexistent :
+- `sections` (JSONB, format Studio `{ type, data }`) : **jamais écrite** par le
+  nouvel éditeur. C'est ce que lit encore le code en production tant que la
+  v2 n'est pas déployée, et c'est le retour arrière.
+- `content` (JSONB, format v2) + `content_version` (2 = v2). Ajoutées par
+  `supabase/migrations/20260926_page_blocks_content.sql` (à exécuter une fois
+  dans le SQL Editor : les clés du site ne permettent pas de DDL).
+
+`resolvePageContent()` (`pageContent.ts`) sert `content` si
+`content_version = 2`, sinon convertit `sections` à la volée
+(`convert.ts`). Pour figer la conversion en base :
+`npx tsx scripts/migrate-pages-to-blocks.ts` (rapport) puis `--write`.
+Retour arrière complet : `UPDATE dynamic_pages SET content_version = 1;`.
+
+**Fichiers.**
+- `types.ts` — modèle ; `blockMeta.ts` — **source unique** des blocs
+  (libellés, champs du formulaire, valeurs par défaut, catégories). Ajouter un
+  bloc = un type dans `types.ts`, une entrée dans `blockMeta.ts`, une vue dans
+  `BlockRenderer.tsx`. L'inspecteur, la bibliothèque et le schéma IA
+  (`aiSchema.ts`) suivent automatiquement.
+- `BlockRenderer.tsx` — rendu **sans hook**, côté serveur pour les visiteurs
+  (contenu visible sans JavaScript), réutilisé par l'éditeur via la prop
+  `editor`. `blocks.css` — styles `pb-*`, couleurs via les variables de la
+  charte (`--brand-*` de GlobalStyles) ; crème, sable et lagon ont leurs
+  valeurs dans `:root` (`--pb-warm`, `--pb-warm-strong`, `--pb-accent`).
+- `presets.ts` — sections prêtes et gabarits de pages ; `validate.ts` —
+  normalisation de tout contenu externe (IA) ; `sanitize.ts` — HTML des blocs
+  texte.
+- `editor/PageBuilder.tsx` — l'éditeur (canvas, inspecteur, bibliothèque, IA,
+  sauvegarde auto 1,5 s, Cmd+Z/Cmd+S). Deux entrées : `/admin/pages/edit/[id]`
+  et le bouton « Modifier cette page » sur le site (`PageEditGate`, chargé
+  seulement pour une admin connectée).
+- Mode **Contenu** (par défaut, pour Emmanuelle : textes, images, liens) et
+  mode **Mise en page** (colonnes, fonds, espacements, animation). Les champs
+  marqués `style: true` dans `blockMeta.ts` n'apparaissent qu'en Mise en page.
+- Double-clic sur un texte simple dans le canvas = édition directe
+  (attribut `data-pb-field`).
+- `legacy_section` : bloc qui rend une section Studio telle quelle (sert aux
+  sections sans équivalent et aux fonctions « Derniers articles » /
+  « Newsletter »). Le registre Studio n'est chargé que si une page en contient.
+- IA : `/api/admin/blocks-ai` (modes `page` et `section`).
+
+L'ancien constructeur Studio (`src/components/pagebuilder/`) reste présent
+pour `legacy_section`, la création de page (`/admin/pages/new`) et le seeder
+(**Pages par défaut**, qui écrit encore au format Studio : une page déjà en v2
+garde son `content`).
 
 ## Ton éditorial & prompts IA
 

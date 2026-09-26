@@ -1,6 +1,7 @@
 /* Les polices sont chargées par next/font dans src/app/layout.tsx et par
    GlobalStyles (réglages « Design & Style » de l'admin) — ne pas les importer ici. */
 @import "tailwindcss";
+@import "./components/blocks/blocks.css";
 @plugin "@tailwindcss/typography";
 
 @theme {

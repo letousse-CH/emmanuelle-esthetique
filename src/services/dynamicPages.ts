@@ -6,6 +6,9 @@ export interface DynamicPage {
   title: string;
   slug: string;
   sections: PageSection[];
+  /** Page builder v2 (sections > colonnes > blocs). Voir components/blocks. */
+  content?: unknown;
+  content_version?: number;
   published: boolean;
   show_header: boolean;
   show_footer: boolean;

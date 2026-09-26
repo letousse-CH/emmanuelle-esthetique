@@ -13,3 +13,6 @@ scratch/
 
 # Local Netlify folder
 .netlify
+
+# Sauvegardes locales de la base
+backups/
