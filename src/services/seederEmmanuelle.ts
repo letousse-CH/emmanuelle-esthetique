@@ -218,6 +218,41 @@ function ctaFinal(opts: {
   };
 }
 
+/**
+ * Un soin de la carte = un bloc « image + texte », en alternance : image à
+ * gauche, puis à droite, avec le fond qui alterne crème / blanc. Les titres,
+ * durées et tarifs viennent de la carte des soins ; tout reste modifiable
+ * bloc par bloc depuis le constructeur (texte, image, côté).
+ */
+interface SoinBlockInput {
+  title: string;
+  /** Ligne d'accroche au-dessus du titre : durée et tarif. */
+  meta?: string;
+  /** HTML du corps : description, listes de tarifs… */
+  content: string;
+  image: string;
+  imageAlt?: string;
+  cta?: string;
+}
+
+function soinBlocks(items: SoinBlockInput[]): PageSection[] {
+  return items.map((it, i) => ({
+    type: 'text_image_1',
+    data: {
+      theme: 'light',
+      eyebrow: it.meta || '',
+      title: it.title,
+      bg_color: i % 2 === 0 ? '#FFFFFF' : CREME,
+      ratio: 'half',
+      image_position: i % 2 === 0 ? 'left' : 'right',
+      image_url: it.image,
+      image_alt: it.imageAlt || it.title,
+      content:
+        `${it.content}<p><a href="${RESA_HREF}">${it.cta || 'Réserver ce soin'}</a></p>`,
+    },
+  }));
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    PAGES — HOME + CATÉGORIES + SOINS + À PROPOS + CONTACT + BON CADEAU
    ────────────────────────────────────────────────────────────────────────*/
@@ -670,19 +705,19 @@ const SOINS_VISAGE: SeoPageSeed = {
   seo: {
     title: 'Soins du visage Phytomer · Palézieux-Gare (Vaud)',
     description:
-      "Soin signature, anti-âge, peau sensible, éclat : les soins visage sur-mesure d'Emmanuelle Esthétique à Palézieux-Gare. Sur rendez-vous.",
-    og_title: 'Soins du visage à Palézieux-Gare — Phytomer sur-mesure',
+      "Peau nette, hydratation, anti-âge : les soins du visage signature Phytomer d'Emmanuelle Esthétique à Palézieux-Gare. Sur rendez-vous.",
+    og_title: 'Soins du visage Phytomer à Palézieux-Gare',
     og_description:
-      "Nettoyage, gommage, masque, massage manuel Phytomer. Chaque protocole est adapté à votre peau à Palézieux-Gare.",
+      "Protocoles marins de haute technicité : manœuvres expertes, efficacité visible et lâcher-prise absolu. À Palézieux-Gare.",
     keywords:
       'soin visage Palézieux, soin visage Vaud, soin Phytomer Palézieux, esthéticienne visage Palézieux-Gare',
   },
   sections: [
     hero({
-      eyebrow: 'Silo — soins du visage',
+      eyebrow: 'Soins du visage signature Phytomer',
       title: 'Soins du visage à Palézieux-Gare',
       description:
-        "Trois protocoles Phytomer, ajustés à votre peau : signature, anti-âge, peau sensible. Le rituel est le même — l'écoute, la douceur, un vrai temps pour vous.",
+        "Des protocoles marins de haute technicité associant manœuvres expertes, efficacité visible et lâcher-prise absolu.",
       cta: 'Réserver un soin visage',
       image: IMG_VISAGE,
     }),
@@ -690,64 +725,60 @@ const SOINS_VISAGE: SeoPageSeed = {
       eyebrow: 'En bref',
       quote: 'Un soin qui écoute votre peau, pas un catalogue.',
       text:
-        "À l'institut Emmanuelle Esthétique de <strong>Palézieux-Gare (Vaud)</strong>, chaque soin du visage suit un rituel en 5 temps : accueil et diagnostic de peau, démaquillage double, gommage doux, masque et sérum <strong>Phytomer</strong>, massage manuel du visage. Le protocole est adapté à votre type de peau — <strong>sensible, mixte, mature ou déshydratée</strong> — et à la saison. Comptez <strong>60 à 90 minutes</strong>, à partir de <strong>CHF 130</strong>.",
+        "À l'institut Emmanuelle Esthétique de <strong>Palézieux-Gare (Vaud)</strong>, trois soins du visage <strong>Phytomer</strong> sont proposés, du coup d'éclat express au protocole anti-âge intensif. Comptez <strong>40 à 75 minutes</strong>, à partir de <strong>CHF 90</strong>. Vous pouvez y ajouter un privilège en cours de soin : boue marine sur le dos ou massage du cuir chevelu.",
       image: IMG_VISAGE,
     }),
-    {
-      type: 'features_2',
-      data: {
-        theme: 'light',
-        eyebrow: 'Nos soins visage',
-        title: 'Trois protocoles, sur-mesure',
-        bg_color: CREME,
-        cards: [
-          {
-            icon: '',
-            icon_image: IMG_VISAGE,
-            title: 'Soin signature',
-            description:
-              "Le rituel complet Phytomer, adapté à votre peau du jour. Idéal pour un premier soin ou une remise à niveau.",
-            link_text: 'Voir le protocole',
-            link_href: '/soin-visage-signature-palezieux',
-          },
-          {
-            icon: '',
-            icon_image: IMG_ANTIAGE,
-            title: 'Soin anti-âge',
-            description:
-              "Manœuvres liftantes manuelles inspirées du massage kobido, actifs Phytomer ciblés. Repulpe, redessine, illumine.",
-            link_text: 'Voir le protocole',
-            link_href: '/soin-anti-age-palezieux',
-          },
-          {
-            icon: '',
-            icon_image: IMG_COCON,
-            title: 'Soin peau sensible',
-            description:
-              "Textures ultra-douces, gestes lents, actifs apaisants. Pensé pour les peaux réactives, rosacées, sujettes aux rougeurs.",
-            link_text: 'Voir le protocole',
-            link_href: '/soin-visage-peau-sensible-palezieux',
-          },
-        ],
+    ...soinBlocks([
+      {
+        title: 'Soin Peau Nette & Coup d’Éclat Express',
+        meta: '40 min · 90 CHF',
+        content:
+          "<p>Nettoyage profond désincrustant sous serviettes chaudes, gommage marin enzymatique, masque chauffant détoxifiant et hydratation personnalisée. Idéal pour un coup d'éclat immédiat.</p>",
+        image: IMG_VISAGE,
       },
-    },
+      {
+        title: 'Soin Hydra Originel — Désaltérant & Repulpant',
+        meta: '60 min · 140 CHF',
+        content:
+          "<p>Véritable bain d'hydratation aux algues tissées bio. Comprend un gommage velours, un modelage délassant du visage et du décolleté, et un masque crémeux à l’algue Nori. Repulpe les traits et restaure la barrière cutanée.</p>",
+        image: IMG_MARINE_GOUTTES,
+      },
+      {
+        title: 'Soin Expert Jeunesse — Correction Rides & Fermeté',
+        meta: '75 min · 165 CHF',
+        content:
+          "<p>Protocole anti-âge intensif. Modelage remodelant ciblé inspiré des techniques de digito-pression, suivi de la pose d’un masque plastifiant tenseur aux actifs marins purs. Lisse visiblement les rides installées et tonifie l'ovale du visage.</p>",
+        image: IMG_ANTIAGE,
+      },
+      {
+        title: 'Les Privilèges Visage',
+        meta: 'En complément pendant votre soin',
+        content:
+          "<ul>" +
+          "<li><strong>Option Boue Marine Auto-Chauffante Dos — 30 CHF.</strong> Application d'une boue marine effervescente et reminéralisante le long de la colonne vertébrale pendant votre soin du visage. Libère immédiatement les tensions musculaires du haut du corps.</li>" +
+          "<li><strong>Option Massage Relaxant du Cuir Chevelu & Nuque (15 min) — 25 CHF.</strong></li>" +
+          "</ul>",
+        image: IMG_MARINE_GALETS,
+        cta: 'Réserver avec un privilège',
+      },
+    ]),
     faqLocale({
       title: 'Vos questions sur les soins du visage',
       cards: [
         {
           question: "Combien coûte un soin du visage à Palézieux ?",
           answer:
-            "Les tarifs indicatifs à l'institut Emmanuelle Esthétique de Palézieux-Gare sont de CHF 130 pour un soin signature 60 min, CHF 170 pour un soin anti-âge 90 min et CHF 150 pour un soin peau sensible 75 min. Le tarif exact est confirmé à la prise de rendez-vous.",
+            "Le Soin Peau Nette & Coup d’Éclat Express (40 min) est à CHF 90, le Soin Hydra Originel (60 min) à CHF 140 et le Soin Expert Jeunesse (75 min) à CHF 165. Les privilèges se règlent en complément : CHF 30 pour la boue marine auto-chauffante sur le dos, CHF 25 pour le massage du cuir chevelu et de la nuque.",
         },
         {
           question: "Quel soin visage choisir pour ma peau ?",
           answer:
-            "On en parle ensemble à la prise de rendez-vous. Peau sensible ou réactive : soin peau sensible. Signes de l'âge, perte de fermeté : soin anti-âge. Premier soin ou entretien général : soin signature. Vous ne choisissez pas seule — c'est le rôle du diagnostic de peau en début de séance.",
+            "On en parle ensemble à la prise de rendez-vous. Un coup d'éclat rapide : Peau Nette & Coup d’Éclat Express. Une peau qui a soif : Hydra Originel. Des rides installées ou un ovale à retendre : Expert Jeunesse. Vous ne choisissez pas seule.",
         },
         {
           question: "Utilisez-vous des appareils ou uniquement du manuel ?",
           answer:
-            "Uniquement des techniques manuelles à Palézieux-Gare : massage, drainage, manœuvres liftantes. Pas d'appareil radiofréquence, pas de LED. Le résultat vient du geste et des actifs Phytomer, pas de la machine.",
+            "Les soins reposent sur la gestuelle manuelle — gommage, modelage, digito-pression — et sur les actifs marins Phytomer. Le résultat vient du geste et des produits, pas d'une machine.",
         },
       ],
     }),
@@ -1053,61 +1084,62 @@ const SOINS_CORPS: SeoPageSeed = {
   slug: 'soins-corps-palezieux',
   published: true,
   seo: {
-    title: 'Massages & Head Spa · Palézieux-Gare (Vaud)',
+    title: 'Rituels & massages du corps · Palézieux-Gare (Vaud)',
     description:
-      "Massage relaxant aux huiles chaudes et Head Spa (massage du cuir chevelu) à Palézieux-Gare. Souffler, dormir mieux, respirer.",
-    og_title: 'Soins du corps à Palézieux-Gare — massages et Head Spa',
+      "Gommage aux sels marins, soin détox du dos, grand massage relaxant : les rituels du corps d'Emmanuelle Esthétique à Palézieux-Gare.",
+    og_title: 'Rituels & massages du corps à Palézieux-Gare',
     og_description:
-      "Un massage n'est pas un travail en profondeur : c'est un moment pour souffler. À Palézieux-Gare, canton de Vaud.",
+      "Le magnétisme marin et une gestuelle manuelle précise, enveloppante et décontractante. À Palézieux-Gare, canton de Vaud.",
     keywords:
-      'massage relaxant Palézieux, Head Spa Vaud, massage cuir chevelu Palézieux, massage huiles chaudes Broye',
+      'massage relaxant Palézieux, gommage corps Vaud, massage Palézieux-Gare, soin du corps Broye, soin dos détox Palézieux',
   },
   sections: [
     hero({
-      eyebrow: 'Silo — soins du corps',
-      title: 'Massages & Head Spa à Palézieux-Gare',
+      eyebrow: 'Rituels & massages du corps',
+      title: 'Rituels & massages du corps à Palézieux-Gare',
       description:
-        "Deux protocoles pour souffler : le massage relaxant aux huiles chaudes et le Head Spa (massage du cuir chevelu). Uniquement pour se détendre — pas de travail en profondeur.",
-      cta: 'Réserver un massage',
+        "La rencontre entre le magnétisme marin et une gestuelle manuelle précise, enveloppante et décontractante.",
+      cta: 'Réserver un rituel',
       image: IMG_MASSAGE,
     }),
     introGeo({
       quote: 'Souffler, respirer, dormir mieux.',
       text:
-        "Les soins du corps à l'institut Emmanuelle Esthétique de <strong>Palézieux-Gare</strong> sont pensés comme un <strong>vrai temps de détente</strong> — pas comme un massage sportif ou thérapeutique. Deux protocoles : <strong>massage relaxant aux huiles chaudes</strong> (60 ou 90 min) et <strong>Head Spa</strong>, le massage du cuir chevelu qui détend l'esprit autant qu'il fait du bien aux cheveux.",
+        "Les soins du corps à l'institut Emmanuelle Esthétique de <strong>Palézieux-Gare</strong> sont pensés comme un <strong>vrai temps de détente</strong> : deux gommages aux actifs marins, un grand massage relaxant sur-mesure et un rituel qui réunit le visage et le corps. De <strong>45 minutes à 1h45</strong>, à partir de <strong>CHF 110</strong>.",
       image: IMG_MASSAGE,
     }),
-    {
-      type: 'features_2',
-      data: {
-        theme: 'light',
-        eyebrow: 'Deux façons de souffler',
-        title: 'Choisissez votre protocole',
-        bg_color: CREME,
-        cards: [
-          {
-            icon: '',
-            icon_image: IMG_MASSAGE,
-            title: 'Massage relaxant aux huiles chaudes',
-            description:
-              "60 ou 90 min. Huiles végétales tièdes, gestes enveloppants, pression douce. Objectif : lâcher prise complet.",
-            link_text: 'Voir le protocole',
-            link_href: '/massage-relaxant-huiles-chaudes-palezieux',
-          },
-          {
-            icon: '',
-            icon_image: IMG_MASSAGE_TETE,
-            title: 'Head Spa · Massage du cuir chevelu',
-            description:
-              "30 ou 45 min. Un massage crânien lent, avec sérum végétal, qui détend les épaules et calme le mental.",
-            link_text: 'Voir le protocole',
-            link_href: '/head-spa-palezieux',
-          },
-        ],
+    ...soinBlocks([
+      {
+        title: 'Soin Voile de Satin — Gommage Peau Neuve',
+        meta: '45 min · 110 CHF',
+        content:
+          "<p>Exfoliation complète aux cristaux de sels marins reminéralisants, suivie d’une application onctueuse et massée de lait satinant. La peau est exfoliée, douce et veloutée.</p>",
+        image: IMG_MARINE_ECUME,
       },
-    },
+      {
+        title: 'Soin Bulles des Mers — Détox & Pureté du Dos',
+        meta: '45 min · 110 CHF',
+        content:
+          "<p>Gommage purifiant du dos, pose sous occlusion thermique de boue marine auto-chauffante décontracturante, puis modelage délassant des trapèzes, de la nuque et du dos à l'huile végétale précieuse.</p>",
+        image: IMG_MARINE_MER,
+      },
+      {
+        title: 'Grand Massage Relaxant Marine — Signature Spa',
+        meta: '60 min · 145 CHF — 90 min · 210 CHF',
+        content:
+          "<p>Massage complet du corps sur-mesure combinant effleurages profonds, drainages doux et pressions dénouantes à l’huile marine satinante parfum printanier. Adapté sur-mesure aux besoins musculaires et énergétiques du jour.</p>",
+        image: IMG_MASSAGE,
+      },
+      {
+        title: 'Rituel Échappée Belle — Visage & Corps',
+        meta: '1h45 · 230 CHF',
+        content:
+          "<p>La synergie parfaite : le gommage complet du corps <em>Voile de Satin</em> ou un massage ciblé du dos, immédiatement suivi du <em>Soin Hydra Originel</em> complet.</p>",
+        image: IMG_COCON,
+      },
+    ]),
     faqLocale({
-      title: 'Vos questions sur les massages',
+      title: 'Vos questions sur les soins du corps',
       cards: [
         {
           question: "Vos massages sont-ils thérapeutiques ?",
@@ -1115,14 +1147,14 @@ const SOINS_CORPS: SeoPageSeed = {
             "Non. Les massages Emmanuelle Esthétique à Palézieux-Gare sont des massages esthétiques et de bien-être : ils apaisent, drainent doucement, détendent. Pour un travail thérapeutique sur des tensions musculaires profondes, orientez-vous vers un massothérapeute agréé ASCA.",
         },
         {
-          question: "Peut-on combiner Head Spa et massage du visage ?",
+          question: "Peut-on combiner un soin du visage et un soin du corps ?",
           answer:
-            "Oui, c'est même une des demandes les plus fréquentes. Un Head Spa 30 min ajouté à un soin visage crée un rituel complet de 90 à 120 min, avec un tarif combiné avantageux (à confirmer à la prise de rendez-vous).",
+            "Oui, c'est précisément le Rituel Échappée Belle (1h45, CHF 230) : le gommage Voile de Satin ou un massage ciblé du dos, suivi du Soin Hydra Originel complet. Vous pouvez aussi ajouter la boue marine auto-chauffante sur le dos (CHF 30) à un soin du visage.",
         },
       ],
     }),
     ctaFinal({
-      title: 'Réserver un massage à Palézieux-Gare',
+      title: 'Réserver un rituel à Palézieux-Gare',
     }),
   ],
 };
@@ -1639,94 +1671,95 @@ const COURS_MAQUILLAGE: SeoPageSeed = {
    ────────────────────────────────────────────────────────────────────────*/
 
 const EPILATION: SeoPageSeed = {
-  title: 'Épilation à la cire au sucre',
+  title: 'Épilation à la cire douce & au sucre',
   slug: 'epilation-sucre-palezieux',
   published: true,
   seo: {
-    title: 'Épilation au sucre indolore · Palézieux-Gare (Vaud)',
+    title: 'Épilation cire douce & pâte de sucre · Palézieux-Gare',
     description:
-      "Épilation à la pâte de sucre, quasi indolore, adaptée aux peaux sensibles. À Palézieux-Gare. Visage, corps, maillot.",
-    og_title: 'Épilation au sucre à Palézieux-Gare — indolore',
+      "Épilation à la cire douce et à la pâte de sucre naturelle (méthode orientale), adaptée aux peaux sensibles. Visage, corps, maillot. Palézieux-Gare.",
+    og_title: 'Épilation à la cire douce et au sucre à Palézieux-Gare',
     og_description:
-      "Une pâte 100 % naturelle rincée à l'eau, qui respecte les peaux réactives. À Palézieux-Gare.",
+      "Épilations soignées, hygiéniques et confortables, suivies d'une émulsion apaisante marine. À Palézieux-Gare.",
     keywords:
-      'épilation sucre Palézieux, épilation naturelle Vaud, épilation indolore Palézieux-Gare, épilation maillot Broye',
+      'épilation sucre Palézieux, épilation cire douce Vaud, épilation orientale Palézieux-Gare, épilation maillot Broye',
   },
   sections: [
     hero({
-      eyebrow: 'Silo — épilation · Palézieux-Gare',
-      title: 'Épilation à la cire au sucre',
+      eyebrow: 'Épilation · Palézieux-Gare',
+      title: 'Épilation à la cire douce & à la pâte de sucre',
       description:
-        "Une pâte 100 % naturelle (sucre, citron, eau), tiède, qui s'enlève à l'eau. Quasi indolore, respectueuse des peaux sensibles.",
+        "Des épilations soignées, hygiéniques et confortables, suivies d'une application d'émulsion apaisante marine.",
       cta: 'Réserver une épilation',
       image: IMG_EPILATION,
     }),
     introGeo({
       quote: 'La méthode douce, même pour les zones sensibles.',
       text:
-        "L'épilation à la <strong>pâte de sucre</strong> à <strong>Palézieux-Gare</strong> est une méthode <strong>100 % naturelle</strong> (sucre, citron, eau), tiède, qui <strong>s'enlève à l'eau</strong>. Elle arrache le poil dans le sens de la pousse — <strong>quasi indolore</strong>, sans irritation, adaptée aux <strong>peaux sensibles, réactives ou sujettes aux poils incarnés</strong>. Toutes les zones : <strong>visage, aisselles, maillot, jambes</strong>.",
+        "À <strong>Palézieux-Gare</strong>, l'épilation se fait à la <strong>cire douce</strong> de haute qualité, adaptée aux peaux sensibles, ou à la <strong>pâte de sucre 100 % naturelle</strong> selon un savoir-faire traditionnel : c'est l'épilation orientale, qui réduit visiblement les repousses sous peau et laisse l'épiderme souple et parfaitement satiné.",
       image: IMG_EPILATION,
     }),
-    {
-      type: 'pricing_2',
-      data: {
-        theme: 'light',
-        eyebrow: 'Tarifs indicatifs',
-        title: 'Chaque zone, un tarif clair',
-        bg_color: CREME,
-        cards: [
-          {
-            title: 'Lèvre supérieure',
-            price: 'CHF 15',
-            price_note: '· 10 min',
-            items: ['Sans irritation', 'Sans rougeur durable'],
-            cta_text: 'Réserver',
-            cta_href: RESA_HREF,
-          },
-          {
-            title: 'Aisselles',
-            price: 'CHF 25',
-            price_note: '· 15 min',
-            items: ['Peau douce sans folliculite', 'Idéal peaux réactives'],
-            cta_text: 'Réserver',
-            cta_href: RESA_HREF,
-          },
-          {
-            title: 'Maillot classique',
-            price: 'CHF 40',
-            price_note: '· 20 min · Intégral : CHF 60',
-            items: ['Moins de poils incarnés', 'Peau apaisée à la sortie'],
-            cta_text: 'Réserver',
-            cta_href: RESA_HREF,
-          },
-          {
-            title: 'Demi-jambes',
-            price: 'CHF 45',
-            price_note: '· 30 min · Complètes : CHF 65',
-            items: ['Épilation lente et propre', 'Repousse espacée'],
-            cta_text: 'Réserver',
-            cta_href: RESA_HREF,
-          },
-        ],
+    ...soinBlocks([
+      {
+        title: 'Épilation à la cire douce',
+        meta: 'Chaque zone, un tarif clair',
+        content:
+          "<p>Des cires douces de haute qualité, adaptées aux peaux sensibles, suivies d'une application d'émulsion apaisante marine.</p>" +
+          "<ul>" +
+          "<li>Sourcils — <strong>22 CHF</strong></li>" +
+          "<li>Lèvre supérieure — <strong>15 CHF</strong></li>" +
+          "<li>Visage complet (sourcils, lèvre, menton, joues) — <strong>45 CHF</strong></li>" +
+          "<li>Aisselles — <strong>22 CHF</strong></li>" +
+          "<li>Bras — <strong>40 CHF</strong></li>" +
+          "<li>Demi-jambes — <strong>42 CHF</strong></li>" +
+          "<li>Jambes complètes — <strong>68 CHF</strong></li>" +
+          "<li>Maillot classique — <strong>28 CHF</strong></li>" +
+          "</ul>",
+        image: IMG_EPILATION,
+        cta: 'Réserver une épilation',
       },
-    },
+      {
+        title: 'Épilation orientale à la pâte de sucre',
+        meta: 'Maillot échancré ou intégral · 55 CHF',
+        content:
+          "<p>Réalisée à la pâte de sucre 100 % naturelle selon un savoir-faire traditionnel précis, l’épilation orientale offre une extraction du poil d'une douceur incomparable, réduisant visiblement les repousses sous peau tout en laissant l'épiderme souple et parfaitement satiné.</p>",
+        image: IMG_MARINE_BRUME,
+        cta: 'Réserver une épilation',
+      },
+      {
+        title: 'Forfait Douceur',
+        meta: 'Demi-jambes + aisselles + maillot au choix · 95 CHF',
+        content:
+          "<p>La formule essentielle, rapide et nette, quel que soit le type de maillot souhaité.</p>",
+        image: IMG_COCON,
+        cta: 'Réserver ce forfait',
+      },
+      {
+        title: 'Forfait Intégral',
+        meta: 'Jambes complètes + aisselles + maillot au choix · 125 CHF',
+        content:
+          "<p>Le rituel complet du corps sans compromis, quel que soit le type de maillot souhaité.</p>",
+        image: IMG_MARINE_HORIZON,
+        cta: 'Réserver ce forfait',
+      },
+    ]),
     faqLocale({
-      title: 'Questions fréquentes sur l\'épilation au sucre',
+      title: 'Questions fréquentes sur l\'épilation',
       cards: [
-        {
-          question: "L'épilation au sucre est-elle vraiment indolore ?",
-          answer:
-            "Quasi indolore par rapport à la cire chaude classique : la pâte de sucre arrache le poil dans le sens de la pousse (et non contre), donc sans traction violente. La première fois reste un peu inconfortable, mais infiniment moins que la cire chaude.",
-        },
         {
           question: "Quelle longueur de poil faut-il avant l'épilation ?",
           answer:
-            "Environ 2 à 5 mm (soit 10 à 15 jours de repousse). Trop court, la pâte n'accroche pas ; trop long, c'est inconfortable. Si vous vous rasez, laissez pousser 2 à 3 semaines avant la première venue.",
+            "Environ 2 à 5 mm (soit 10 à 15 jours de repousse). Trop court, la cire ou la pâte n'accroche pas ; trop long, c'est inconfortable. Si vous vous rasez, laissez pousser 2 à 3 semaines avant la première venue.",
         },
         {
-          question: "L'épilation au sucre convient-elle à une femme enceinte ?",
+          question: "Quelle différence entre la cire douce et la pâte de sucre ?",
           answer:
-            "Oui, sans problème. La méthode est douce, la pâte est comestible (sucre, citron, eau) — aucun produit chimique. Signalez juste votre grossesse à la prise de rendez-vous.",
+            "La cire douce est adaptée aux peaux sensibles et convient à la plupart des zones. La pâte de sucre 100 % naturelle (méthode orientale) est proposée pour le maillot échancré ou intégral : elle réduit visiblement les repousses sous peau et laisse l'épiderme souple et satiné.",
+        },
+        {
+          question: "Les forfaits comprennent-ils tous les types de maillot ?",
+          answer:
+            "Oui : dans le Forfait Douceur comme dans le Forfait Intégral, le maillot est au choix, classique, échancré ou intégral, pour le même prix.",
         },
       ],
     }),
