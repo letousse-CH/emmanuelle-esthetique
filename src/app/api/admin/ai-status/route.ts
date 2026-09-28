@@ -7,9 +7,9 @@ import { validateSupabaseToken } from '../../../../utils/apiAuth';
 import Anthropic from '@anthropic-ai/sdk';
 import { getAiConfig, invalidateAiConfigCache } from '../../../../services/aiConfig';
 import { resolveModelSpec } from '../../../../constants/aiModels';
-import { getAnthropicKey } from '../../../../services/secrets';
+import { getAnthropicKey, getResendApiKey } from '../../../../services/secrets';
+import { getR2Config } from '../../../../utils/r2Config';
 import { getAiStatus, setAiStatus } from '../../../../services/aiStatusCache';
-import { supabase } from '../../../../services/supabase';
 
 interface ServiceStatus {
   ok: boolean;
@@ -46,24 +46,14 @@ export async function GET(req: NextRequest) {
   if (cached && !forceRefresh && cached.keyTail === keyTail && now - cached.checkedAt < CACHE_TTL) {
     return NextResponse.json(cached);
   }
-  const resendKey = process.env.RESEND_API_KEY;
-  // Le stockage lit ses identifiants dans l'environnement, puis dans la table
-  // `settings` (saisie depuis Paramètres > Clés des services) : le diagnostic
-  // doit regarder aux deux endroits, sinon il dit « À régler » à tort.
-  let r2Settings: Record<string, string> = {};
+  // Resend et R2 se lisent comme partout ailleurs : clé saisie dans l'admin
+  // (table protégée app_secrets), sinon variable d'environnement.
+  const resendKey = await getResendApiKey();
+  let r2Configured = false;
   try {
-    const { data } = await supabase
-      .from('settings')
-      .select('key, value')
-      .in('key', ['r2_account_id', 'r2_access_key_id', 'r2_secret_access_key', 'r2_bucket_name']);
-    r2Settings = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value ?? '']));
-  } catch { /* diagnostic seulement : on garde les variables d'environnement */ }
-  const r2Configured = Boolean(
-    (process.env.R2_ACCOUNT_ID || r2Settings.r2_account_id) &&
-    (process.env.R2_ACCESS_KEY_ID || r2Settings.r2_access_key_id) &&
-    (process.env.R2_SECRET_ACCESS_KEY || r2Settings.r2_secret_access_key) &&
-    (process.env.R2_BUCKET_NAME || r2Settings.r2_bucket_name)
-  );
+    const r2 = await getR2Config();
+    r2Configured = Boolean(r2.accountId && r2.accessKey && r2.secretKey && r2.bucket);
+  } catch { /* diagnostic seulement */ }
 
   let error: string | null = null;
   let spec: { id: string; label: string; supportsAdaptiveThinking?: boolean } = { id: '', label: '' };

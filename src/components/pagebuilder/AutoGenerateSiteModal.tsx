@@ -2,6 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '../../services/supabase';
+
+/** En-têtes des appels admin : la route exige désormais une session admin. */
+async function adminJsonHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token ?? '';
+  return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 import {
   Sparkles,
   BookOpen,
@@ -56,7 +64,7 @@ export default function AutoGenerateSiteModal({
       try {
         const res = await fetch('/api/admin/generate-site-structure', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await adminJsonHeaders(),
           body: JSON.stringify({ action: 'check_and_propose' }),
         });
 
@@ -118,7 +126,7 @@ export default function AutoGenerateSiteModal({
       try {
         const res = await fetch('/api/admin/generate-site-structure', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await adminJsonHeaders(),
           body: JSON.stringify({
             action: 'generate_single_page',
             pageSpec: {
@@ -147,7 +155,7 @@ export default function AutoGenerateSiteModal({
       try {
         await fetch('/api/admin/generate-site-structure', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await adminJsonHeaders(),
           body: JSON.stringify({
             action: 'update_navigation_menu',
             generatedPages: generatedPagesList,

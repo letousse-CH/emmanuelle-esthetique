@@ -1,3 +1,4 @@
+import { getResendApiKey } from './secrets';
 /**
  * Exécution des automatisations — logique unique, trois points d'entrée.
  *
@@ -43,9 +44,9 @@ async function actionWebhook(config: Record<string, string>, automation: Automat
 }
 
 async function actionEmail(config: Record<string, string>, automation: Automation) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = await getResendApiKey();
   const to = config.to;
-  if (!apiKey) throw new Error('RESEND_API_KEY manquante.');
+  if (!apiKey) throw new Error('Clé Resend absente : renseignez-la dans Paramètres, rubrique « Clés des services ».');
   if (!to) throw new Error('Destinataire non renseigné.');
 
   const response = await fetch('https://api.resend.com/emails', {
