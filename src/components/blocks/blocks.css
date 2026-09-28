@@ -197,6 +197,48 @@
 @media (min-width: 640px) and (max-width: 1023px) { .pb-cards-imgleft.pb-cols-2, .pb-cards-imgleft.pb-cols-3, .pb-cards-imgleft.pb-cols-4 { grid-template-columns: minmax(0, 1fr); } }
 @media (min-width: 1024px) { .pb-cards-imgleft.pb-cols-3, .pb-cards-imgleft.pb-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+/* Cartes en carrousel : piste défilante (tactile natif) + boutons/points ajoutés par CardsCarousel. */
+.pb-carousel { position: relative; }
+.pb-carousel-track {
+  display: flex; gap: 1.25rem; overflow-x: auto; scroll-snap-type: x proximity;
+  scroll-behavior: smooth; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  /* `overflow-x: auto` force `overflow-y` à `auto` aussi : sans cette marge, le survol
+     d'une carte (soulèvement + ombre, voir .pb-card:hover) serait coupé en haut et en bas. */
+  padding: 1rem .25rem 2rem; margin: -1rem -.25rem -1.75rem;
+}
+.pb-carousel-track::-webkit-scrollbar { display: none; }
+.pb-carousel-track > .pb-card { scroll-snap-align: start; flex: 0 0 min(80%, 22rem); }
+.pb-carousel-draggable { cursor: grab; touch-action: pan-y; }
+.pb-carousel-draggable:active { cursor: grabbing; }
+.pb-cards-carousel.pb-cols-2 .pb-carousel-track > .pb-card,
+.pb-cards-carousel.pb-cols-3 .pb-carousel-track > .pb-card,
+.pb-cards-carousel.pb-cols-4 .pb-carousel-track > .pb-card { flex-basis: min(82%, 22rem); }
+@media (min-width: 640px) {
+  .pb-cards-carousel.pb-cols-2 .pb-carousel-track > .pb-card { flex-basis: min(56%, 26rem); }
+  .pb-cards-carousel.pb-cols-3 .pb-carousel-track > .pb-card,
+  .pb-cards-carousel.pb-cols-4 .pb-carousel-track > .pb-card { flex-basis: min(42%, 20rem); }
+}
+@media (min-width: 1024px) {
+  .pb-cards-carousel.pb-cols-3 .pb-carousel-track > .pb-card { flex-basis: min(31%, 20rem); }
+  .pb-cards-carousel.pb-cols-4 .pb-carousel-track > .pb-card { flex-basis: min(24%, 17rem); }
+}
+.pb-carousel-controls { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: .5rem; }
+.pb-carousel-dots { display: flex; gap: .45rem; }
+.pb-carousel-dot { width: .45rem; height: .45rem; padding: 0; border: 0; border-radius: 999px; background: var(--pb-line); cursor: pointer; transition: background .2s, width .2s; }
+.pb-carousel-dot[aria-current="true"] { width: 1.15rem; background: var(--pb-primary); }
+.pb-tone-light .pb-carousel-dot { background: rgba(255, 255, 255, .35); }
+.pb-tone-light .pb-carousel-dot[aria-current="true"] { background: #fff; }
+.pb-carousel-nav { display: flex; gap: .6rem; margin-left: auto; }
+.pb-carousel-btn {
+  width: 2.75rem; height: 2.75rem; border-radius: 999px; border: 1px solid var(--pb-line);
+  background: var(--pb-bg); color: var(--pb-fg); display: grid; place-items: center;
+  font-size: 1.35rem; line-height: 1; cursor: pointer; transition: background .2s, transform .15s, opacity .2s;
+}
+.pb-carousel-btn:hover:not(:disabled) { background: var(--pb-card); transform: translateY(-1px); }
+.pb-carousel-btn:disabled { opacity: .35; cursor: default; }
+.pb-tone-light .pb-carousel-btn { background: transparent; border-color: rgba(255, 255, 255, .4); color: #fff; }
+.pb-tone-light .pb-carousel-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .12); }
+
 .pb-steps { display: grid; gap: 1.25rem; counter-reset: pbstep; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 768px) { .pb-steps-n2 { grid-template-columns: repeat(2, 1fr); } .pb-steps-n3 { grid-template-columns: repeat(3, 1fr); } .pb-steps-n4 { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 1100px) { .pb-steps-n4 { grid-template-columns: repeat(4, 1fr); } }

@@ -59,7 +59,7 @@ export interface HeroBlock {
 }
 
 export interface CardItem { id: string; image?: string; title?: string; text: string; linkText?: string; linkUrl?: string }
-export interface CardsBlock { id: string; type: 'cards'; eyebrow?: string; title?: string; intro?: string; cols: 2 | 3 | 4; style?: 'plain' | 'tinted' | 'outlined'; imagePosition?: 'top' | 'left'; items: CardItem[] }
+export interface CardsBlock { id: string; type: 'cards'; eyebrow?: string; title?: string; intro?: string; cols: 2 | 3 | 4; style?: 'plain' | 'tinted' | 'outlined'; imagePosition?: 'top' | 'left'; layout?: 'grid' | 'carousel'; items: CardItem[] }
 
 export interface FaqItem { id: string; question: string; answer: string }
 export interface FaqBlock { id: string; type: 'faq'; eyebrow?: string; title?: string; intro?: string; items: FaqItem[] }

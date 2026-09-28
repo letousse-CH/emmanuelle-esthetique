@@ -183,8 +183,9 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { key: 'cols', label: 'Colonnes', kind: 'select', style: true, options: [{ value: 2, label: '2' }, { value: 3, label: '3' }, { value: 4, label: '4' }] },
       { key: 'imagePosition', label: 'Position de l\'image', kind: 'select', options: [{ value: 'top', label: 'Au-dessus du texte' }, { value: 'left', label: 'À gauche du texte' }] },
       { key: 'style', label: 'Style des cartes', kind: 'select', style: true, options: [{ value: 'plain', label: 'Sans fond' }, { value: 'tinted', label: 'Fond teinté' }, { value: 'outlined', label: 'Filet' }] },
+      { key: 'layout', label: 'Présentation', kind: 'select', style: true, help: 'Carrousel : boutons flèches et glisser à la souris ou au doigt.', options: [{ value: 'grid', label: 'Grille' }, { value: 'carousel', label: 'Carrousel' }] },
     ],
-    create: () => ({ id: uid(), type: 'cards', title: 'Nos atouts', cols: 3, style: 'tinted', items: [
+    create: () => ({ id: uid(), type: 'cards', title: 'Nos atouts', cols: 3, style: 'tinted', layout: 'grid', items: [
       { id: uid(), title: 'Premier atout', text: 'Une phrase qui l\'explique.' },
       { id: uid(), title: 'Deuxième atout', text: 'Une phrase qui l\'explique.' },
       { id: uid(), title: 'Troisième atout', text: 'Une phrase qui l\'explique.' },

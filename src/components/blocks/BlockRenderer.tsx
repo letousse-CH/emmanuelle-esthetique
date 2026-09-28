@@ -18,6 +18,7 @@ import { sanitizeHtml } from './sanitize';
 import LegacySection from './LegacySection';
 import GoogleReviews from '../GoogleReviews';
 import ContactForm from '../ContactForm';
+import CardsCarousel from './CardsCarousel';
 
 export type EditorSelection =
   | { kind: 'section'; sectionId: string }
@@ -194,31 +195,37 @@ function HeroView({ b, ctx }: { b: HeroBlock; ctx: Ctx }) {
 function CardsView({ b, ctx }: { b: CardsBlock; ctx: Ctx }) {
   const style = b.style || 'tinted';
   const left = b.imagePosition === 'left';
+  const carousel = b.layout === 'carousel';
+  const cardNodes = b.items.map((it, i) => {
+    const body = (
+      <>
+        {it.title && <h3 className="pb-card-title" {...f(ctx, `items.${i}.title`)}>{it.title}</h3>}
+        {it.text && <p className="pb-card-text" {...f(ctx, `items.${i}.text`)}>{it.text}</p>}
+        {it.linkText && <Btn text={it.linkText} url={it.linkUrl} variant="link" ctx={ctx} field={`items.${i}.linkText`} />}
+      </>
+    );
+    return (
+      <article key={it.id} className={`pb-card pb-card-${style}`}>
+        {it.image && (
+          <div className="pb-card-img">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={it.image} alt={it.title || ''} loading="lazy" decoding="async" draggable={false} />
+          </div>
+        )}
+        {left ? <div className="pb-card-body">{body}</div> : body}
+      </article>
+    );
+  });
   return (
     <div>
       <Head eyebrow={b.eyebrow} title={b.title} intro={b.intro} ctx={ctx} />
-      <div className={`pb-cards pb-cols-${b.cols || 3} ${left ? 'pb-cards-imgleft' : ''}`}>
-        {b.items.map((it, i) => {
-          const body = (
-            <>
-              {it.title && <h3 className="pb-card-title" {...f(ctx, `items.${i}.title`)}>{it.title}</h3>}
-              {it.text && <p className="pb-card-text" {...f(ctx, `items.${i}.text`)}>{it.text}</p>}
-              {it.linkText && <Btn text={it.linkText} url={it.linkUrl} variant="link" ctx={ctx} field={`items.${i}.linkText`} />}
-            </>
-          );
-          return (
-            <article key={it.id} className={`pb-card pb-card-${style}`}>
-              {it.image && (
-                <div className="pb-card-img">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={it.image} alt={it.title || ''} loading="lazy" decoding="async" />
-                </div>
-              )}
-              {left ? <div className="pb-card-body">{body}</div> : body}
-            </article>
-          );
-        })}
-      </div>
+      {carousel ? (
+        <div className={`pb-cards-carousel pb-cols-${b.cols || 3}`}>
+          <CardsCarousel editable={!!ctx.editor}>{cardNodes}</CardsCarousel>
+        </div>
+      ) : (
+        <div className={`pb-cards pb-cols-${b.cols || 3} ${left ? 'pb-cards-imgleft' : ''}`}>{cardNodes}</div>
+      )}
     </div>
   );
 }
