@@ -21,6 +21,8 @@ import { usePathname } from 'next/navigation';
 
 const BLOCK = '.pb-page:not(.pb-editing) .pb-col > *';
 const SECTION = '.pb-page:not(.pb-editing) .pb-section';
+/** Éléments de grille : révélés chacun à leur entrée dans l'écran (et non avec leur bloc). */
+const ITEMS = '.pb-page:not(.pb-editing) :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > *';
 const PARALLAX = '.pb-page:not(.pb-editing) [data-parallax]';
 /** Grilles dont les éléments d'une même ligne se décalent en défilant. */
 const ROWS = '.pb-page:not(.pb-editing) :is(.pb-cards, .pb-steps, .pb-offers, .pb-testis)';
@@ -190,14 +192,14 @@ export default function MotionLayer() {
       // Bas de page atteint : un bloc court collé au pied pourrait rester sous la
       // marge de l'observateur — on révèle ce qui reste.
       if (window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
-        document.querySelectorAll(`${BLOCK}:not(.is-in)`).forEach((el) => el.classList.add('is-in'));
+        document.querySelectorAll(`${BLOCK}:not(.is-in), ${ITEMS}:not(.is-in)`).forEach((el) => el.classList.add('is-in'));
       }
     };
     const schedule = () => { if (!ticking) { ticking = true; requestAnimationFrame(paint); } };
 
     // ── Balayage : les pages arrivent aussi par navigation, sans rechargement ─
     const scan = () => {
-      document.querySelectorAll(`${BLOCK}, ${SECTION}`).forEach((el) => {
+      document.querySelectorAll(`${BLOCK}, ${SECTION}, ${ITEMS}`).forEach((el) => {
         if (seen.has(el)) return;
         seen.add(el);
         io.observe(el);
@@ -228,7 +230,7 @@ export default function MotionLayer() {
     // Page trop courte pour défiler : ce qui est dans l'écran mais sous la marge
     // de l'observateur se révèle quand même.
     const settle = window.setTimeout(() => {
-      document.querySelectorAll(`${BLOCK}:not(.is-in)`).forEach((el) => {
+      document.querySelectorAll(`${BLOCK}:not(.is-in), ${ITEMS}:not(.is-in)`).forEach((el) => {
         if (el.getBoundingClientRect().top < window.innerHeight) el.classList.add('is-in');
       });
     }, 1800);
