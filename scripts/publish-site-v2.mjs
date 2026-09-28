@@ -26,7 +26,6 @@
  *   - copie les réglages SEO `seo_pages_brouillon_*` vers les vraies clés, le
  *     menu `navigation_menu_draft` vers `navigation_menu`, met à jour la
  *     fourchette de prix et le texte d'activité (« cabine privée ») ;
- *   - NE TOUCHE PAS au téléphone : voir l'avertissement affiché.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
@@ -142,10 +141,6 @@ async function publish() {
   } else {
     console.log('\nEssai terminé — ajouter --write pour appliquer.');
   }
-
-  const phone = current.get('business_phone');
-  console.log(`\n⚠ À vérifier avec Emmanuelle : le réglage « business_phone » vaut « ${phone} » (${String(phone).replace(/\D/g, '').length} chiffres),`);
-  console.log('  alors que les pages affichent +41 78 823 66 12. Corriger dans /admin/settings (onglet Entreprise) — il alimente le JSON-LD, le pied de page et llms.txt.');
 }
 
 (rollbackFile ? rollback() : publish()).catch((e) => {

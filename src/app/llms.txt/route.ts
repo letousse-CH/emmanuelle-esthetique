@@ -64,6 +64,10 @@ export async function GET() {
     `- **Nom** : ${b.name}\n` +
     `- **Adresse** : ${address}\n` +
     `- **Lieu** : cabine privée, à 2 minutes à pied de la gare CFF de Palézieux\n` +
+    `- **Accès train** : gare CFF de Palézieux à 2 minutes à pied (IR15, S4)\n` +
+    `- **Accès voiture** : place de parking gratuite devant la cabine ; A12 sortie Châtillens/Oron à 5 min ; A9 sortie Chexbres à 15 min\n` +
+    `- **Public** : soins réservés aux femmes\n` +
+    `- **Paiement** : TWINT, espèces, cartes bancaires, bons cadeaux\n` +
     `- **Zones desservies** : ${areaServed}\n` +
     (hours ? `- **Horaires** : ${hours}, sur rendez-vous\n` : `- **Réservation** : sur rendez-vous\n`) +
     `- **Téléphone** : ${phone || 'sur demande'}\n` +
@@ -80,7 +84,7 @@ export async function GET() {
     `- [Phytomer, la cosmétique marine](${site}/phytomer)\n` +
     `- [À propos — ${b.owner}](${site}/a-propos)\n` +
     `- [Contact, accès et horaires](${site}/contact)\n` +
-    `- [Bon cadeau](${site}/bon-cadeau)\n` +
+    `- [Bon cadeau](${site}/bon-cadeau) : montant libre dès CHF 50 ou soin de la carte, valable 60 mois\n` +
     `- [Mentions légales](${site}/mentions-legales)\n`;
 
   return new Response(body, {

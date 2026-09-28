@@ -37,10 +37,10 @@ function loadEnv() {
 
 // ─── Coordonnées (à confirmer avec Emmanuelle avant la mise en ligne) ─────────
 
-const PHONE = '+41 78 823 66 12';
+const PHONE = '+41 78 225 76 36';
 const EMAIL = 'e.letousse@gmail.com';
 const ADDRESS = 'Chemin de la Marouette 19, 1607 Palézieux (VD)';
-const HOURS = 'Du lundi au samedi, de 9 h à 19 h, sur rendez-vous';
+const HOURS = 'Du lundi au samedi, de 9 h à 18 h, sur rendez-vous';
 
 // ─── Bibliothèque d'images (media_assets) ─────────────────────────────────────
 
@@ -144,6 +144,51 @@ const fromPrice = (cat: CarteCategoryId) => {
   return chf(Math.min(...prices));
 };
 
+/**
+ * Les soins ne se présentent pas comme des cartes de forfaits : chaque soin est
+ * une ligne de menu de spa — nom en serif, durée et prix en petit au-dessus,
+ * description et détail à côté, lien discret pour réserver. (La carte des
+ * tarifs de /soins, elle, reste une liste.) Les blocs `offers` écrits plus bas
+ * sont convertis ici : en lignes de menu, ou en cartes sans prix en vedette
+ * pour l'accueil.
+ */
+function expandOffers(content: ContentStructure, mode: 'rows' | 'cards'): ContentStructure {
+  const out: ContentStructure = [];
+  for (const sec of content) {
+    const blocks = sec.columns.flatMap((c) => c.blocks);
+    const offerBlocks = blocks.filter((b) => b.type === 'offers') as Array<Extract<B, { type: 'offers' }>>;
+    if (!offerBlocks.length) { out.push(sec); continue; }
+    const head = offerBlocks[0];
+    const all = offerBlocks.flatMap((b) => b.offers);
+    const meta = (o: OfferItem) => [o.priceNote?.replace(/^·\s*/, ''), o.price].filter(Boolean).join(' · ');
+    if (mode === 'cards') {
+      out.push({
+        ...sec,
+        columns: [{ id: uid(), blocks: [cards({
+          eyebrow: head.eyebrow, title: head.title, intro: head.intro, cols: 3, style: 'tinted',
+          items: all.map((o) => ({ title: o.name, text: `${o.description ?? ''} ${meta(o)}.`.trim(), linkText: o.ctaText, linkUrl: o.ctaUrl })),
+        })] }],
+      });
+      continue;
+    }
+    out.push(section('1-col', [[
+      heading(head.title ?? '', 2, { eyebrow: head.eyebrow }),
+      ...(head.intro ? [prose(`<p>${head.intro}</p>`)] : []),
+    ]], { width: 'narrow', paddingY: 'small', background: 'transparent' }));
+    all.forEach((o, i) => {
+      const bullets = o.bullets?.length ? `<ul>${o.bullets.map((b) => `<li>${b}</li>`).join('')}</ul>` : '';
+      out.push(section('2-col-40-60', [
+        [heading(o.name, 3, { eyebrow: meta(o) })],
+        [
+          prose(`${o.description ? `<p>${o.description}</p>` : ''}${bullets}`),
+          button('Réserver ce soin', '/contact', 'link'),
+        ],
+      ], { paddingY: 'medium', alignItems: 'top', background: i % 2 ? 'surface' : 'transparent' }));
+    });
+  }
+  return out;
+}
+
 // ─── Pages ────────────────────────────────────────────────────────────────────
 
 interface PageDef {
@@ -241,6 +286,7 @@ pages.push({
         { question: 'Comment prendre rendez-vous ?', answer: `Uniquement sur rendez-vous, ${HOURS.charAt(0).toLowerCase()}${HOURS.slice(1)}. Écrivez via le formulaire de contact, par e-mail ou par téléphone : vous recevez une réponse sous 24 h.` },
         { question: 'Que veut dire « soins Phytomer » ?', answer: 'Phytomer est une marque française de cosmétique marine. Les soins de la carte s’appuient sur ses produits professionnels (algues, sels marins, boue marine…) et sur des gestes manuels précis.' },
         { question: 'Je viens d’Oron, de Châtel-Saint-Denis ou de Chexbres : est-ce facile d’accès ?', answer: 'Oui. La cabine est à deux minutes à pied de la gare CFF de Palézieux et dispose d’une place de parking gratuite. Elle accueille les clientes de Palézieux, Oron, Puidoux, Chexbres, Châtel-Saint-Denis, Lavaux, Vevey et de la Broye.' },
+        { question: 'Les soins sont-ils ouverts aux hommes ?', answer: 'Non, les soins sont réservés aux femmes.' },
         { question: 'Puis-je offrir un soin ?', answer: 'Oui : un bon cadeau Emmanuelle Esthétique peut être d’un montant libre ou d’un soin de la carte. Tous les détails sont sur la page « Bon cadeau ».' },
       ],
     })]], { paddingY: 'large' }),
@@ -762,7 +808,7 @@ pages.push({
   slug: 'contact',
   title: 'Contact, accès et horaires',
   seoTitle: 'Prendre rendez-vous à Palézieux-Gare | Emmanuelle Esthétique',
-  seoDescription: `Réservez votre soin à Palézieux-Gare (${ADDRESS}), à 2 minutes de la gare CFF. Du lundi au samedi, 9 h–19 h, sur rendez-vous.`,
+  seoDescription: `Réservez votre soin à Palézieux-Gare (${ADDRESS}), à 2 minutes de la gare CFF. Du lundi au samedi, 9 h–18 h, sur rendez-vous.`,
   ogImage: IMG.cabineFleurs.url,
   keywords: 'rendez-vous institut de beauté Palézieux, contact esthéticienne Palézieux, accès gare Palézieux, horaires',
   content: [
@@ -778,7 +824,7 @@ pages.push({
         contact({ title: 'Coordonnées' }),
         divider(),
         heading('Comment venir', 3),
-        prose('<p><strong>En train</strong> : la gare CFF de Palézieux est à 2 minutes à pied de la cabine.</p><p><strong>En voiture</strong> : une place de parking gratuite est disponible devant la cabine.</p><p><strong>Pour qui ?</strong> La cabine accueille les clientes de Palézieux, Oron, Puidoux, Chexbres, Châtel-Saint-Denis, Lavaux, Vevey et de la Broye.</p>'),
+        prose('<p><strong>En train (CFF)</strong> : la gare de Palézieux est à 2 minutes à pied de la cabine. Depuis Lausanne : IR15, 18 min. Depuis Vevey et la Riviera : S4, 17 min. Depuis Fribourg : IR15, 25 min. Depuis Bulle : 12 min. Depuis Romont, Oron et Puidoux : S4 directe.</p><p><strong>En voiture</strong> : une place de parking gratuite est disponible devant la cabine. Autoroute A12, sortie Châtillens / Oron, à 5 min ; A9, sortie Chexbres depuis la Riviera, à 15 min.</p><p><strong>Bon à savoir</strong> : les soins sont réservés aux femmes. La cabine accueille les clientes de Palézieux, Oron, Puidoux, Chexbres, Châtel-Saint-Denis, Lavaux, Vevey et de la Broye.</p>'),
       ],
       [heading('Écrire à Emmanuelle', 2, { eyebrow: 'Formulaire' }), contactForm()],
     ], { paddingY: 'large', alignItems: 'top' }),
@@ -786,10 +832,13 @@ pages.push({
       eyebrow: 'Questions fréquentes',
       title: 'Accès et rendez-vous',
       items: [
-        { question: 'Comment venir en transports publics ?', answer: 'La cabine est à 2 minutes à pied de la gare CFF de Palézieux.' },
+        { question: 'Comment venir en transports publics ?', answer: 'La cabine est à 2 minutes à pied de la gare CFF de Palézieux. Depuis Lausanne : IR15, 18 minutes. Depuis Vevey et la Riviera : S4, 17 minutes. Depuis Fribourg : IR15, 25 minutes. Depuis Bulle : 12 minutes. Depuis Romont, Oron et Puidoux : S4 directe.' },
         { question: 'Y a-t-il un parking près de la cabine ?', answer: 'Oui, une place de parking gratuite est disponible devant la cabine, à Palézieux-Gare.' },
         { question: 'Quels sont les horaires ?', answer: `${HOURS}.` },
         { question: 'Comment prendre rendez-vous ?', answer: 'Avec le formulaire de contact de cette page, par e-mail ou par téléphone. Vous recevez une réponse sous 24 h.' },
+        { question: 'Les soins sont-ils ouverts aux hommes ?', answer: 'Non, les soins sont réservés aux femmes.' },
+        { question: 'Quels moyens de paiement sont acceptés ?', answer: 'TWINT, espèces, cartes bancaires et bons cadeaux Emmanuelle Esthétique.' },
+        { question: 'Comment venir en voiture ?', answer: 'Autoroute A12, sortie Châtillens / Oron, à 5 minutes ; A9, sortie Chexbres depuis la Riviera, à 15 minutes. Une place de parking gratuite est disponible devant la cabine.' },
       ],
     })]], { background: 'surface', paddingY: 'large' }),
   ],
@@ -819,9 +868,9 @@ pages.push({
       cols: 3,
       style: 'tinted',
       items: [
-        { title: 'Un montant libre', text: 'Choisissez le montant qui vous convient : la bénéficiaire choisit le soin qui lui fait envie.' },
+        { title: 'Un montant libre', text: 'Choisissez le montant qui vous convient, dès CHF 50 : la bénéficiaire choisit le soin qui lui fait envie.' },
         { title: 'Un soin précis', text: 'Offrez un soin de la carte — soin du visage, massage, rituel du corps. Le bon indique le soin choisi.', linkText: 'Voir la carte des soins', linkUrl: '/soins' },
-        { title: 'PDF ou papier', text: 'Le bon vous est envoyé en PDF par e-mail, ou remis sous enveloppe.' },
+        { title: 'PDF ou papier', text: 'Le bon vous est envoyé en PDF par e-mail dans les 24 h, ou remis dans une enveloppe cartonnée à retirer à la cabine de Palézieux-Gare.' },
       ],
     })]], { paddingY: 'large' }),
     section('1-col', [[
@@ -832,7 +881,7 @@ pages.push({
       eyebrow: 'Questions fréquentes',
       title: 'Sur les bons cadeaux',
       items: [
-        { question: 'Comment commander un bon cadeau ?', answer: 'Écrivez-moi via le formulaire de contact, par e-mail ou par téléphone : indiquez le montant ou le soin souhaité, le nom de la bénéficiaire et le mode de livraison.' },
+        { question: 'Comment commander un bon cadeau ?', answer: 'Écrivez-moi via le formulaire de contact, par e-mail ou par téléphone : indiquez le montant ou le soin souhaité, le nom de la bénéficiaire et le mode de livraison. Je vous envoie le bon dans les 24 h.' },
         { question: 'Quelle est la durée de validité d’un bon cadeau ?', answer: 'Un bon cadeau Emmanuelle Esthétique est valable 60 mois.' },
         { question: 'Le bon peut-il couvrir un soin précis ?', answer: 'Oui : le bon peut être d’un montant libre ou pour un soin de la carte.' },
       ],
@@ -876,8 +925,9 @@ async function main() {
   console.log(`Base : ${url}\nMode : ${write ? 'ÉCRITURE (brouillons uniquement)' : 'essai (aucune écriture)'}\n`);
 
   for (const p of pages) {
-    const blocks = p.content.reduce((n, s) => n + s.columns.reduce((m, c) => m + c.blocks.length, 0), 0);
-    console.log(`  brouillon/${p.slug.padEnd(24)} ${String(p.content.length).padStart(2)} sections, ${String(blocks).padStart(3)} blocs · ${p.seoTitle.length} car. de titre, ${p.seoDescription.length} de description`);
+    const expanded = expandOffers(p.content, p.slug === 'home' ? 'cards' : 'rows');
+    const blocks = expanded.reduce((n, s) => n + s.columns.reduce((m, c) => m + c.blocks.length, 0), 0);
+    console.log(`  brouillon/${p.slug.padEnd(24)} ${String(expanded.length).padStart(2)} sections, ${String(blocks).padStart(3)} blocs · ${p.seoTitle.length} car. de titre, ${p.seoDescription.length} de description`);
     if (p.seoTitle.length > 65) console.log(`    ⚠ titre SEO long (${p.seoTitle.length})`);
     if (p.seoDescription.length > 165) console.log(`    ⚠ description SEO longue (${p.seoDescription.length})`);
     if (!write) continue;
@@ -886,7 +936,7 @@ async function main() {
       slug: `brouillon/${p.slug}`,
       title: p.title,
       sections: [],
-      content: p.content,
+      content: expandOffers(p.content, p.slug === 'home' ? 'cards' : 'rows'),
       content_version: 2,
       published: false,
       show_header: true,
