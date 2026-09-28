@@ -69,6 +69,7 @@ export function normalizeSection(raw: unknown): ContentSection | null {
     id: typeof r.id === 'string' ? r.id : uid(),
     layout,
     paddingY: PADS.includes(r.paddingY as VerticalPadding) ? (r.paddingY as VerticalPadding) : 'medium',
+    innerPad: r.innerPad === 'medium' || r.innerPad === 'large' ? r.innerPad : 'none',
     background: BGS.includes(r.background as SectionBackground) ? (r.background as SectionBackground) : 'transparent',
     columns,
   };

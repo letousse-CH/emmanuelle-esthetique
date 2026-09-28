@@ -3,26 +3,24 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, Package } from 'lucide-react';
+import { Sparkles, Package, FlaskConical, Receipt, PieChart, Target } from 'lucide-react';
 
-/**
- * Bascule entre les deux moitiés du catalogue : ce qui se fait (prestations et
- * forfaits) et ce qui se vend (marchandise).
- *
- * Elle existe parce que la barre d'onglets de la web app n'a que quatre places
- * et que la barre latérale de l'admin disparaît en mode app : sans ce lien,
- * l'écran produits serait inatteignable depuis un téléphone.
- */
 const LINKS = [
-  { name: 'Prestations', path: '/admin/caisse/prestations', icon: Sparkles },
-  { name: 'Produits',    path: '/admin/caisse/produits',    icon: Package },
+  { name: 'Cockpit & Objectifs',   path: '/admin/caisse/cockpit',     icon: Target },
+  { name: 'Prestations',          path: '/admin/caisse/prestations', icon: Sparkles },
+  { name: 'Produits Vente',       path: '/admin/caisse/produits',    icon: Package },
+  { name: 'Stock Cabine & Soins', path: '/admin/caisse/cabine',      icon: FlaskConical },
+  { name: 'Factures & Dépenses',  path: '/admin/caisse/depenses',    icon: Receipt },
+  { name: 'Bilan & Fiscalité',    path: '/admin/caisse/bilan',       icon: PieChart },
 ];
 
 export default function CaisseCatalogNav() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Catalogue" className="flex gap-1.5">
+    // Même rendu que le contrôle segmenté `Tabs` du kit : ce sont deux vues
+    // d'un même catalogue, pas deux pages sans rapport.
+    <nav aria-label="Catalogue" className="inline-flex gap-1 rounded-lg bg-stone-100 p-1">
       {LINKS.map(l => {
         const isActive = pathname.startsWith(l.path);
         return (
@@ -30,13 +28,13 @@ export default function CaisseCatalogNav() {
             key={l.path}
             href={l.path}
             aria-current={isActive ? 'page' : undefined}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+            className={`flex items-center gap-2 rounded-md px-3.5 h-9 text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
               isActive
-                ? 'border-sage bg-sage/8 text-sage'
-                : 'border-stone-200 text-stone-500 hover:border-stone-300 hover:text-stone-700'
+                ? 'bg-white text-stone-950 font-semibold shadow-xs ring-1 ring-stone-200'
+                : 'text-stone-700 font-medium hover:text-stone-950'
             }`}
           >
-            <l.icon size={13} /> {l.name}
+            <l.icon size={15} /> {l.name}
           </Link>
         );
       })}

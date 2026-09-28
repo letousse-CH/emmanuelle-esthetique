@@ -8,29 +8,14 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getAiConfig, invalidateAiConfigCache } from '../../../../services/aiConfig';
 import { resolveModelSpec } from '../../../../constants/aiModels';
 import { getAnthropicKey } from '../../../../services/secrets';
+import { getAiStatus, setAiStatus } from '../../../../services/aiStatusCache';
+import { supabase } from '../../../../services/supabase';
 
 interface ServiceStatus {
   ok: boolean;
   label: string;
   error: string | null;
 }
-
-let cachedStatus: {
-  ok: boolean;
-  configured: boolean;
-  working: boolean;
-  error: string | null;
-  /** Modèle testé — celui choisi dans /admin/settings → IA & Budget. */
-  model: string;
-  modelLabel: string;
-  services?: {
-    ai: ServiceStatus;
-    resend: ServiceStatus;
-    r2: ServiceStatus;
-    database: ServiceStatus;
-  };
-  checkedAt: number;
-} | null = null;
 
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
@@ -51,39 +36,56 @@ export async function GET(req: NextRequest) {
   // changement de modèle sans attendre l'expiration du TTL côté serveur.
   if (forceRefresh) invalidateAiConfigCache();
 
-  // Return cached version if still valid
   const now = Date.now();
-  if (cachedStatus && !forceRefresh && (now - cachedStatus.checkedAt < CACHE_TTL)) {
-    return NextResponse.json(cachedStatus);
-  }
-
   const apiKey = await getAnthropicKey();
+  const keyTail = apiKey ? apiKey.slice(-4) : null;
+
+  // Le cache ne vaut que pour la même clé : une clé qu'on vient de coller dans
+  // l'admin doit être prise en compte immédiatement.
+  const cached = getAiStatus();
+  if (cached && !forceRefresh && cached.keyTail === keyTail && now - cached.checkedAt < CACHE_TTL) {
+    return NextResponse.json(cached);
+  }
   const resendKey = process.env.RESEND_API_KEY;
+  // Le stockage lit ses identifiants dans l'environnement, puis dans la table
+  // `settings` (saisie depuis Paramètres > Clés des services) : le diagnostic
+  // doit regarder aux deux endroits, sinon il dit « À régler » à tort.
+  let r2Settings: Record<string, string> = {};
+  try {
+    const { data } = await supabase
+      .from('settings')
+      .select('key, value')
+      .in('key', ['r2_account_id', 'r2_access_key_id', 'r2_secret_access_key', 'r2_bucket_name']);
+    r2Settings = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value ?? '']));
+  } catch { /* diagnostic seulement : on garde les variables d'environnement */ }
   const r2Configured = Boolean(
-    process.env.R2_ACCOUNT_ID &&
-    process.env.R2_ACCESS_KEY_ID &&
-    process.env.R2_SECRET_ACCESS_KEY &&
-    process.env.R2_BUCKET_NAME
+    (process.env.R2_ACCOUNT_ID || r2Settings.r2_account_id) &&
+    (process.env.R2_ACCESS_KEY_ID || r2Settings.r2_access_key_id) &&
+    (process.env.R2_SECRET_ACCESS_KEY || r2Settings.r2_secret_access_key) &&
+    (process.env.R2_BUCKET_NAME || r2Settings.r2_bucket_name)
   );
 
   let error: string | null = null;
   let spec: { id: string; label: string; supportsAdaptiveThinking?: boolean } = { id: '', label: '' };
 
   if (!apiKey || apiKey === 'MY_ANTHROPIC_API_KEY') {
-    error = "ANTHROPIC_API_KEY non configurée dans le fichier d'environnement.";
+    error = "Aucune clé Claude n'est enregistrée. Ajoutez-la dans Paramètres, rubrique « Clés des services ».";
   } else {
     try {
       const { model } = await getAiConfig(forceRefresh);
       spec = resolveModelSpec(model);
-      const client = new Anthropic({ apiKey });
-      await client.messages.create({
-        model: spec.id,
-        max_tokens: 8,
-        ...(spec.supportsAdaptiveThinking ? { thinking: { type: 'disabled' as const } } : {}),
-        messages: [{ role: 'user', content: 'Ping' }],
-      });
+      const client = new Anthropic({ apiKey, timeout: 15000, maxRetries: 0 });
+      // Aucun token consommé : on vérifie que la clé est acceptée et que le
+      // modèle choisi dans « IA & budget » lui est accessible.
+      await client.models.retrieve(spec.id);
     } catch (err: any) {
-      error = err?.message || String(err);
+      const status = err?.status;
+      error =
+        status === 401 || status === 403
+          ? "Anthropic refuse la clé enregistrée. Remplacez-la dans Paramètres, rubrique « Clés des services »."
+          : status === 404
+            ? `Le modèle choisi (${spec.label || spec.id}) n'est pas accessible avec cette clé. Choisissez-en un autre dans Paramètres, rubrique « IA & budget ».`
+            : "Anthropic ne répond pas pour le moment. Réessayez dans quelques minutes.";
       console.error('[ai-status] Anthropic check failed:', error);
     }
   }
@@ -93,7 +95,8 @@ export async function GET(req: NextRequest) {
   const r2Ok = r2Configured;
   const dbOk = true; // JWT validé avec succès à l'étape 1
 
-  cachedStatus = {
+  const status = {
+    keyTail,
     ok: aiOk,
     configured: Boolean(apiKey),
     working: aiOk,
@@ -108,6 +111,7 @@ export async function GET(req: NextRequest) {
     },
     checkedAt: now,
   };
+  setAiStatus(status);
 
-  return NextResponse.json(cachedStatus);
+  return NextResponse.json(status);
 }

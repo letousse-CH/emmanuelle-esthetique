@@ -6,6 +6,9 @@ import { recordAiUsage } from '../../../services/aiUsage';
 import { getSettingsServer } from '../../../services/settingsServer';
 import { getAnthropicKey } from '../../../services/secrets';
 
+// Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
+export const maxDuration = 60;
+
 /**
  * Les balises méta sont une micro-tâche : elles restent volontairement sur le
  * modèle le moins cher, quel que soit le modèle choisi dans /admin/settings.
@@ -51,7 +54,8 @@ export async function POST(req: NextRequest) {
     .trim()
     .slice(0, 2500);
 
-  const client = new Anthropic({ apiKey });
+  // Haiku répond en quelques secondes : délai borné pour rester sous 60 s.
+  const client = new Anthropic({ apiKey, timeout: 25000, maxRetries: 1 });
 
   // Contexte de marque (réglages « Éditorial & Marque » de l'admin) : les
   // prompts ne codent en dur aucune activité ni positionnement.

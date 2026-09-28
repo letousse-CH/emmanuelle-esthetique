@@ -2,8 +2,8 @@ import React from 'react';
 import AnalyticsDashboardClient from './AnalyticsDashboardClient';
 
 export const metadata = {
-  title: 'Tableau de Bord & Analytics | Admin Studio',
-  description: 'Suivi didactique des visiteurs, clics et taux de conversion de vos pages.',
+  title: 'Statistiques | Administration',
+  description: 'Pages consultées, clics sur les boutons et demandes de contact reçues.',
 };
 
 export default function AnalyticsPage() {

@@ -293,6 +293,10 @@ export default function Inspector({ content, selection, mode, onSelect, onChange
               <Segmented value={section.paddingY} onChange={(v) => setSection({ paddingY: v })} options={[{ value: 'none', label: 'Aucun' }, { value: 'small', label: 'Petit' }, { value: 'medium', label: 'Moyen' }, { value: 'large', label: 'Grand' }]} />
             </div>
             <div>
+              <Label>Marge intérieure</Label>
+              <Segmented value={section.innerPad || 'none'} onChange={(v) => setSection({ innerPad: v })} options={[{ value: 'none', label: '0 px' }, { value: 'medium', label: '+40 px' }, { value: 'large', label: '+80 px' }]} />
+            </div>
+            <div>
               <Label>Largeur du contenu</Label>
               <Segmented value={section.width ?? 'wide'} onChange={(v) => setSection({ width: v })} options={[{ value: 'narrow', label: 'Lecture' }, { value: 'contained', label: 'Moyenne' }, { value: 'wide', label: 'Large' }, { value: 'full', label: 'Écran' }]} />
             </div>

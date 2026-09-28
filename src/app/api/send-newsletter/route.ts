@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { SITE_CONFIG } from '../../../config/site';
 import { sendEmail } from '../../../services/email';
 import { buildUnsubToken, isUnsubConfigured } from '../../../utils/unsubToken';
+import { isAdminEmail } from '../../../utils/apiAuth';
 
 function buildNewsletterHtml(email: string, contentHtml: string): string {
   const unsubToken = buildUnsubToken(email);
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     });
 
     const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) {
+    if (authError || !user || !isAdminEmail(user.email)) {
       return NextResponse.json({ error: 'Session invalide ou expirée.' }, { status: 401 });
     }
 

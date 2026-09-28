@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { S3Client, ListObjectsV2Command, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { validateSupabaseToken } from '../../../../utils/apiAuth';
-import { supabase } from '../../../../services/supabase';
+import { getR2Config } from '../../../../utils/r2Config';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,27 +14,22 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    let accountId = body.r2AccountId;
-    let accessKeyId = body.r2AccessKeyId;
-    let secretAccessKey = body.r2SecretAccessKey;
-    let bucketName = body.r2BucketName;
-    let publicUrl = body.r2PublicUrl;
+    let accountId = String(body.r2AccountId ?? '').trim();
+    let accessKeyId = String(body.r2AccessKeyId ?? '').trim();
+    let secretAccessKey = String(body.r2SecretAccessKey ?? '').trim();
+    let bucketName = String(body.r2BucketName ?? '').trim();
+    let publicUrl = String(body.r2PublicUrl ?? '').trim();
 
-    // Fallback on DB settings if not passed in body
-    if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
-      const { data } = await supabase.from('settings').select('key, value').in('key', [
-        'r2_account_id',
-        'r2_access_key_id',
-        'r2_secret_access_key',
-        'r2_bucket_name',
-        'r2_public_url',
-      ]);
-      const map = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value ?? '']));
-      accountId = accountId || map.r2_account_id;
-      accessKeyId = accessKeyId || map.r2_access_key_id;
-      secretAccessKey = secretAccessKey || map.r2_secret_access_key;
-      bucketName = bucketName || map.r2_bucket_name;
-      publicUrl = publicUrl || map.r2_public_url;
+    // Champs vides dans la requête : on teste la configuration enregistrée
+    // (app_secrets, puis variables R2_*). Un champ rempli permet de tester une
+    // valeur avant de l'enregistrer.
+    if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !publicUrl) {
+      const stored = await getR2Config();
+      accountId = accountId || stored.accountId;
+      accessKeyId = accessKeyId || stored.accessKey;
+      secretAccessKey = secretAccessKey || stored.secretKey;
+      bucketName = bucketName || stored.bucket;
+      publicUrl = publicUrl || stored.publicUrl;
     }
 
     // Détecter si l'utilisateur a confondu l'URL S3 API et l'URL Publique Web

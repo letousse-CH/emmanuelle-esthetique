@@ -23,6 +23,8 @@ import { injectInternalLinks } from '../../../utils/internalLinks';
 import { sanitizeEditorHtml } from '../../../utils/sanitizeHtml';
 import SocialContentGenerator from '../../../components/admin/SocialContentGenerator';
 import { useModuleFlags } from '../../../hooks/useModuleFlags';
+import { useAiJob } from '../../../hooks/useAiJob';
+import AiJobProgress from '../../../components/admin/AiJobProgress';
 
 const safeSanitize = (html: string): string => {
   if (typeof window !== 'undefined') {
@@ -71,6 +73,17 @@ function extractYouTubeEmbedUrl(input: string): string | null {
   return startSeconds ? `${embedUrl}?start=${startSeconds}` : embedUrl;
 }
 
+/** Valeur pour un champ datetime-local, à l'heure locale (toISOString donnerait l'heure UTC). */
+function toLocalInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Empêche la touche Entrée d'enregistrer (ou de publier) tout le formulaire depuis un champ court. */
+const blockEnterSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === 'Enter') e.preventDefault();
+};
+
 function normalizeForSeo(text: string): string {
   return text
     .toLowerCase()
@@ -80,9 +93,9 @@ function normalizeForSeo(text: string): string {
 }
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'ia',           label: 'Génération IA', icon: Cpu          },
+  { id: 'ia',           label: "Écrire avec l'IA", icon: Cpu     },
   { id: 'redaction',     label: 'Rédaction',    icon: PenLine      },
-  { id: 'seo',          label: 'SEO',           icon: Search       },
+  { id: 'seo',          label: 'Référencement', icon: Search       },
   { id: 'programmation', label: 'Publication',  icon: CalendarClock },
 ];
 
@@ -112,6 +125,7 @@ export default function BlogEdit() {
   const [otherArticles, setOtherArticles]   = useState<Array<{ title: string; slug: string }>>([]);
   const [activeTab, setActiveTab]           = useState<TabId>(isEditing ? 'redaction' : 'ia');
   const [generatingMeta, setGeneratingMeta] = useState(false);
+  const [metaError, setMetaError]           = useState('');
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [mediaTarget, setMediaTarget]       = useState<'content' | 'cover'>('content');
   const [showBrief, setShowBrief]           = useState(false);
@@ -123,12 +137,20 @@ export default function BlogEdit() {
   const [aiPreview, setAiPreview] = useState('');
   const [aiError, setAiError]     = useState('');
   const aiAccRef                  = useRef('');
+  /*
+    La rédaction (environ 2 400 mots) dépasse les 60 s d'une fonction Netlify :
+    elle passe par une tâche de fond, suivie ici. L'identifiant de la tâche est
+    gardé le temps de la session du navigateur : après un rechargement, le
+    texte rédigé s'affiche quand même.
+  */
+  const articleJob = useAiJob<{ content?: string }>(`article:${id ?? 'new'}`);
 
   const [seoFoundKws, setSeoFoundKws]   = useState<string[]>([]);
   const analysisTimerRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
   const quillRef                        = React.useRef<any>(null);
 
-  const [publishMode, setPublishMode] = useState<PublishMode>('published');
+  // Un nouvel article part en brouillon : rien n'est mis en ligne sans le choisir.
+  const [publishMode, setPublishMode] = useState<PublishMode>(isEditing ? 'published' : 'draft');
   const [scheduledAt, setScheduledAt] = useState('');
 
   const [formData, setFormData] = useState<Partial<Article>>({
@@ -140,7 +162,7 @@ export default function BlogEdit() {
     meta_description: '',
     meta_keywords:    '',
     category:         seoBrief?.category || '',
-    published:        true,
+    published:        false,
     scheduled_at:     null,
   });
 
@@ -183,7 +205,7 @@ export default function BlogEdit() {
         setPublishMode('published');
       } else if (data.scheduled_at) {
         setPublishMode('scheduled');
-        setScheduledAt(data.scheduled_at.slice(0, 16));
+        setScheduledAt(toLocalInputValue(new Date(data.scheduled_at)));
       } else {
         setPublishMode('draft');
       }
@@ -256,62 +278,52 @@ export default function BlogEdit() {
     setAiPreview('');
     setAiError('');
     aiAccRef.current = '';
-
-    try {
-      const authHeaders = await getAuthHeader();
-      const res = await fetch('/api/generate-article', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ idea }),
-      });
-
-      if (!res.ok || !res.body) {
-        const errText = await res.text();
-        throw new Error(errText || `Erreur ${res.status}`);
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split('\n')) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (!data || data === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === 'error') {
-              throw new Error(parsed.message || 'Erreur de génération IA');
-            }
-            if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta' && parsed.delta?.text) {
-              aiAccRef.current += parsed.delta.text;
-              setAiPreview(aiAccRef.current);
-            }
-          } catch (parseErr: any) {
-            if (parseErr?.message) throw parseErr; // rethrow errors, swallow parse failures
-          }
-        }
-      }
-      setAiStatus('done');
-    } catch (err: any) {
-      setAiError(err.message || 'Erreur inconnue');
-      setAiStatus('error');
-    }
+    // Le résultat (ou l'erreur) est reporté par l'effet qui suit l'état de la tâche.
+    await articleJob.start('article', { idea });
   };
 
-  const insertGeneratedContent = () => {
-    if (!aiAccRef.current) return;
+  // Report de l'état de la tâche de rédaction dans l'écran (y compris après
+  // un rechargement de la page).
+  useEffect(() => {
+    if (articleJob.status === 'pending' || articleJob.status === 'running') {
+      setAiStatus('generating');
+      return;
+    }
+    if (articleJob.status === 'done') {
+      const content = String(articleJob.result?.content ?? '');
+      if (!content.trim()) {
+        setAiError("Aucun texte n'a été reçu.");
+        setAiStatus('error');
+        return;
+      }
+      aiAccRef.current = content;
+      setAiPreview(content);
+      setAiStatus('done');
+      return;
+    }
+    if (articleJob.status === 'error') {
+      setAiError(articleJob.error || "La rédaction automatique s'est interrompue.");
+      setAiStatus('error');
+    }
+  }, [articleJob.status, articleJob.result, articleJob.error]);
+
+  const insertGeneratedContent = (): boolean => {
+    if (!aiAccRef.current) return false;
+    const hasText = (formData.content || '').replace(/<[^>]*>/g, '').trim().length > 0;
+    if (hasText && !window.confirm("Remplacer le texte actuel de l'article par le texte généré ? Le texte actuel sera perdu.")) {
+      return false;
+    }
     setFormData(prev => ({ ...prev, content: aiAccRef.current }));
     setAiStatus('idle');
     setAiPreview('');
+    articleJob.reset();
+    return true;
   };
 
   const generateMeta = async (overrides?: { content?: string }) => {
     if (!formData.title) return;
     setGeneratingMeta(true);
+    setMetaError('');
     try {
       const authHeaders = await getAuthHeader();
       const res = await fetch('/api/generate-meta', {
@@ -319,7 +331,8 @@ export default function BlogEdit() {
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ title: formData.title, content: overrides?.content ?? formData.content ?? '' }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error();
       if (data.meta_title || data.meta_description || data.meta_keywords) {
         setFormData(prev => ({
           ...prev,
@@ -327,8 +340,12 @@ export default function BlogEdit() {
           ...(data.meta_description ? { meta_description: data.meta_description } : {}),
           ...(data.meta_keywords    ? { meta_keywords: data.meta_keywords }       : {}),
         }));
+      } else {
+        throw new Error();
       }
-    } catch { /* silently ignore */ }
+    } catch {
+      setMetaError("Les suggestions n'ont pas pu être générées. Réessayez dans un instant, ou remplissez les champs vous-même.");
+    }
     finally { setGeneratingMeta(false); }
   };
 
@@ -454,21 +471,18 @@ export default function BlogEdit() {
     return text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
   })();
 
-  const saveButtonClass = publishMode === 'published'
-    ? 'bg-sage text-white hover:bg-stone-900'
-    : publishMode === 'scheduled'
-    ? 'bg-amber-500 text-white hover:bg-amber-600'
-    : 'bg-stone-700 text-white hover:bg-stone-900';
+  const saveButtonClass = 'bg-accent text-accent-fg hover:bg-accent-hover';
 
   const saveButtonLabel = saving ? 'Enregistrement…'
     : publishMode === 'published' ? 'Publier'
     : publishMode === 'scheduled' ? 'Programmer'
-    : 'Sauvegarder';
+    : 'Enregistrer le brouillon';
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-64">
-        <div className="w-6 h-6 rounded-full border-2 border-stone-200 border-t-sage animate-spin" />
+      <div className="flex items-center justify-center gap-2 min-h-64 text-[14px] text-stone-700" role="status">
+        <div className="w-5 h-5 rounded-full border-2 border-stone-200 border-t-accent animate-spin" />
+        Chargement de l'article…
       </div>
     );
   }
@@ -477,9 +491,9 @@ export default function BlogEdit() {
     <form onSubmit={handleSubmit} className="min-h-screen">
 
       {/* ── Topbar sticky ─────────────────────────────── */}
-      <div className="sticky top-0 z-30 bg-white border-b border-stone-100 shadow-sm">
+      <div className="sticky top-16 z-10 bg-white border-b border-stone-200 shadow-sm">
         <div className="flex items-center gap-3 px-6 h-14">
-          <Link href="/admin/blog" className="shrink-0 text-stone-500 hover:text-stone-700 transition-colors">
+          <Link href="/admin/blog" aria-label="Retour à la liste des articles" title="Retour aux articles" className="shrink-0 p-1.5 -ml-1.5 rounded-lg text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors">
             <ArrowLeft size={18} />
           </Link>
 
@@ -491,16 +505,18 @@ export default function BlogEdit() {
               value={formData.title || ''}
               onChange={handleChange}
               onBlur={() => !isEditing && !formData.slug && generateSlug()}
+              onKeyDown={blockEnterSubmit}
+              aria-label="Titre de l'article"
               placeholder="Titre de l'article…"
-              className="w-full text-base font-medium text-stone-900 bg-transparent border-none outline-none placeholder:text-stone-400 truncate"
+              className="w-full text-base font-medium text-stone-900 bg-transparent border-none outline-none placeholder:text-stone-500 truncate"
             />
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full ${
-              publishMode === 'published' ? 'bg-green-50 text-green-700'
-              : publishMode === 'scheduled' ? 'bg-amber-50 text-amber-700'
-              : 'bg-stone-100 text-stone-500'
+            <span className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 rounded-full ${
+              publishMode === 'published' ? 'bg-emerald-50 text-emerald-700'
+              : publishMode === 'scheduled' ? 'bg-amber-50 text-amber-800'
+              : 'bg-stone-100 text-stone-700'
             }`}>
               {publishMode === 'published' ? <Globe size={10} /> : publishMode === 'scheduled' ? <Clock size={10} /> : <FileText size={10} />}
               {publishMode === 'published' ? 'Publié' : publishMode === 'scheduled' ? 'Programmé' : 'Brouillon'}
@@ -509,16 +525,17 @@ export default function BlogEdit() {
             {seoBrief && (
               <Link
                 href="/admin/seo"
-                className="hidden md:flex items-center gap-1.5 text-[12px] bg-amber-50 border border-amber-200 text-amber-700 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors font-bold"
+                className="hidden md:flex items-center gap-1.5 text-[13px] bg-stone-100 text-stone-900 px-3 py-1.5 rounded-lg hover:bg-stone-200 transition-colors font-semibold"
               >
-                💡 Brief SEO
+                Idées de sujets
               </Link>
             )}
 
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 text-xs font-extrabold rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+              aria-label={saveButtonLabel}
+              className="bg-accent hover:bg-accent-hover flex items-center gap-2 px-5 py-2 text-[14px] font-semibold rounded-lg text-accent-fg transition-all cursor-pointer disabled:opacity-50"
             >
               <Save size={14} />
               <span className="hidden sm:inline">{saveButtonLabel}</span>
@@ -528,22 +545,26 @@ export default function BlogEdit() {
 
         {/* Slug row */}
         <div className="flex items-center gap-2 px-6 pb-3">
-          <span className="text-[12.5px] text-stone-500">{SITE_CONFIG.url.replace(/^https?:\/\//i, '')}/blog/</span>
+          <label htmlFor="article-slug" className="text-[13px] text-stone-600">
+            <span className="sr-only">Adresse de l'article : </span>{SITE_CONFIG.url.replace(/^https?:\/\//i, '')}/blog/
+          </label>
           <input
+            id="article-slug"
             type="text"
             name="slug"
             required
             value={formData.slug || ''}
             onChange={handleChange}
-            className="flex-1 text-[11px] font-mono px-2 py-0.5 border border-stone-200 focus:border-stone-900 rounded outline-none bg-stone-50 focus:bg-white lowercase max-w-xs"
+            onKeyDown={blockEnterSubmit}
+            className="flex-1 min-w-0 text-[13px] px-2 py-1 border border-stone-200 focus:border-stone-900 rounded-md outline-none bg-stone-50 focus:bg-white lowercase max-w-xs"
           />
-          <button type="button" onClick={generateSlug} className="text-[12px] text-sage hover:underline font-bold">
-            Générer
+          <button type="button" onClick={generateSlug} title="Recalculer l'adresse à partir du titre" className="text-[13px] text-accent hover:underline font-semibold">
+            Depuis le titre
           </button>
         </div>
 
         {/* Tab bar */}
-        <div className="flex border-t border-stone-100">
+        <div className="flex border-t border-stone-200 overflow-x-auto" role="tablist" aria-label="Sections de l'article">
           {TABS.map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -551,14 +572,17 @@ export default function BlogEdit() {
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-label={tab.label}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold border-b-2 transition-all ${
+                className={`flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-colors ${
                   isActive
-                    ? 'border-stone-900 text-stone-900 bg-sage/5'
-                    : 'border-transparent text-stone-500 hover:text-stone-700 hover:bg-stone-50'
+                    ? 'border-accent text-stone-950'
+                    : 'border-transparent text-stone-700 hover:text-stone-950 hover:bg-stone-50'
                 }`}
               >
-                <Icon size={13} />
+                <Icon size={14} />
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
             );
@@ -575,22 +599,24 @@ export default function BlogEdit() {
 
             {/* Cover + catégorie */}
             <div className="grid sm:grid-cols-2 gap-4">
-              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5 space-y-3">
+              <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
                 <h3 className="text-[13px] font-medium text-stone-800">Image de couverture</h3>
                 {formData.cover_image ? (
                   <div className="relative group">
-                    <img src={formData.cover_image} alt="Couverture" className="w-full aspect-video object-cover rounded-xl border border-stone-100" />
+                    <img src={formData.cover_image} alt="Couverture" className="w-full aspect-video object-cover rounded-xl border border-stone-200" />
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, cover_image: '' }))}
-                      className="absolute top-2 right-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 bg-white rounded-full p-1 shadow-md text-stone-500 hover:text-red-500 transition-all"
+                      aria-label="Retirer l'image de couverture"
+                      title="Retirer l'image"
+                      className="absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-md text-stone-700 hover:text-red-700 transition-colors"
                     >
                       <X size={13} />
                     </button>
                   </div>
                 ) : (
                   <div className="aspect-video bg-stone-50 border-2 border-dashed border-stone-200 rounded-xl flex items-center justify-center">
-                    <ImageIcon size={24} className="text-stone-500" />
+                    <ImageIcon size={24} className="text-stone-600" />
                   </div>
                 )}
                 <div className="flex gap-2">
@@ -599,22 +625,25 @@ export default function BlogEdit() {
                     name="cover_image"
                     value={formData.cover_image || ''}
                     onChange={handleChange}
+                    onKeyDown={blockEnterSubmit}
+                    aria-label="Adresse de l'image de couverture"
                     placeholder="https://…"
-                    className="flex-1 px-3 py-2 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-lg outline-none bg-stone-50 focus:bg-white text-xs"
+                    className="flex-1 min-w-0 px-3 py-2 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-lg outline-none bg-stone-50 focus:bg-white text-[13px]"
                   />
                   <button
                     type="button"
                     onClick={() => { setMediaTarget('cover'); setShowMediaLibrary(true); }}
-                    className="shrink-0 p-2 border border-stone-200 rounded-lg text-stone-500 hover:text-stone-900 hover:border-sage transition-colors"
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-stone-100 text-stone-900 text-[13px] font-semibold hover:bg-stone-200 transition-colors"
                   >
-                    <ImageIcon size={14} />
+                    <ImageIcon size={14} /> Choisir
                   </button>
                 </div>
               </div>
 
-              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5 space-y-3">
-                <h3 className="text-[13px] font-medium text-stone-800">Catégorie</h3>
+              <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
+                <label htmlFor="article-category" className="block text-[13px] font-medium text-stone-800">Catégorie</label>
                 <select
+                  id="article-category"
                   name="category"
                   value={formData.category || ''}
                   onChange={handleChange}
@@ -628,21 +657,21 @@ export default function BlogEdit() {
 
                 <div className="pt-2 space-y-1.5">
                   <div className="flex items-baseline justify-between">
-                    <span className={`text-xs font-bold tabular-nums ${
-                      wordCount === 0 ? 'text-stone-500'
-                      : wordCount >= 2000 && wordCount <= 2800 ? 'text-green-600'
-                      : wordCount >= 1500 ? 'text-orange-500'
-                      : 'text-red-500'
+                    <span className={`text-xs font-semibold tabular-nums ${
+                      wordCount === 0 ? 'text-stone-600'
+                      : wordCount >= 2000 && wordCount <= 2800 ? 'text-emerald-600'
+                      : wordCount >= 1500 ? 'text-amber-700'
+                      : 'text-red-700'
                     }`}>
                       {wordCount.toLocaleString('fr-FR')} mots
                     </span>
-                    <span className="text-[12px] text-stone-500">Cible : 2000–2800</span>
+                    <span className="text-[13px] text-stone-600">Longueur conseillée : 2000 à 2800 mots</span>
                   </div>
                   <div className="w-full bg-stone-100 rounded-full h-1">
                     <div
                       className={`h-1 rounded-full transition-all ${
-                        wordCount >= 2000 && wordCount <= 2800 ? 'bg-green-400'
-                        : wordCount >= 1500 ? 'bg-orange-400'
+                        wordCount >= 2000 && wordCount <= 2800 ? 'bg-emerald-400'
+                        : wordCount >= 1500 ? 'bg-amber-400'
                         : wordCount > 0 ? 'bg-red-400'
                         : 'bg-stone-200'
                       }`}
@@ -654,23 +683,23 @@ export default function BlogEdit() {
             </div>
 
             {/* Éditeur */}
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
+            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
                 <h2 className="text-[13px] font-medium text-stone-800">Contenu</h2>
                 <div className="flex items-center gap-4">
                   <button
                     type="button"
                     onClick={insertYouTubeVideo}
-                    className="flex items-center gap-1.5 text-xs font-bold text-red-600 hover:text-stone-900 transition-colors"
+                    className="flex items-center gap-1.5 text-[13px] font-semibold text-stone-800 hover:text-stone-950 transition-colors"
                   >
-                    <Youtube size={13} /> Vidéo YouTube
+                    <Youtube size={14} /> Vidéo YouTube
                   </button>
                   <button
                     type="button"
                     onClick={() => { setMediaTarget('content'); setShowMediaLibrary(true); }}
-                    className="flex items-center gap-1.5 text-xs font-bold text-sage hover:text-stone-900 transition-colors"
+                    className="flex items-center gap-1.5 text-[13px] font-semibold text-stone-800 hover:text-stone-950 transition-colors"
                   >
-                    <ImageIcon size={13} /> Insérer un média
+                    <ImageIcon size={14} /> Insérer une image
                   </button>
                 </div>
               </div>
@@ -692,112 +721,115 @@ export default function BlogEdit() {
         {/* ════ ONGLET SEO ════ */}
         {activeTab === 'seo' && (
           <div className="space-y-6">
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-6">
-              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
-                <h2 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                  <Search size={15} className="text-sage" /> Balises méta
+            <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-6">
+              <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+                <h2 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
+                  <Search size={15} className="text-accent" /> Apparence dans Google
                 </h2>
                 <button
                   type="button"
                   onClick={() => generateMeta()}
                   disabled={generatingMeta || !formData.title}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sage/10 hover:bg-sage/20 text-sage font-bold text-[12px] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={!formData.title ? "Saisissez d'abord un titre" : undefined}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-900 font-semibold text-[13px] rounded-lg transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
                 >
-                  <Sparkles size={12} className={generatingMeta ? 'animate-spin' : ''} />
-                  {generatingMeta ? 'Génération…' : 'Générer avec l\'IA'}
+                  <Sparkles size={14} />
+                  {generatingMeta ? 'Rédaction…' : "Proposer avec l'IA"}
                 </button>
               </div>
+              {metaError && <p role="alert" className="text-[13px] text-red-700">{metaError}</p>}
 
               <div className="space-y-1.5">
                 <div className="flex justify-between items-baseline">
-                  <label htmlFor="meta_title" className="text-[13px] font-medium text-stone-800">Meta Titre</label>
+                  <label htmlFor="meta_title" className="text-[13px] font-medium text-stone-800">Titre affiché dans Google</label>
                   {(() => {
                     const len = (formData.meta_title || '').length;
-                    return <span className={`text-xs font-bold tabular-nums ${len === 0 ? 'text-stone-500' : len <= 60 ? 'text-green-500' : 'text-red-500'}`}>{len}/60</span>;
+                    return <span className={`text-xs font-semibold tabular-nums ${len === 0 ? 'text-stone-600' : len <= 60 ? 'text-emerald-700' : 'text-red-700'}`}>{len}/60</span>;
                   })()}
                 </div>
                 <input
                   id="meta_title" type="text" name="meta_title" maxLength={70}
                   value={formData.meta_title || ''} onChange={handleChange}
-                  placeholder="Titre Google…"
+                  onKeyDown={blockEnterSubmit}
+                  placeholder="Titre qui apparaîtra dans les résultats de recherche"
                   className="w-full px-3 py-2.5 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-xl outline-none bg-stone-50 focus:bg-white text-sm"
                 />
                 <div className="w-full bg-stone-100 rounded-full h-0.5">
-                  <div className={`h-0.5 rounded-full transition-all ${(formData.meta_title || '').length <= 60 ? 'bg-green-400' : 'bg-red-400'}`}
+                  <div className={`h-0.5 rounded-full transition-all ${(formData.meta_title || '').length <= 60 ? 'bg-emerald-400' : 'bg-red-400'}`}
                     style={{ width: `${Math.min(((formData.meta_title || '').length / 60) * 100, 100)}%` }} />
                 </div>
               </div>
 
               <div className="space-y-1.5">
                 <div className="flex justify-between items-baseline">
-                  <label htmlFor="meta_description" className="text-[13px] font-medium text-stone-800">Meta Description</label>
+                  <label htmlFor="meta_description" className="text-[13px] font-medium text-stone-800">Description affichée dans Google</label>
                   {(() => {
                     const len = (formData.meta_description || '').length;
-                    return <span className={`text-xs font-bold tabular-nums ${
-                      len === 0 ? 'text-stone-500' : len >= 150 && len <= 160 ? 'text-green-500' : len > 160 ? 'text-red-500' : 'text-orange-400'
+                    return <span className={`text-xs font-semibold tabular-nums ${
+                      len === 0 ? 'text-stone-600' : len >= 150 && len <= 160 ? 'text-emerald-700' : len > 160 ? 'text-red-700' : 'text-amber-700'
                     }`}>{len}/160</span>;
                   })()}
                 </div>
                 <textarea
                   id="meta_description" name="meta_description" rows={3} maxLength={170}
                   value={formData.meta_description || ''} onChange={handleChange}
-                  placeholder="Description Google & réseaux…"
+                  placeholder="Deux phrases qui donnent envie de lire l'article (Google et réseaux sociaux)"
                   className="w-full px-3 py-2.5 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-xl outline-none bg-stone-50 focus:bg-white text-sm resize-none"
                 />
                 <div className="w-full bg-stone-100 rounded-full h-0.5">
                   <div className={`h-0.5 rounded-full transition-all ${
                     (formData.meta_description || '').length > 160 ? 'bg-red-400'
-                    : (formData.meta_description || '').length >= 150 ? 'bg-green-400'
-                    : 'bg-orange-300'
+                    : (formData.meta_description || '').length >= 150 ? 'bg-emerald-400'
+                    : 'bg-amber-300'
                   }`} style={{ width: `${Math.min(((formData.meta_description || '').length / 160) * 100, 100)}%` }} />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="meta_keywords" className="text-[13px] font-medium text-stone-800">Mots-clés méta</label>
+                <label htmlFor="meta_keywords" className="text-[13px] font-medium text-stone-800">Mots-clés</label>
                 <textarea
                   id="meta_keywords" name="meta_keywords" rows={2}
                   value={formData.meta_keywords || ''} onChange={handleChange}
-                  placeholder="ex : rêve éveillé libre, alexithymie, empathie cognitive…"
+                  placeholder="ex : soin du visage, peau sèche, hydratation…"
                   className="w-full px-3 py-2.5 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-xl outline-none bg-stone-50 focus:bg-white text-sm resize-none"
                 />
-                <p className="text-[12.5px] text-stone-500">Séparés par des virgules. Laissez vide pour utiliser la catégorie par défaut.</p>
+                <p className="text-[13px] text-stone-600">Séparés par des virgules. Laissez vide pour utiliser la catégorie par défaut.</p>
               </div>
             </div>
 
             {/* SEO Cluster Checklist */}
             {seoTotalKws > 0 && (
-              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-stone-100">
-                  <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                    <Target size={15} className="text-sage" /> Cluster SEO
+              <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+                  <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
+                    <Target size={15} className="text-accent" /> Mots-clés du sujet présents dans le texte
                   </h3>
                   <div className="flex items-center gap-2">
-                    <span className={`text-lg font-bold tabular-nums ${seoScore >= 75 ? 'text-green-600' : seoScore >= 50 ? 'text-orange-500' : 'text-red-500'}`}>
-                      {seoScore}%
+                    <span className={`text-lg font-semibold tabular-nums ${seoScore >= 75 ? 'text-emerald-700' : seoScore >= 50 ? 'text-amber-700' : 'text-red-700'}`}>
+                      {seoFoundKws.length}/{seoTotalKws}
                     </span>
-                    <span className="text-[12.5px] text-stone-500">{seoFoundKws.length}/{seoTotalKws}</span>
                   </div>
                 </div>
                 <div className="w-full bg-stone-100 rounded-full h-2">
-                  <div className={`h-2 rounded-full transition-all duration-500 ${seoScore >= 75 ? 'bg-green-400' : seoScore >= 50 ? 'bg-orange-400' : 'bg-red-400'}`}
+                  <div className={`h-2 rounded-full transition-all duration-500 ${seoScore >= 75 ? 'bg-emerald-400' : seoScore >= 50 ? 'bg-amber-400' : 'bg-red-400'}`}
                     style={{ width: `${seoScore}%` }} />
                 </div>
                 <div>
-                  <p className="text-[12.5px] font-medium text-stone-700 mb-1">Requête focus</p>
-                  <p className="font-mono text-xs bg-stone-50 border border-stone-100 px-2.5 py-1.5 rounded-lg text-stone-700">🔍 {seoBrief!.keyword}</p>
+                  <p className="text-[13px] font-medium text-stone-700 mb-1">Recherche principale visée</p>
+                  <p className="font-mono text-xs bg-stone-50 border border-stone-200 px-2.5 py-1.5 rounded-lg text-stone-700">{seoBrief!.keyword}</p>
                 </div>
                 <div>
-                  <p className="text-[12.5px] font-medium text-stone-700 mb-2">Mots-clés secondaires</p>
+                  <p className="text-[13px] font-medium text-stone-700 mb-2">Mots-clés associés</p>
                   <div className="grid sm:grid-cols-2 gap-1.5 max-h-72 overflow-y-auto">
                     {seoKeywords.map((kw, i) => {
                       const found = seoFoundKws.includes(kw);
                       return (
-                        <div key={i} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg transition-colors ${found ? 'bg-green-50 text-green-700' : 'bg-stone-50 text-stone-500'}`}>
-                          <span className={`w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-[11.5px] font-bold ${found ? 'bg-green-500 text-white' : 'bg-stone-200'}`}>
-                            {found ? '✓' : ''}
+                        <div key={i} className={`flex items-center gap-2 text-[13px] px-3 py-2 rounded-lg transition-colors ${found ? 'bg-emerald-50 text-emerald-800' : 'bg-stone-50 text-stone-700'}`}>
+                          <span className={`w-4 h-4 rounded-full shrink-0 flex items-center justify-center ${found ? 'bg-emerald-600 text-white' : 'bg-stone-200'}`}>
+                            {found && <CheckCircle2 size={12} aria-hidden="true" />}
                           </span>
-                          <span className="font-mono truncate">{kw}</span>
+                          <span className="truncate">{kw}</span>
+                          <span className="sr-only">{found ? ' (présent)' : ' (absent)'}</span>
                         </div>
                       );
                     })}
@@ -816,23 +848,24 @@ export default function BlogEdit() {
 
             {/* Brief SEO */}
             {seoBrief && (
-              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
+              <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
                       <Target size={15} className="text-amber-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-stone-900">Brief SEO</p>
-                      <p className="text-[12.5px] text-stone-500 font-mono">{seoBrief.keyword}</p>
+                      <p className="text-sm font-semibold text-stone-900">Fiche du sujet</p>
+                      <p className="text-[12.5px] text-stone-600 font-mono">{seoBrief.keyword}</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowBrief(b => !b)}
-                    className="flex items-center gap-1 text-[12.5px] text-stone-500 hover:text-stone-700 transition-colors"
+                    aria-expanded={showBrief}
+                    className="flex items-center gap-1 text-[13px] font-medium text-stone-700 hover:text-stone-950 transition-colors"
                   >
-                    {showBrief ? <><ChevronUp size={13} /> Masquer</> : <><ChevronDown size={13} /> Voir le brief</>}
+                    {showBrief ? <><ChevronUp size={14} /> Masquer</> : <><ChevronDown size={14} /> Voir la fiche</>}
                   </button>
                 </div>
 
@@ -843,12 +876,12 @@ export default function BlogEdit() {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <p className="text-[12.5px] font-medium text-stone-700 mb-1">Requête cible</p>
-                        <p className="font-mono bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-100 text-stone-700">🔍 {seoBrief.keyword}</p>
+                        <p className="font-mono bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200 text-stone-700">{seoBrief.keyword}</p>
                       </div>
                       <div>
-                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Catégorie & intent</p>
-                        <p className="text-stone-700">{seoBrief.category} — <span className="text-stone-500">{seoBrief.intent}</span>
-                          {seoBrief.difficulty && <span className="ml-2 text-[12px] font-bold px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">{seoBrief.difficulty}</span>}
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Catégorie et intention</p>
+                        <p className="text-stone-700">{seoBrief.category} — <span className="text-stone-600">{seoBrief.intent}</span>
+                          {seoBrief.difficulty && <span className="ml-2 text-[12px] font-semibold px-1.5 py-0.5 rounded bg-stone-100 text-stone-600">{seoBrief.difficulty}</span>}
                         </p>
                       </div>
                     </div>
@@ -856,16 +889,16 @@ export default function BlogEdit() {
                     {/* Question reformulée */}
                     {seoBrief.question && (
                       <div>
-                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Question reformulée (H2 candidat)</p>
-                        <p className="text-stone-700 bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-100 italic">{seoBrief.question}</p>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Question reformulée (possible intertitre)</p>
+                        <p className="text-stone-700 bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200 italic">{seoBrief.question}</p>
                       </div>
                     )}
 
                     {/* Opportunité éditoriale */}
                     {seoBrief.opportunity && (
                       <div>
-                        <p className="text-[12px] font-bold text-amber-500 mb-1">Opportunité éditoriale</p>
-                        <p className="text-stone-600 bg-amber-50 border border-amber-100 px-3 py-2 rounded-xl text-xs">{seoBrief.opportunity}</p>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Pourquoi ce sujet</p>
+                        <p className="text-stone-700 bg-stone-50 border border-stone-200 px-3 py-2 rounded-xl text-[13px]">{seoBrief.opportunity}</p>
                       </div>
                     )}
 
@@ -873,17 +906,17 @@ export default function BlogEdit() {
                     {seoBrief.suggestedIntro && (
                       <div>
                         <p className="text-[12.5px] font-medium text-stone-700 mb-1">Accroche suggérée</p>
-                        <p className="text-stone-600 italic bg-stone-50 px-3 py-2 rounded-xl border border-stone-100 text-xs leading-relaxed">"{seoBrief.suggestedIntro}"</p>
+                        <p className="text-stone-700 italic bg-stone-50 px-3 py-2 rounded-xl border border-stone-200 text-xs leading-relaxed">"{seoBrief.suggestedIntro}"</p>
                       </div>
                     )}
 
                     {/* Cluster sémantique */}
                     {seoBrief.secondaryKeywords?.length ? (
                       <div>
-                        <p className="text-[12.5px] font-medium text-stone-700 mb-2">Cluster sémantique ({seoBrief.secondaryKeywords.length} termes)</p>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-2">Mots-clés associés ({seoBrief.secondaryKeywords.length})</p>
                         <div className="flex flex-wrap gap-1.5">
                           {seoBrief.secondaryKeywords.map((kw, i) => (
-                            <span key={i} className="text-[12px] font-mono bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{kw}</span>
+                            <span key={i} className="text-[12px] font-mono bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full">{kw}</span>
                           ))}
                         </div>
                       </div>
@@ -892,10 +925,10 @@ export default function BlogEdit() {
                     {/* PAA */}
                     {seoBrief.relatedQuestions.length > 0 && (
                       <div>
-                        <p className="text-[12.5px] font-medium text-stone-700 mb-2">Questions Google (PAA)</p>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-2">Questions souvent posées sur Google</p>
                         <ul className="space-y-1">
                           {seoBrief.relatedQuestions.map((q, i) => (
-                            <li key={i} className="flex items-start gap-2 text-stone-600 text-xs"><span className="text-sage mt-0.5">›</span> {q}</li>
+                            <li key={i} className="flex items-start gap-2 text-stone-700 text-xs"><span className="text-accent mt-0.5">›</span> {q}</li>
                           ))}
                         </ul>
                       </div>
@@ -906,16 +939,18 @@ export default function BlogEdit() {
                       <p className="text-[12.5px] font-medium text-stone-700 mb-2">Conseils de rédaction</p>
                       <ul className="space-y-1">
                         {seoBrief.contentTips.map((t, i) => (
-                          <li key={i} className="flex items-start gap-2 text-stone-600 text-xs"><span className="text-wood mt-0.5">•</span> {t}</li>
+                          <li key={i} className="flex items-start gap-2 text-stone-700 text-xs"><span className="text-accent mt-0.5">•</span> {t}</li>
                         ))}
                       </ul>
                     </div>
 
                     {/* CTA */}
-                    <div>
-                      <p className="text-[12.5px] font-medium text-stone-700 mb-1">CTA suggéré</p>
-                      <p className="text-stone-600 italic bg-sage/5 px-3 py-2 rounded-xl border border-sage/10 text-xs">{seoBrief.cta}</p>
-                    </div>
+                    {seoBrief.cta && (
+                      <div>
+                        <p className="text-[12.5px] font-medium text-stone-700 mb-1">Invitation finale suggérée</p>
+                        <p className="text-stone-700 italic bg-stone-50 px-3 py-2 rounded-xl border border-stone-200 text-[13px]">{seoBrief.cta}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -923,17 +958,17 @@ export default function BlogEdit() {
 
             {/* Génération article */}
             {moduleFlags.ai_generation && (
-              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-                <div className="flex items-center gap-3 px-6 py-4 border-b border-stone-100">
-                  <div className="w-8 h-8 rounded-xl bg-stone-900 flex items-center justify-center">
-                    <Wand2 size={15} className="text-white" />
+              <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="flex items-center gap-3 px-6 py-4 border-b border-stone-200">
+                  <div className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center">
+                    <Wand2 size={15} className="text-stone-700" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-stone-900">
-                      {seoBrief ? 'Rédaction IA — article complet' : 'Régénérer l\'article'}
+                    <p className="text-sm font-semibold text-stone-900">
+                      {seoBrief ? "Rédiger l'article avec l'IA" : isEditing ? "Réécrire l'article avec l'IA" : "Rédiger l'article avec l'IA"}
                     </p>
-                    <p className="text-[12.5px] text-stone-500">
-                      {seoBrief ? `Basé sur le brief : ${seoBrief.keyword}` : 'Génère depuis le titre et la catégorie actuels'}
+                    <p className="text-[12.5px] text-stone-600">
+                      {seoBrief ? `À partir de la fiche du sujet : ${seoBrief.keyword}` : "À partir du titre et de la catégorie. Vous relirez le texte avant de l'utiliser."}
                     </p>
                   </div>
                 </div>
@@ -943,7 +978,9 @@ export default function BlogEdit() {
                   <button
                     type="button"
                     onClick={generateArticle}
-                    className="flex items-center gap-3 bg-stone-900 hover:bg-stone-700 text-white px-6 py-3 rounded-xl font-bold text-sm transition-colors"
+                    disabled={!formData.title && !seoBrief}
+                    title={!formData.title && !seoBrief ? "Saisissez d'abord un titre" : undefined}
+                    className="flex items-center gap-3 bg-accent hover:bg-accent-hover text-accent-fg px-6 py-3 rounded-lg font-semibold text-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
                   >
                     <Wand2 size={16} />
                     {isEditing ? 'Régénérer l\'article (~2400 mots)' : 'Générer l\'article complet (~2400 mots)'}
@@ -951,47 +988,36 @@ export default function BlogEdit() {
                 )}
 
                 {aiStatus === 'generating' && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 text-sm text-stone-600">
-                      <div className="w-4 h-4 rounded-full border-2 border-sage border-t-transparent animate-spin" />
-                      <span>Rédaction en cours… <span className="text-stone-500 font-mono">{Math.round(aiPreview.length / 5)} mots</span></span>
-                    </div>
-                    {aiPreview && (
-                      <div
-                        className="max-h-80 overflow-y-auto bg-stone-50 border border-stone-100 rounded-xl p-4 text-sm text-stone-700 leading-relaxed prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{ __html: safeSanitize(aiPreview) }}
-                      />
-                    )}
-                  </div>
+                  <AiJobProgress label="Rédaction en cours…" elapsedSeconds={articleJob.elapsedSeconds} />
                 )}
 
                 {aiStatus === 'done' && (
                   <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-green-700 text-sm font-bold">
+                    <div className="flex items-center gap-2 text-emerald-700 text-sm font-semibold">
                       <CheckCircle2 size={16} />
                       Article généré — {Math.round(aiAccRef.current.length / 5)} mots environ
                     </div>
 
                     <div
-                      className="max-h-80 overflow-y-auto bg-stone-50 border border-stone-100 rounded-xl p-4 text-sm text-stone-700 leading-relaxed prose prose-sm max-w-none"
+                      className="max-h-80 overflow-y-auto bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-700 leading-relaxed prose prose-sm max-w-none"
                       dangerouslySetInnerHTML={{ __html: safeSanitize(aiPreview) }}
                     />
                     <div className="flex gap-3">
                       <button
                         type="button"
-                        onClick={() => { insertGeneratedContent(); setActiveTab('redaction'); }}
-                        className="flex items-center gap-2 bg-sage text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-sage/90 transition-colors"
+                        onClick={() => { if (insertGeneratedContent()) setActiveTab('redaction'); }}
+                        className="flex items-center gap-2 bg-accent text-accent-fg px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-accent-hover transition-colors"
                       >
                         <CheckCircle2 size={14} />
-                        Insérer & aller à Rédaction
+                        Utiliser ce texte
                       </button>
                       <button
                         type="button"
                         onClick={generateArticle}
-                        className="flex items-center gap-2 bg-stone-100 text-stone-700 px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-stone-200 transition-colors"
+                        className="flex items-center gap-2 bg-stone-100 text-stone-900 px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-stone-200 transition-colors"
                       >
                         <Wand2 size={14} />
-                        Régénérer
+                        Proposer un autre texte
                       </button>
                     </div>
                   </div>
@@ -999,11 +1025,11 @@ export default function BlogEdit() {
 
                 {aiStatus === 'error' && (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-red-600 text-sm font-bold">
-                      <AlertCircle size={16} />
-                      Erreur : {aiError}
+                    <div role="alert" className="flex items-start gap-2 text-red-700 text-sm">
+                      <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                      <span><span className="font-semibold">La rédaction n'a pas abouti.</span> {aiError} Vérifiez votre connexion puis réessayez.</span>
                     </div>
-                    <button type="button" onClick={generateArticle} className="text-xs text-stone-500 hover:text-stone-800 underline">
+                    <button type="button" onClick={generateArticle} className="flex items-center gap-2 bg-stone-100 text-stone-900 px-4 py-2 rounded-lg font-semibold text-[13px] hover:bg-stone-200 transition-colors">
                       Réessayer
                     </button>
                   </div>
@@ -1024,8 +1050,8 @@ export default function BlogEdit() {
                   sourceRef={id}
                 />
               ) : (
-                <div className="bg-stone-50 border-2 border-dashed border-stone-200 rounded-2xl p-8 text-center">
-                  <p className="text-stone-500 text-sm">Générez ou rédigez d'abord le contenu pour accéder à la génération de posts réseaux sociaux.</p>
+                <div className="bg-white border border-dashed border-stone-200 rounded-xl p-8 text-center">
+                  <p className="text-stone-700 text-sm">Quand l'article aura du texte, vous pourrez en tirer ici des publications pour les réseaux sociaux.</p>
                 </div>
               )
             )}
@@ -1035,29 +1061,30 @@ export default function BlogEdit() {
         {/* ════ ONGLET PROGRAMMATION ════ */}
         {activeTab === 'programmation' && (
           <div className="space-y-6 max-w-lg">
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-5">
-              <h2 className="text-sm font-bold text-stone-900 flex items-center gap-2 pb-3 border-b border-stone-100">
-                <CalendarClock size={15} className="text-sage" /> Mode de publication
+            <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-5">
+              <h2 className="text-sm font-semibold text-stone-900 flex items-center gap-2 pb-3 border-b border-stone-200">
+                <CalendarClock size={15} className="text-accent" /> Mode de publication
               </h2>
 
               <div className="flex flex-col gap-3">
                 {([
-                  { mode: 'draft',     icon: FileText,      label: 'Brouillon',  desc: 'Invisible sur le site',   color: 'text-stone-600', activeBg: 'bg-stone-100 border-stone-400'  },
-                  { mode: 'scheduled', icon: Clock,         label: 'Programmé',  desc: 'Publication automatique', color: 'text-amber-600', activeBg: 'bg-amber-50 border-amber-400'   },
-                  { mode: 'published', icon: Globe,         label: 'Publié',     desc: 'En ligne immédiatement',  color: 'text-sage',      activeBg: 'bg-sage/5 border-sage'          },
+                  { mode: 'draft',     icon: FileText,      label: 'Brouillon',  desc: 'Invisible sur le site',   color: 'text-stone-900', activeBg: 'bg-stone-100 border-stone-400'  },
+                  { mode: 'scheduled', icon: Clock,         label: 'Programmé',  desc: 'Mis en ligne automatiquement à la date choisie', color: 'text-amber-900', activeBg: 'bg-amber-50 border-amber-400'   },
+                  { mode: 'published', icon: Globe,         label: 'Publié',     desc: 'En ligne dès l\'enregistrement',  color: 'text-stone-950',      activeBg: 'bg-accent-soft border-accent'          },
                 ] as const).map(({ mode, icon: Icon, label, desc, color, activeBg }) => (
                   <button
                     key={mode}
                     type="button"
                     onClick={() => setPublishMode(mode)}
-                    className={`flex items-center gap-4 px-5 py-4 border-2 rounded-xl transition-all text-left ${
-                      publishMode === mode ? `${activeBg} ${color}` : 'border-stone-200 text-stone-600 hover:border-stone-200 bg-stone-50'
+                    aria-pressed={publishMode === mode}
+                    className={`flex items-center gap-4 px-5 py-4 border-2 rounded-xl transition-colors text-left ${
+                      publishMode === mode ? `${activeBg} ${color}` : 'border-stone-200 text-stone-700 hover:border-stone-300 bg-white'
                     }`}
                   >
                     <Icon className="w-5 h-5 shrink-0" />
                     <div className="flex-1">
-                      <p className="text-sm font-bold leading-none mb-1">{label}</p>
-                      <p className="text-xs opacity-70">{desc}</p>
+                      <p className="text-sm font-semibold leading-none mb-1">{label}</p>
+                      <p className="text-[13px] text-stone-700">{desc}</p>
                     </div>
                     {publishMode === mode && <CheckCircle2 size={16} className="shrink-0" />}
                   </button>
@@ -1066,24 +1093,25 @@ export default function BlogEdit() {
 
               {publishMode === 'scheduled' && (
                 <div className="space-y-2 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <label className="text-[13px] font-medium text-amber-800 flex items-center gap-1.5">
-                    <Clock size={12} /> Date et heure de publication
+                  <label htmlFor="article-scheduled-at" className="text-[13px] font-medium text-amber-900 flex items-center gap-1.5">
+                    <Clock size={13} /> Date et heure de publication
                   </label>
                   <input
+                    id="article-scheduled-at"
                     type="datetime-local"
                     value={scheduledAt}
-                    min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+                    min={toLocalInputValue(new Date(Date.now() + 60_000))}
                     onChange={(e) => setScheduledAt(e.target.value)}
                     className="w-full px-3 py-2.5 border border-amber-300 focus:border-amber-500 rounded-lg outline-none bg-white text-stone-800 text-sm"
                   />
-                  <p className="text-[11px] text-amber-600">Publication automatique (±10 min)</p>
+                  <p className="text-[13px] text-amber-900">L'article sera mis en ligne automatiquement, à dix minutes près.</p>
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={saving}
-                className={`w-full flex items-center justify-center gap-2 py-3.5 font-bold text-sm rounded-xl transition-colors disabled:opacity-50 ${saveButtonClass}`}
+                className={`w-full flex items-center justify-center gap-2 py-3.5 font-semibold text-sm rounded-xl transition-colors disabled:opacity-50 ${saveButtonClass}`}
               >
                 {publishMode === 'published' ? <Globe size={15} /> : publishMode === 'scheduled' ? <Clock size={15} /> : <FileText size={15} />}
                 {saveButtonLabel}
@@ -1091,12 +1119,12 @@ export default function BlogEdit() {
             </div>
 
             {publishMode === 'published' && formData.slug && (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-1">
-                <p className="text-xs font-bold text-green-700 flex items-center gap-1.5">
-                  <Globe size={12} /> IndexNow activé
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-1">
+                <p className="text-[13px] font-semibold text-emerald-800 flex items-center gap-1.5">
+                  <Globe size={13} /> Signalé aux moteurs de recherche
                 </p>
-                <p className="text-xs text-green-600">
-                  L'article sera soumis à Bing à la publication : <span className="font-mono">{SITE_CONFIG.url.replace(/^https?:\/\//i, '')}/blog/{formData.slug}</span>
+                <p className="text-[13px] text-emerald-800">
+                  Bing sera prévenu de la nouvelle page dès l'enregistrement : <span className="font-mono">{SITE_CONFIG.url.replace(/^https?:\/\//i, '')}/blog/{formData.slug}</span>
                 </p>
               </div>
             )}
@@ -1117,18 +1145,18 @@ export default function BlogEdit() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="youtube-modal-title"
-            className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-4"
+            className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 id="youtube-modal-title" className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                <Youtube size={16} className="text-red-600" /> Insérer une vidéo YouTube
+              <h3 id="youtube-modal-title" className="text-sm font-semibold text-stone-900 flex items-center gap-2">
+                <Youtube size={16} className="text-stone-700" /> Insérer une vidéo YouTube
               </h3>
               <button
                 type="button"
                 onClick={() => setShowYoutubeModal(false)}
                 aria-label="Fermer"
-                className="text-stone-500 hover:text-stone-700 transition-colors cursor-pointer"
+                className="text-stone-600 hover:text-stone-700 transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -1146,10 +1174,10 @@ export default function BlogEdit() {
                 placeholder="https://www.youtube.com/watch?v=… ou code <iframe>"
                 className="w-full px-3 py-2.5 border border-stone-200 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 rounded-lg outline-none bg-stone-50 focus:bg-white text-sm"
               />
-              <p className="text-[12.5px] text-stone-500">Collez un lien YouTube ou le code d'intégration &lt;iframe&gt; fourni par YouTube.</p>
+              <p className="text-[12.5px] text-stone-600">Collez un lien YouTube ou le code d'intégration &lt;iframe&gt; fourni par YouTube.</p>
               {youtubeError && (
-                <p className="text-xs text-red-500 flex items-center gap-1.5 pt-1">
-                  <AlertCircle size={12} /> {youtubeError}
+                <p role="alert" className="text-[13px] text-red-700 flex items-start gap-1.5 pt-1">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" /> {youtubeError}
                 </p>
               )}
             </div>
@@ -1158,14 +1186,14 @@ export default function BlogEdit() {
               <button
                 type="button"
                 onClick={() => setShowYoutubeModal(false)}
-                className="px-4 py-2 text-xs font-bold text-stone-500 hover:text-stone-800 transition-colors"
+                className="px-4 py-2 rounded-lg text-[13px] font-semibold text-stone-800 hover:bg-stone-100 transition-colors"
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={confirmYoutubeInsert}
-                className="px-4 py-2 bg-stone-900 hover:bg-stone-700 text-white text-xs font-bold rounded-lg transition-colors"
+                className="px-4 py-2 bg-accent hover:bg-accent-hover text-accent-fg text-[13px] font-semibold rounded-lg transition-colors"
               >
                 Insérer
               </button>

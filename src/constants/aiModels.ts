@@ -87,6 +87,26 @@ export const AI_MODELS: AiModelSpec[] = [
 ];
 
 export const DEFAULT_AI_MODEL = 'claude-opus-5';
+
+/**
+ * Modèle des appels « rapides » (voir `callClaude`, mode `quick`) quand le
+ * modèle choisi dans les réglages est un Opus : un appel synchrone doit tenir
+ * dans les 60 s d'une fonction Netlify, et Sonnet répond nettement plus vite.
+ * Chaque Opus a son équivalent Sonnet de la même génération.
+ */
+export const FAST_FALLBACK_MODEL = 'claude-sonnet-5';
+
+const QUICK_EQUIVALENT: Record<string, string> = {
+  'claude-opus-5': FAST_FALLBACK_MODEL,
+  'claude-opus-4-8': 'claude-sonnet-4-6',
+};
+
+/** Modèle à utiliser pour un appel rapide, à partir du modèle des réglages. */
+export function quickModelFor(id: string): AiModelSpec {
+  const spec = resolveModelSpec(id);
+  if (spec.family !== 'Opus') return spec;
+  return getModelSpec(QUICK_EQUIVALENT[spec.id] ?? FAST_FALLBACK_MODEL) ?? spec;
+}
 export const DEFAULT_AI_EFFORT: AiEffort = 'medium';
 
 export const AI_EFFORT_LEVELS: { value: AiEffort; label: string; hint: string }[] = [

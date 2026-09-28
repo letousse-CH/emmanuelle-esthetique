@@ -31,19 +31,25 @@ export default function NewSocialPostDialog({ initialDate, onClose, onCreated }:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
+  // Refs : l'effet ne doit tourner qu'à l'ouverture, sinon il remet le focus
+  // sur la fenêtre à chaque rendu du parent ou à chaque changement de busy.
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     panelRef.current?.focus();
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose(); };
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busyRef.current) onCloseRef.current(); };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [busy, onClose]);
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!title.trim()) { setError('Le titre est obligatoire.'); return; }
-    if (!brief.trim()) { setError("Décrivez l'angle en quelques lignes — l'IA en a besoin pour écrire."); return; }
+    if (!title.trim()) { setError('Indiquez le sujet du post.'); return; }
+    if (!brief.trim()) { setError("Décrivez l'idée en quelques lignes : l'IA en a besoin pour écrire."); return; }
 
     setBusy(true);
     try {
@@ -59,8 +65,8 @@ export default function NewSocialPostDialog({ initialDate, onClose, onCreated }:
       if (!res.ok || !data || data.error) {
         throw new Error(
           data?.error === 'not_configured'
-            ? "Clé API IA non configurée — ajoutez ANTHROPIC_API_KEY dans les variables d'environnement."
-            : data?.error || `Génération impossible (HTTP ${res.status}).`
+            ? "La rédaction automatique n'est pas activée sur ce site. Contactez la personne qui gère le site."
+            : data?.error || `La rédaction a échoué (erreur ${res.status}). Réessayez dans un instant.`
         );
       }
 
@@ -73,7 +79,7 @@ export default function NewSocialPostDialog({ initialDate, onClose, onCreated }:
         planned_date: plannedDate,
         status: 'ready',
       });
-      if (insertError) throw new Error(insertError.message);
+      if (insertError) throw new Error(`Le texte a été écrit mais n'a pas pu être enregistré dans le calendrier. Réessayez. (Détail : ${insertError.message})`);
 
       onCreated(plannedDate);
     } catch (err: any) {
@@ -95,18 +101,18 @@ export default function NewSocialPostDialog({ initialDate, onClose, onCreated }:
         aria-labelledby="new-social-post-title"
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden outline-none"
+        className="bg-white w-full max-w-lg rounded-xl shadow-2xl overflow-hidden outline-none"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
-          <h3 id="new-social-post-title" className="text-sm font-bold text-stone-900 flex items-center gap-2">
-            <Sparkles size={15} className="text-sage" /> Nouveau post depuis une idée
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
+          <h3 id="new-social-post-title" className="text-[16px] font-semibold text-stone-950 flex items-center gap-2">
+            <Sparkles size={16} className="text-stone-700" /> Nouveau post à partir d&apos;une idée
           </h3>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
             aria-label="Fermer"
-            className="p-1.5 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
+            className="p-1.5 text-stone-600 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -114,8 +120,8 @@ export default function NewSocialPostDialog({ initialDate, onClose, onCreated }:
 
         <form onSubmit={submit} className="p-6 space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="new-post-title" className="block text-[13px] font-medium text-stone-800">
-              Titre / sujet
+            <label htmlFor="new-post-title" className="block text-[14px] font-semibold text-stone-900">
+              Sujet
             </label>
             <input
               id="new-post-title"
@@ -123,14 +129,14 @@ export default function NewSocialPostDialog({ initialDate, onClose, onCreated }:
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               disabled={busy}
-              placeholder="Ex : Pourquoi il revient toujours au moment où vous allez mieux"
+              placeholder="ex : Trois gestes pour garder une peau souple en hiver"
               className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 disabled:opacity-60"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="new-post-brief" className="block text-[13px] font-medium text-stone-800">
-              Angle / brief
+            <label htmlFor="new-post-brief" className="block text-[14px] font-semibold text-stone-900">
+              Ce que vous voulez dire
             </label>
             <textarea
               id="new-post-brief"
@@ -138,15 +144,15 @@ export default function NewSocialPostDialog({ initialDate, onClose, onCreated }:
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
               disabled={busy}
-              placeholder="En quelques lignes : l'idée à faire passer, l'exemple concret, ce que le lecteur doit comprendre à la fin."
+              placeholder="En quelques lignes : l'idée à faire passer, un exemple concret, ce que vos clientes doivent retenir."
               className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 resize-none leading-relaxed disabled:opacity-60"
             />
-            <p className="text-[12.5px] text-stone-500">Plus le brief est précis, moins le résultat aura besoin d'être retouché.</p>
+            <p className="text-[13px] text-stone-600">Plus vous êtes précise, moins le texte aura besoin d&apos;être retouché.</p>
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="new-post-date" className="block text-[13px] font-medium text-stone-800">
-              Planifier le
+            <label htmlFor="new-post-date" className="block text-[14px] font-semibold text-stone-900">
+              À publier le
             </label>
             <input
               id="new-post-date"
@@ -159,8 +165,8 @@ export default function NewSocialPostDialog({ initialDate, onClose, onCreated }:
           </div>
 
           {error && (
-            <p className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              <AlertCircle size={13} className="shrink-0 mt-px" /> {error}
+            <p role="alert" className="flex items-start gap-1.5 text-[13px] text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" /> {error}
             </p>
           )}
 
@@ -169,19 +175,19 @@ export default function NewSocialPostDialog({ initialDate, onClose, onCreated }:
               type="button"
               onClick={onClose}
               disabled={busy}
-              className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-sm font-medium hover:bg-stone-50 transition-colors disabled:opacity-40 cursor-pointer"
+              className="px-4 h-10 rounded-lg bg-stone-100 text-stone-900 text-sm font-semibold hover:bg-stone-200 transition-colors disabled:opacity-45 cursor-pointer"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={busy}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-stone-900 text-white text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50 cursor-pointer"
+              className="flex items-center justify-center gap-2 px-4 h-10 rounded-lg bg-accent text-accent-fg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-45 cursor-pointer"
             >
-              {busy ? <><Loader2 size={15} className="animate-spin" /> Génération…</> : <><Sparkles size={15} /> Générer le contenu</>}
+              {busy ? <><Loader2 size={15} className="animate-spin" /> Rédaction…</> : <><Sparkles size={15} /> Rédiger le post</>}
             </button>
           </div>
-          {busy && <p className="text-[12.5px] text-stone-500 text-center">L'IA écrit les 3 formats — comptez une dizaine de secondes.</p>}
+          {busy && <p role="status" className="text-[13px] text-stone-700 text-center">L&apos;IA écrit les versions Instagram, LinkedIn et Facebook. Comptez une dizaine de secondes.</p>}
         </form>
       </div>
     </div>

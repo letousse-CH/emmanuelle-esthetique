@@ -1,8 +1,20 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '../../../../utils/supabaseAdmin';
 import { supabase as publicSupabase } from '../../../../services/supabase';
+import { validateSupabaseToken } from '../../../../utils/apiAuth';
 
 export const runtime = 'nodejs';
+
+/**
+ * La route lit et écrit avec la clé de service : sans ce contrôle, n'importe
+ * quel visiteur pouvait vider ou réécrire la base de savoir de l'agent.
+ */
+async function requireAdmin(req: NextRequest): Promise<boolean> {
+  const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  return validateSupabaseToken(token);
+}
+
+const UNAUTHORIZED = { error: 'Votre session a expiré. Reconnectez-vous puis réessayez.' };
 
 function stripToText(content: unknown): string {
   if (!content) return '';
@@ -83,13 +95,14 @@ function extractPageContent(page: { title: string; slug: string; content?: unkno
     `- Titre de la page : "${page.title}"`,
     `- Adresse URL : /${page.slug}`,
     ``,
-    `💡 Astuce : Vous pouvez cliquer sur "✏️ Éditer / Compléter le texte" ci-dessous pour rédiger les informations exactes (tarifs, horaires, prestations) que vous souhaitez transmettre à vos visiteurs !`,
+    `Pour que l'agent en sache davantage, complétez le contenu de cette page dans l'éditeur de pages, ou ajoutez un texte (tarifs, horaires, prestations) dans le savoir de l'agent.`,
   ].join('\n');
 
   return `INFORMATIONS RETENUES POUR LA PAGE : ${page.title.toUpperCase()} (URL: /${page.slug})\n\n${cleanBody || emptyExplanation}`;
 }
 
 export async function GET(req: NextRequest) {
+  if (!(await requireAdmin(req))) return NextResponse.json(UNAUTHORIZED, { status: 401 });
   const admin = getSupabaseAdmin() || publicSupabase;
   const { searchParams } = new URL(req.url);
   const agentId = searchParams.get('agentId');
@@ -113,6 +126,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await requireAdmin(req))) return NextResponse.json(UNAUTHORIZED, { status: 401 });
   const admin = getSupabaseAdmin() || publicSupabase;
   let body: { action?: string; agentId?: string; docId?: string; title?: string; content?: string };
 
@@ -130,13 +144,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   }
 
+  // Correction du texte d'un document existant, sans toucher à son type ni à
+  // sa référence (évite de créer un doublon « texte » d'une page).
+  if (action === 'update' && docId && typeof content === 'string') {
+    const { error } = await admin
+      .from('agent_documents')
+      .update({ content, updated_at: new Date().toISOString() })
+      .eq('id', docId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true });
+  }
+
   if (action === 'add' && agentId && title && content) {
-    const sourceRef = title
+    const baseRef = title
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
+    // « brief-editorial » est réservé au brief régénéré à chaque réindexation :
+    // un texte saisi à la main sous ce titre aurait été effacé en silence.
+    const sourceRef = baseRef === 'brief-editorial' ? 'brief-editorial-perso' : baseRef || 'texte';
 
     const { error } = await admin.from('agent_documents').upsert(
       {
@@ -156,16 +184,21 @@ export async function POST(req: NextRequest) {
 
   if (action === 'reindex' && agentId) {
     // 1. Purger les anciens documents automatiques (pages, articles, brief-editorial)
-    await admin
+    const { error: purgeErr } = await admin
       .from('agent_documents')
       .delete()
       .eq('agent_id', agentId)
       .or('source_type.in.(page,article),source_ref.eq.brief-editorial');
+    if (purgeErr) {
+      console.error('[agents-knowledge] reindex purge error:', purgeErr.message);
+      return NextResponse.json({ error: purgeErr.message }, { status: 500 });
+    }
 
     // 2. Récupération des données Supabase (dynamic_pages, articles, settings)
     let [pagesRes, articlesRes, settingsRes] = await Promise.all([
-      admin.from('dynamic_pages').select('slug, title, content, sections'),
-      admin.from('articles').select('slug, title, content'),
+      // Seul le contenu en ligne : un brouillon ne doit pas être cité aux visiteurs.
+      admin.from('dynamic_pages').select('slug, title, content, sections').eq('published', true),
+      admin.from('articles').select('slug, title, content').eq('published', true),
       admin.from('settings').select('key, value').in('key', [
         'site_activity_context',
         'site_target_persona',
@@ -182,7 +215,12 @@ export async function POST(req: NextRequest) {
     ]);
 
     // 3. Auto-seeder les pages fondamentales si dynamic_pages est vide
-    if (!pagesRes.data || pagesRes.data.length === 0) {
+    // Compté sans filtre « publié » : des pages existantes mais en brouillon ne
+    // doivent jamais être écrasées par ces gabarits génériques.
+    const { count: anyPageCount } = await admin
+      .from('dynamic_pages')
+      .select('slug', { count: 'exact', head: true });
+    if ((!pagesRes.data || pagesRes.data.length === 0) && anyPageCount === 0) {
       const DEFAULT_SEEDS = [
         {
           title: 'Accueil',
@@ -213,7 +251,7 @@ export async function POST(req: NextRequest) {
       ];
 
       await admin.from('dynamic_pages').upsert(DEFAULT_SEEDS, { onConflict: 'slug' });
-      pagesRes = await admin.from('dynamic_pages').select('slug, title, content, sections');
+      pagesRes = await admin.from('dynamic_pages').select('slug, title, content, sections').eq('published', true);
     }
 
     // 4. Rassembler toutes les pages du site (dynamic_pages + routes fondamentales)
@@ -301,7 +339,12 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         };
       }),
-      ...(articlesRes.data ?? []).map((a: { slug: string; title: string; content: unknown }) => ({
+      ...Array.from(
+        new Map(
+          ((articlesRes.data ?? []) as { slug: string; title: string; content: unknown }[])
+            .map((a) => [a.slug || 'article', a] as const),
+        ).values(),
+      ).map((a) => ({
         agent_id: agentId,
         title: `Article : ${a.title}`,
         source_type: 'article' as const,
@@ -311,10 +354,12 @@ export async function POST(req: NextRequest) {
       })),
     ].filter((row) => row.content.trim().length > 0);
 
-    // Insertion directe sécurisée
+    // Upsert plutôt qu'insert : deux réindexations simultanées (ouverture de
+    // l'écran + clic, ou brief enregistré) se heurtaient sur la contrainte
+    // d'unicité et la seconde échouait.
     const { error: insertErr } = await admin
       .from('agent_documents')
-      .insert(rows);
+      .upsert(rows, { onConflict: 'agent_id,source_type,source_ref' });
 
     if (insertErr) {
       console.error('[agents-knowledge] reindex insert error:', insertErr.message);

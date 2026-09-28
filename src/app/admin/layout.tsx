@@ -7,6 +7,7 @@ import { supabase } from '../../services/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useModuleFlags } from '../../hooks/useModuleFlags';
 import { useAppMode } from '../../hooks/useAppMode';
+import { useAdminAccent } from '../../hooks/useAdminAccent';
 import SystemHealthPill from '../../components/admin/SystemHealthPill';
 import {
   LayoutDashboard,
@@ -20,7 +21,6 @@ import {
   CalendarDays,
   Layers,
   Menu,
-  ChevronRight,
   ExternalLink,
   Share2,
   CreditCard,
@@ -28,7 +28,6 @@ import {
   BookOpenCheck,
   Sparkles,
   Gift,
-  Package,
   Megaphone,
   Bot,
   Workflow,
@@ -38,11 +37,32 @@ import {
   Rocket,
   Search,
   Plus,
-  Compass,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
+  Receipt,
+  PieChart,
+  Target,
 } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { SITE_CONFIG } from '../../config/site';
 import { CommandMenu, Kbd } from '../../components/admin/ui';
+
+type NavItem = {
+  name: string;
+  path: string;
+  icon: React.ElementType;
+  exact?: boolean;
+  /** Chemins supplémentaires qui rendent l'entrée active. */
+  also?: string[];
+};
+type NavGroup = { label?: string; items: NavItem[] };
+
+function isItemActive(item: NavItem, pathname: string) {
+  const match = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
+  if (item.exact) return pathname === item.path;
+  return match(item.path) || (item.also ?? []).some(match);
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -51,6 +71,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const moduleFlags = useModuleFlags();
   const siteName = useSettings(['business_name']).business_name;
   const appMode = useAppMode();
+  useAdminAccent();
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -62,10 +83,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const mobileMenuButtonRef = React.useRef<HTMLButtonElement>(null);
   const asideRef = React.useRef<HTMLElement>(null);
+  const quickCreateRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => { setMobileOpen(false); }, [pathname]);
+  React.useEffect(() => { setMobileOpen(false); setQuickCreateOpen(false); }, [pathname]);
 
-  // Écouteur global pour ouvrir la recherche rapide via ⌘K ou Ctrl+K
+  // Recherche rapide : ⌘K / Ctrl+K
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -77,7 +99,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Drawer mobile
+  // Menu « Créer » : fermeture au clic extérieur et à Échap
+  React.useEffect(() => {
+    if (!quickCreateOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!quickCreateRef.current?.contains(e.target as Node)) setQuickCreateOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setQuickCreateOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [quickCreateOpen]);
+
+  // Tiroir mobile
   React.useEffect(() => {
     if (!mobileOpen) return;
     const previousOverflow = document.body.style.overflow;
@@ -139,99 +176,123 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [user, loading, router]);
 
+  // Une clé Claude enregistrée ou retirée dans Paramètres : on refait le
+  // diagnostic tout de suite, pour que le bandeau ne reste pas périmé.
+  React.useEffect(() => {
+    const onKeyChange = () => { void checkAiStatus(true); };
+    window.addEventListener('admin:ai-key-changed', onKeyChange);
+    return () => window.removeEventListener('admin:ai-key-changed', onKeyChange);
+  }, []);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
   };
 
-  /* ═══ 6 Hubs Métier 2026 ═══ */
-  const navGroups = [
+  /*
+   * Navigation rangée par usage : ce que l'on modifie sur le site, ce que l'on
+   * publie, ce que l'on encaisse, ce que l'on mesure, ce que l'on délègue.
+   * Les réglages vivent en pied de barre, à part du travail quotidien.
+   */
+  const navGroups: NavGroup[] = ([
     {
-      label: '📊 Pilotage',
-      items: [
-        { name: 'Tableau de bord', path: '/admin', icon: LayoutDashboard, exact: true },
-        { name: 'Analytics', path: '/admin/analytics', icon: TrendingUp },
-        { name: 'Pilote automatique', path: '/admin/autopilot', icon: Rocket },
-      ],
+      items: [{ name: 'Tableau de bord', path: '/admin', icon: LayoutDashboard, exact: true }],
     },
     {
-      label: '📝 Contenu & Médias',
+      label: 'Site',
       items: [
-        { name: 'Pages du site', path: '/admin/pages', icon: Layers },
-        ...(moduleFlags.blog ? [{ name: 'Articles de blog', path: '/admin/blog', icon: FileText }] : []),
+        { name: 'Pages', path: '/admin/pages', icon: Layers },
         { name: 'Médiathèque', path: '/admin/medias', icon: ImageIcon },
-        ...(moduleFlags.events ? [{ name: 'Événements', path: '/admin/events', icon: CalendarDays }] : []),
+        { name: 'Menu', path: '/admin/menu', icon: Menu },
+        { name: 'En-tête et pied de page', path: '/admin/entete-pied', icon: PanelsTopLeft },
       ],
     },
     {
-      label: '📢 Marketing & Audience',
+      label: 'Contenu',
       items: [
+        ...(moduleFlags.blog ? [{ name: 'Articles', path: '/admin/blog', icon: FileText }] : []),
+        ...(moduleFlags.events ? [{ name: 'Événements', path: '/admin/events', icon: CalendarDays }] : []),
         ...(moduleFlags.newsletter ? [{ name: 'Newsletter', path: '/admin/newsletter', icon: Send }] : []),
         ...(moduleFlags.social ? [{ name: 'Réseaux sociaux', path: '/admin/social', icon: Share2 }] : []),
-        { name: 'Abonnés & Leads', path: '/admin/subscribers', icon: Mail },
-        ...(moduleFlags.keywords ? [{ name: 'SEO & Mots-clés', path: '/admin/seo', icon: BarChart2 }] : []),
-        ...(moduleFlags.caisse ? [{ name: 'Promotions', path: '/admin/promotions', icon: Megaphone }] : []),
       ],
     },
     ...(moduleFlags.caisse
       ? [
           {
-            label: '🛒 Caisse & Commerce',
+            label: 'Caisse & Finances',
             items: [
-              { name: 'Encaissement POS', path: '/admin/caisse', icon: CreditCard, exact: true },
-              { name: 'Journal & Chiffre d\'affaires', path: '/admin/caisse/journal', icon: BookOpenCheck },
+              { name: 'Cockpit Hebdo', path: '/admin/caisse/cockpit', icon: Target },
+              { name: 'Encaisser', path: '/admin/caisse', icon: CreditCard, exact: true },
+              { name: 'Journal', path: '/admin/caisse/journal', icon: BookOpenCheck },
+              { name: 'Clientes', path: '/admin/caisse/clients', icon: Users },
+              { name: 'Catalogue & Stock', path: '/admin/caisse/prestations', icon: Sparkles, also: ['/admin/caisse/produits', '/admin/caisse/cabine', '/admin/caisse/cockpit'] },
+              { name: 'Factures & Dépenses', path: '/admin/caisse/depenses', icon: Receipt },
+              { name: 'Bilan & Fiscalité', path: '/admin/caisse/bilan', icon: PieChart },
               { name: 'Bons cadeaux', path: '/admin/caisse/bons', icon: Gift },
-              { name: 'Fiches Clients', path: '/admin/caisse/clients', icon: Users },
-              { name: 'Prestations', path: '/admin/caisse/prestations', icon: Sparkles },
-              { name: 'Produits & Stock', path: '/admin/caisse/produits', icon: Package },
+              { name: 'Promotions', path: '/admin/promotions', icon: Megaphone },
             ],
           },
         ]
       : []),
     {
-      label: '🤖 Intelligence IA',
+      label: 'Audience',
       items: [
+        { name: 'Statistiques', path: '/admin/analytics', icon: TrendingUp },
+        ...(moduleFlags.keywords ? [{ name: 'SEO et mots-clés', path: '/admin/seo', icon: BarChart2 }] : []),
+        { name: 'Abonnés', path: '/admin/subscribers', icon: Mail },
+      ],
+    },
+    {
+      label: 'Assistants',
+      items: [
+        { name: 'Pilote automatique', path: '/admin/autopilot', icon: Rocket },
         ...(moduleFlags.agents ? [{ name: 'Agent IA', path: '/admin/agents', icon: Bot }] : []),
         ...(moduleFlags.automations ? [{ name: 'Automatisations', path: '/admin/automations', icon: Workflow }] : []),
       ],
     },
-    {
-      label: '⚙️ Configuration',
-      items: [
-        { name: 'Menu de navigation', path: '/admin/menu', icon: Menu },
-        { name: 'En-tête & Pied de page', path: '/admin/entete-pied', icon: PanelsTopLeft },
-        { name: 'Paramètres & Style', path: '/admin/settings', icon: Settings },
-      ],
-    },
-  ].filter((group) => group.items.length > 0);
+  ] as NavGroup[]).filter((group) => group.items.length > 0);
+
+  const settingsItem: NavItem = { name: 'Paramètres', path: '/admin/settings', icon: Settings };
 
   const fullBleed = /^\/admin\/pages\/(new|edit)/.test(pathname);
 
-  const currentSection =
-    navGroups
-      .flatMap((group) => group.items)
-      .filter((item: { path: string; exact?: boolean }) =>
-        item.exact ? pathname === item.path : pathname === item.path || pathname.startsWith(`${item.path}/`),
-      )
-      .sort((a, b) => b.path.length - a.path.length)[0]?.name ?? 'Administration';
+  const allItems = [...navGroups.flatMap((g) => g.items), settingsItem];
+  const currentItem = allItems
+    .filter((item) => isItemActive(item, pathname))
+    .sort((a, b) => b.path.length - a.path.length)[0];
+  const currentGroup = navGroups.find((g) => currentItem && g.items.includes(currentItem))?.label;
 
-  // Liste plate pour le CommandMenu
-  const commandItems = navGroups.flatMap((group) =>
-    group.items.map((item) => ({
-      id: item.path,
-      name: item.name,
-      category: group.label,
-      path: item.path,
-      icon: item.icon,
-    }))
-  );
+  const commandItems = [
+    ...navGroups.flatMap((group) =>
+      group.items.map((item) => ({
+        id: item.path,
+        name: item.name,
+        category: group.label ?? 'Accueil',
+        path: item.path,
+        icon: item.icon,
+      })),
+    ),
+    { id: settingsItem.path, name: settingsItem.name, category: 'Réglages', path: settingsItem.path, icon: settingsItem.icon },
+  ];
+
+  const quickCreate = [
+    ...(moduleFlags.blog ? [{ label: 'Article', href: '/admin/blog/new', icon: FileText }] : []),
+    { label: 'Page', href: '/admin/pages/new', icon: Layers },
+    ...(moduleFlags.events ? [{ label: 'Événement', href: '/admin/events/new', icon: CalendarDays }] : []),
+    ...(moduleFlags.caisse
+      ? [
+          { label: 'Encaissement', href: '/admin/caisse', icon: CreditCard },
+          { label: 'Fiche cliente', href: '/admin/caisse/clients', icon: Users },
+        ]
+      : []),
+  ];
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50 text-stone-900">
+      <div className="min-h-screen flex items-center justify-center bg-white text-stone-900">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 rounded-full border-2 border-stone-200 border-t-stone-900 animate-spin" />
-          <p className="text-stone-500 text-xs tracking-widest uppercase font-semibold">Chargement du Studio 2026…</p>
+          <div className="w-7 h-7 rounded-full border-2 border-stone-200 border-t-accent animate-spin" />
+          <p className="text-stone-600 text-sm">Chargement…</p>
         </div>
       </div>
     );
@@ -249,279 +310,268 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  const navLink = (item: NavItem) => {
+    const active = isItemActive(item, pathname);
+    return (
+      <Link
+        key={item.path}
+        href={item.path}
+        title={collapsed ? item.name : undefined}
+        aria-current={active ? 'page' : undefined}
+        className={`group flex items-center gap-3 rounded-lg px-3 h-10 text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+          active
+            ? 'bg-white text-accent font-semibold ring-1 ring-stone-200 shadow-xs'
+            : 'text-stone-900 font-medium hover:bg-stone-200/60'
+        } ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
+      >
+        <item.icon
+          size={17}
+          strokeWidth={active ? 2.2 : 1.9}
+          className={`shrink-0 ${active ? 'text-accent' : 'text-stone-700'}`}
+        />
+        <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{item.name}</span>
+      </Link>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex text-stone-900 antialiased font-sans">
+    <div className="min-h-screen bg-white flex text-stone-900 antialiased font-sans">
       <a
         href="#admin-main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:bg-stone-900 focus:text-white focus:px-4 focus:py-2 focus:rounded-xl focus:text-sm focus:font-medium"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[9999] focus:bg-accent focus:text-accent-fg focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-medium"
       >
         Aller au contenu
       </a>
 
-      {/* Overlay mobile */}
+      {/* Voile mobile */}
       {mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-30 lg:hidden"
+          className="fixed inset-0 bg-stone-900/30 z-30 lg:hidden"
         />
       )}
 
-      {/* Sidebar Luminous Light 2026 */}
+      {/* Barre latérale */}
       <aside
         ref={asideRef}
         aria-label="Navigation principale"
-        className={`fixed inset-y-0 left-0 z-40 lg:relative lg:z-auto w-64 ${
-          collapsed ? 'lg:w-16' : 'lg:w-64'
-        } shrink-0 bg-white border-r border-stone-200/80 flex flex-col transition-all duration-200 ease-in-out text-stone-700 shadow-2xs ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 lg:sticky lg:top-0 lg:h-screen lg:z-auto ${
+          collapsed ? 'lg:w-[68px]' : 'lg:w-64'
+        } shrink-0 bg-stone-50 border-r border-stone-200 flex flex-col transition-[width,transform] duration-200 ease-out ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        {/* Logo / Brand Header */}
-        <div className="h-16 flex items-center px-4 border-b border-purple-100 shrink-0">
+        {/* Marque */}
+        <div className={`h-16 flex items-center shrink-0 ${collapsed ? 'lg:justify-center px-4 lg:px-0' : 'px-5'}`}>
           <Link
             href="/admin"
-            className={`flex items-center gap-3 group min-w-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 ${
-              collapsed ? 'mx-auto' : ''
-            }`}
+            className="flex items-center gap-3 min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
-            <div className="w-9 h-9 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 flex items-center justify-center text-white text-xs font-black shrink-0 shadow-[0_4px_12px_rgba(168,85,247,0.3)]">
+            <span className="size-8 rounded-lg bg-accent text-accent-fg grid place-items-center text-[13px] font-semibold shrink-0">
               {(siteName || 'S').charAt(0).toUpperCase()}
-            </div>
-            {!collapsed && (
-              <span className="min-w-0">
-                <span className="block text-[14px] font-extrabold text-zinc-900 truncate tracking-tight">
-                  {siteName || 'Studio Admin'}
-                </span>
-                <span className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-bold">
-                  <span className="size-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse" />
-                  Studio 2026
-                </span>
+            </span>
+            <span className={`min-w-0 ${collapsed ? 'lg:hidden' : ''}`}>
+              <span className="block text-[15px] font-semibold text-stone-950 truncate tracking-tight">
+                {siteName || 'Administration'}
               </span>
-            )}
+              <span className="block text-[13px] text-stone-600">Administration</span>
+            </span>
           </Link>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Fermer le menu"
+            className="ml-auto lg:hidden p-2 -mr-2 rounded-lg text-stone-600 hover:bg-stone-100 cursor-pointer"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Quick Search Button in Sidebar */}
-        {!collapsed && (
-          <div className="px-3 pt-3">
-            <button
-              type="button"
-              onClick={() => setCmdOpen(true)}
-              className="w-full flex items-center justify-between px-4 py-2 rounded-full bg-slate-100/80 border border-purple-100 text-zinc-600 text-xs hover:bg-white hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer group"
-            >
-              <span className="flex items-center gap-2">
-                <Search size={14} className="text-purple-500 group-hover:text-purple-700 transition-colors" />
-                <span className="font-semibold">Rechercher...</span>
-              </span>
-              <Kbd>⌘K</Kbd>
-            </button>
-          </div>
-        )}
-
-        {/* Nav list */}
-        <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5">
-          {navGroups.map((group) => (
-            <div key={group.label}>
-              {!collapsed && (
-                <p className="px-3 mb-2 text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-1 space-y-6">
+          {navGroups.map((group, gi) => (
+            <div key={group.label ?? `g${gi}`}>
+              {group.label && (
+                <p className={`px-3 mb-1.5 text-[13px] font-semibold text-stone-600 ${collapsed ? 'lg:hidden' : ''}`}>
                   {group.label}
                 </p>
               )}
-              <div className="space-y-1">
-                {group.items.map((item: { name: string; path: string; icon: React.ElementType; exact?: boolean }) => {
-                  const isActive =
-                    pathname === item.path ||
-                    (!item.exact && item.path !== '/admin' && pathname.startsWith(item.path));
-                  return (
-                    <Link
-                      key={item.path}
-                      href={item.path}
-                      title={collapsed ? item.name : undefined}
-                      aria-current={isActive ? 'page' : undefined}
-                      className={`relative flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-extrabold transition-all duration-150 ${
-                        isActive
-                          ? 'bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white shadow-[0_4px_14px_rgba(168,85,247,0.3)] scale-[1.02]'
-                          : 'text-zinc-600 hover:bg-purple-50/70 hover:text-purple-900'
-                      } ${collapsed ? 'justify-center px-2' : ''}`}
-                    >
-                      <item.icon
-                        size={17}
-                        className={`shrink-0 ${
-                          isActive ? 'text-amber-300' : 'text-zinc-400 group-hover:text-purple-600'
-                        }`}
-                      />
-                      {!collapsed && <span className="truncate">{item.name}</span>}
-                    </Link>
-                  );
-                })}
-              </div>
+              {group.label && collapsed && <div className="hidden lg:block mx-3 mb-2 border-t border-stone-200" />}
+              <div className="space-y-0.5">{group.items.map(navLink)}</div>
             </div>
           ))}
         </nav>
 
-        {/* Bottom Profile / Links */}
-        <div className="px-3 pb-4 space-y-1 border-t border-stone-100 pt-3">
+        {/* Pied de barre */}
+        <div className="px-3 py-3 space-y-0.5 border-t border-stone-200">
+          {navLink(settingsItem)}
           <a
             href={SITE_CONFIG.url}
             target="_blank"
             rel="noopener noreferrer"
             title={collapsed ? 'Voir le site' : undefined}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition-colors ${
-              collapsed ? 'justify-center' : ''
+            className={`flex items-center gap-3 rounded-lg px-3 h-10 text-[15px] font-medium text-stone-900 hover:bg-stone-200/60 transition-colors ${
+              collapsed ? 'lg:justify-center lg:px-0' : ''
             }`}
           >
-            <ExternalLink size={16} className="shrink-0 text-stone-400" />
-            {!collapsed && <span>Voir le site public</span>}
+            <ExternalLink size={17} strokeWidth={1.9} className="shrink-0 text-stone-700" />
+            <span className={collapsed ? 'lg:hidden' : ''}>Voir le site</span>
           </a>
           <button
             onClick={handleLogout}
             title={collapsed ? 'Déconnexion' : undefined}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium text-stone-600 hover:bg-red-50 hover:text-red-700 w-full transition-colors cursor-pointer ${
-              collapsed ? 'justify-center' : ''
+            className={`flex w-full items-center gap-3 rounded-lg px-3 h-10 text-[15px] font-medium text-stone-900 hover:bg-stone-200/60 transition-colors cursor-pointer ${
+              collapsed ? 'lg:justify-center lg:px-0' : ''
             }`}
           >
-            <LogOut size={16} className="shrink-0 text-stone-400" />
-            {!collapsed && <span>Déconnexion</span>}
+            <LogOut size={17} strokeWidth={1.9} className="shrink-0 text-stone-700" />
+            <span className={collapsed ? 'lg:hidden' : ''}>Déconnexion</span>
+          </button>
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? 'Déplier la navigation' : 'Replier la navigation'}
+            aria-pressed={collapsed}
+            title={collapsed ? 'Déplier' : 'Replier'}
+            className={`hidden lg:flex w-full items-center gap-3 rounded-lg px-3 h-10 text-[15px] font-medium text-stone-700 hover:bg-stone-200/60 hover:text-stone-900 transition-colors cursor-pointer ${
+              collapsed ? 'justify-center px-0' : ''
+            }`}
+          >
+            {collapsed ? <PanelLeftOpen size={17} strokeWidth={1.75} /> : <PanelLeftClose size={17} strokeWidth={1.75} className="text-stone-500" />}
+            {!collapsed && <span>Replier</span>}
           </button>
         </div>
-
-        {/* Collapse Toggle */}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          aria-label={collapsed ? 'Déplier la navigation' : 'Replier la navigation'}
-          aria-pressed={collapsed}
-          className="hidden lg:flex absolute -right-3 top-16 w-6 h-6 rounded-full bg-white border border-stone-200 shadow-sm items-center justify-center text-stone-500 hover:text-stone-900 hover:border-stone-400 transition-colors cursor-pointer z-10"
-        >
-          <ChevronRight size={12} className={`transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`} />
-        </button>
       </aside>
 
-      {/* Main Area */}
-      <main id="admin-main-content" tabIndex={-1} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col outline-none">
-        {/* Topbar 2026 Glassmorphic */}
-        <div className="h-16 border-b border-stone-200/80 bg-white/80 backdrop-blur-md flex items-center px-4 lg:px-8 shrink-0 sticky top-0 z-20 gap-4">
+      {/* Zone principale */}
+      <main id="admin-main-content" tabIndex={-1} className="flex-1 min-w-0 flex flex-col outline-none">
+        {/* Barre du haut */}
+        <header className="h-16 bg-white/95 backdrop-blur border-b border-stone-200 flex items-center gap-3 px-4 sm:px-6 lg:px-10 shrink-0 sticky top-0 z-20">
           <button
             ref={mobileMenuButtonRef}
             onClick={() => setMobileOpen(true)}
-            className="lg:hidden -ml-1 p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-xl transition-colors cursor-pointer"
+            className="lg:hidden -ml-1 p-2 text-stone-700 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
             aria-label="Ouvrir le menu"
             aria-expanded={mobileOpen}
           >
             <Menu size={20} />
           </button>
 
-          {/* Section Breadcrumb */}
-          <div className="flex items-center gap-2.5">
-            <span className="size-2.5 rounded-full bg-emerald-500 shadow-2xs shadow-emerald-500/50" />
-            <p className="min-w-0 truncate text-sm font-bold text-stone-900 tracking-tight">{currentSection}</p>
+          <div className="min-w-0 flex items-baseline gap-2">
+            {currentGroup && <span className="hidden sm:inline text-[16px] text-stone-600">{currentGroup}</span>}
+            {currentGroup && <span className="hidden sm:inline text-[16px] text-stone-400">/</span>}
+            <p className="truncate text-[16px] font-semibold text-stone-950">{currentItem?.name ?? 'Administration'}</p>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
-            {/* Indicateur de Santé & Diagnostic des Clés API */}
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setCmdOpen(true)}
+              className="hidden md:flex items-center gap-2 h-9 w-64 px-3 rounded-lg bg-stone-100 text-[14px] font-medium text-stone-700 hover:bg-stone-200/70 transition-colors cursor-pointer"
+            >
+              <Search size={15} className="text-stone-700" />
+              <span className="flex-1 text-left">Rechercher</span>
+              <Kbd>⌘K</Kbd>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCmdOpen(true)}
+              aria-label="Rechercher"
+              className="md:hidden p-2 rounded-lg text-stone-700 hover:bg-stone-100 cursor-pointer"
+            >
+              <Search size={18} />
+            </button>
+
             <SystemHealthPill />
 
-            {/* Quick Action Button "+ Créer" */}
-            <div className="relative">
+            <div className="relative" ref={quickCreateRef}>
               <button
                 type="button"
                 onClick={() => setQuickCreateOpen(!quickCreateOpen)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-semibold hover:bg-stone-800 transition-all shadow-xs active:scale-95 cursor-pointer"
+                aria-expanded={quickCreateOpen}
+                aria-haspopup="menu"
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2"
               >
-                <Plus size={14} />
-                <span>Créer</span>
+                <Plus size={16} />
+                <span className="hidden sm:inline">Créer</span>
               </button>
 
               {quickCreateOpen && (
                 <div
-                  className="absolute right-0 mt-2 w-48 rounded-xl bg-white border border-stone-200 shadow-xl py-1.5 z-30 animate-fadein"
-                  onClick={() => setQuickCreateOpen(false)}
+                  role="menu"
+                  className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-stone-200 shadow-lg p-1.5 z-30 animate-fadein"
                 >
-                  <Link href="/admin/blog/new" className="flex items-center gap-2.5 px-3 py-2 text-xs text-stone-700 hover:bg-stone-100 hover:text-stone-900 font-medium">
-                    <FileText size={14} className="text-stone-400" />
-                    <span>Nouvel article</span>
-                  </Link>
-                  <Link href="/admin/pages/new" className="flex items-center gap-2.5 px-3 py-2 text-xs text-stone-700 hover:bg-stone-100 hover:text-stone-900 font-medium">
-                    <Layers size={14} className="text-stone-400" />
-                    <span>Nouvelle page</span>
-                  </Link>
-                  {moduleFlags.caisse && (
-                    <>
-                      <Link href="/admin/caisse" className="flex items-center gap-2.5 px-3 py-2 text-xs text-stone-700 hover:bg-stone-100 hover:text-stone-900 font-medium border-t border-stone-100">
-                        <CreditCard size={14} className="text-emerald-600" />
-                        <span>Encaissement rapide</span>
-                      </Link>
-                      <Link href="/admin/caisse/clients" className="flex items-center gap-2.5 px-3 py-2 text-xs text-stone-700 hover:bg-stone-100 hover:text-stone-900 font-medium">
-                        <Users size={14} className="text-stone-400" />
-                        <span>Nouveau client</span>
-                      </Link>
-                    </>
-                  )}
+                  {quickCreate.map((q) => (
+                    <Link
+                      key={q.href + q.label}
+                      role="menuitem"
+                      href={q.href}
+                      onClick={() => setQuickCreateOpen(false)}
+                      className="flex items-center gap-3 px-3 h-10 rounded-lg text-[15px] font-medium text-stone-900 hover:bg-stone-100"
+                    >
+                      <q.icon size={16} strokeWidth={1.9} className="text-stone-700" />
+                      <span>{q.label}</span>
+                    </Link>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* User Profile Chip */}
-            <div className="flex items-center gap-2.5 pl-2 border-l border-stone-200/80">
-              <span className="hidden text-[13px] font-semibold text-stone-700 sm:block">{user?.email}</span>
-              <div
-                role="img"
-                aria-label={user?.email ? `Connecté en tant que ${user.email}` : 'Utilisateur connecté'}
-                className="w-8 h-8 rounded-xl bg-gradient-to-br from-stone-900 to-stone-800 text-white flex items-center justify-center text-xs font-bold shadow-2xs border border-stone-700"
-              >
-                {user?.email?.charAt(0).toUpperCase() ?? 'A'}
-              </div>
+            <div
+              role="img"
+              title={user?.email ?? undefined}
+              aria-label={user?.email ? `Connecté en tant que ${user.email}` : 'Utilisateur connecté'}
+              className="hidden sm:grid size-9 rounded-full bg-stone-100 text-stone-700 place-items-center text-[13px] font-medium"
+            >
+              {user?.email?.charAt(0).toUpperCase() ?? 'A'}
             </div>
           </div>
-        </div>
+        </header>
 
-        {/* AI Status Alert */}
+        {/* Alerte IA */}
         {aiStatus && !aiStatus.ok && (
-          <div className="bg-red-50 border-b border-red-200 px-4 lg:px-8 py-3 flex items-center gap-3 text-red-900 text-[13px] shrink-0">
+          <div className="bg-red-50 border-b border-red-100 px-4 sm:px-6 lg:px-10 py-2.5 flex items-center gap-3 text-red-900 text-[14px] shrink-0">
             <AlertTriangle size={16} className="shrink-0 text-red-600" />
-            <div className="flex-1 leading-relaxed">
-              <span className="font-semibold">L'IA est indisponible :</span>{' '}
+            <p className="flex-1">
+              <span className="font-medium">L'IA est indisponible.</span>{' '}
               {aiStatus.error || "La clé API est invalide ou épuisée."}
-            </div>
+            </p>
             <button
               type="button"
               onClick={() => checkAiStatus(true)}
-              className="shrink-0 rounded-xl border border-red-300 bg-white px-3 py-1 text-[12.5px] font-semibold text-red-800 hover:bg-red-100 cursor-pointer shadow-2xs"
+              className="shrink-0 rounded-lg border border-red-200 bg-white px-3 h-8 text-[13px] font-medium text-red-800 hover:bg-red-50 cursor-pointer"
             >
-              Re-tester
+              Tester à nouveau
             </button>
           </div>
         )}
 
-        {/* Budget Alert */}
+        {/* Alerte budget */}
         {aiBudget && aiBudget.level !== 'ok' && (
-          <div className={`px-4 lg:px-8 py-3 flex items-center gap-3 text-[13px] shrink-0 border-b ${
-            aiBudget.level === 'exceeded' ? 'bg-red-50 border-red-200 text-red-900' : 'bg-amber-50 border-amber-200 text-amber-900'
+          <div className={`px-4 sm:px-6 lg:px-10 py-2.5 flex items-center gap-3 text-[14px] shrink-0 border-b ${
+            aiBudget.level === 'exceeded' ? 'bg-red-50 border-red-100 text-red-900' : 'bg-amber-50 border-amber-100 text-amber-900'
           }`}>
             <AlertTriangle size={16} className={`shrink-0 ${aiBudget.level === 'exceeded' ? 'text-red-600' : 'text-amber-600'}`} />
-            <div className="flex-1 leading-relaxed">
-              <span className="font-semibold">
+            <p className="flex-1">
+              <span className="font-medium">
                 {aiBudget.level === 'exceeded' ? 'Budget IA dépassé.' : 'Budget IA bientôt atteint.'}
               </span>{' '}
               ${Number(aiBudget.usage?.totalUsd ?? 0).toFixed(2)} consommés ce mois-ci ({Math.round(aiBudget.percentUsed)} %).
-            </div>
+            </p>
             <Link
               href="/admin/settings"
-              className={`shrink-0 rounded-xl border bg-white px-3 py-1 text-[12.5px] font-semibold transition-colors ${
-                aiBudget.level === 'exceeded' ? 'border-red-300 text-red-800 hover:bg-red-100' : 'border-amber-300 text-amber-900 hover:bg-amber-100'
-              }`}
+              className="shrink-0 rounded-lg border border-current/20 bg-white px-3 h-8 inline-flex items-center text-[13px] font-medium hover:bg-white/60"
             >
               Réglages IA
             </Link>
           </div>
         )}
 
-        {/* Main Content View */}
-        <div className={fullBleed ? 'flex-1' : 'mx-auto w-full max-w-[1440px] flex-1 p-4 sm:p-6 lg:p-8'}>
+        {/* Contenu */}
+        <div className={fullBleed ? 'flex-1' : 'w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10 2xl:px-14'}>
           {children}
         </div>
       </main>
 
-      {/* Command Menu Modal Overlay (⌘K) */}
       <CommandMenu
         isOpen={cmdOpen}
         onClose={() => setCmdOpen(false)}
@@ -530,4 +580,3 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
-

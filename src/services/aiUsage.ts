@@ -28,19 +28,28 @@ export interface RecordUsageInput {
   /** Fonctionnalité appelante : 'article', 'page', 'social'… */
   feature?: string;
   usage: TokenUsage | null | undefined;
+  /** Durée de l'appel, en millisecondes (colonne `duration_ms`). */
+  durationMs?: number;
 }
+
+/**
+ * Passe à `false` si la colonne `duration_ms` n'existe pas encore (migration
+ * 20260927_ai_usage_duration.sql non appliquée) : on n'essaie plus de l'écrire
+ * et la consommation continue d'être enregistrée.
+ */
+let durationColumnAvailable = true;
 
 /**
  * Enregistre un appel. **Ne lève jamais** : une génération réussie ne doit pas
  * échouer parce que la comptabilité a échoué.
  */
-export async function recordAiUsage({ model, feature, usage }: RecordUsageInput): Promise<void> {
+export async function recordAiUsage({ model, feature, usage, durationMs }: RecordUsageInput): Promise<void> {
   if (!usage) return;
   try {
     const db = client();
     if (!db) return;
 
-    const { error } = await db.from('ai_usage').insert({
+    const row: Record<string, unknown> = {
       model,
       feature: feature || 'inconnu',
       input_tokens: usage.input_tokens ?? 0,
@@ -48,7 +57,17 @@ export async function recordAiUsage({ model, feature, usage }: RecordUsageInput)
       cache_read_tokens: usage.cache_read_input_tokens ?? 0,
       cache_creation_tokens: usage.cache_creation_input_tokens ?? 0,
       cost_usd: Number(estimateCostUsd(model, usage).toFixed(6)),
-    });
+    };
+    const withDuration =
+      durationColumnAvailable && typeof durationMs === 'number' && Number.isFinite(durationMs);
+    if (withDuration) row.duration_ms = Math.round(durationMs);
+
+    let { error } = await db.from('ai_usage').insert(row);
+    if (error && withDuration && /duration_ms/i.test(error.message)) {
+      durationColumnAvailable = false;
+      delete row.duration_ms;
+      ({ error } = await db.from('ai_usage').insert(row));
+    }
     if (error) console.error('[aiUsage] Enregistrement impossible :', error.message);
   } catch (err) {
     console.error('[aiUsage] Enregistrement impossible :', err);

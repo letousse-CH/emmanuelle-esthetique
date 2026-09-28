@@ -5,7 +5,7 @@ import JournalClient from './JournalClient';
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="p-8 text-sm text-stone-600">Chargement...</div>}>
+    <Suspense fallback={<div className="p-8 text-sm text-stone-700">Chargement...</div>}>
       <JournalClient />
     </Suspense>
   );

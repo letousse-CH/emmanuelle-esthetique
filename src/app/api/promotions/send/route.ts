@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { SITE_CONFIG } from '../../../../config/site';
 import { plainTextToSimpleHtml, sendEmail } from '../../../../services/email';
 import { buildUnsubToken, isUnsubConfigured } from '../../../../utils/unsubToken';
+import { isAdminEmail } from '../../../../utils/apiAuth';
 import { buildAudience, renderMessage } from '../../../../types/promotions';
 import type { Promotion, Subscriber } from '../../../../types/promotions';
 import type { Client, ClientStats } from '../../../../types/caisse';
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   const { data: { user }, error: authError } = await userClient.auth.getUser();
-  if (authError || !user) {
+  if (authError || !user || !isAdminEmail(user.email)) {
     return NextResponse.json({ error: 'Session invalide ou expirée.' }, { status: 401 });
   }
 

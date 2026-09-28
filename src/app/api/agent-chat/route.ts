@@ -13,13 +13,24 @@ import { callClaude } from '../../../utils/ai';
 import type { Agent, AgentCollectField } from '../../../types/agents';
 import { getAnthropicKey } from '../../../services/secrets';
 import { emitAutomationEvent } from '../../../services/automationRunner';
+import { checkRateLimit } from '../../../utils/rateLimit';
 
 export const runtime = 'nodejs';
+// Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
+export const maxDuration = 60;
 
 /** Plafond de contexte : au-delà, la facture grimpe sans gain de qualité. */
 const MAX_KNOWLEDGE_CHARS = 24_000;
 
 export async function POST(req: NextRequest) {
+  // Route publique (widget du site) : chaque message est facturé par l'IA,
+  // on plafonne donc le débit par adresse IP.
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+  const rate = await checkRateLimit(`agent-chat:${ip}`, { windowMs: 60_000, maxRequests: 20 });
+  if (!rate.success) {
+    return NextResponse.json({ error: 'Trop de messages en peu de temps. Patientez une minute.' }, { status: 429 });
+  }
+
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json({ error: 'Supabase non configuré.' }, { status: 500 });
@@ -159,6 +170,7 @@ export async function POST(req: NextRequest) {
       system: systemPrompt,
       max_tokens: 800,
       feature: 'agent_chat',
+      mode: 'quick',
       messages: [
         ...(history ?? []).map((m) => ({
           role: m.role as 'user' | 'assistant',

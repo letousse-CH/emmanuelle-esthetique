@@ -1,33 +1,10 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { validateSupabaseToken } from '../../../../utils/apiAuth';
+import { isAdminRequest } from '../../../../utils/apiAuth';
 import { supabase } from '../../../../services/supabase';
+import { getR2Config } from '../../../../utils/r2Config';
 
-async function getR2Config() {
-  let accountId = process.env.R2_ACCOUNT_ID || '';
-  let accessKey = process.env.R2_ACCESS_KEY_ID || '';
-  let secretKey = process.env.R2_SECRET_ACCESS_KEY || '';
-  let bucket = process.env.R2_BUCKET_NAME || '';
-  let publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || process.env.VITE_R2_PUBLIC_URL || '';
-
-  if (!accountId || !accessKey || !secretKey || !bucket || !publicUrl) {
-    const { data } = await supabase.from('settings').select('key, value').in('key', [
-      'r2_account_id',
-      'r2_access_key_id',
-      'r2_secret_access_key',
-      'r2_bucket_name',
-      'r2_public_url',
-    ]);
-    const map = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value ?? '']));
-    accountId = accountId || map.r2_account_id || '';
-    accessKey = accessKey || map.r2_access_key_id || '';
-    secretKey = secretKey || map.r2_secret_access_key || '';
-    bucket = bucket || map.r2_bucket_name || '';
-    publicUrl = publicUrl || map.r2_public_url || '';
-  }
-
-  return { accountId, accessKey, secretKey, bucket, publicUrl };
-}
+// Identifiants R2 : app_secrets (admin) puis variables R2_* ; voir utils/r2Config.
 
 function isCandidateImageUrl(url: string, cleanPublicUrl: string): boolean {
   if (!url || typeof url !== 'string') return false;
@@ -90,9 +67,9 @@ async function mirrorExternalImageToR2(
 
 export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get('authorization') || '';
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    const isAuth = (token === 'system-cron-bypass') || (await validateSupabaseToken(token));
+    // Session admin, ou appel interne de la tâche planifiée (x-internal-secret).
+    // L'ancien passe-partout « system-cron-bypass » est supprimé.
+    const isAuth = await isAdminRequest(req);
 
     if (!isAuth) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });

@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '../../../utils/supabaseAdmin';
+import { isAdminEmail } from '../../../utils/apiAuth';
 
 
 export async function GET(req: NextRequest) {
@@ -13,8 +14,8 @@ export async function GET(req: NextRequest) {
   if (!token) {
     return NextResponse.json({ error: 'Non autorisé. Token manquant.' }, { status: 401 });
   }
-  const { error: authError } = await supabase.auth.getUser(token);
-  if (authError) {
+  const { data: authData, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !authData?.user || !isAdminEmail(authData.user.email)) {
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
   }
 

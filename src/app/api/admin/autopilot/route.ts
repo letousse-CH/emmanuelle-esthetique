@@ -1,8 +1,25 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { validateSupabaseToken } from '../../../../utils/apiAuth';
+import { isAdminRequest } from '../../../../utils/apiAuth';
 import { getAutopilotConfig, saveAutopilotConfig, runAutopilotCycle } from '../../../../services/autopilotService';
 
+export const runtime = 'nodejs';
+// Un cycle attend la rédaction complète d'un article par l'IA : les 10 s par
+// défaut des fonctions Netlify ne suffisent pas.
+export const maxDuration = 60;
+
+/**
+ * Session admin obligatoire. Le contrôle ne s'appliquait auparavant que si un
+ * jeton était fourni : une requête sans en-tête pouvait lancer un cycle
+ * (article rédigé par l'IA, donc facturé, puis publié) ou changer les réglages.
+ */
+async function isAdmin(req: NextRequest): Promise<boolean> {
+  return isAdminRequest(req);
+}
+
+const UNAUTHORIZED = { error: 'Votre session a expiré. Reconnectez-vous puis réessayez.' };
+
 export async function GET(req: NextRequest) {
+  if (!(await isAdmin(req))) return NextResponse.json(UNAUTHORIZED, { status: 401 });
   try {
     const config = await getAutopilotConfig();
     return NextResponse.json(config);
@@ -12,15 +29,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization') || '';
-  const token = authHeader.replace('Bearer ', '').trim();
-  
-  if (token) {
-    const isValid = await validateSupabaseToken(token);
-    if (!isValid) {
-      return NextResponse.json({ error: 'Jeton d\'accès invalide.' }, { status: 401 });
-    }
-  }
+  if (!(await isAdmin(req))) return NextResponse.json(UNAUTHORIZED, { status: 401 });
 
   try {
     const body = await req.json();

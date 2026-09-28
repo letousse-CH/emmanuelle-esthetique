@@ -7,7 +7,8 @@ import 'react-quill-new/dist/quill.snow.css';
 
 const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false }) as any;
 import { supabase } from '../../../services/supabase';
-import { Send, Eye, EyeOff, Users, CheckCircle, XCircle, Loader } from 'lucide-react';
+import { Send, Eye, EyeOff, Users } from 'lucide-react';
+import { Button, Callout, Card, CardBody, CardHeader, Field, Input, PageHeader } from '../../../components/admin/ui';
 
 import { SITE_CONFIG } from '../../../config/site';
 
@@ -32,10 +33,10 @@ function EmailPreview({ subject, html }: { subject: string; html: string }) {
       </div>
     </div>`;
   return (
-    <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-      <div className="px-5 py-3 border-b border-stone-100 bg-stone-50/50 flex items-center gap-2">
-        <span className="text-[12.5px] font-medium text-stone-700">Aperçu (mail normal)</span>
-        {subject && <span className="truncate text-[12.5px] text-stone-500">— {subject}</span>}
+    <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 bg-stone-50/50 flex items-center gap-2">
+        <span className="text-[13px] font-semibold text-stone-800 shrink-0">Aperçu</span>
+        {subject && <span className="truncate text-[13px] text-stone-700">{subject}</span>}
       </div>
       <div className="overflow-auto max-h-[600px] bg-white">
         <iframe srcDoc={full} title="Aperçu newsletter" className="w-full border-none" style={{ height: 600 }} />
@@ -44,13 +45,19 @@ function EmailPreview({ subject, html }: { subject: string; html: string }) {
   );
 }
 
+/** Texte visible d'un contenu HTML : un éditeur vide renvoie « <p><br></p> », qui n'est pas vide pour autant. */
+function plainText(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+}
+
 export default function NewsletterEditor() {
   const [subject, setSubject]             = useState('');
   const [html, setHtml]                   = useState('');
   const [testEmail, setTestEmail]         = useState('');
   const [showPreview, setShowPreview]     = useState(true);
   const [status, setStatus]               = useState<SendStatus>('idle');
-  const [result, setResult]               = useState<{ sent: number; failed: number; total: number } | null>(null);
+  const [result, setResult]               = useState<{ sent: number; failed: number; total: number; isTest: boolean } | null>(null);
+  const [errorText, setErrorText]         = useState('');
   const [confirm, setConfirm]             = useState(false);
   const [history, setHistory]             = useState<Newsletter[]>([]);
   const [subscriberCount, setSubscriberCount] = useState<number | null>(null);
@@ -61,117 +68,152 @@ export default function NewsletterEditor() {
   const fetchCount = async () => { const { count } = await supabase.from('subscribers').select('*', { count: 'exact', head: true }).eq('active', true); setSubscriberCount(count ?? 0); };
   const getToken = async () => { const { data } = await supabase.auth.getSession(); return data.session?.access_token || ''; };
 
+  const hasContent = subject.trim() !== '' && plainText(html) !== '';
+  const alreadySent = history.find(n => n.subject.trim().toLowerCase() === subject.trim().toLowerCase() && subject.trim() !== '');
+  const plural = (n: number | null) => (n !== null && n > 1 ? 's' : '');
+
   const send = async (isTest: boolean) => {
-    if (!subject.trim() || !html.trim()) return;
+    if (!hasContent) return;
     if (isTest && !testEmail.trim()) return;
-    setStatus('sending'); setResult(null); setConfirm(false);
+    setStatus('sending'); setResult(null); setErrorText(''); setConfirm(false);
     try {
       const token = await getToken();
       const res = await fetch('/api/send-newsletter', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ subject, html, ...(isTest ? { testEmail } : {}) }) });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setResult({ sent: data.sent, failed: data.failed, total: data.total ?? data.sent });
+      const data = await res.json().catch(() => ({ error: "Le serveur a renvoyé une réponse illisible." }));
+      if (!res.ok || data.error) throw new Error(data.error || `Erreur ${res.status}`);
+      setResult({ sent: data.sent, failed: data.failed, total: data.total ?? data.sent, isTest });
       setStatus('done');
       if (!isTest) { fetchHistory(); fetchCount(); }
-    } catch { setStatus('error'); }
+    } catch (e: any) {
+      setErrorText(e?.message || '');
+      setStatus('error');
+    }
   };
 
   const modules = useMemo(() => ({ toolbar: { container: [[{ header: [2, 3, false] }], ['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], ['blockquote', 'link'], ['clean']] } }), []);
 
+  const sending = status === 'sending';
+
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Audience</p>
-          <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5"><Send size={20} className="text-sage" /> Composer une newsletter</h1>
-          <p className="mt-1 text-sm text-stone-600 flex items-center gap-1.5 flex-wrap">
-            <Users size={12} />
-            {subscriberCount === null ? '…' : `${subscriberCount} abonné${subscriberCount !== 1 ? 's' : ''} actif${subscriberCount !== 1 ? 's' : ''}`}
-            <span className="text-stone-200">·</span>
-            <Link href="/admin/subscribers" className="text-sage hover:text-stone-900/70 transition-colors">Gérer les abonnés</Link>
-          </p>
-        </div>
-        <button onClick={() => setShowPreview(v => !v)}
-          className="flex items-center gap-2 text-xs text-stone-500 hover:text-stone-800 border border-stone-200 hover:border-stone-300 px-3 py-2 rounded-lg transition-all cursor-pointer shrink-0">
-          {showPreview ? <EyeOff size={13} /> : <Eye size={13} />}
-          {showPreview ? 'Masquer aperçu' : 'Voir aperçu'}
-        </button>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        title="Newsletter"
+        description={
+          <span className="inline-flex items-center gap-1.5 flex-wrap">
+            <Users size={15} className="text-stone-600" aria-hidden="true" />
+            {subscriberCount === null ? 'Comptage des abonnés…' : `${subscriberCount} abonné${plural(subscriberCount)} actif${plural(subscriberCount)}`}
+            <span className="text-stone-400" aria-hidden="true">·</span>
+            <Link href="/admin/subscribers" className="text-accent font-medium hover:underline">Gérer les abonnés</Link>
+          </span>
+        }
+        actions={
+          <Button variant="ghost" icon={showPreview ? EyeOff : Eye} onClick={() => setShowPreview(v => !v)} aria-pressed={showPreview}>
+            {showPreview ? "Masquer l'aperçu" : "Afficher l'aperçu"}
+          </Button>
+        }
+      />
 
       <div className={`grid gap-6 ${showPreview ? 'lg:grid-cols-2' : 'grid-cols-1'}`}>
-        <div className="space-y-4">
+        <div className="space-y-5 min-w-0">
+          <Field label="Objet de l'e-mail" htmlFor="nl-subject">
+            <Input id="nl-subject" type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder="ex : Vos soins pour préparer la peau à l'hiver" />
+          </Field>
           <div className="space-y-1.5">
-            <label className="block text-[13px] font-medium text-stone-800">Objet de l'email</label>
-            <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Ex : Une nouvelle réflexion sur le silence intérieur…"
-              className="w-full px-4 py-3 border border-stone-200 bg-white rounded-xl text-sm text-stone-800 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors shadow-sm" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="block text-[13px] font-medium text-stone-800">Contenu</label>
-            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden shadow-sm [&_.ql-editor]:text-[17px] [&_.ql-editor]:leading-relaxed">
-              <ReactQuill theme="snow" value={html} onChange={setHtml} modules={modules} className="mb-12 font-sans" placeholder="Écrivez votre newsletter…" />
+            <p className="block text-[14px] font-semibold text-stone-900" id="nl-content-label">Contenu</p>
+            <div aria-labelledby="nl-content-label" className="bg-white border border-stone-300 rounded-lg overflow-hidden [&_.ql-editor]:text-[16px] [&_.ql-editor]:leading-relaxed [&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-stone-200 [&_.ql-container]:border-0">
+              <ReactQuill theme="snow" value={html} onChange={setHtml} modules={modules} className="font-sans" placeholder="Écrivez votre newsletter…" />
             </div>
           </div>
-          <div className="space-y-3 pt-1">
-            <div className="flex gap-2">
-              <input type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)} placeholder="votre@email.com (test)"
-                className="flex-1 px-4 py-2.5 border border-stone-200 bg-white rounded-lg text-sm placeholder:text-stone-400 focus:border-stone-900 outline-none transition-all" />
-              <button onClick={() => send(true)} disabled={status === 'sending' || !subject || !html || !testEmail}
-                className="px-4 py-2.5 border border-stone-900 text-stone-900 text-xs font-semibold rounded-lg hover:bg-sage hover:text-white transition-colors disabled:opacity-40 cursor-pointer">
-                Test
-              </button>
-            </div>
-            {!confirm ? (
-              <button onClick={() => setConfirm(true)} disabled={status === 'sending' || !subject || !html}
-                className="w-full flex items-center justify-center gap-2 bg-sage text-white py-3.5 text-sm font-medium rounded-xl hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer shadow-sm">
-                {status === 'sending' ? <><Loader size={15} className="animate-spin" /> Envoi en cours…</> : <><Send size={15} /> Envoyer à {subscriberCount ?? '…'} abonnés</>}
-              </button>
-            ) : (
-              <div className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-3">
-                <p className="text-sm text-red-700">Confirmer l'envoi à <strong>{subscriberCount}</strong> abonné{subscriberCount !== 1 ? 's' : ''} ? Cette action est irréversible.</p>
+
+          <Card>
+            <CardBody className="space-y-5">
+              <Field label="S'envoyer un e-mail de test" htmlFor="nl-test" hint="Recevez la newsletter dans votre boîte avant de l'envoyer à tout le monde.">
                 <div className="flex gap-2">
-                  <button onClick={() => send(false)} className="flex-1 bg-red-600 text-white py-2.5 text-xs font-semibold rounded-lg hover:bg-red-700 transition-colors cursor-pointer">Confirmer</button>
-                  <button onClick={() => setConfirm(false)} className="flex-1 border border-stone-200 text-stone-600 py-2.5 text-xs font-semibold rounded-lg hover:bg-stone-50 transition-colors cursor-pointer">Annuler</button>
+                  <Input id="nl-test" type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)} placeholder="votre@adresse.ch" className="flex-1 min-w-0" />
+                  <Button variant="secondary" onClick={() => send(true)} disabled={sending || !hasContent || !testEmail.trim()}>
+                    Envoyer le test
+                  </Button>
                 </div>
+              </Field>
+
+              <div className="border-t border-stone-200 pt-5">
+                {!confirm ? (
+                  <Button
+                    variant="primary"
+                    icon={Send}
+                    loading={sending}
+                    onClick={() => setConfirm(true)}
+                    disabled={sending || !hasContent || !subscriberCount}
+                    className="w-full"
+                  >
+                    {sending ? 'Envoi en cours…' : `Envoyer à ${subscriberCount ?? '…'} abonné${plural(subscriberCount)}`}
+                  </Button>
+                ) : (
+                  <div className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-3" role="alertdialog" aria-labelledby="nl-confirm-text">
+                    <p id="nl-confirm-text" className="text-[14px] text-red-900">
+                      Envoyer « {subject} » à <strong>{subscriberCount}</strong> abonné{plural(subscriberCount)} ? Un e-mail envoyé ne peut pas être rappelé.
+                    </p>
+                    {alreadySent && (
+                      <p className="text-[13px] text-red-900">
+                        Attention : une newsletter avec le même objet a déjà été envoyée le {new Date(alreadySent.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}.
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => send(false)} className="h-10 px-4 bg-red-700 text-white text-[14px] font-semibold rounded-lg hover:bg-red-800 transition-colors cursor-pointer">Oui, envoyer maintenant</button>
+                      <Button variant="secondary" onClick={() => setConfirm(false)}>Annuler</Button>
+                    </div>
+                  </div>
+                )}
+                {!hasContent && (
+                  <p className="mt-2 text-[13px] text-stone-600">Renseignez l&apos;objet et le contenu pour pouvoir envoyer.</p>
+                )}
+                {hasContent && subscriberCount === 0 && (
+                  <p className="mt-2 text-[13px] text-stone-600">Aucun abonné actif pour l&apos;instant : l&apos;envoi est désactivé.</p>
+                )}
               </div>
-            )}
-            {status === 'done' && result && (
-              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
-                <CheckCircle size={15} className="shrink-0" />
-                {result.sent} email{result.sent !== 1 ? 's' : ''} envoyé{result.sent !== 1 ? 's' : ''}{result.failed > 0 && `, ${result.failed} échec${result.failed !== 1 ? 's' : ''}`}.
-              </div>
-            )}
-            {status === 'error' && (
-              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-                <XCircle size={15} className="shrink-0" /> Une erreur s'est produite. Vérifiez la configuration SMTP.
-              </div>
-            )}
-          </div>
+
+              {status === 'done' && result && (
+                <Callout tone={result.failed > 0 ? 'warning' : 'success'}>
+                  {result.isTest
+                    ? `E-mail de test envoyé à ${testEmail.trim()}.`
+                    : `${result.sent} e-mail${result.sent > 1 ? 's' : ''} envoyé${result.sent > 1 ? 's' : ''}${result.failed > 0 ? `, ${result.failed} non parvenu${result.failed > 1 ? 's' : ''} (adresses à vérifier dans la liste des abonnés)` : ''}.`}
+                </Callout>
+              )}
+              {status === 'error' && (
+                <div role="alert">
+                  <Callout tone="danger">
+                    L&apos;envoi n&apos;a pas abouti{errorText ? ` : ${errorText}` : '.'} Réessayez dans un instant ; si le problème continue, vérifiez les réglages d&apos;envoi d&apos;e-mails.
+                  </Callout>
+                </div>
+              )}
+            </CardBody>
+          </Card>
         </div>
         {showPreview && <EmailPreview subject={subject} html={html} />}
       </div>
 
       {history.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-[13px] font-medium text-stone-800 pb-2 border-b border-stone-100">Newsletters envoyées</h2>
-          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-stone-100 bg-stone-50/50">
-                <th className="text-left px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600">Objet</th>
-                <th className="text-left px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 hidden sm:table-cell">Date</th>
-                <th className="text-left px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600">Envoyés</th>
-                <th className="text-left px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 hidden sm:table-cell">Échecs</th>
+        <Card>
+          <CardHeader title="Newsletters envoyées" description="Les 20 derniers envois." />
+          <div className="overflow-x-auto">
+            <table className="w-full text-[14px]">
+              <thead><tr className="border-b border-stone-200 bg-stone-50">
+                <th scope="col" className="text-left px-6 py-3 text-[13px] font-semibold text-stone-700">Objet</th>
+                <th scope="col" className="text-left px-6 py-3 text-[13px] font-semibold text-stone-700 hidden sm:table-cell">Date</th>
+                <th scope="col" className="text-left px-6 py-3 text-[13px] font-semibold text-stone-700">Envoyés</th>
+                <th scope="col" className="text-left px-6 py-3 text-[13px] font-semibold text-stone-700 hidden sm:table-cell">Échecs</th>
               </tr></thead>
-              <tbody>{history.map(n => (
-                <tr key={n.id} className="border-b border-stone-50 hover:bg-stone-50/50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-stone-900 truncate max-w-xs">{n.subject}</td>
-                  <td className="px-6 py-4 text-stone-500 text-xs hidden sm:table-cell">{new Date(n.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</td>
-                  <td className="px-6 py-4"><span className="inline-flex items-center gap-1 text-green-600 font-semibold text-xs"><CheckCircle size={12} /> {n.sent_count}</span></td>
-                  <td className="px-6 py-4 hidden sm:table-cell">{n.failed_count > 0 ? <span className="text-red-400 font-semibold text-xs">{n.failed_count}</span> : <span className="text-stone-200 text-xs">0</span>}</td>
+              <tbody className="divide-y divide-stone-200">{history.map(n => (
+                <tr key={n.id} className="hover:bg-stone-50 transition-colors">
+                  <td className="px-6 py-3.5 font-medium text-stone-900 truncate max-w-xs">{n.subject}</td>
+                  <td className="px-6 py-3.5 text-stone-700 text-[13px] hidden sm:table-cell whitespace-nowrap">{new Date(n.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</td>
+                  <td className="px-6 py-3.5 text-stone-900 tabular-nums">{n.sent_count}</td>
+                  <td className="px-6 py-3.5 hidden sm:table-cell tabular-nums">{n.failed_count > 0 ? <span className="text-red-700 font-semibold">{n.failed_count}</span> : <span className="text-stone-600">0</span>}</td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

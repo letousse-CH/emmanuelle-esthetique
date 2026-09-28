@@ -121,7 +121,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
   };
 
   const sendTest = async () => {
-    if (!testEmail.includes('@')) { setError('Adresse de test invalide.'); return; }
+    if (!testEmail.includes('@')) { setError('Adresse d’essai invalide : vérifiez qu’elle contient un @.'); return; }
     setSending(true); setError(null); setNotice(null);
     try {
       // Enregistrer d'abord : la route relit la promotion en base, elle ne
@@ -166,7 +166,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
     try {
       await clearFailedSends(promotion.id, 'email');
       setSends(await listPromotionSends(promotion.id));
-      setNotice('Les échecs sont remis en file. Relance l’envoi.');
+      setNotice('Les adresses en échec sont remises dans la liste d’envoi. Cliquez de nouveau sur « Envoyer ».');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Reprise impossible.');
     } finally {
@@ -182,7 +182,10 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
    */
   const openWhatsApp = async (entry: AudienceEntry) => {
     const texte = renderMessage(messageWa, entry);
+    // L'ouverture doit rester synchrone (sinon le navigateur bloque la
+    // fenêtre) ; le texte est enregistré juste après s'il a changé.
     window.open(whatsappLink(entry.waNumber!, texte), '_blank', 'noopener');
+    if (dirty && !saving) void save();
     try {
       await recordPromotionSend({
         promotionId: promotion.id,
@@ -207,34 +210,55 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
   };
 
   const waFaits = parWa.filter(e => servis.whatsapp.has(e.waNumber!.toLowerCase())).length;
+  const emailsRestants = parEmail.filter(e => !servis.email.has(e.email!.toLowerCase())).length;
+
+  // Fermer ne doit ni perdre un texte en cours de rédaction, ni laisser croire
+  // qu'un envoi groupé est interrompu (il continue tant que la page est ouverte).
+  const requestClose = () => {
+    if (sending) {
+      setNotice('Un envoi est en cours : attendez qu’il se termine avant de fermer.');
+      return;
+    }
+    if (dirty && !confirm('Des modifications ne sont pas enregistrées. Fermer quand même et les perdre ?')) return;
+    onClose();
+  };
+
+  // Échap ferme le panneau, avec les mêmes garde-fous que la croix.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') requestClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-stone-900/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-stone-900/40" onClick={requestClose}>
       <aside
         role="dialog" aria-modal="true" aria-label={`Promotion ${promotion.nom}`}
         onClick={e => e.stopPropagation()}
         className="bg-stone-50 w-full sm:max-w-2xl h-full overflow-y-auto shadow-2xl"
       >
-        <header className="sticky top-0 z-10 bg-white border-b border-stone-100 px-5 py-4 flex items-center justify-between gap-3">
+        <header className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-4 flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <label htmlFor="promo-nom" className="sr-only">Nom de la promotion</label>
             <input
               id="promo-nom" type="text" value={nom} onChange={e => mark(setNom)(e.target.value)}
               placeholder="Nom de la promotion"
-              className="w-full text-lg font-semibold text-stone-900 bg-transparent border-0 outline-none placeholder:text-stone-400"
+              className="w-full text-lg font-semibold text-stone-900 bg-transparent border-0 outline-none placeholder:text-stone-500"
             />
-            <p className="text-[12.5px] text-stone-500">
+            <p className="text-[12.5px] text-stone-600">
               {CANAL_LABELS[canal]} · {segmentDef.label}
-              {dirty && <span className="text-amber-600"> · modifications non enregistrées</span>}
+              {dirty && <span className="text-amber-700"> · modifications non enregistrées</span>}
             </p>
           </div>
           <button
             onClick={save} disabled={saving || !dirty}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 text-xs transition-all disabled:opacity-40 cursor-pointer"
+            className={`shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-semibold transition-colors disabled:opacity-45 cursor-pointer ${
+              dirty ? 'bg-accent text-accent-fg hover:bg-accent-hover' : 'bg-stone-100 text-stone-900 hover:bg-stone-200'
+            }`}
           >
-            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Enregistrer
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} {dirty ? 'Enregistrer' : 'Enregistré'}
           </button>
-          <button onClick={onClose} aria-label="Fermer" className="shrink-0 p-1.5 text-stone-500 hover:text-stone-800 cursor-pointer">
+          <button onClick={requestClose} aria-label="Fermer" className="shrink-0 p-1.5 text-stone-600 hover:text-stone-900 cursor-pointer">
             <X size={18} />
           </button>
         </header>
@@ -248,8 +272,8 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
             </div>
           )}
           {notice && (
-            <div className="flex items-start gap-2.5 rounded-xl border border-sage/30 bg-sage/5 px-4 py-3 text-sm text-stone-700">
-              <Check size={15} className="shrink-0 mt-0.5 text-sage" />
+            <div className="flex items-start gap-2.5 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-stone-700">
+              <Check size={15} className="shrink-0 mt-0.5 text-accent" />
               <span className="flex-1">{notice}</span>
               <button onClick={() => setNotice(null)} aria-label="Masquer" className="shrink-0 cursor-pointer"><X size={14} /></button>
             </div>
@@ -262,8 +286,8 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
               {(['email', 'whatsapp', 'les_deux'] as PromotionCanal[]).map(c => (
                 <button
                   key={c} onClick={() => mark(setCanal)(c)} aria-pressed={canal === c}
-                  className={`px-2 py-2 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-                    canal === c ? 'border-sage bg-sage/8 text-sage' : 'border-stone-200 text-stone-500 hover:border-stone-300'
+                  className={`px-2 py-2 rounded-lg text-[13px] font-medium border transition-colors cursor-pointer ${
+                    canal === c ? 'border-accent bg-accent-soft text-accent font-semibold' : 'border-stone-200 text-stone-700 hover:border-stone-300'
                   }`}
                 >
                   {CANAL_LABELS[c]}
@@ -289,7 +313,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
               >
                 {SEGMENTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
               </select>
-              <p className="text-[12.5px] text-stone-500 mt-1.5">{segmentDef.help}</p>
+              <p className="text-[12.5px] text-stone-600 mt-1.5">{segmentDef.help}</p>
             </div>
 
             {segmentDef.param && (
@@ -322,7 +346,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
             )}
 
             {loading ? (
-              <p className="text-xs text-stone-500 italic">Calcul de l&apos;audience…</p>
+              <p className="text-[13px] text-stone-600">Calcul des destinataires…</p>
             ) : (
               <div className="space-y-2 pt-1">
                 {/* Les deux compteurs s'affichent quel que soit le canal choisi :
@@ -335,23 +359,23 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                   <Chip icon={MessageCircle} label={`${parWa.length} par WhatsApp`} muted={!utiliseWa} />
                 </div>
                 {!utiliseWa && parWa.length > 0 && (
-                  <p className="text-[11px] text-stone-500">
+                  <p className="text-[13px] text-stone-600">
                     {parWa.length} cliente{parWa.length > 1 ? 's sont joignables' : ' est joignable'} par
                     WhatsApp mais ne recevr{parWa.length > 1 ? 'ont' : 'a'} rien :
                     {' '}<button
                       onClick={() => mark(setCanal)(utiliseEmail ? 'les_deux' : 'whatsapp')}
-                      className="font-semibold text-sage hover:underline cursor-pointer"
+                      className="font-semibold text-accent hover:underline cursor-pointer"
                     >
                       ajouter le canal WhatsApp
                     </button>.
                   </p>
                 )}
                 {!utiliseEmail && parEmail.length > 0 && (
-                  <p className="text-[11px] text-stone-500">
+                  <p className="text-[13px] text-stone-600">
                     {parEmail.length} adresse{parEmail.length > 1 ? 's' : ''} e-mail dans cette audience —
                     {' '}<button
                       onClick={() => mark(setCanal)('les_deux')}
-                      className="font-semibold text-sage hover:underline cursor-pointer"
+                      className="font-semibold text-accent hover:underline cursor-pointer"
                     >
                       ajouter le canal e-mail
                     </button>.
@@ -361,7 +385,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
             )}
 
             {!loading && audience.length === 0 && (
-              <p className="flex items-start gap-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p className="flex items-start gap-2 text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                 <TriangleAlert size={13} className="shrink-0 mt-0.5" />
                 Personne ne correspond. Les accords publicitaires se cochent sur chaque
                 fiche cliente — sans eux, une cliente n&apos;entre dans aucune audience.
@@ -380,7 +404,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                 <input
                   id="promo-objet" type="text" value={objet} onChange={e => mark(setObjet)(e.target.value)}
                   placeholder="−20 % sur les soins du visage en septembre"
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 outline-none"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 outline-none"
                 />
               </div>
               <div>
@@ -388,9 +412,9 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                 <textarea
                   id="promo-corps" rows={8} value={messageEmail} onChange={e => mark(setMessageEmail)(e.target.value)}
                   placeholder={"Bonjour {{prenom}},\n\nCe mois-ci, …"}
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 outline-none resize-y"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 outline-none resize-y"
                 />
-                <p className="text-[12px] text-stone-500 mt-1 leading-relaxed">
+                <p className="text-[12px] text-stone-600 mt-1 leading-relaxed">
                   Texte simple : une ligne vide sépare deux paragraphes. Le lien de désinscription
                   est ajouté automatiquement — il est obligatoire.
                 </p>
@@ -402,33 +426,35 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                 <input
                   id="promo-test" type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)}
                   placeholder="Adresse pour un essai"
-                  className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 outline-none"
+                  className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 outline-none"
                 />
                 <button
                   onClick={sendTest} disabled={sending || !testEmail.trim() || !objet.trim() || !messageEmail.trim()}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 text-sm transition-all disabled:opacity-40 cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-stone-100 text-stone-900 font-semibold hover:bg-stone-200 text-sm transition-colors disabled:opacity-40 cursor-pointer"
                 >
-                  {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Essai
+                  {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Envoyer un essai
                 </button>
               </div>
 
               <button
                 onClick={sendAll}
-                disabled={sending || parEmail.length === 0 || !objet.trim() || !messageEmail.trim()}
-                className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
+                disabled={sending || emailsRestants === 0 || !objet.trim() || !messageEmail.trim()}
+                className="w-full flex items-center justify-center gap-2 bg-accent text-accent-fg py-2.5 rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-40 cursor-pointer"
               >
                 {sending && progress
-                  ? <><Loader2 size={14} className="animate-spin" /> {progress.done} / {progress.total}…</>
-                  : <><Send size={14} /> Envoyer aux {parEmail.filter(e => !servis.email.has(e.email!.toLowerCase())).length} adresses restantes</>}
+                  ? <><Loader2 size={14} className="animate-spin" /> Envoi en cours : {progress.done} / {progress.total}…</>
+                  : emailsRestants === 0
+                    ? <><Check size={14} /> {parEmail.length === 0 ? 'Aucune adresse à qui envoyer' : 'Toutes les adresses ont reçu cet e-mail'}</>
+                    : <><Send size={14} /> Envoyer à {emailsRestants} adresse{emailsRestants > 1 ? 's' : ''}</>}
               </button>
               {servis.email.size > 0 && (
-                <p className="text-[12px] text-stone-500 text-center">
+                <p className="text-[12px] text-stone-600 text-center">
                   {servis.email.size} adresse{servis.email.size > 1 ? 's ont' : ' a'} déjà reçu cette promotion —
                   {' '}elle{servis.email.size > 1 ? 's' : ''} ne {servis.email.size > 1 ? 'seront' : 'sera'} pas resollicité{servis.email.size > 1 ? 'es' : 'e'}.
                 </p>
               )}
               {echecsEmail > 0 && (
-                <div className="flex items-center justify-center gap-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <div className="flex items-center justify-center gap-2 text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   <TriangleAlert size={12} className="shrink-0" />
                   <span>{echecsEmail} envoi{echecsEmail > 1 ? 's' : ''} en échec.</span>
                   <button
@@ -453,24 +479,24 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                 <textarea
                   id="promo-wa" rows={5} value={messageWa} onChange={e => mark(setMessageWa)(e.target.value)}
                   placeholder={"Bonjour {{prenom}} ! Ce mois-ci, …"}
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 outline-none resize-y"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 outline-none resize-y"
                 />
-                <p className="text-[12px] text-stone-500 mt-1 leading-relaxed">
+                <p className="text-[12px] text-stone-600 mt-1 leading-relaxed">
                   Court et direct : ce n&apos;est pas un e-mail. Un clic ouvre la conversation
-                  avec le message déjà écrit, tu appuies sur envoyer dans WhatsApp.
+                  avec le message déjà écrit ; il reste à appuyer sur « Envoyer » dans WhatsApp.
                 </p>
               </div>
               <Variables />
 
               {parWa.length === 0 ? (
-                <p className="text-[12.5px] text-stone-500 italic">
+                <p className="text-[12.5px] text-stone-600 italic">
                   Aucune destinataire joignable : il faut un numéro exploitable et l&apos;accord WhatsApp coché.
                 </p>
               ) : (
                 <>
-                  <div className="flex items-center justify-between text-[12.5px] text-stone-500">
+                  <div className="flex items-center justify-between text-[12.5px] text-stone-600">
                     <span>{waFaits} / {parWa.length} contactées</span>
-                    {waFaits > 0 && <span className="text-sage">Coché après ouverture de la conversation</span>}
+                    {waFaits > 0 && <span className="text-stone-600">Une ligne est cochée dès que sa conversation a été ouverte</span>}
                   </div>
                   <ul className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
                     {parWa.map(entry => {
@@ -479,28 +505,28 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                         <li
                           key={entry.key}
                           className={`flex items-center gap-2.5 border rounded-lg px-3 py-2 transition-colors ${
-                            fait ? 'border-sage/30 bg-sage/5' : 'border-stone-200'
+                            fait ? 'border-emerald-200 bg-emerald-50/60' : 'border-stone-200'
                           }`}
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-stone-700 truncate">{entry.nom}</p>
-                            <p className="text-[12.5px] text-stone-500 tabular-nums">+{entry.waNumber}</p>
+                            <p className="text-[12.5px] text-stone-600 tabular-nums">+{entry.waNumber}</p>
                           </div>
                           {fait ? (
                             <button
                               onClick={() => undoWhatsApp(entry)}
-                              className="shrink-0 flex items-center gap-1 text-[12.5px] text-stone-500 hover:text-stone-700 cursor-pointer"
-                              title="Marquer comme non envoyé"
+                              className="shrink-0 flex items-center gap-1 text-[12.5px] text-stone-600 hover:text-stone-700 cursor-pointer"
+                              title="Remettre dans la liste (si le message n'a finalement pas été envoyé)"
                             >
-                              <RotateCcw size={12} /> Annuler
+                              <RotateCcw size={12} /> Pas envoyé
                             </button>
                           ) : (
                             <button
                               onClick={() => openWhatsApp(entry)}
                               disabled={!messageWa.trim()}
-                              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-900 text-white hover:bg-sage text-xs transition-colors disabled:opacity-40 cursor-pointer"
+                              className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg bg-stone-100 text-stone-900 font-semibold hover:bg-stone-200 text-[13px] transition-colors disabled:opacity-40 cursor-pointer"
                             >
-                              <ExternalLink size={12} /> Ouvrir
+                              <ExternalLink size={13} /> Ouvrir WhatsApp
                             </button>
                           )}
                         </li>
@@ -526,24 +552,24 @@ function Chip({ icon: Icon, label, muted }: {
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-lg ${
-        muted ? 'text-stone-500 bg-stone-50 border border-dashed border-stone-200' : 'text-stone-600 bg-stone-100'
+      className={`inline-flex items-center gap-1.5 text-[13px] font-medium px-2.5 py-1 rounded-lg ${
+        muted ? 'text-stone-600 bg-stone-50 border border-dashed border-stone-200' : 'text-stone-700 bg-stone-100'
       }`}
       title={muted ? 'Canal non sélectionné pour cette promotion' : undefined}
     >
-      <Icon size={11} className={muted ? 'text-stone-400' : 'text-stone-600'} /> {label}
+      <Icon size={13} className={muted ? 'text-stone-500' : 'text-stone-700'} /> {label}
     </span>
   );
 }
 
 function Variables() {
   return (
-    <p className="text-[12px] text-stone-500">
+    <p className="text-[12px] text-stone-600">
       Variables :{' '}
       {VARIABLES_DISPONIBLES.map((v, i) => (
         <span key={v.token}>
           {i > 0 && ', '}
-          <code className="px-1 bg-stone-100 rounded text-stone-500">{v.token}</code> {v.help.toLowerCase()}
+          <code className="px-1 bg-stone-100 rounded text-stone-600">{v.token}</code> {v.help.toLowerCase()}
         </span>
       ))}
     </p>

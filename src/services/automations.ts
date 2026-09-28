@@ -1,6 +1,20 @@
 import { supabase } from './supabase';
 import type { Automation, AutomationRun } from '../types/automations';
 
+/**
+ * Vérifie que les tables du module existent. Sans elles, l'écran affichait
+ * « aucune automatisation » puis une erreur technique à l'enregistrement.
+ * Renvoie un message à afficher, ou `null` si tout est en place.
+ */
+export async function checkAutomationsSetup(): Promise<string | null> {
+  const { error } = await supabase.from('automations').select('id').limit(1);
+  if (!error) return null;
+  if (error.code === 'PGRST205' || /schema cache|does not exist/i.test(error.message)) {
+    return "Le module Automatisations n'est pas encore installé dans la base de données. La personne qui gère le site doit exécuter une fois le fichier supabase/migrations/20260819_automations.sql dans l'éditeur SQL de Supabase.";
+  }
+  return `Les automatisations n'ont pas pu être chargées (${error.message}). Rechargez la page.`;
+}
+
 export async function fetchAutomations(): Promise<Automation[]> {
   const { data, error } = await supabase
     .from('automations')
@@ -58,17 +72,33 @@ export async function fetchRuns(automationId?: string, limit = 50): Promise<Auto
 export async function runAutomation(
   id: string,
 ): Promise<{ success: boolean; error?: string; detail?: unknown }> {
+  // La route exige une session admin : sans ce jeton, chaque clic sur
+  // « Exécuter » finissait en 401.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    return { success: false, error: 'Votre session a expiré. Reconnectez-vous puis réessayez.' };
+  }
   try {
     const response = await fetch('/api/automations/run', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ id, triggeredBy: 'manual' }),
     });
-    const payload = await response.json();
-    if (!response.ok) return { success: false, error: payload?.error ?? 'Échec' };
+    const payload = await response.json().catch(() => null);
+    if (response.status === 401) {
+      return { success: false, error: 'Votre session a expiré. Reconnectez-vous puis réessayez.' };
+    }
+    // Délai dépassé côté hébergeur (Netlify renvoie alors une page sans JSON).
+    if (!payload && (response.status === 502 || response.status === 504)) {
+      return {
+        success: false,
+        error: "L'action a dépassé le temps de réponse autorisé par l'hébergeur. Consultez l'historique dans quelques minutes avant de relancer.",
+      };
+    }
+    if (!response.ok) return { success: false, error: payload?.error ?? "L'exécution a échoué côté serveur." };
     return { success: true, detail: payload };
-  } catch (error) {
-    return { success: false, error: (error as Error).message };
+  } catch {
+    return { success: false, error: 'Le serveur ne répond pas. Vérifiez votre connexion puis réessayez.' };
   }
 }
 

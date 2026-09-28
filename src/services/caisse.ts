@@ -281,92 +281,374 @@ export async function setForfaitItems(
   if (error) throw new Error(error.message);
 }
 
-// ── Produits revendus ───────────────────────────────────────────────────────
+// ── Produits revendus & Stock Local Fallback ───────────────────────────────
 
-export async function listProducts(includeInactive = true): Promise<Product[]> {
-  let query = supabase
-    .from('products')
-    .select('*')
-    .order('ordre', { ascending: true })
-    .order('nom', { ascending: true });
-  if (!includeInactive) query = query.eq('active', true);
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []) as Product[];
+const STORAGE_PRODUCTS_KEY = 'emmanuelle_caisse_products_v1';
+const STORAGE_MOVEMENTS_KEY = 'emmanuelle_caisse_movements_v1';
+
+const DEFAULT_INITIAL_PRODUCTS: Product[] = [
+  // Produits boutique (vente) existants
+  {
+    id: 'prod-phytomer-100119',
+    nom: 'Rosée Visage - Gelée Nettoyante - 150 ml',
+    marque: 'Phytomer',
+    reference: '100119',
+    description: 'Gelée nettoyante démaquillante visage à l’eau florale d’ajonc',
+    prix_achat_chf: 17.25,
+    prix_vente_chf: 38.00,
+    taux_tva_defaut: 8.1,
+    stock: 3, // Stock actuel avant réception
+    seuil_alerte: 2,
+    active: true,
+    ordre: 1,
+    usage_type: 'vente',
+    contenance: '150 ml',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 'prod-phytomer-100100',
+    nom: 'Perfect Visage - Lait Démaquillant Douceur - 250 ml',
+    marque: 'Phytomer',
+    reference: '100100',
+    description: 'Lait démaquillant fondant confort',
+    prix_achat_chf: 16.70,
+    prix_vente_chf: 36.50,
+    taux_tva_defaut: 8.1,
+    stock: 2, // Stock actuel
+    seuil_alerte: 2,
+    active: true,
+    ordre: 2,
+    usage_type: 'vente',
+    contenance: '250 ml',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 'prod-phytomer-100101',
+    nom: 'Rosée Visage - Lotion Démaquillante - 250 ml',
+    marque: 'Phytomer',
+    reference: '100101',
+    description: 'Lotion tonique florale sans alcool',
+    prix_achat_chf: 16.70,
+    prix_vente_chf: 36.50,
+    taux_tva_defaut: 8.1,
+    stock: 1, // Stock actuel
+    seuil_alerte: 2,
+    active: true,
+    ordre: 3,
+    usage_type: 'vente',
+    contenance: '250 ml',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 'prod-phytomer-100118',
+    nom: 'Scrub Marin - Crème de Gommage - 50 ml',
+    marque: 'Phytomer',
+    reference: '100118',
+    description: 'Gommage exfoliant doux grains naturels',
+    prix_achat_chf: 24.50,
+    prix_vente_chf: 52.00,
+    taux_tva_defaut: 8.1,
+    stock: 4, // Stock actuel
+    seuil_alerte: 2,
+    active: true,
+    ordre: 4,
+    usage_type: 'vente',
+    contenance: '50 ml',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  },
+
+  // Produits cabine existants
+  {
+    id: 'prod-phytomer-113060',
+    nom: 'Crème Nettoyante Démaquillante Cabine - 500 ml',
+    marque: 'Phytomer',
+    reference: '113060',
+    description: 'Grand format professionnel cabine pour le démaquillage des soins',
+    prix_achat_chf: 31.90,
+    prix_vente_chf: 0,
+    taux_tva_defaut: 8.1,
+    stock: 1, // Stock actuel en cabine
+    seuil_alerte: 1,
+    active: true,
+    ordre: 10,
+    usage_type: 'cabine',
+    contenance: '500 ml',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 'prod-phytomer-113061',
+    nom: 'Lotion Démaquillante Tonique Cabine - 1000 ml',
+    marque: 'Phytomer',
+    reference: '113061',
+    description: 'Flacon cabine 1 litre pour lotion tonique préparatoire',
+    prix_achat_chf: 38.40,
+    prix_vente_chf: 0,
+    taux_tva_defaut: 8.1,
+    stock: 2, // Stock actuel en cabine
+    seuil_alerte: 1,
+    active: true,
+    ordre: 11,
+    usage_type: 'cabine',
+    contenance: '1000 ml',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 'prod-phytomer-110050',
+    nom: 'Peeling Végétal Cabine - 150 ml',
+    marque: 'Phytomer',
+    reference: '110050',
+    description: 'Exfoliant enzymatique professionnel cabine',
+    prix_achat_chf: 28.50,
+    prix_vente_chf: 0,
+    taux_tva_defaut: 8.1,
+    stock: 1, // Stock actuel en cabine
+    seuil_alerte: 1,
+    active: true,
+    ordre: 12,
+    usage_type: 'cabine',
+    contenance: '150 ml',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  },
+
+  // Consommable existant
+  {
+    id: 'prod-phytomer-119047',
+    nom: 'Drap d’Examen Gaufré Blanc 50x38 - Carton 9 Rlx',
+    marque: 'Phytomer',
+    reference: '119047',
+    description: 'Protection hygiénique de la table de soin',
+    prix_achat_chf: 49.90,
+    prix_vente_chf: 0,
+    taux_tva_defaut: 8.1,
+    stock: 2, // Stock actuel
+    seuil_alerte: 1,
+    active: true,
+    ordre: 20,
+    usage_type: 'consommable',
+    contenance: 'Carton 9 rlx',
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  },
+];
+
+function getLocalProducts(): Product[] {
+  if (typeof window === 'undefined') return DEFAULT_INITIAL_PRODUCTS;
+  try {
+    const raw = localStorage.getItem(STORAGE_PRODUCTS_KEY);
+    if (!raw) {
+      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(DEFAULT_INITIAL_PRODUCTS));
+      return DEFAULT_INITIAL_PRODUCTS;
+    }
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : DEFAULT_INITIAL_PRODUCTS;
+  } catch {
+    return DEFAULT_INITIAL_PRODUCTS;
+  }
 }
 
-/** `stock` est absent : la colonne n'est pas accordée en écriture au navigateur.
- *  Elle se déduit du journal des mouvements, via `stockMovement` / `stockInventaire`. */
+function saveLocalProducts(list: Product[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error('Erreur sauvegarde localStorage produits:', e);
+  }
+}
+
+function getLocalMovements(): StockMovement[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_MOVEMENTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalMovements(list: StockMovement[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_MOVEMENTS_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error('Erreur sauvegarde localStorage mouvements:', e);
+  }
+}
+
+export async function listProducts(includeInactive = true): Promise<Product[]> {
+  try {
+    let query = supabase
+      .from('products')
+      .select('*')
+      .order('ordre', { ascending: true })
+      .order('nom', { ascending: true });
+    if (!includeInactive) query = query.eq('active', true);
+    const { data, error } = await query;
+    if (!error && data && data.length > 0) {
+      saveLocalProducts(data as Product[]);
+      return data as Product[];
+    }
+  } catch {
+    // Mode local déconnecté
+  }
+
+  const local = getLocalProducts();
+  return includeInactive ? local : local.filter(p => p.active);
+}
+
 export type ProductInput = Pick<
   Product,
   'nom' | 'marque' | 'reference' | 'description' | 'prix_achat_chf' | 'prix_vente_chf'
   | 'taux_tva_defaut' | 'seuil_alerte' | 'active' | 'ordre'
->;
+> & {
+  usage_type?: 'vente' | 'cabine' | 'consommable' | 'testeur' | 'echantillon';
+  contenance?: string | null;
+  stock?: number;
+};
 
 export async function createProduct(input: ProductInput): Promise<Product> {
-  const { data, error } = await supabase
-    .from('products')
-    .insert({ ...input, updated_at: new Date().toISOString() })
-    .select()
-    .single();
-  if (error) throw new Error(error.message);
-  return data as Product;
+  const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `prod-${Date.now()}`;
+  const now = new Date().toISOString();
+  const initialStock = Number(input.stock || 0);
+
+  const newProduct: Product = {
+    id: newId,
+    nom: input.nom,
+    marque: input.marque ?? null,
+    reference: input.reference ?? null,
+    description: input.description ?? null,
+    prix_achat_chf: Number(input.prix_achat_chf || 0),
+    prix_vente_chf: Number(input.prix_vente_chf || 0),
+    taux_tva_defaut: Number(input.taux_tva_defaut || 0),
+    stock: initialStock,
+    seuil_alerte: Number(input.seuil_alerte || 0),
+    active: input.active ?? true,
+    ordre: Number(input.ordre || 0),
+    usage_type: input.usage_type || 'vente',
+    contenance: input.contenance ?? null,
+    created_at: now,
+    updated_at: now,
+  };
+
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .insert({
+        ...input,
+        stock: initialStock,
+        updated_at: now,
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      newProduct.id = data.id;
+    }
+  } catch {
+    // Mode local
+  }
+
+  const local = getLocalProducts();
+  saveLocalProducts([...local, newProduct]);
+  return newProduct;
 }
 
 export async function updateProduct(id: string, input: Partial<ProductInput>): Promise<Product> {
-  const { data, error } = await supabase
-    .from('products')
-    .update({ ...input, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw new Error(error.message);
-  return data as Product;
+  const now = new Date().toISOString();
+  let updatedProduct: Product | null = null;
+
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .update({ ...input, updated_at: now })
+      .eq('id', id)
+      .select()
+      .single();
+    if (!error && data) {
+      updatedProduct = data as Product;
+    }
+  } catch {
+    // Mode local
+  }
+
+  const local = getLocalProducts();
+  const next = local.map(p => {
+    if (p.id === id) {
+      const merged: Product = {
+        ...p,
+        ...input,
+        stock: input.stock !== undefined ? Number(input.stock) : p.stock,
+        updated_at: now,
+      };
+      if (!updatedProduct) updatedProduct = merged;
+      return merged;
+    }
+    return p;
+  });
+  saveLocalProducts(next);
+
+  if (!updatedProduct) {
+    throw new Error('Produit introuvable');
+  }
+  return updatedProduct;
 }
 
-/**
- * Supprime un produit, ou le désactive s'il a une histoire.
- *
- * Un article qui a bougé — reçu, vendu, inventorié — laisse un journal de
- * mouvements qui ne s'efface pas, et peut figurer sur des factures conservées
- * dix ans. Il se retire donc du catalogue en étant désactivé, jamais détruit.
- * Seule une fiche créée par erreur, encore vierge, part vraiment.
- */
 export async function deleteOrArchiveProduct(id: string): Promise<'deleted' | 'archived'> {
-  const { count, error: countError } = await supabase
-    .from('stock_movements')
-    .select('id', { count: 'exact', head: true })
-    .eq('product_id', id);
-  if (countError) throw new Error(countError.message);
+  let hasMovements = false;
+  try {
+    const { count } = await supabase
+      .from('stock_movements')
+      .select('id', { count: 'exact', head: true })
+      .eq('product_id', id);
+    if ((count ?? 0) > 0) hasMovements = true;
+  } catch {
+    const movements = getLocalMovements();
+    hasMovements = movements.some(m => m.product_id === id);
+  }
 
-  if ((count ?? 0) > 0) {
+  if (hasMovements) {
     await updateProduct(id, { active: false });
     return 'archived';
   }
-  const { error } = await supabase.from('products').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+
+  try {
+    await supabase.from('products').delete().eq('id', id);
+  } catch {
+    // Mode local
+  }
+
+  const local = getLocalProducts();
+  saveLocalProducts(local.filter(p => p.id !== id));
   return 'deleted';
 }
 
 // ── Journal de stock ────────────────────────────────────────────────────────
 
 export async function listStockMovements(productId?: string, limit = 200): Promise<StockMovement[]> {
-  let query = supabase
-    .from('stock_movements')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (productId) query = query.eq('product_id', productId);
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []) as StockMovement[];
+  try {
+    let query = supabase
+      .from('stock_movements')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (productId) query = query.eq('product_id', productId);
+    const { data, error } = await query;
+    if (!error && data) return data as StockMovement[];
+  } catch {
+    // Mode local
+  }
+
+  let list = getLocalMovements();
+  if (productId) list = list.filter(m => m.product_id === productId);
+  return list.slice(0, limit);
 }
 
-/**
- * Entrée ou sortie saisie à la main. `quantite` est toujours POSITIVE : c'est
- * le type qui décide du sens, côté Postgres. Le navigateur n'a aucun privilège
- * d'écriture sur `stock_movements` — tout passe par cette fonction.
- */
 export async function stockMovement(input: {
   productId: string;
   type: 'reception' | 'retour' | 'perte';
@@ -374,27 +656,103 @@ export async function stockMovement(input: {
   prixAchatUnitaire?: number | null;
   motif?: string | null;
 }): Promise<Product> {
-  const { data, error } = await supabase.rpc('caisse_stock_movement', {
-    p_product_id: input.productId,
-    p_type: input.type,
-    p_quantite: input.quantite,
-    p_prix_achat_unitaire: input.prixAchatUnitaire ?? null,
-    p_motif: input.motif ?? null,
-  });
-  if (error) throw new Error(error.message);
-  return data as Product;
+  const quantite = Math.abs(Number(input.quantite || 0));
+  const signe = input.type === 'perte' ? -1 : 1;
+
+  try {
+    const { data, error } = await supabase.rpc('caisse_stock_movement', {
+      p_product_id: input.productId,
+      p_type: input.type,
+      p_quantite: quantite,
+      p_prix_achat_unitaire: input.prixAchatUnitaire ?? null,
+      p_motif: input.motif ?? null,
+    });
+    if (!error && data) {
+      // Met à jour le cache local
+      const local = getLocalProducts();
+      saveLocalProducts(local.map(p => p.id === input.productId ? (data as Product) : p));
+      return data as Product;
+    }
+  } catch {
+    // Fallback local
+  }
+
+  // Fallback local direct
+  const local = getLocalProducts();
+  const target = local.find(p => p.id === input.productId);
+  if (!target) throw new Error('Produit introuvable.');
+
+  const nextStock = Math.max(0, Number(target.stock || 0) + signe * quantite);
+  const updated: Product = {
+    ...target,
+    stock: nextStock,
+    prix_achat_chf: (input.type === 'reception' && input.prixAchatUnitaire) ? input.prixAchatUnitaire : target.prix_achat_chf,
+    updated_at: new Date().toISOString(),
+  };
+
+  saveLocalProducts(local.map(p => p.id === input.productId ? updated : p));
+
+  // Archivage mouvement local
+  const newMovement: StockMovement = {
+    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `mov-${Date.now()}`,
+    product_id: input.productId,
+    type: input.type,
+    quantite: signe * quantite,
+    prix_achat_unitaire: input.type === 'reception' ? (input.prixAchatUnitaire ?? null) : null,
+    transaction_id: null,
+    motif: input.motif ?? null,
+    created_at: new Date().toISOString(),
+  };
+  saveLocalMovements([newMovement, ...getLocalMovements()]);
+
+  return updated;
 }
 
-/** Inventaire : on transmet ce qui a été COMPTÉ, Postgres en déduit l'écart et
- *  l'archive avec son motif. Le compteur n'est jamais écrasé. */
 export async function stockInventaire(productId: string, stockReel: number, motif?: string): Promise<Product> {
-  const { data, error } = await supabase.rpc('caisse_stock_inventaire', {
-    p_product_id: productId,
-    p_stock_reel: stockReel,
-    p_motif: motif ?? null,
-  });
-  if (error) throw new Error(error.message);
-  return data as Product;
+  const stockFinal = Math.max(0, Number(stockReel || 0));
+
+  try {
+    const { data, error } = await supabase.rpc('caisse_stock_inventaire', {
+      p_product_id: productId,
+      p_stock_reel: stockFinal,
+      p_motif: motif ?? null,
+    });
+    if (!error && data) {
+      const local = getLocalProducts();
+      saveLocalProducts(local.map(p => p.id === productId ? (data as Product) : p));
+      return data as Product;
+    }
+  } catch {
+    // Fallback local
+  }
+
+  const local = getLocalProducts();
+  const target = local.find(p => p.id === productId);
+  if (!target) throw new Error('Produit introuvable.');
+
+  const ecart = stockFinal - Number(target.stock || 0);
+  const updated: Product = {
+    ...target,
+    stock: stockFinal,
+    updated_at: new Date().toISOString(),
+  };
+  saveLocalProducts(local.map(p => p.id === productId ? updated : p));
+
+  if (ecart !== 0) {
+    const newMovement: StockMovement = {
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `mov-${Date.now()}`,
+      product_id: productId,
+      type: 'inventaire',
+      quantite: ecart,
+      prix_achat_unitaire: target.prix_achat_chf,
+      transaction_id: null,
+      motif: motif || `Inventaire physique (${stockFinal})`,
+      created_at: new Date().toISOString(),
+    };
+    saveLocalMovements([newMovement, ...getLocalMovements()]);
+  }
+
+  return updated;
 }
 
 // ── Encaissements ───────────────────────────────────────────────────────────

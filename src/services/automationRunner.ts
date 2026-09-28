@@ -11,12 +11,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { getSupabaseAdmin } from '../utils/supabaseAdmin';
-import { callClaude } from '../utils/ai';
-import { buildPrompt, type ArticleIdea } from '../utils/articleGeneration';
 import { runSocialAutomation } from './socialAutomation';
 import { publishScheduledArticles } from './publishScheduled';
-import { getSettingsServer } from './settingsServer';
 import { SITE_CONFIG } from '../config/site';
+import { createJob } from './aiJobs';
+import { dispatchJob } from './aiJobDispatch';
 import type { Automation } from '../types/automations';
 
 export type AutomationEvent =
@@ -25,17 +24,6 @@ export type AutomationEvent =
   | 'sale.created'
   | 'subscriber.created'
   | 'article.published';
-
-/** Slug d'article dérivé d'un titre — même règle que l'éditeur de blog. */
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80);
-}
 
 // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -74,23 +62,30 @@ async function actionEmail(config: Record<string, string>, automation: Automatio
   return { sentTo: to };
 }
 
-async function actionKeywordScan(origin: string) {
-  const response = await fetch(`${origin}/api/keyword-scan`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(process.env.CRON_SECRET ? { 'x-cron-secret': process.env.CRON_SECRET } : {}),
-    },
-    body: JSON.stringify({ source: 'automation' }),
-  });
-  if (!response.ok) throw new Error(`Le scan a répondu ${response.status}.`);
-  return await response.json().catch(() => ({}));
+/*
+  Les étapes IA longues ne sont plus attendues ici : la tâche planifiée qui
+  exécute les automatisations est une fonction synchrone, coupée à 60 s.
+  Elles sont enregistrées comme tâches de fond (services/aiJobs.ts) et
+  s'exécutent dans la fonction Netlify ai-job-background (15 min). Le journal
+  de l'automatisation indique l'identifiant de la tâche ; son résultat est
+  dans la table ai_jobs.
+*/
+
+/** Scan des mots-clés, en tâche de fond. */
+async function actionKeywordScan() {
+  const jobId = await createJob('keyword-scan', { source: 'automation' });
+  const via = await dispatchJob(jobId);
+  return { queued: true, jobId, via };
 }
 
 /**
  * Rédige un brouillon à partir de la plus ancienne idée en file, et la retire
  * de la file une fois l'article créé. L'article reste **non publié** : une
  * automatisation ne met jamais un texte en ligne sans relecture.
+ *
+ * L'idée est choisie ici (lecture rapide) puis la rédaction part en tâche de
+ * fond (services/aiTasks/article.ts, type `automation-article`). Une idée
+ * déjà en cours de rédaction n'est pas reprise, pour éviter un doublon.
  */
 async function actionGenerateArticle(admin: SupabaseClient, config: Record<string, string>) {
   let query = admin
@@ -111,49 +106,30 @@ async function actionGenerateArticle(admin: SupabaseClient, config: Record<strin
     if (filtered.length > 0) candidates = filtered;
   }
 
-  const next = candidates[0];
-  if (!next) throw new Error("Aucune idée en file : ajoutez-en depuis l'espace SEO.");
+  // Idées déjà confiées à une tâche de rédaction non terminée.
+  const { data: busyJobs } = await admin
+    .from('ai_jobs')
+    .select('input')
+    .eq('kind', 'automation-article')
+    .in('status', ['pending', 'running']);
+  const busy = new Set(
+    ((busyJobs ?? []) as { input: { ideaId?: string } | null }[])
+      .map((job) => job.input?.ideaId)
+      .filter(Boolean) as string[],
+  );
 
-  const idea = { ...(next.data as Record<string, unknown>) } as unknown as ArticleIdea;
-  if (!idea.keyword) idea.keyword = next.title;
-  if (!idea.suggestedTitle) idea.suggestedTitle = next.title;
+  const next = candidates.find((row) => !busy.has(row.id));
+  if (!next) {
+    throw new Error(
+      busy.size > 0
+        ? 'Toutes les idées en file sont déjà en cours de rédaction.'
+        : "Aucune idée en file : ajoutez-en depuis l'espace SEO.",
+    );
+  }
 
-  const settings = await getSettingsServer([
-    'site_activity_context',
-    'site_target_persona',
-    'site_tone_of_voice',
-    'site_brand_tone',
-  ]);
-
-  const completion = await callClaude({
-    feature: 'article',
-    max_tokens: 16000,
-    messages: [{ role: 'user', content: buildPrompt(idea, settings) }],
-  });
-
-  const content = completion.content.map((block) => block.text).join('').trim();
-  if (!content) throw new Error('Le modèle a renvoyé un article vide.');
-
-  const baseSlug = idea.suggestedSlug?.trim() || slugify(idea.suggestedTitle);
-  const slug = `${baseSlug}-${Date.now().toString(36)}`.slice(0, 90);
-
-  const { data: created, error } = await admin
-    .from('articles')
-    .insert({
-      title: idea.suggestedTitle,
-      slug,
-      content,
-      category: idea.category ?? null,
-      meta_keywords: idea.keyword,
-      published: false,
-    })
-    .select('id, slug')
-    .single();
-  if (error) throw new Error(error.message);
-
-  await admin.from('saved_ideas').delete().eq('id', next.id);
-
-  return { articleId: created?.id, slug: created?.slug, title: idea.suggestedTitle, published: false };
+  const jobId = await createJob('automation-article', { ideaId: next.id });
+  const via = await dispatchJob(jobId);
+  return { queued: true, jobId, via, title: next.title, published: false };
 }
 
 async function actionGenerateSocial(config: Record<string, string>) {
@@ -235,7 +211,7 @@ export async function executeAutomation(
   switch (automation.action_type) {
     case 'webhook':          return actionWebhook(config, automation);
     case 'email':            return actionEmail(config, automation);
-    case 'keyword_scan':     return actionKeywordScan(origin);
+    case 'keyword_scan':     return actionKeywordScan();
     case 'generate_article': return actionGenerateArticle(admin, config);
     case 'generate_social':  return actionGenerateSocial(config);
     case 'newsletter_digest':return actionNewsletterDigest(admin);

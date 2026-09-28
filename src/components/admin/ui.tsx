@@ -31,20 +31,20 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md';
 
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-2 rounded-xl font-medium whitespace-nowrap transition-all duration-150 ' +
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ' +
-  'disabled:opacity-45 disabled:pointer-events-none cursor-pointer active:scale-[0.98]';
+  'inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-colors duration-150 ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 ' +
+  'disabled:opacity-45 disabled:pointer-events-none cursor-pointer';
 
 const BUTTON_VARIANT: Record<ButtonVariant, string> = {
-  primary: 'bg-stone-900 text-white hover:bg-stone-800 shadow-xs hover:shadow-sm border border-stone-900',
-  secondary: 'bg-white text-stone-800 border border-stone-200 hover:bg-stone-50 hover:border-stone-300 shadow-xs',
-  ghost: 'text-stone-600 hover:bg-stone-100/80 hover:text-stone-900',
-  danger: 'bg-white text-red-700 border border-red-200 hover:bg-red-50/80 hover:border-red-300 shadow-xs',
+  primary: 'bg-accent text-accent-fg hover:bg-accent-hover border border-transparent',
+  secondary: 'bg-stone-100 text-stone-900 border border-transparent hover:bg-stone-200',
+  ghost: 'text-stone-800 hover:bg-stone-100 hover:text-stone-950',
+  danger: 'bg-white text-red-700 border border-red-200 hover:bg-red-50 hover:border-red-300',
 };
 
 const BUTTON_SIZE: Record<ButtonSize, string> = {
   sm: 'h-8 px-3 text-[13px]',
-  md: 'h-10 px-4 text-sm',
+  md: 'h-10 px-4 text-[14px]',
 };
 
 export function Button({
@@ -112,12 +112,12 @@ export function PageHeader({
   breadcrumb?: { label: string; href?: string }[];
 }) {
   return (
-    <header className="mb-8">
+    <header className="mb-10">
       {breadcrumb && breadcrumb.length > 0 && (
-        <nav aria-label="Fil d'Ariane" className="mb-2 flex items-center gap-1 text-[13px] text-stone-500">
+        <nav aria-label="Fil d'Ariane" className="mb-2 flex items-center gap-1 text-[13px] text-stone-600">
           {breadcrumb.map((crumb, i) => (
             <React.Fragment key={`${crumb.label}-${i}`}>
-              {i > 0 && <ChevronRight size={13} className="text-stone-500" />}
+              {i > 0 && <ChevronRight size={13} className="text-stone-600" />}
               {crumb.href ? (
                 <Link href={crumb.href} className="hover:text-stone-900 transition-colors">
                   {crumb.label}
@@ -130,9 +130,9 @@ export function PageHeader({
         </nav>
       )}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 max-w-2xl">
-          <h1 className="text-[26px] font-semibold tracking-tight text-stone-900">{title}</h1>
-          {description && <p className="mt-1.5 text-[15px] leading-relaxed text-stone-600">{description}</p>}
+        <div className="min-w-0 max-w-3xl">
+          <h1 className="text-[28px] font-semibold tracking-tight text-stone-950 leading-tight">{title}</h1>
+          {description && <p className="mt-2 text-[15px] leading-relaxed text-stone-700">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
@@ -151,7 +151,7 @@ export function Card({
   return (
     <Tag
       {...props}
-      className={`rounded-2xl border border-stone-200/80 bg-white shadow-xs transition-all duration-200 ${className}`}
+      className={`rounded-xl border border-stone-200 bg-white ${className}`}
     >
       {children}
     </Tag>
@@ -168,10 +168,10 @@ export function CardHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-100 px-6 py-4.5">
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 px-6 py-5">
       <div className="min-w-0">
-        <h2 className="text-[15px] font-semibold text-stone-900 tracking-tight">{title}</h2>
-        {description && <p className="mt-1 text-[13px] leading-relaxed text-stone-500">{description}</p>}
+        <h2 className="text-[18px] font-semibold text-stone-950 tracking-tight">{title}</h2>
+        {description && <p className="mt-1 text-[14px] leading-relaxed text-stone-600">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
@@ -179,7 +179,7 @@ export function CardHeader({
 }
 
 export function CardBody({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`px-6 py-5 ${className}`}>{children}</div>;
+  return <div className={`px-6 py-6 ${className}`}>{children}</div>;
 }
 
 /** Pied de carte : c'est là, et nulle part ailleurs, que se valide un bloc. */
@@ -191,8 +191,8 @@ export function CardFooter({
   hint?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-b-2xl border-t border-stone-100 bg-stone-50/60 px-6 py-3.5">
-      <div className="min-w-0 text-[13px] text-stone-500">{hint}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-stone-200 bg-stone-50/50 px-6 py-4">
+      <div className="min-w-0 text-[13px] text-stone-600">{hint}</div>
       <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
   );
@@ -201,9 +201,9 @@ export function CardFooter({
 // ── Champs ─────────────────────────────────────────────────────────────────
 
 export const inputClass =
-  'rounded-xl border border-stone-200 bg-white px-3.5 text-sm text-stone-900 placeholder:text-stone-400 ' +
-  'shadow-xs transition-all duration-150 focus:border-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900/10 ' +
-  'disabled:bg-stone-50 disabled:text-stone-400';
+  'rounded-lg border border-stone-300 bg-white px-3.5 text-[14px] text-stone-900 placeholder:text-stone-500 ' +
+  'transition-colors duration-150 focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/15 ' +
+  'disabled:bg-stone-50 disabled:text-stone-500';
 
 export const inputHeight = 'h-10';
 
@@ -240,13 +240,13 @@ export function Field({
   return (
     <div className={`space-y-1.5 ${className}`}>
       {label && (
-        <label htmlFor={htmlFor} className="block text-[13px] font-medium text-stone-800">
+        <label htmlFor={htmlFor} className="block text-[14px] font-semibold text-stone-900">
           {label}
           {required && <span className="ml-0.5 text-red-600">*</span>}
         </label>
       )}
       {children}
-      {hint && !error && <p className="text-[12.5px] leading-relaxed text-stone-500">{hint}</p>}
+      {hint && !error && <p className="text-[12.5px] leading-relaxed text-stone-600">{hint}</p>}
       {error && (
         <p className="flex items-start gap-1.5 text-[12.5px] font-medium text-red-600">
           <XCircle size={13} className="mt-0.5 shrink-0" /> {error}
@@ -291,8 +291,8 @@ export function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2
-        disabled:opacity-45 disabled:pointer-events-none ${checked ? 'bg-stone-900' : 'bg-stone-300'}`}
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2
+        disabled:opacity-45 disabled:pointer-events-none ${checked ? 'bg-accent' : 'bg-stone-300'}`}
     >
       <span
         className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition-transform ${
@@ -320,8 +320,8 @@ export function ToggleRow({
   return (
     <div className="flex items-start justify-between gap-6 py-3.5">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-stone-900">{title}</p>
-        {description && <p className="mt-0.5 text-[13px] leading-relaxed text-stone-500">{description}</p>}
+        <p className="text-[15px] font-semibold text-stone-900">{title}</p>
+        {description && <p className="mt-0.5 text-[13px] leading-relaxed text-stone-600">{description}</p>}
       </div>
       <div className="pt-0.5">
         <Toggle checked={checked} onChange={onChange} label={title} disabled={disabled} />
@@ -335,7 +335,7 @@ export function ToggleRow({
 type Tone = 'info' | 'success' | 'warning' | 'danger';
 
 const CALLOUT: Record<Tone, { box: string; icon: React.ElementType; iconClass: string }> = {
-  info: { box: 'border-stone-200/80 bg-stone-50/80 text-stone-800', icon: Info, iconClass: 'text-stone-500' },
+  info: { box: 'border-stone-200 bg-stone-50/80 text-stone-800', icon: Info, iconClass: 'text-stone-600' },
   success: { box: 'border-emerald-200/80 bg-emerald-50/70 text-emerald-900', icon: Check, iconClass: 'text-emerald-600' },
   warning: { box: 'border-amber-200/80 bg-amber-50/70 text-amber-900', icon: AlertTriangle, iconClass: 'text-amber-600' },
   danger: { box: 'border-red-200/80 bg-red-50/70 text-red-900', icon: XCircle, iconClass: 'text-red-600' },
@@ -355,7 +355,7 @@ export function Callout({
   const spec = CALLOUT[tone];
   const Icon = spec.icon;
   return (
-    <div className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-[13px] leading-relaxed ${spec.box}`}>
+    <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-[14px] leading-relaxed ${spec.box}`}>
       <Icon size={15} className={`mt-0.5 shrink-0 ${spec.iconClass}`} />
       <div className="min-w-0 flex-1">
         {title && <p className="font-semibold text-stone-900 mb-0.5">{title}</p>}
@@ -368,7 +368,7 @@ export function Callout({
 
 const BADGE: Record<Tone | 'neutral', string> = {
   neutral: 'bg-stone-100 text-stone-700 border-stone-200',
-  info: 'bg-sky-50 text-sky-800 border-sky-200/80',
+  info: 'bg-accent-soft text-accent border-accent/15',
   success: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
   warning: 'bg-amber-50 text-amber-800 border-amber-200/80',
   danger: 'bg-red-50 text-red-800 border-red-200/80',
@@ -403,14 +403,14 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-50/50 px-6 py-14 text-center">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-stone-200 bg-white px-6 py-16 text-center">
       {Icon && (
-        <span className="mb-4 grid size-12 place-items-center rounded-2xl border border-stone-200 bg-white text-stone-600 shadow-xs">
+        <span className="mb-4 grid size-12 place-items-center rounded-xl bg-stone-100 text-stone-600">
           <Icon size={22} />
         </span>
       )}
       <p className="text-[15px] font-semibold text-stone-900">{title}</p>
-      {description && <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-stone-500">{description}</p>}
+      {description && <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-stone-600">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
   );
@@ -444,8 +444,8 @@ export function Tabs({
   label: string;
 }) {
   return (
-    <div className="-mx-1 overflow-x-auto border-b border-stone-200">
-      <div role="tablist" aria-label={label} className="flex min-w-max gap-1 px-1">
+    <div className="max-w-full overflow-x-auto">
+      <div role="tablist" aria-label={label} className="inline-flex min-w-max gap-1 rounded-lg bg-stone-100 p-1">
         {items.map((item) => {
           const isActive = item.id === active;
           return (
@@ -455,11 +455,11 @@ export function Tabs({
               role="tab"
               aria-selected={isActive}
               onClick={() => onChange(item.id)}
-              className={`-mb-px flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
+              className={`flex items-center gap-2 rounded-md px-3.5 h-9 text-[14px] transition-colors cursor-pointer
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
                   isActive
-                    ? 'border-stone-900 text-stone-900'
-                    : 'border-transparent text-stone-500 hover:border-stone-300 hover:text-stone-900'
+                    ? 'bg-white text-stone-950 font-semibold shadow-xs ring-1 ring-stone-200'
+                    : 'text-stone-700 font-medium hover:text-stone-950'
                 }`}
             >
               {item.icon && <item.icon size={15} />}
@@ -502,23 +502,21 @@ export function SideNav({
               role="tab"
               aria-selected={isActive}
               onClick={() => onChange(item.id)}
-              className={`group flex w-full min-w-max items-start gap-3 rounded-2xl p-3 text-left transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-2 lg:min-w-0 ${
-                isActive
-                  ? 'bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white shadow-[0_4px_16px_rgba(168,85,247,0.3)] scale-[1.01]'
-                  : 'bg-white border border-stone-200/80 text-zinc-700 hover:bg-purple-50/50 hover:text-purple-900 hover:border-purple-200 shadow-2xs'
+              className={`group flex w-full min-w-max items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-w-0 ${
+                isActive ? 'bg-accent-soft' : 'hover:bg-stone-100'
               }`}
             >
               {item.icon && (
-                <div className={`p-2 rounded-xl shrink-0 transition-colors ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-700 group-hover:bg-purple-100 group-hover:text-purple-700'
-                }`}>
-                  <item.icon size={16} />
-                </div>
+                <item.icon
+                  size={17}
+                  strokeWidth={isActive ? 2.1 : 1.75}
+                  className={`mt-0.5 shrink-0 ${isActive ? 'text-accent' : 'text-stone-700'}`}
+                />
               )}
-              <span className="min-w-0 pt-0.5">
-                <span className={`block text-xs font-extrabold tracking-tight ${isActive ? 'text-white' : 'text-zinc-900'}`}>{item.label}</span>
+              <span className="min-w-0">
+                <span className={`block text-[15px] ${isActive ? 'font-semibold text-accent' : 'font-medium text-stone-900'}`}>{item.label}</span>
                 {item.description && (
-                  <span className={`mt-0.5 hidden text-[11px] leading-snug font-medium lg:block ${isActive ? 'text-purple-100' : 'text-zinc-500'}`}>
+                  <span className="mt-0.5 hidden text-[12.5px] leading-snug text-stone-600 lg:block">
                     {item.description}
                   </span>
                 )}
@@ -535,8 +533,8 @@ export function SideNav({
 
 export function Spinner({ label = 'Chargement' }: { label?: string }) {
   return (
-    <div className="flex items-center gap-2.5 py-8 text-sm text-stone-600">
-      <Loader2 size={16} className="animate-spin text-stone-500" />
+    <div className="flex items-center gap-2.5 py-8 text-sm text-stone-700">
+      <Loader2 size={16} className="animate-spin text-stone-600" />
       {label}
     </div>
   );
@@ -560,7 +558,7 @@ export function FormMessage({ message }: { message: { type: 'success' | 'error';
 
 export function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex items-center gap-0.5 rounded-lg border border-stone-200 bg-stone-100/80 px-2 py-0.5 font-mono text-[11px] font-semibold text-stone-600 shadow-2xs">
+    <kbd className="inline-flex items-center gap-0.5 rounded-md border border-stone-200 bg-white px-1.5 py-0.5 font-sans text-[11px] font-medium text-stone-600">
       {children}
     </kbd>
   );
@@ -608,22 +606,22 @@ export function CommandMenu({
       );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-stone-950/60 backdrop-blur-sm animate-fadein">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-stone-900/30 animate-fadein">
       <div
         className="fixed inset-0"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-stone-200 overflow-hidden z-10">
+      <div className="relative w-full max-w-xl rounded-xl bg-white shadow-xl border border-stone-200 overflow-hidden z-10">
         {/* Input */}
-        <div className="flex items-center gap-3 px-4 h-14 border-b border-stone-100 bg-stone-50/50">
-          <Search size={18} className="text-stone-400 shrink-0" />
+        <div className="flex items-center gap-3 px-4 h-14 border-b border-stone-200">
+          <Search size={18} className="text-stone-500 shrink-0" />
           <input
             ref={inputRef}
             type="text"
-            placeholder="Rechercher une section, un outil ou une action... (Échap pour fermer)"
+            placeholder="Aller à…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="flex-1 bg-transparent text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none"
+            className="flex-1 bg-transparent text-[15px] text-stone-900 placeholder:text-stone-500 focus:outline-none"
           />
           <Kbd>Échap</Kbd>
         </div>
@@ -631,7 +629,7 @@ export function CommandMenu({
         {/* Results */}
         <div className="max-h-80 overflow-y-auto p-2 space-y-1">
           {filtered.length === 0 ? (
-            <div className="py-8 text-center text-xs text-stone-400">
+            <div className="py-8 text-center text-xs text-stone-500">
               Aucun résultat trouvé pour "{query}"
             </div>
           ) : (
@@ -644,28 +642,28 @@ export function CommandMenu({
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {item.icon ? (
-                    <span className="p-1.5 rounded-lg bg-stone-100 text-stone-600 group-hover:bg-stone-900 group-hover:text-white transition-colors">
+                    <span className="p-1.5 rounded-lg bg-stone-100 text-stone-700 group-hover:bg-accent group-hover:text-accent-fg transition-colors">
                       <item.icon size={15} />
                     </span>
                   ) : (
-                    <Sparkles size={15} className="text-stone-400 shrink-0" />
+                    <Sparkles size={15} className="text-stone-500 shrink-0" />
                   )}
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-stone-900 truncate group-hover:text-stone-900">
                       {item.name}
                     </p>
-                    <p className="text-[11px] text-stone-400">{item.category}</p>
+                    <p className="text-[11px] text-stone-500">{item.category}</p>
                   </div>
                 </div>
-                <CornerDownLeft size={13} className="text-stone-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <CornerDownLeft size={13} className="text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </Link>
             ))
           )}
         </div>
 
-        <div className="px-4 py-2.5 bg-stone-50 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-400">
-          <span>Astuce : tapez <Kbd>⌘K</Kbd> n'importe où pour ouvrir la recherche rapide</span>
-          <span className="flex items-center gap-1"><Sparkles size={12} className="text-amber-500" /> Admin Studio 2026</span>
+        <div className="px-4 py-2.5 bg-stone-50 border-t border-stone-200 flex items-center justify-between text-[11px] text-stone-500">
+          <span><Kbd>⌘K</Kbd> ouvre la recherche partout</span>
+          <span>Entrée pour ouvrir</span>
         </div>
       </div>
     </div>

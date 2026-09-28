@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { SITE_CONFIG } from '../../../config/site';
 import { sendEmail } from '../../../services/email';
 import { buildUnsubToken, isUnsubConfigured } from '../../../utils/unsubToken';
+import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { emitAutomationEvent } from '../../../services/automationRunner';
 
 /*
@@ -129,6 +130,9 @@ export async function POST(req: NextRequest) {
 
     if (!token) {
       return NextResponse.json({ error: 'Non autorisé. Token manquant.' }, { status: 401 });
+    }
+    if (!(await validateSupabaseToken(token))) {
+      return NextResponse.json({ error: 'Session invalide ou expirée.' }, { status: 401 });
     }
 
     // Pas d'envoi sans lien de désinscription vérifiable (voir utils/unsubToken).

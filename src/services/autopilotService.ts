@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { getSupabaseAdmin } from '../utils/supabaseAdmin';
 import { getAutomaticArticleImages, injectInlineImagesIntoContent } from '../utils/articleImages';
 import { getSettingsServer } from './settingsServer';
+import { internalHeaders } from '../utils/apiAuth';
 
 export interface AutopilotConfig {
   enabled: boolean;
@@ -47,10 +48,14 @@ export async function saveAutopilotConfig(config: Partial<AutopilotConfig>): Pro
   if (config.lastRunAt) {
     updates.push({ key: 'autopilot_last_run', value: config.lastRunAt });
   }
-
-  for (const item of updates) {
-    await dbClient.from('settings').upsert({ key: item.key, value: item.value });
+  // La prochaine échéance calculée après un cycle était ignorée.
+  if (config.nextRunAt && !config.frequency) {
+    updates.push({ key: 'autopilot_next_run', value: config.nextRunAt });
   }
+
+  if (updates.length === 0) return true;
+  const { error } = await dbClient.from('settings').upsert(updates, { onConflict: 'key' });
+  if (error) throw new Error(`Réglages non enregistrés : ${error.message}`);
 
   return true;
 }
@@ -70,7 +75,9 @@ export function calculateNextRunDate(frequency: string): string {
 /**
  * Exécute un cycle complet de création autonome (1 Article Long-Form + Visuels HD + 3 Posts Sociaux)
  */
-export async function runAutopilotCycle(origin: string = ''): Promise<{ ok: boolean; articleTitle?: string; error?: string }> {
+export async function runAutopilotCycle(
+  origin: string = '',
+): Promise<{ ok: boolean; articleTitle?: string; published?: boolean; error?: string }> {
   const dbClient = getSupabaseAdmin() || supabase;
 
   try {
@@ -98,12 +105,21 @@ export async function runAutopilotCycle(origin: string = ''): Promise<{ ok: bool
       // Si la liste de mots-clés est épuisée, relancer un scan automatique
       try {
         if (origin) {
-          await fetch(`${origin}/api/keyword-scan`, { method: 'POST' });
+          await fetch(`${origin}/api/keyword-scan`, { method: 'POST', headers: internalHeaders() });
         }
       } catch (scanErr) {
         console.warn('[AutopilotEngine] Automatic scan trigger:', scanErr);
       }
+      // Pas de sujet en attente : on s'arrête. Le sujet de repli (« développement
+      // d'activité ») n'a rien à voir avec le site et aurait été publié tel quel.
+      return {
+        ok: false,
+        error: "Aucun sujet en attente dans le Hub Mots-clés. Ajoutez-en un depuis l'écran SEO, puis relancez le cycle. Aucun article n'a été créé.",
+      };
     }
+
+    const autopilotConfig = await getAutopilotConfig();
+    const publishDirectly = autopilotConfig.mode !== 'review_required';
 
     // 2. Obtenir l'illustration HD automatique (Couverture + 2 images d'illustration)
     const autoImages = getAutomaticArticleImages(selectedTitle);
@@ -114,11 +130,12 @@ export async function runAutopilotCycle(origin: string = ''): Promise<{ ok: bool
     let metaDescription = selectedIntro;
     let metaKeywords = selectedKeyword;
     let category = 'Conseils';
+    let aiFailure = '';
 
     try {
       const aiRes = await fetch(`${origin || ''}/api/admin/generate-blog-post`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...internalHeaders() },
         body: JSON.stringify({ title: selectedTitle, keyword: selectedKeyword }),
       });
       if (aiRes.ok) {
@@ -129,8 +146,24 @@ export async function runAutopilotCycle(origin: string = ''): Promise<{ ok: bool
         if (data.meta_keywords) metaKeywords = data.meta_keywords;
         if (data.category) category = data.category;
         if (data.suggested_slug) selectedSlug = data.suggested_slug;
+      } else {
+        const detail = await aiRes.json().catch(() => null);
+        aiFailure = aiRes.status === 502 || aiRes.status === 504
+          ? 'le service IA a mis trop de temps à répondre'
+          : detail?.error || `erreur ${aiRes.status}`;
       }
-    } catch { /* fallback html below */ }
+    } catch {
+      aiFailure = 'le service IA est injoignable';
+    }
+
+    if (!articleHtml) {
+      // Le texte générique ci-dessous était publié quand la rédaction IA
+      // échouait. On s'arrête désormais : rien n'est créé, le sujet reste en file.
+      return {
+        ok: false,
+        error: `La rédaction de l'article n'a pas abouti (${aiFailure || 'réponse vide du service IA'}). Aucun article n'a été créé ; le sujet reste en attente. Réessayez dans quelques minutes.`,
+      };
+    }
 
     if (!articleHtml) {
       articleHtml = `<p class="lead">${selectedIntro}</p>
@@ -160,7 +193,8 @@ export async function runAutopilotCycle(origin: string = ''): Promise<{ ok: bool
         content: finalHtmlContent,
         category: category,
         cover_image: autoImages.coverImage,
-        published: true,
+        // En mode « validation », l'article reste en brouillon à relire.
+        published: publishDirectly,
       },
     ]).select('id').single();
 
@@ -171,11 +205,11 @@ export async function runAutopilotCycle(origin: string = ''): Promise<{ ok: bool
       await dbClient.from('seo_clusters').delete().eq('id', clusterIdToClean);
     }
 
-    // 6. Publier sur les canaux sociaux
-    try {
+    // 6. Publier sur les canaux sociaux (seulement si l'article est en ligne)
+    if (publishDirectly) try {
       await fetch(`${origin || ''}/api/admin/social-publish`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...internalHeaders() },
         body: JSON.stringify({
           platform: 'all',
           title: `Lot Hebdomadaire - ${selectedTitle}`,
@@ -186,11 +220,10 @@ export async function runAutopilotCycle(origin: string = ''): Promise<{ ok: bool
     } catch { /* ignore non critical */ }
 
     // 7. Mettre à jour la date de dernière exécution et prochaine exécution
-    const config = await getAutopilotConfig();
-    const nextDate = calculateNextRunDate(config.frequency);
+    const nextDate = calculateNextRunDate(autopilotConfig.frequency);
     await saveAutopilotConfig({ lastRunAt: new Date().toISOString(), nextRunAt: nextDate });
 
-    return { ok: true, articleTitle: selectedTitle };
+    return { ok: true, articleTitle: selectedTitle, published: publishDirectly };
   } catch (err: any) {
     console.error('[AutopilotCycle] Erreur:', err);
     return { ok: false, error: err.message };

@@ -2,41 +2,9 @@ import { NextResponse, NextRequest } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { validateSupabaseToken } from '../../../utils/apiAuth';
 import { supabase } from '../../../services/supabase';
+import { getR2Config } from '../../../utils/r2Config';
 
-/**
- * Récupération DYNAMIQUE des identifiants Cloudflare R2 :
- * 1. Essaie d'abord les variables d'environnement process.env
- * 2. Bascule automatiquement sur la table Supabase `settings` (modifiable depuis l'Admin > Paramètres > Clés API)
- */
-async function getR2Config() {
-  let accountId = process.env.R2_ACCOUNT_ID || '';
-  let accessKey = process.env.R2_ACCESS_KEY_ID || '';
-  let secretKey = process.env.R2_SECRET_ACCESS_KEY || '';
-  let bucket = process.env.R2_BUCKET_NAME || '';
-  let publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || process.env.VITE_R2_PUBLIC_URL || '';
-
-  if (!accountId || !accessKey || !secretKey || !bucket || !publicUrl) {
-    try {
-      const { data } = await supabase.from('settings').select('key, value').in('key', [
-        'r2_account_id',
-        'r2_access_key_id',
-        'r2_secret_access_key',
-        'r2_bucket_name',
-        'r2_public_url',
-      ]);
-      const map = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value ?? '']));
-      accountId = accountId || map.r2_account_id || '';
-      accessKey = accessKey || map.r2_access_key_id || '';
-      secretKey = secretKey || map.r2_secret_access_key || '';
-      bucket = bucket || map.r2_bucket_name || '';
-      publicUrl = publicUrl || map.r2_public_url || '';
-    } catch (e) {
-      console.error("Erreur lecture settings R2 Supabase:", e);
-    }
-  }
-
-  return { accountId, accessKey, secretKey, bucket, publicUrl };
-}
+// Identifiants R2 : app_secrets (admin) puis variables R2_* ; voir utils/r2Config.
 
 export async function POST(req: NextRequest) {
   try {
@@ -51,11 +19,11 @@ export async function POST(req: NextRequest) {
     const { accountId, accessKey, secretKey, bucket, publicUrl } = await getR2Config();
 
     const missing = [
-      !accountId && 'R2_ACCOUNT_ID / r2_account_id',
-      !accessKey && 'R2_ACCESS_KEY_ID / r2_access_key_id',
-      !secretKey && 'R2_SECRET_ACCESS_KEY / r2_secret_access_key',
-      !bucket && 'R2_BUCKET_NAME / r2_bucket_name',
-      !publicUrl && 'NEXT_PUBLIC_R2_PUBLIC_URL / r2_public_url',
+      !accountId && 'R2_ACCOUNT_ID',
+      !accessKey && 'R2_ACCESS_KEY_ID',
+      !secretKey && 'R2_SECRET_ACCESS_KEY',
+      !bucket && 'R2_BUCKET_NAME',
+      !publicUrl && 'NEXT_PUBLIC_R2_PUBLIC_URL',
     ].filter(Boolean) as string[];
 
     if (missing.length > 0) {

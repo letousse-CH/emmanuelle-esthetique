@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import {
-  DEFAULT_SCHEDULE, WEEKDAYS, cronToSchedule, deleteAutomation, describeCron, describeNextRun,
+  DEFAULT_SCHEDULE, WEEKDAYS, checkAutomationsSetup, cronToSchedule, deleteAutomation, describeCron, describeNextRun,
   fetchAutomations, fetchRuns, runAutomation, saveAutomation, scheduleToCron, toggleAutomation,
   type Schedule,
 } from '../../../services/automations';
@@ -95,8 +95,15 @@ export default function AutomationsClient() {
   const [busy, setBusy] = useState<string | null>(null);
   const [openHistory, setOpenHistory] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const problem = await checkAutomationsSetup();
+    setSetupError(problem);
+    if (problem) {
+      setLoading(false);
+      return;
+    }
     const [automations, history] = await Promise.all([fetchAutomations(), fetchRuns(undefined, 40)]);
     setItems(automations);
     setRuns(history);
@@ -124,6 +131,11 @@ export default function AutomationsClient() {
     if (!draft) return;
     if (!draft.name.trim()) {
       setMessage({ type: 'error', text: "Donnez un nom à l'automatisation." });
+      return;
+    }
+    if (draft.trigger_type === 'schedule' && draft.schedule.frequency === 'custom'
+      && draft.schedule.raw.trim().split(/\s+/).length !== 5) {
+      setMessage({ type: 'error', text: "L'expression avancée doit comporter cinq champs séparés par des espaces, par exemple « 0 6 * * 1 »." });
       return;
     }
     const spec = ACTION_CATALOG[draft.action_type];
@@ -160,6 +172,17 @@ export default function AutomationsClient() {
   }
 
   async function handleRun(automation: Automation) {
+    // L'exécution est réelle : e-mail envoyé, webhook appelé, articles mis en
+    // ligne ou génération IA facturée. On le dit avant, pas après.
+    const actionSpec = ACTION_CATALOG[automation.action_type];
+    const consequence = actionSpec?.publishes
+      ? 'Du contenu sera mis en ligne sur le site.'
+      : automation.action_type === 'email'
+        ? 'Un e-mail sera envoyé.'
+        : automation.action_type === 'webhook'
+          ? 'Le service externe sera prévenu.'
+          : 'La génération utilise votre budget IA.';
+    if (!confirm(`Exécuter « ${automation.name} » maintenant ?\n\n${actionSpec?.label ?? ''}. ${consequence}`)) return;
     setBusy(automation.id);
     setMessage(null);
     const result = await runAutomation(automation.id);
@@ -173,7 +196,31 @@ export default function AutomationsClient() {
     await load();
   }
 
+  async function handleToggle(automation: Automation, next: boolean) {
+    setMessage(null);
+    const result = await toggleAutomation(automation.id, next);
+    if (!result.success) {
+      setMessage({ type: 'error', text: `« ${automation.name} » n'a pas pu être ${next ? 'activée' : 'mise en pause'} : ${result.error}` });
+      return;
+    }
+    await load();
+  }
+
+  async function handleDelete(automation: Automation) {
+    if (!confirm(`Supprimer « ${automation.name} » ? Son journal d'exécutions sera perdu.`)) return;
+    setMessage(null);
+    const result = await deleteAutomation(automation.id);
+    if (!result.success) {
+      setMessage({ type: 'error', text: `Suppression impossible : ${result.error}` });
+      return;
+    }
+    if (draft?.id === automation.id) setDraft(null);
+    setMessage({ type: 'success', text: `« ${automation.name} » a été supprimée.` });
+    await load();
+  }
+
   if (loading) return <Spinner label="Chargement des automatisations…" />;
+  if (setupError) return <Callout tone="danger" title="Automatisations indisponibles">{setupError}</Callout>;
 
   const spec = draft ? ACTION_CATALOG[draft.action_type] : null;
 
@@ -182,10 +229,10 @@ export default function AutomationsClient() {
       {/* ── Comment ça marche ─────────────────────────────────────────── */}
       <Callout tone="info" title="Une automatisation, c'est une phrase en deux temps.">
         <p className="mt-1">
-          <strong>Quand</strong> quelque chose arrive — une date, une demande, une vente —{' '}
-          <strong>alors</strong> le site fait une action à votre place. Rien n'est publié ni envoyé
-          sans votre relecture&nbsp;: les actions qui produisent du contenu déposent toujours un
-          brouillon.
+          <strong>Quand</strong> quelque chose arrive (une date, une demande, une vente),{' '}
+          <strong>alors</strong> le site fait une action à votre place. Les actions qui rédigent du
+          contenu déposent un brouillon à relire. Celles qui envoient un e-mail, appellent un
+          webhook ou publient les articles programmés agissent directement.
         </p>
       </Callout>
 
@@ -196,7 +243,7 @@ export default function AutomationsClient() {
             type="button"
             onClick={() => setMessage(null)}
             aria-label="Masquer le message"
-            className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 cursor-pointer"
+            className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-700 cursor-pointer"
           >
             <X size={14} />
           </button>
@@ -248,14 +295,14 @@ export default function AutomationsClient() {
                       className={`rounded-lg border p-3 text-left transition-colors cursor-pointer
                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
                           isActive
-                            ? 'border-stone-900 bg-stone-900 text-white'
-                            : 'border-stone-300 bg-white text-stone-800 hover:border-stone-400 hover:bg-stone-50'
+                            ? 'border-accent bg-accent-soft text-stone-900'
+                            : 'border-stone-200 bg-white text-stone-800 hover:border-stone-300 hover:bg-stone-50'
                         }`}
                     >
                       <span className="flex items-center gap-2 text-[13.5px] font-medium">
                         <Icon size={15} /> {trigger.label}
                       </span>
-                      <span className={`mt-1 block text-[12.5px] leading-snug ${isActive ? 'text-stone-500' : 'text-stone-600'}`}>
+                      <span className="mt-1 block text-[13px] leading-snug text-stone-600">
                         {trigger.description}
                       </span>
                     </button>
@@ -336,8 +383,8 @@ export default function AutomationsClient() {
                       </Field>
                     )}
                   </div>
-                  <p className="mt-3 flex items-center gap-1.5 text-[12.5px] text-stone-600">
-                    <Clock size={13} className="text-stone-500" />
+                  <p className="mt-3 flex items-center gap-1.5 text-[13px] text-stone-700">
+                    <Clock size={13} className="text-stone-600" />
                     {describeCron(scheduleToCron(draft.schedule))}
                     {describeNextRun(scheduleToCron(draft.schedule)) && (
                       <> · prochaine fois {describeNextRun(scheduleToCron(draft.schedule))}</>
@@ -362,8 +409,8 @@ export default function AutomationsClient() {
                   {(() => {
                     const event = EVENT_CATALOG.find((e) => e.key === draft.event);
                     return event ? (
-                      <p className="mt-2 text-[12.5px] leading-relaxed text-stone-600">
-                        {event.description} <span className="text-stone-500">{event.emitted}</span>
+                      <p className="mt-2 text-[13px] leading-relaxed text-stone-700">
+                        {event.description} <span className="text-stone-600">{event.emitted}</span>
                       </p>
                     ) : null;
                   })()}
@@ -390,7 +437,7 @@ export default function AutomationsClient() {
                 <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 space-y-3">
                   <p className="text-[13px] leading-relaxed text-stone-700">{spec.detail}</p>
                   {spec.requires && (
-                    <p className="text-[12.5px] text-stone-600">
+                    <p className="text-[13px] text-stone-700">
                       <span className="font-medium text-stone-800">Nécessite&nbsp;:</span> {spec.requires}
                     </p>
                   )}
@@ -427,7 +474,7 @@ export default function AutomationsClient() {
             <div className="flex items-center justify-between gap-4 rounded-lg border border-stone-200 px-4 py-3">
               <div>
                 <p className="text-sm font-medium text-stone-900">Activer tout de suite</p>
-                <p className="text-[12.5px] text-stone-600">
+                <p className="text-[13px] text-stone-700">
                   En pause, l'automatisation reste enregistrée mais ne se déclenche jamais seule.
                 </p>
               </div>
@@ -462,8 +509,8 @@ export default function AutomationsClient() {
           description={items.length > 0 ? `${items.length} configurée${items.length > 1 ? 's' : ''}.` : undefined}
           actions={
             !draft && (
-              <Button variant="primary" size="sm" icon={Plus} onClick={() => setDraft(emptyDraft())}>
-                Nouvelle
+              <Button variant="primary" size="sm" icon={Plus} onClick={() => { setDraft(emptyDraft()); setMessage(null); }}>
+                Nouvelle automatisation
               </Button>
             )
           }
@@ -496,15 +543,15 @@ export default function AutomationsClient() {
                         {automation.last_status === 'success' && <Badge tone="success"><Check size={11} /> Dernier passage réussi</Badge>}
                         {automation.last_status === 'error' && <Badge tone="danger"><XCircle size={11} /> Dernier passage en échec</Badge>}
                       </div>
-                      <p className="mt-1 flex items-center gap-1.5 text-[13px] text-stone-600">
-                        <Icon size={13} className="shrink-0 text-stone-500" />
+                      <p className="mt-1 flex items-center gap-1.5 text-[13px] text-stone-700">
+                        <Icon size={13} className="shrink-0 text-stone-600" />
                         {summarize(automation)}
                       </p>
                       {nextRun && (
-                        <p className="mt-0.5 text-[12.5px] text-stone-500">Prochaine fois&nbsp;: {nextRun}</p>
+                        <p className="mt-0.5 text-[13px] text-stone-600">Prochaine fois&nbsp;: {nextRun}</p>
                       )}
                       {!automation.enabled && (
-                        <p className="mt-0.5 text-[12.5px] text-stone-500">
+                        <p className="mt-0.5 text-[13px] text-stone-600">
                           En pause — elle ne se déclenchera pas toute seule.
                         </p>
                       )}
@@ -513,7 +560,7 @@ export default function AutomationsClient() {
                     <div className="flex shrink-0 items-center gap-2">
                       <Toggle
                         checked={automation.enabled}
-                        onChange={async (next) => { await toggleAutomation(automation.id, next); await load(); }}
+                        onChange={(next) => void handleToggle(automation, next)}
                         label={`${automation.enabled ? 'Mettre en pause' : 'Activer'} ${automation.name}`}
                       />
                       <Button
@@ -537,13 +584,9 @@ export default function AutomationsClient() {
                         size="sm"
                         variant="ghost"
                         aria-label={`Supprimer ${automation.name}`}
-                        onClick={async () => {
-                          if (!confirm(`Supprimer « ${automation.name} » ? Son journal d'exécutions sera perdu.`)) return;
-                          await deleteAutomation(automation.id);
-                          await load();
-                        }}
+                        onClick={() => void handleDelete(automation)}
                       >
-                        <Trash2 size={15} className="text-stone-500" />
+                        <Trash2 size={15} className="text-stone-600" />
                       </Button>
                     </div>
                   </div>
@@ -554,7 +597,7 @@ export default function AutomationsClient() {
                         type="button"
                         onClick={() => setOpenHistory(isOpen ? null : automation.id)}
                         aria-expanded={isOpen}
-                        className="flex items-center gap-1 text-[12.5px] font-medium text-stone-600 transition-colors hover:text-stone-900 cursor-pointer"
+                        className="flex items-center gap-1 text-[13px] font-medium text-stone-700 transition-colors hover:text-stone-900 cursor-pointer"
                       >
                         <ChevronDown size={13} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                         {history.length} passage{history.length > 1 ? 's' : ''} enregistré{history.length > 1 ? 's' : ''}
@@ -562,18 +605,18 @@ export default function AutomationsClient() {
                       {isOpen && (
                         <ul className="mt-2 space-y-1 rounded-lg border border-stone-200 bg-stone-50 p-3">
                           {history.slice(0, 8).map((run) => (
-                            <li key={run.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12.5px]">
+                            <li key={run.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px]">
                               {run.status === 'success' ? (
                                 <Check size={12} className="shrink-0 translate-y-0.5 text-emerald-600" />
                               ) : run.status === 'error' ? (
                                 <XCircle size={12} className="shrink-0 translate-y-0.5 text-red-600" />
                               ) : (
-                                <Loader2 size={12} className="shrink-0 translate-y-0.5 animate-spin text-stone-500" />
+                                <Loader2 size={12} className="shrink-0 translate-y-0.5 animate-spin text-stone-600" />
                               )}
                               <span className="tabular-nums text-stone-700">
                                 {new Date(run.started_at).toLocaleString('fr-CH')}
                               </span>
-                              <span className="text-stone-500">
+                              <span className="text-stone-600">
                                 {run.triggered_by === 'manual' ? 'lancée à la main'
                                   : run.triggered_by === 'schedule' ? 'passage planifié'
                                   : run.triggered_by.startsWith('event:') ? 'déclenchée par un événement'
@@ -616,17 +659,17 @@ export default function AutomationsClient() {
                       {already ? (
                         <Badge tone="success"><Check size={11} /> en place</Badge>
                       ) : (
-                        <ArrowRight size={14} className="shrink-0 text-stone-500 transition-transform group-hover:translate-x-0.5" />
+                        <ArrowRight size={14} className="shrink-0 text-stone-600 transition-transform group-hover:translate-x-0.5" />
                       )}
                     </span>
-                    <span className="text-[12.5px] leading-relaxed text-stone-600">{recipe.summary}</span>
+                    <span className="text-[13px] leading-relaxed text-stone-700">{recipe.summary}</span>
                   </button>
                 </li>
               );
             })}
           </ul>
-          <p className="mt-4 flex items-start gap-1.5 text-[12.5px] leading-relaxed text-stone-500">
-            <Sparkles size={13} className="mt-0.5 shrink-0 text-stone-500" />
+          <p className="mt-4 flex items-start gap-1.5 text-[13px] leading-relaxed text-stone-600">
+            <Sparkles size={13} className="mt-0.5 shrink-0 text-stone-600" />
             Un modèle ouvre le formulaire pré-rempli. Rien n'est enregistré tant que vous n'avez pas
             validé, et tout reste modifiable ensuite.
           </p>

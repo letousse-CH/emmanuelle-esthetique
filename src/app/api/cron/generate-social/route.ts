@@ -7,7 +7,11 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { isModuleEnabledServer } from '../../../../config/modules';
+import { hasCronSecret } from '../../../../utils/apiAuth';
 import { runSocialAutomation } from '../../../../services/socialAutomation';
+
+// Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -18,7 +22,7 @@ export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   const urlSecret = req.nextUrl.searchParams.get('secret');
-  if (token !== cronSecret && urlSecret !== cronSecret) {
+  if (!hasCronSecret(token) && !hasCronSecret(urlSecret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

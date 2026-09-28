@@ -19,6 +19,9 @@ interface LegalLink { name: string; path: string; }
 
 const MENU_KEY = 'navigation_menu';
 const LEGAL_KEY = 'footer_legal_links';
+// Même réglage que la liste des pages : la page servie à la racine du site.
+const HOME_SLUG_KEY = 'home_page_slug';
+const LEGACY_HOME_SLUGS = ['home', 'accueil'];
 
 export default function MenuClient() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -27,12 +30,15 @@ export default function MenuClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [homeSlug, setHomeSlug] = useState('');
+  // Dernier état enregistré, pour signaler les modifications en attente.
+  const [savedSnapshot, setSavedSnapshot] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [{ data }, allPages] = await Promise.all([
-        supabase.from('settings').select('key, value').in('key', [MENU_KEY, LEGAL_KEY]),
+        supabase.from('settings').select('key, value').in('key', [MENU_KEY, LEGAL_KEY, HOME_SLUG_KEY]),
         fetchAllPages(),
       ]);
       const map = Object.fromEntries((data ?? []).map((row: any) => [row.key, row.value]));
@@ -40,17 +46,26 @@ export default function MenuClient() {
         try { const value = JSON.parse(raw || '[]'); return Array.isArray(value) ? value : fallback; }
         catch { return fallback; }
       };
-      setMenuItems(parse(map[MENU_KEY], []));
-      setLegalLinks(parse(map[LEGAL_KEY], []));
+      const loadedMenu = parse(map[MENU_KEY], []);
+      const loadedLegal = parse(map[LEGAL_KEY], []);
+      setMenuItems(loadedMenu);
+      setLegalLinks(loadedLegal);
+      setSavedSnapshot(JSON.stringify([loadedMenu, loadedLegal]));
+      setHomeSlug(String(map[HOME_SLUG_KEY] ?? '').trim());
       setPages(allPages);
     } catch (err) {
-      setMessage({ type: 'error', text: 'Impossible de charger le menu.' });
+      setMessage({ type: 'error', text: "Le menu n'a pas pu être chargé. Rechargez la page ; si le problème continue, vérifiez votre connexion." });
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Page d'accueil réellement servie à « / » : le réglage, sinon l'ancien nom présent.
+  const effectiveHomeSlug =
+    homeSlug || LEGACY_HOME_SLUGS.find((slug) => pages.some((p) => p.slug === slug)) || '';
+  const pagePath = (page: DynamicPage) => (page.slug === effectiveHomeSlug ? '/' : `/${page.slug}`);
 
   // ── Manipulation du menu ─────────────────────────────────────────────
   const moveItem = (i: number, d: -1 | 1) => {
@@ -65,7 +80,7 @@ export default function MenuClient() {
   const addDropdown = () =>
     setMenuItems((prev) => [...prev, { name: 'Nouveau menu', type: 'dropdown', children: [] }]);
   const addPage = (page: DynamicPage) =>
-    setMenuItems((prev) => [...prev, { name: page.title, path: page.slug === 'home' ? '/' : `/${page.slug}` }]);
+    setMenuItems((prev) => [...prev, { name: page.title, path: pagePath(page) }]);
   const addCustom = () => setMenuItems((prev) => [...prev, { name: 'Nouveau lien', path: '/' }]);
 
   const addSubItem = (i: number) =>
@@ -90,30 +105,49 @@ export default function MenuClient() {
     ...legalLinks.map((link) => link.path),
   ].filter(Boolean) as string[]);
 
-  const pagePath = (page: DynamicPage) => (page.slug === 'home' ? '/' : `/${page.slug}`);
+
+  const isDirty = !loading && JSON.stringify([menuItems, legalLinks]) !== savedSnapshot;
 
   const save = async () => {
+    // Un intitulé vide donnerait un lien invisible dans l'en-tête.
+    const emptyName = menuItems.some((item) => !(item.name ?? '').trim())
+      || menuItems.some((item) => (item.children ?? []).some((child) => !(child.name ?? '').trim()));
+    if (emptyName) {
+      setMessage({ type: 'error', text: "Un lien du menu n'a pas d'intitulé. Donnez-lui un nom ou retirez-le, puis enregistrez." });
+      return;
+    }
     setSaving(true);
     setMessage(null);
+    const cleanLegal = legalLinks.filter((l) => (l.name ?? '').trim() && (l.path ?? '').trim());
     const { error } = await supabase.from('settings').upsert(
       [
         { key: MENU_KEY, value: JSON.stringify(menuItems) },
-        { key: LEGAL_KEY, value: JSON.stringify(legalLinks.filter((l) => l.name.trim() && l.path.trim())) },
+        { key: LEGAL_KEY, value: JSON.stringify(cleanLegal) },
       ],
       { onConflict: 'key' },
     );
     setSaving(false);
-    setMessage(
-      error
-        ? { type: 'error', text: error.message }
-        : { type: 'success', text: 'Navigation enregistrée. Rechargez le site pour la voir.' },
-    );
+    if (error) {
+      setMessage({ type: 'error', text: `La navigation n'a pas pu être enregistrée (${error.message}). Vos modifications sont toujours là : réessayez.` });
+      return;
+    }
+    setLegalLinks(cleanLegal);
+    setSavedSnapshot(JSON.stringify([menuItems, cleanLegal]));
+    setMessage({ type: 'success', text: 'Navigation enregistrée. Rechargez le site pour la voir.' });
   };
+
+  // Prévient avant de quitter la page avec des modifications non enregistrées.
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
 
   const availablePages = pages.filter((page) => !usedPaths.has(pagePath(page)));
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="Navigation"
         description="Ce que vos visiteurs voient dans l'en-tête et en bas de page. Rien n'est proposé par défaut : vous choisissez parmi vos pages réelles."
@@ -150,7 +184,7 @@ export default function MenuClient() {
                   return (
                     <div key={idx} className="rounded-lg border border-stone-200 p-4">
                       <div className="flex flex-wrap items-end gap-3">
-                        <span className="mb-2 grid size-8 shrink-0 place-items-center rounded-lg bg-stone-100 text-stone-600">
+                        <span className="mb-2 grid size-8 shrink-0 place-items-center rounded-lg bg-stone-100 text-stone-700">
                           {isDropdown ? <FolderOpen size={15} /> : <Link2 size={15} />}
                         </span>
 
@@ -186,7 +220,15 @@ export default function MenuClient() {
                           <IconAction label={`Descendre « ${item.name} »`} disabled={idx === menuItems.length - 1} onClick={() => moveItem(idx, 1)}>
                             <ChevronDown size={15} />
                           </IconAction>
-                          <IconAction label={`Retirer « ${item.name} »`} danger onClick={() => deleteItem(idx)}>
+                          <IconAction
+                            label={`Retirer « ${item.name} »`}
+                            danger
+                            onClick={() => {
+                              const count = item.children?.length ?? 0;
+                              if (isDropdown && count > 0 && !confirm(`Retirer le menu « ${item.name} » et ses ${count} sous-lien${count > 1 ? 's' : ''} ?`)) return;
+                              deleteItem(idx);
+                            }}
+                          >
                             <Trash2 size={15} />
                           </IconAction>
                         </div>
@@ -195,28 +237,29 @@ export default function MenuClient() {
                       {isDropdown && (
                         <div className="mt-3 space-y-2 border-l-2 border-stone-200 pl-4">
                           {(item.children ?? []).length === 0 ? (
-                            <p className="py-1 text-[12.5px] text-stone-600">Aucun sous-lien pour l'instant.</p>
+                            <p className="py-1 text-[13px] text-stone-700">Aucun sous-lien pour l'instant.</p>
                           ) : (
                             (item.children ?? []).map((child, si) => (
                               <div key={si} className="flex flex-wrap items-end gap-3 rounded-lg bg-stone-50 p-3">
-                                <Field label="Intitulé" className="min-w-[8rem] flex-1">
-                                  <Input value={child.name} onChange={(e) => updateSubItem(idx, si, 'name', e.target.value)} />
+                                <Field label="Intitulé" htmlFor={`menu-${idx}-sub-name-${si}`} className="min-w-[8rem] flex-1">
+                                  <Input id={`menu-${idx}-sub-name-${si}`} value={child.name} onChange={(e) => updateSubItem(idx, si, 'name', e.target.value)} />
                                 </Field>
-                                <Field label="Adresse" className="min-w-[10rem] flex-[2]">
+                                <Field label="Adresse" htmlFor={`menu-${idx}-sub-path-${si}`} className="min-w-[10rem] flex-[2]">
                                   <Input
+                                    id={`menu-${idx}-sub-path-${si}`}
                                     value={child.path}
                                     onChange={(e) => updateSubItem(idx, si, 'path', e.target.value)}
                                     className="font-mono text-[13px]"
                                   />
                                 </Field>
                                 <div className="mb-1 flex shrink-0 items-center gap-0.5">
-                                  <IconAction label="Monter" disabled={si === 0} onClick={() => moveSubItem(idx, si, -1)}>
+                                  <IconAction label={`Monter « ${child.name || 'ce sous-lien'} »`} disabled={si === 0} onClick={() => moveSubItem(idx, si, -1)}>
                                     <ChevronUp size={14} />
                                   </IconAction>
-                                  <IconAction label="Descendre" disabled={si === (item.children?.length ?? 0) - 1} onClick={() => moveSubItem(idx, si, 1)}>
+                                  <IconAction label={`Descendre « ${child.name || 'ce sous-lien'} »`} disabled={si === (item.children?.length ?? 0) - 1} onClick={() => moveSubItem(idx, si, 1)}>
                                     <ChevronDown size={14} />
                                   </IconAction>
-                                  <IconAction label="Retirer" danger onClick={() => deleteSubItem(idx, si)}>
+                                  <IconAction label={`Retirer « ${child.name || 'ce sous-lien'} »`} danger onClick={() => deleteSubItem(idx, si)}>
                                     <Trash2 size={14} />
                                   </IconAction>
                                 </div>
@@ -244,11 +287,11 @@ export default function MenuClient() {
             />
             <CardBody>
               {pages.length === 0 ? (
-                <p className="text-[13px] text-stone-600">
+                <p className="text-[13px] text-stone-700">
                   Aucune page n'a encore été créée. Rendez-vous dans <strong>Pages</strong> pour en ajouter une.
                 </p>
               ) : availablePages.length === 0 ? (
-                <p className="flex items-center gap-1.5 text-[13px] text-stone-600">
+                <p className="flex items-center gap-1.5 text-[13px] text-stone-700">
                   <Check size={14} className="text-emerald-600" />
                   Toutes vos pages figurent déjà dans la navigation.
                 </p>
@@ -260,11 +303,11 @@ export default function MenuClient() {
                         type="button"
                         onClick={() => addPage(page)}
                         className="flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-[13px] text-stone-800 transition-colors hover:border-stone-400 hover:bg-stone-50 cursor-pointer
-                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2"
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2"
                       >
-                        <Plus size={13} className="text-stone-500" />
+                        <Plus size={13} className="text-stone-600" />
                         {page.title}
-                        <span className="font-mono text-[11.5px] text-stone-500">{pagePath(page)}</span>
+                        <span className="font-mono text-[12px] text-stone-600">{pagePath(page)}</span>
                         {!page.published && <Badge tone="warning">brouillon</Badge>}
                       </button>
                     </li>
@@ -287,20 +330,21 @@ export default function MenuClient() {
             />
             <CardBody className="space-y-3">
               <Callout tone="info">
-                Ces liens étaient auparavant écrits en dur dans le pied de page et pointaient vers des
-                pages que ce site n'a pas forcément. N'ajoutez ici que des pages réellement créées.
+                N&apos;ajoutez ici que des pages qui existent sur votre site : sinon, le lien mènera
+                vos visiteuses vers une page introuvable.
               </Callout>
 
               {legalLinks.length === 0 ? (
-                <p className="flex items-center gap-1.5 text-[13px] text-stone-600">
-                  <Scale size={14} className="text-stone-500" />
+                <p className="flex items-center gap-1.5 text-[13px] text-stone-700">
+                  <Scale size={14} className="text-stone-600" />
                   Aucun lien : la ligne du bas n'affichera que votre nom et l'année.
                 </p>
               ) : (
                 legalLinks.map((link, idx) => (
                   <div key={idx} className="flex flex-wrap items-end gap-3 rounded-lg border border-stone-200 p-3">
-                    <Field label="Intitulé" className="min-w-[9rem] flex-1">
+                    <Field label="Intitulé" htmlFor={`legal-name-${idx}`} className="min-w-[9rem] flex-1">
                       <Input
+                        id={`legal-name-${idx}`}
                         value={link.name}
                         placeholder="Mentions légales"
                         onChange={(e) =>
@@ -308,8 +352,9 @@ export default function MenuClient() {
                         }
                       />
                     </Field>
-                    <Field label="Adresse" className="min-w-[10rem] flex-[2]">
+                    <Field label="Adresse" htmlFor={`legal-path-${idx}`} className="min-w-[10rem] flex-[2]">
                       <Input
+                        id={`legal-path-${idx}`}
                         value={link.path}
                         placeholder="/mentions-legales"
                         className="font-mono text-[13px]"
@@ -329,9 +374,11 @@ export default function MenuClient() {
             </CardBody>
           </Card>
 
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-6 py-4">
-            <p className="text-[13px] text-stone-600">
-              Les changements ne sont visibles sur le site qu'une fois enregistrés.
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-6 py-4">
+            <p className={`text-[13px] ${isDirty ? 'font-medium text-amber-800' : 'text-stone-700'}`} aria-live="polite">
+              {isDirty
+                ? 'Modifications non enregistrées.'
+                : "Les changements ne sont visibles sur le site qu'une fois enregistrés."}
             </p>
             <div className="flex items-center gap-2">
               <Button icon={ExternalLink} onClick={() => window.open('/', '_blank', 'noopener')}>
@@ -360,8 +407,8 @@ function IconAction({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className={`grid size-8 place-items-center rounded-lg text-stone-500 transition-colors disabled:opacity-25 cursor-pointer disabled:cursor-default
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 ${
+      className={`grid size-8 place-items-center rounded-lg text-stone-600 transition-colors disabled:opacity-25 cursor-pointer disabled:cursor-default
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
           danger ? 'hover:bg-red-50 hover:text-red-700' : 'hover:bg-stone-100 hover:text-stone-900'
         }`}
     >

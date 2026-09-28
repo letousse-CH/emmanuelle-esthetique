@@ -22,6 +22,7 @@ export function blocksSchemaForAi(): string {
   return `Une page est un tableau de sections :
 { "layout": "1-col"|"2-col-equal"|"2-col-40-60"|"2-col-60-40"|"3-col-equal"|"full-width",
   "paddingY": "none"|"small"|"medium"|"large",
+  "innerPad"?: "none"|"medium"|"large",
   "width"?: "narrow"|"contained"|"wide"|"full",
   "background": "transparent"|"surface"|"warm"|"warm-strong"|"accent"|"dark",
   "bgImage"?: { "url": string, "opacity": number },

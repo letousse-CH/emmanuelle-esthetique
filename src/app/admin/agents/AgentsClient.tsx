@@ -2,21 +2,18 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, ArrowLeft, ArrowRight, Bot, Brain, Check, CheckCircle2, Eye, FileText, Globe,
-  Loader2, MessageSquare, Plus, RefreshCw, Send, Sparkles, Trash2, X, Zap,
-  BookOpen, UserCheck, ShieldCheck, Smile, Database
+  AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle2, Eye, FileText, Globe, Loader2, Plus, RefreshCw, Send, Sparkles, Trash2, X, BookOpen,
 } from 'lucide-react';
 
 import {
   deleteAgentDocument, fetchAgentDocuments, fetchAgents,
-  reindexAgentKnowledge, saveAgent, saveAgentDocument, ensureSuperAgent,
+  reindexAgentKnowledge, saveAgent, saveAgentDocument, ensureSuperAgent, checkAgentsSetup,
 } from '../../../services/agents';
 import {
   type Agent, type AgentCollectField, type AgentDocument,
 } from '../../../types/agents';
 import {
-  Badge, Button, Callout, Card, CardBody, CardFooter, CardHeader, EmptyState,
-  Field, FormMessage, Input, Select, Spinner, Textarea, Toggle,
+  Badge, Button, Callout, Card, CardBody, CardFooter, CardHeader, Field, FormMessage, Input, Spinner, Textarea, Toggle, ToggleRow,
 } from '../../../components/admin/ui';
 import EditorialBriefModal from './EditorialBriefModal';
 import DocumentViewerModal from './DocumentViewerModal';
@@ -36,6 +33,8 @@ type Fields = AgentCollectField[];
 export default function AgentsClient() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const [docs, setDocs] = useState<AgentDocument[]>([]);
   const [busy, setBusy] = useState<boolean>(false);
   const [saving, setSaving] = useState(false);
@@ -48,7 +47,7 @@ export default function AgentsClient() {
   const [isBriefModalOpen, setIsBriefModalOpen] = useState(false);
   const [viewingDoc, setViewingDoc] = useState<AgentDocument | null>(null);
 
-  // Formulaire du Super Agent
+  // Formulaire de l'agent
   const [form, setForm] = useState<{
     name: string;
     greeting: string;
@@ -59,12 +58,11 @@ export default function AgentsClient() {
     collect: Fields;
   } | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const superAgent = await ensureSuperAgent();
+  /** Recopie l'agent enregistré dans le formulaire. */
+  const applyAgent = useCallback((superAgent: Agent) => {
     setAgent(superAgent);
     setForm({
-      name: superAgent.name || 'Super Agent du Site',
+      name: superAgent.name || 'Assistant du site',
       greeting: superAgent.greeting || 'Bonjour ! Je suis l’assistant IA du site. Comment puis-je vous aider ?',
       system_prompt: superAgent.system_prompt || '',
       avatar: superAgent.avatar || '🤖',
@@ -72,25 +70,47 @@ export default function AgentsClient() {
       enabled: superAgent.enabled ?? true,
       collect: (superAgent.collect_fields ?? []) as Fields,
     });
+  }, []);
 
-    // Chargement garanti des documents via l'API serveur
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    const setupError = await checkAgentsSetup();
+    if (setupError) {
+      setLoadError(setupError);
+      setLoading(false);
+      return;
+    }
+    let superAgent: Agent | undefined;
+    try {
+      superAgent = await ensureSuperAgent();
+    } catch {
+      superAgent = undefined;
+    }
+    if (!superAgent) {
+      setLoadError("L'agent n'a pas pu être chargé. Vérifiez votre connexion, puis rechargez la page.");
+      setLoading(false);
+      return;
+    }
+    applyAgent(superAgent);
+
     const d = await fetchAgentDocuments(superAgent.id);
     setDocs(d);
     setLoading(false);
 
-    // Auto-réindexation au chargement pour garantir que le savoir et le décompte des pages sont à jour
-    void reindexAgentKnowledge(superAgent.id).then(async (res) => {
+    // Relecture du site à l'ouverture, pour que le savoir suive les pages et
+    // articles publiés depuis la dernière visite.
+    const agentId = superAgent.id;
+    void reindexAgentKnowledge(agentId).then(async (res) => {
       if (res.success) {
-        setDocs(await fetchAgentDocuments(superAgent.id));
+        setDocs(await fetchAgentDocuments(agentId));
       }
     });
-
-    return superAgent;
-  }, []);
+  }, [applyAgent]);
 
   useEffect(() => { void load(); }, [load]);
 
-  // Metric du savoir du Super Agent
+  // Décompte des sources de l'agent
   const knowledgeMetrics = useMemo(() => {
     const briefDoc = docs.find((d) => d.source_ref === 'brief-editorial' || d.source_type === 'brief');
     const pageDocs = docs.filter((d) => d.source_type === 'page');
@@ -113,24 +133,41 @@ export default function AgentsClient() {
     };
   }, [docs]);
 
-  async function handleSaveForm() {
-    if (!agent || !form) return;
-    if (!form.name.trim()) return setMessage({ type: 'error', text: "Le Super Agent a besoin d'un nom." });
+  /** Enregistre la fiche. Renvoie `true` si l'enregistrement a réussi. */
+  async function handleSaveForm(): Promise<boolean> {
+    if (!agent || !form || saving) return false;
+    if (!form.name.trim()) {
+      setMessage({ type: 'error', text: "Donnez un nom à l'agent (étape 1)." });
+      return false;
+    }
     setSaving(true);
+    setMessage(null);
     const result = await saveAgent({
       ...agent,
       name: form.name.trim(),
       greeting: form.greeting.trim(),
       system_prompt: form.system_prompt.trim(),
       avatar: form.avatar,
-      max_turns: Math.min(30, Math.max(2, form.max_turns)),
+      max_turns: Math.min(15, Math.max(2, form.max_turns || 10)),
       enabled: form.enabled,
       collect_fields: form.collect.filter((field) => field.key.trim() && field.label.trim()),
     });
+    if (!result.success) {
+      setSaving(false);
+      setMessage({ type: 'error', text: `Réglages non enregistrés : ${result.error ?? 'erreur inconnue'}. Réessayez.` });
+      return false;
+    }
+    // Relecture de la fiche enregistrée, sans recharger tout l'écran ni
+    // relancer la lecture du site à chaque enregistrement.
+    const rows = await fetchAgents();
+    const saved = rows.find((a) => a.id === agent.id);
+    if (saved) applyAgent(saved);
     setSaving(false);
-    if (!result.success) return setMessage({ type: 'error', text: result.error ?? 'Enregistrement impossible.' });
-    setMessage({ type: 'success', text: 'Réglages du Super Agent enregistrés !' });
-    await load();
+    setMessage({
+      type: 'success',
+      text: form.enabled ? "Réglages enregistrés. L'agent est visible sur le site." : "Réglages enregistrés. L'agent n'est pas affiché sur le site.",
+    });
+    return true;
   }
 
   async function handleReindex() {
@@ -140,14 +177,26 @@ export default function AgentsClient() {
     setBusy(false);
     setMessage(
       result.success
-        ? { type: 'success', text: `Bravo ! ${result.count} source(s) (Brief Éditorial, pages web et articles) réindexées avec succès.` }
-        : { type: 'error', text: result.error ?? 'Indexation impossible.' },
+        ? { type: 'success', text: `Site relu : ${result.count} source${result.count > 1 ? 's' : ''} (brief, pages et articles en ligne).` }
+        : { type: 'error', text: `Le site n'a pas pu être relu : ${result.error ?? 'erreur inconnue'}. Réessayez dans un instant.` },
     );
     setDocs(await fetchAgentDocuments(agent.id));
   }
 
-  async function addDocument(formEl: HTMLFormElement) {
+  async function removeDocument(doc: AgentDocument) {
     if (!agent) return;
+    if (!confirm(`Retirer « ${doc.title} » du savoir de l'agent ?`)) return;
+    const result = await deleteAgentDocument(doc.id);
+    if (!result.success) {
+      setMessage({ type: 'error', text: `Suppression impossible : ${result.error ?? 'erreur inconnue'}.` });
+      return;
+    }
+    setDocs(await fetchAgentDocuments(agent.id));
+    setMessage({ type: 'success', text: `« ${doc.title} » a été retiré.` });
+  }
+
+  async function addDocument(formEl: HTMLFormElement) {
+    if (!agent || adding) return;
     const data = new FormData(formEl);
     const title = String(data.get('title') ?? '').trim();
     const content = String(data.get('content') ?? '').trim();
@@ -155,46 +204,48 @@ export default function AgentsClient() {
       setMessage({ type: 'error', text: 'Un titre et un texte sont nécessaires.' });
       return;
     }
+    setAdding(true);
     const result = await saveAgentDocument({
       agent_id: agent.id, title, content, source_type: 'texte', source_ref: slugify(title),
     });
-    if (!result.success) return setMessage({ type: 'error', text: result.error ?? 'Enregistrement impossible.' });
+    setAdding(false);
+    if (!result.success) {
+      setMessage({ type: 'error', text: `Texte non ajouté : ${result.error ?? 'erreur inconnue'}. Votre saisie est conservée, réessayez.` });
+      return;
+    }
     formEl.reset();
     setDocs(await fetchAgentDocuments(agent.id));
-    setMessage({ type: 'success', text: 'Ajouté au savoir du Super Agent.' });
+    setMessage({ type: 'success', text: `« ${title} » a été ajouté au savoir de l'agent.` });
   }
 
-  if (loading) return <Spinner label="Préparation du Super Agent IA…" />;
+  if (loading) return <Spinner label="Chargement de l'agent…" />;
+  if (loadError) return <Callout tone="danger" title="Agent indisponible">{loadError}</Callout>;
 
   return (
     <div className="space-y-6">
-      {/* ── En-tête du Super Agent ─────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-sky-500 p-6 text-white shadow-md">
-        <div className="flex flex-wrap items-center justify-between gap-4 relative z-10">
+      {/* ── En-tête de l'agent ─────────────────────────────────────── */}
+      <div className="rounded-xl border border-stone-200 bg-white p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 text-3xl shadow-inner backdrop-blur-md">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-stone-100 text-2xl">
               {form?.avatar || '🤖'}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-white tracking-tight">{form?.name || 'Super Agent IA'}</h2>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-200 border border-emerald-400/30">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Agent du Site
-                </span>
+                <h2 className="text-xl font-semibold text-stone-900 tracking-tight">{agent?.name || 'Agent IA'}</h2>
+                {agent?.enabled
+                  ? <Badge tone="success">Visible sur le site</Badge>
+                  : <Badge>Non affiché sur le site</Badge>}
               </div>
-              <p className="text-xs text-indigo-100 mt-0.5">
-                Configurez votre assistant unique en 3 étapes simples (1 ➔ 2 ➔ 3).
+              <p className="text-[14px] text-stone-600 mt-0.5">
+                Réglez-le en trois étapes : son identité, ce qu'il sait, puis l'essai et la mise en ligne.
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsBriefModalOpen(true)}
-            className="bg-amber-400 hover:bg-amber-300 text-amber-950 font-bold px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer border border-amber-300 flex items-center gap-2 text-sm"
-          >
-            <Sparkles size={16} className="text-amber-950" /> Brief Éditorial & Marque
-          </button>
+          <Button icon={Sparkles} onClick={() => setIsBriefModalOpen(true)}>
+            Brief éditorial
+          </Button>
         </div>
       </div>
 
@@ -205,7 +256,7 @@ export default function AgentsClient() {
             type="button"
             onClick={() => setMessage(null)}
             aria-label="Masquer le message"
-            className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 cursor-pointer"
+            className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-700 cursor-pointer"
           >
             <X size={14} />
           </button>
@@ -218,20 +269,21 @@ export default function AgentsClient() {
         <button
           type="button"
           onClick={() => setStep(1)}
-          className={`flex items-center gap-3.5 rounded-2xl border p-4 text-left transition-all cursor-pointer ${
+          aria-current={step === 1 ? 'step' : undefined}
+          className={`flex items-center gap-3.5 rounded-xl border p-4 text-left transition-colors cursor-pointer ${
             step === 1
-              ? 'border-indigo-600 bg-indigo-600 text-white shadow-md ring-2 ring-indigo-500/30 scale-[1.02]'
-              : 'border-emerald-300 bg-emerald-50/70 text-emerald-950 hover:bg-emerald-100'
+              ? 'border-accent bg-accent-soft text-stone-900'
+              : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
           }`}
         >
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold shadow-xs ${
-            step === 1 ? 'bg-white text-indigo-700' : 'bg-emerald-600 text-white'
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+            step === 1 ? 'bg-accent text-accent-fg' : 'bg-stone-100 text-stone-700'
           }`}>
             {step > 1 ? <Check size={18} /> : '1'}
           </div>
           <div>
-            <p className={`text-[11px] font-bold uppercase tracking-wider ${step === 1 ? 'text-indigo-200' : 'text-emerald-700'}`}>Étape 1</p>
-            <p className="text-sm font-bold truncate">Identité & Apparence</p>
+            <p className="text-[13px] text-stone-600">Étape 1</p>
+            <p className="text-sm font-semibold truncate">Identité</p>
           </div>
         </button>
 
@@ -239,29 +291,23 @@ export default function AgentsClient() {
         <button
           type="button"
           onClick={() => setStep(2)}
-          className={`flex items-center gap-3.5 rounded-2xl border p-4 text-left transition-all cursor-pointer ${
+          aria-current={step === 2 ? 'step' : undefined}
+          className={`flex items-center gap-3.5 rounded-xl border p-4 text-left transition-colors cursor-pointer ${
             step === 2
-              ? 'border-indigo-600 bg-indigo-600 text-white shadow-md ring-2 ring-indigo-500/30 scale-[1.02]'
+              ? 'border-accent bg-accent-soft text-stone-900'
               : step > 2
-              ? 'border-emerald-300 bg-emerald-50/70 text-emerald-950 hover:bg-emerald-100'
+              ? 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
               : 'border-stone-200 bg-white hover:bg-stone-50 text-stone-700'
           }`}
         >
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold shadow-xs ${
-            step === 2 ? 'bg-white text-indigo-700' : step > 2 ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-700'
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+            step === 2 ? 'bg-accent text-accent-fg' : step > 2 ? 'bg-accent text-accent-fg' : 'bg-stone-100 text-stone-700'
           }`}>
             {step > 2 ? <Check size={18} /> : '2'}
           </div>
           <div>
-            <p className={`text-[11px] font-bold uppercase tracking-wider ${step === 2 ? 'text-indigo-200' : step > 2 ? 'text-emerald-700' : 'text-stone-400'}`}>Étape 2</p>
-            <div className="flex items-center gap-1.5">
-              <p className="text-sm font-bold truncate">Savoir & Cerveau</p>
-              <span className={`rounded-full px-2 py-0.2 text-[10.5px] font-extrabold ${
-                step === 2 ? 'bg-amber-400 text-stone-950' : 'bg-amber-100 text-amber-900'
-              }`}>
-                {knowledgeMetrics.score}%
-              </span>
-            </div>
+            <p className="text-[13px] text-stone-600">Étape 2</p>
+            <p className="text-sm font-semibold truncate">Ce qu'il sait</p>
           </div>
         </button>
 
@@ -269,20 +315,21 @@ export default function AgentsClient() {
         <button
           type="button"
           onClick={() => setStep(3)}
-          className={`flex items-center gap-3.5 rounded-2xl border p-4 text-left transition-all cursor-pointer ${
+          aria-current={step === 3 ? 'step' : undefined}
+          className={`flex items-center gap-3.5 rounded-xl border p-4 text-left transition-colors cursor-pointer ${
             step === 3
-              ? 'border-indigo-600 bg-indigo-600 text-white shadow-md ring-2 ring-indigo-500/30 scale-[1.02]'
+              ? 'border-accent bg-accent-soft text-stone-900'
               : 'border-stone-200 bg-white hover:bg-stone-50 text-stone-700'
           }`}
         >
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold shadow-xs ${
-            step === 3 ? 'bg-white text-indigo-700' : 'bg-stone-100 text-stone-700'
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+            step === 3 ? 'bg-accent text-accent-fg' : 'bg-stone-100 text-stone-700'
           }`}>
             3
           </div>
           <div>
-            <p className={`text-[11px] font-bold uppercase tracking-wider ${step === 3 ? 'text-indigo-200' : 'text-stone-400'}`}>Étape 3</p>
-            <p className="text-sm font-bold truncate">Test & En Ligne</p>
+            <p className="text-[13px] text-stone-600">Étape 3</p>
+            <p className="text-sm font-semibold truncate">Essai et mise en ligne</p>
           </div>
         </button>
       </div>
@@ -291,22 +338,24 @@ export default function AgentsClient() {
       {step === 1 && agent && form && (
         <Card className="border-stone-200 shadow-xs">
           <CardHeader
-            title="Étape 1 : Choisissez l'identité de votre Super Agent"
-            description="Définissez son avatar emoji, son prénom et son message d'accueil pour vos visiteurs."
+            title="Étape 1 : identité"
+            description="Son avatar, son nom et la phrase qu'il dit à l'ouverture de la conversation."
           />
           <CardBody className="space-y-6">
             {/* Choix d'avatar */}
-            <Field label="1. Choix du visage / Avatar" hint="Cliquez sur l'avatar que vous préférez pour votre assistant.">
+            <Field label="Avatar" hint="Affiché à côté de ses messages.">
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 {AVATARS.map((emoji) => (
                   <button
                     key={emoji}
                     type="button"
                     onClick={() => setForm({ ...form, avatar: emoji })}
-                    className={`h-14 w-14 rounded-2xl text-2xl flex items-center justify-center transition-all cursor-pointer ${
+                    aria-pressed={form.avatar === emoji}
+                    aria-label={`Choisir l'avatar ${emoji}`}
+                    className={`h-12 w-12 rounded-lg text-2xl flex items-center justify-center transition-colors cursor-pointer ${
                       form.avatar === emoji
-                        ? 'bg-indigo-600 text-white scale-110 shadow-lg ring-4 ring-indigo-200'
-                        : 'bg-stone-100 hover:bg-stone-200 text-stone-800'
+                        ? 'bg-accent-soft ring-2 ring-accent'
+                        : 'bg-stone-100 hover:bg-stone-200'
                     }`}
                   >
                     {emoji}
@@ -316,11 +365,11 @@ export default function AgentsClient() {
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="2. Nom du Super Agent" htmlFor="agent-name" hint="Visible en haut du widget de chat." required>
+              <Field label="Nom" htmlFor="agent-name" hint="Affiché en haut de la fenêtre de conversation." required>
                 <Input id="agent-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </Field>
 
-              <Field label="3. Première phrase d'accueil" htmlFor="agent-greeting" hint="Ce qu'il dit dès l'ouverture du chat.">
+              <Field label="Phrase d'accueil" htmlFor="agent-greeting" hint="Ce qu'il dit dès l'ouverture de la conversation.">
                 <Input
                   id="agent-greeting"
                   value={form.greeting}
@@ -332,24 +381,27 @@ export default function AgentsClient() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
-                label="4. Plafond d'échanges par conversation"
+                label="Nombre d'échanges maximum"
                 htmlFor="agent-turns"
-                hint="Limite le nombre de messages (Max 15, conseillé : 10) pour éviter les échanges sans fin."
+                hint="Entre 2 et 15 (conseillé : 10). Au-delà, l'agent propose de laisser ses coordonnées."
               >
                 <Input
                   id="agent-turns"
                   type="number"
                   min={2}
                   max={15}
-                  value={form.max_turns}
-                  onChange={(e) => setForm({ ...form, max_turns: Math.min(15, Math.max(2, Number(e.target.value) || 10)) })}
+                  value={form.max_turns || ''}
+                  // Borné à la sortie du champ seulement : borner à chaque frappe
+                  // transformait « 1 » en 2, et il était impossible de taper 12.
+                  onChange={(e) => setForm({ ...form, max_turns: Number(e.target.value) || 0 })}
+                  onBlur={() => setForm({ ...form, max_turns: Math.min(15, Math.max(2, form.max_turns || 10)) })}
                 />
               </Field>
 
               <Field
-                label="5. Consigne générale de style"
+                label="Consigne de style"
                 htmlFor="agent-prompt"
-                hint="Indiquez son attitude globale (ex: Sois poli, concis et invite naturellement le visiteur à laisser ses coordonnées)."
+                hint="Son attitude générale. Ex. poli, concis, invite à laisser ses coordonnées."
               >
                 <Input
                   id="agent-prompt"
@@ -362,219 +414,140 @@ export default function AgentsClient() {
           </CardBody>
           <CardFooter>
             <div className="flex items-center justify-between w-full gap-3">
-              <Button variant="ghost" icon={Check} loading={saving} onClick={() => void handleSaveForm()}>
-                Enregistrer la fiche
+              <Button icon={Check} loading={saving} onClick={() => void handleSaveForm()}>
+                Enregistrer
               </Button>
-              <button
-                type="button"
-                onClick={() => {
-                  void handleSaveForm();
-                  setStep(2);
+              <Button
+                variant="primary"
+                disabled={saving}
+                onClick={async () => {
+                  // On ne change d'étape qu'une fois la fiche enregistrée.
+                  if (await handleSaveForm()) setStep(2);
                 }}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer active:scale-95 text-sm"
               >
-                Continuer vers l'Étape 2 : Savoir <ArrowRight size={16} />
-              </button>
+                Enregistrer et continuer <ArrowRight size={16} />
+              </Button>
             </div>
           </CardFooter>
         </Card>
       )}
 
-      {/* ── CONTENU DE L'ÉTAPE 2 : SAVOIR & CERVEAU (REFONTE DIDACTIQUE) ─ */}
+      {/* ── ÉTAPE 2 : CE QUE L'AGENT SAIT ─────────────────────────────── */}
       {step === 2 && (
-        <div className="space-y-6">
-          <Card className="overflow-hidden border-stone-200 shadow-xs">
-            <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 p-6 text-white">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-500 text-stone-950 font-bold shadow-md">
-                    <Brain size={28} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <h3 className="text-lg font-bold text-white tracking-tight">
-                        Étape 2 : Le Cerveau du Super Agent
-                      </h3>
-                      <Badge tone={knowledgeMetrics.score >= 80 ? 'success' : knowledgeMetrics.score >= 50 ? 'info' : 'warning'}>
-                        {knowledgeMetrics.score}% Formé
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-stone-300 mt-1">
-                      Le Super Agent lit votre site web pour pouvoir répondre de façon exacte et professionnelle.
-                    </p>
-                  </div>
-                </div>
+        <Card>
+          <CardHeader
+            title="Étape 2 : ce qu'il sait"
+            description="L'agent répond uniquement à partir de votre brief, des pages et articles en ligne, et des textes que vous ajoutez ici. Le site est relu à chaque ouverture de cet écran."
+            actions={
+              <Button icon={RefreshCw} loading={busy} onClick={() => void handleReindex()}>
+                Relire le site
+              </Button>
+            }
+          />
+          <CardBody className="space-y-6">
+            {/* Résumé des sources */}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <button
+                type="button"
+                onClick={() => setIsBriefModalOpen(true)}
+                className="rounded-xl border border-stone-200 bg-white p-4 text-left transition-colors hover:bg-stone-50 cursor-pointer"
+              >
+                <span className="flex items-center justify-between text-[13px] font-medium text-stone-600">
+                  Brief éditorial
+                  {knowledgeMetrics.hasBrief
+                    ? <CheckCircle2 size={16} className="text-emerald-600" />
+                    : <AlertCircle size={16} className="text-amber-600" />}
+                </span>
+                <span className="mt-2 block text-base font-semibold text-stone-900">
+                  {knowledgeMetrics.hasBrief ? 'Renseigné' : 'À remplir'}
+                </span>
+                <span className="mt-1 block text-[13px] font-medium text-accent">Modifier le brief</span>
+              </button>
 
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleReindex()}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-extrabold px-6 py-3 rounded-2xl shadow-lg cursor-pointer flex items-center gap-2.5 text-sm transition-all active:scale-95 border-none disabled:opacity-50"
-                >
-                  {busy ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} />} ⚡ Remplir le cerveau (Indexation 1-Clic)
-                </button>
+              <div className="rounded-xl border border-stone-200 bg-white p-4">
+                <span className="flex items-center justify-between text-[13px] font-medium text-stone-600">
+                  Pages du site <Globe size={16} className="text-stone-500" />
+                </span>
+                <span className="mt-2 block text-base font-semibold text-stone-900">
+                  {knowledgeMetrics.pageCount} page{knowledgeMetrics.pageCount > 1 ? 's' : ''}
+                </span>
               </div>
 
-              {/* Barre de progression du savoir */}
-              <div className="mt-5 space-y-1.5">
-                <div className="flex justify-between text-xs font-semibold text-stone-300">
-                  <span>Niveau d'apprentissage : {knowledgeMetrics.score}%</span>
-                  <span>{docs.length} source(s) enregistrée(s)</span>
-                </div>
-                <div className="h-3 w-full overflow-hidden rounded-full bg-stone-800 border border-stone-700">
-                  <div
-                    className="h-full bg-gradient-to-r from-amber-400 via-sky-400 to-emerald-400 transition-all duration-700 shadow-sm"
-                    style={{ width: `${knowledgeMetrics.score}%` }}
-                  />
-                </div>
+              <div className="rounded-xl border border-stone-200 bg-white p-4">
+                <span className="flex items-center justify-between text-[13px] font-medium text-stone-600">
+                  Articles du blog <BookOpen size={16} className="text-stone-500" />
+                </span>
+                <span className="mt-2 block text-base font-semibold text-stone-900">
+                  {knowledgeMetrics.articleCount} article{knowledgeMetrics.articleCount > 1 ? 's' : ''}
+                </span>
               </div>
 
-              {/* 4 Cartes Piliers du Savoir */}
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {/* 1. Brief */}
-                <div
-                  onClick={() => setIsBriefModalOpen(true)}
-                  className={`rounded-2xl border p-4 cursor-pointer transition-all hover:shadow-md ${
-                    knowledgeMetrics.hasBrief
-                      ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
-                      : 'border-stone-700 bg-stone-800/80 text-stone-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span>🎯 Brief Éditorial</span>
-                    {knowledgeMetrics.hasBrief ? <CheckCircle2 size={16} className="text-amber-400" /> : <AlertCircle size={16} className="text-stone-400" />}
-                  </div>
-                  <p className="mt-2 text-sm font-bold text-white truncate">
-                    {knowledgeMetrics.hasBrief ? 'Positionnement & Ton' : 'À configurer'}
-                  </p>
-                  <span className="mt-2.5 inline-flex items-center text-xs font-bold text-amber-300 underline">
-                    Éditer le brief →
-                  </span>
-                </div>
-
-                {/* 2. Pages Web */}
-                <div className="rounded-2xl border border-sky-500/40 bg-sky-500/10 p-4 text-sky-200">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span>🌐 Pages Web du Site</span>
-                    <Globe size={16} className="text-sky-400" />
-                  </div>
-                  <p className="mt-2 text-base font-extrabold text-white">
-                    {knowledgeMetrics.pageCount} page(s) web
-                  </p>
-                  <span className="mt-1 block text-xs text-sky-300 font-medium">Pages et blocs lusa</span>
-                </div>
-
-                {/* 3. Articles Blog */}
-                <div className="rounded-2xl border border-purple-500/40 bg-purple-500/10 p-4 text-purple-200">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span>📰 Articles du Blog</span>
-                    <BookOpen size={16} className="text-purple-400" />
-                  </div>
-                  <p className="mt-2 text-base font-extrabold text-white">
-                    {knowledgeMetrics.articleCount} article(s)
-                  </p>
-                  <span className="mt-1 block text-xs text-purple-300 font-medium">Savoir du blog</span>
-                </div>
-
-                {/* 4. Tarifs & FAQ */}
-                <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-emerald-200">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span>💡 Tarifs & FAQ</span>
-                    <FileText size={16} className="text-emerald-400" />
-                  </div>
-                  <p className="mt-2 text-base font-extrabold text-white">
-                    {knowledgeMetrics.customCount} document(s)
-                  </p>
-                  <span className="mt-1 block text-xs text-emerald-300 font-medium">Savoirs sur-mesure</span>
-                </div>
+              <div className="rounded-xl border border-stone-200 bg-white p-4">
+                <span className="flex items-center justify-between text-[13px] font-medium text-stone-600">
+                  Textes ajoutés <FileText size={16} className="text-stone-500" />
+                </span>
+                <span className="mt-2 block text-base font-semibold text-stone-900">
+                  {knowledgeMetrics.customCount} texte{knowledgeMetrics.customCount > 1 ? 's' : ''}
+                </span>
               </div>
             </div>
 
-            {/* Note explicative sur le stockage Supabase */}
-            <div className="bg-indigo-50/60 border-b border-indigo-100 p-4 px-6 flex items-start gap-3">
-              <Database size={18} className="text-indigo-600 shrink-0 mt-0.5" />
-              <div className="text-xs text-indigo-950 space-y-1">
-                <p className="font-bold">Où sont stockés les savoirs de votre Super Agent ?</p>
-                <p className="text-stone-600 leading-relaxed">
-                  Toutes les informations (Brief Éditorial, pages du site, articles et tarifs) sont conservées en sécurité dans la table <code className="bg-indigo-100 px-1 py-0.5 rounded text-indigo-900 font-mono text-[11px]">agent_documents</code> de votre base de données Supabase. Cliquez sur <strong>« Inspecter »</strong> ci-dessous pour voir le texte exact que l'agent a retenu pour chaque document.
-                </p>
-              </div>
-            </div>
-
-            {/* Liste des documents appris par le Super Agent */}
-            <CardBody className="space-y-4 pt-5">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center justify-between">
-                <span>Contenus mémorisés dans son cerveau ({docs.length})</span>
-                <span className="text-[11px] font-normal text-stone-600">Stockés dans table Supabase agent_documents</span>
-              </h4>
+            {/* Liste des sources */}
+            <div className="space-y-3">
+              <h3 className="text-[15px] font-semibold text-stone-900">
+                Sources utilisées ({docs.length})
+              </h3>
 
               {docs.length === 0 ? (
                 <Callout tone="warning">
-                  Aucun savoir mémorisé pour le moment. Cliquez sur le grand bouton vert « ⚡ Remplir le cerveau (Indexation 1-Clic) » ci-dessus pour lire vos pages web.
+                  L'agent ne sait encore rien de votre site. Cliquez sur « Relire le site » ci-dessus, ou ajoutez un texte ci-dessous.
                 </Callout>
               ) : (
-                <ul className="max-h-72 space-y-2.5 overflow-y-auto pr-1">
+                <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
                   {docs.map((doc) => {
                     const isBrief = doc.source_ref === 'brief-editorial' || doc.source_type === 'brief';
                     return (
                       <li
                         key={doc.id}
-                        className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 transition-all ${
-                          isBrief
-                            ? 'border-amber-200 bg-amber-50/70 shadow-2xs'
-                            : doc.source_type === 'page'
-                            ? 'border-sky-200 bg-sky-50/50 shadow-2xs'
-                            : doc.source_type === 'article'
-                            ? 'border-purple-200 bg-purple-50/50 shadow-2xs'
-                            : 'border-stone-200 bg-white hover:bg-stone-50'
-                        }`}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3"
                       >
                         <span className="flex min-w-0 items-center gap-3">
                           {isBrief ? (
-                            <Sparkles size={18} className="shrink-0 text-amber-600" />
+                            <Sparkles size={16} className="shrink-0 text-stone-500" />
                           ) : doc.source_type === 'page' ? (
-                            <Globe size={18} className="shrink-0 text-sky-600" />
+                            <Globe size={16} className="shrink-0 text-stone-500" />
                           ) : doc.source_type === 'article' ? (
-                            <BookOpen size={18} className="shrink-0 text-purple-600" />
+                            <BookOpen size={16} className="shrink-0 text-stone-500" />
                           ) : (
-                            <FileText size={18} className="shrink-0 text-stone-500" />
+                            <FileText size={16} className="shrink-0 text-stone-500" />
                           )}
-                          <span className="truncate text-sm font-bold text-stone-900">
-                            {doc.title}
+                          <span className="truncate text-[14px] font-medium text-stone-900">{doc.title}</span>
+                          <span className="hidden shrink-0 sm:inline">
+                            {isBrief ? (
+                              <Badge>Brief</Badge>
+                            ) : doc.source_type === 'page' ? (
+                              <Badge>Page</Badge>
+                            ) : doc.source_type === 'article' ? (
+                              <Badge>Article</Badge>
+                            ) : (
+                              <Badge tone="info">Texte ajouté</Badge>
+                            )}
                           </span>
-                          {isBrief ? (
-                            <Badge tone="warning">Brief Éditorial</Badge>
-                          ) : doc.source_type === 'page' ? (
-                            <Badge tone="info">Page Web</Badge>
-                          ) : doc.source_type === 'article' ? (
-                            <Badge tone="neutral">Article</Badge>
-                          ) : (
-                            <Badge>Texte libre</Badge>
-                          )}
                         </span>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setViewingDoc(doc)}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-white border border-stone-300 px-3 py-1.5 text-xs font-bold text-stone-800 hover:bg-stone-100 cursor-pointer shadow-xs transition-all"
-                            title="Inspecter le texte retenu par l'agent"
-                          >
-                            <Eye size={14} className="text-indigo-600" /> Inspecter le texte
-                          </button>
-                          {!isBrief && (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!agent) return;
-                                await deleteAgentDocument(doc.id);
-                                setDocs(await fetchAgentDocuments(agent.id));
-                              }}
-                              className="rounded-xl p-2 text-stone-400 transition-colors hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button size="sm" variant="ghost" icon={Eye} onClick={() => setViewingDoc(doc)}>
+                            {doc.source_type === 'texte' && !isBrief ? 'Voir / modifier' : 'Voir'}
+                          </Button>
+                          {doc.source_type === 'texte' && !isBrief && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
                               aria-label={`Retirer ${doc.title}`}
+                              onClick={() => void removeDocument(doc)}
                             >
-                              <Trash2 size={15} />
-                            </button>
+                              <Trash2 size={15} className="text-stone-600" />
+                            </Button>
                           )}
                         </div>
                       </li>
@@ -582,66 +555,62 @@ export default function AgentsClient() {
                   })}
                 </ul>
               )}
+            </div>
 
-              {/* Formulaire d'ajout rapide */}
-              <form
-                onSubmit={(event) => { event.preventDefault(); void addDocument(event.currentTarget); }}
-                className="space-y-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-4"
-              >
-                <p className="text-[13px] font-bold text-stone-900 flex items-center gap-1.5">
-                  <Plus size={16} className="text-emerald-600" /> Ajouter un tarif ou une condition spécifique
+            {/* Ajout d'un texte */}
+            <form
+              onSubmit={(event) => { event.preventDefault(); void addDocument(event.currentTarget); }}
+              className="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-4"
+            >
+              <div>
+                <p className="text-[15px] font-semibold text-stone-900">Ajouter un texte</p>
+                <p className="text-[13px] text-stone-600">
+                  Une information absente du site : tarif, zone de déplacement, condition d'annulation…
                 </p>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Field label="Titre" htmlFor="doc-title" className="sm:col-span-1">
-                    <Input id="doc-title" name="title" placeholder="Ex: Délais d'intervention" />
-                  </Field>
-                  <Field label="Texte explicatif" htmlFor="doc-content" className="sm:col-span-2">
-                    <Input id="doc-content" name="content" placeholder="Interventions sous 24h à 48h sur le canton de Genève..." />
-                  </Field>
-                </div>
-                <div className="flex justify-end">
-                  <Button type="submit" size="sm" icon={Plus}>Ajouter au savoir</Button>
-                </div>
-              </form>
-            </CardBody>
-
-            <CardFooter>
-              <div className="flex items-center justify-between w-full gap-3">
-                <Button variant="ghost" onClick={() => setStep(1)}>
-                  <ArrowLeft size={16} className="mr-1 inline" /> Étape 1 : Identité
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setStep(3)}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer active:scale-95 text-sm"
-                >
-                  Continuer vers l'Étape 3 : Test & Activation <ArrowRight size={16} />
-                </button>
               </div>
-            </CardFooter>
-          </Card>
-        </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Titre" htmlFor="doc-title" className="sm:col-span-1">
+                  <Input id="doc-title" name="title" placeholder="Ex. Zone de déplacement" />
+                </Field>
+                <Field label="Texte" htmlFor="doc-content" className="sm:col-span-2">
+                  <Textarea id="doc-content" name="content" rows={2} placeholder="Ex. Je me déplace à domicile dans un rayon de 20 km autour de Palézieux." />
+                </Field>
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" size="sm" icon={Plus} loading={adding}>Ajouter</Button>
+              </div>
+            </form>
+          </CardBody>
+
+          <CardFooter>
+            <Button variant="ghost" onClick={() => setStep(1)}>
+              <ArrowLeft size={16} /> Étape 1
+            </Button>
+            <Button variant="primary" onClick={() => setStep(3)}>
+              Continuer <ArrowRight size={16} />
+            </Button>
+          </CardFooter>
+        </Card>
       )}
 
       {/* ── CONTENU DE L'ÉTAPE 3 : TEST & MISE EN LIGNE ──────────────── */}
       {step === 3 && agent && form && (
         <div className="space-y-6">
           {/* Récolte d'informations & Activation */}
-          <Card className="border-stone-200 shadow-xs">
+          <Card>
             <CardHeader
-              title="Étape 3 : Coordonnées à récolter & Activation sur le site"
-              description="Définissez quelles coordonnées le Super Agent doit demander aux visiteurs."
+              title="Étape 3 : coordonnées et mise en ligne"
+              description="Ce que l'agent demande aux visiteurs, et son affichage sur le site."
             />
             <CardBody className="space-y-5">
-              <div className="rounded-xl border border-stone-200 p-4 space-y-3 bg-stone-50/50">
-                <div className="flex items-center justify-between">
+              <div className="rounded-xl border border-stone-200 p-4 space-y-3 bg-stone-50">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h4 className="text-sm font-semibold text-stone-900">Champs demandés aux visiteurs</h4>
-                    <p className="text-[12px] text-stone-600">L'agent les demande une par une, sans jamais forcer.</p>
+                    <h4 className="text-[15px] font-semibold text-stone-900">Informations demandées aux visiteurs</h4>
+                    <p className="text-[13px] text-stone-600">L'agent les demande une par une, sans insister.</p>
                   </div>
                   <Button
                     size="sm"
-                    variant="ghost"
                     icon={Plus}
                     onClick={() => setForm({ ...form, collect: [...form.collect, { key: '', label: '', required: false }] })}
                   >
@@ -649,16 +618,23 @@ export default function AgentsClient() {
                   </Button>
                 </div>
 
+                {form.collect.length === 0 && (
+                  <p className="text-[14px] text-stone-600">Aucune information demandée : l'agent se contente de répondre.</p>
+                )}
                 <ul className="space-y-2">
                   {form.collect.map((field, index) => (
                     <li key={index} className="flex flex-wrap items-center gap-3 rounded-lg border border-stone-200 bg-white p-3">
                       <Input
                         value={field.label}
-                        placeholder="Ex: Téléphone"
-                        className="min-w-[10rem] flex-1 h-9 text-[13px]"
+                        placeholder="Ex. Téléphone"
+                        aria-label="Information demandée"
+                        className="min-w-[10rem] flex-1"
                         onChange={(e) => {
                           const collect = [...form.collect];
-                          collect[index] = { ...field, label: e.target.value, key: field.key || slugify(e.target.value) };
+                          // La clé suit le libellé tant qu'elle en dérive. Avant,
+                          // elle se figeait sur la première lettre tapée (« t »).
+                          const derived = !field.key || field.key === slugify(field.label);
+                          collect[index] = { ...field, label: e.target.value, key: derived ? slugify(e.target.value) : field.key };
                           setForm({ ...form, collect });
                         }}
                       />
@@ -672,14 +648,15 @@ export default function AgentsClient() {
                           }}
                           label="Obligatoire"
                         />
-                        <span className="text-[12px] font-medium text-stone-600">Obligatoire</span>
+                        <span className="text-[13px] font-medium text-stone-700">Obligatoire</span>
                       </div>
                       <Button
                         size="sm"
                         variant="ghost"
+                        aria-label={`Retirer ${field.label || 'ce champ'}`}
                         onClick={() => setForm({ ...form, collect: form.collect.filter((_, i) => i !== index) })}
                       >
-                        <Trash2 size={14} className="text-stone-400 hover:text-red-600" />
+                        <Trash2 size={14} className="text-stone-600" />
                       </Button>
                     </li>
                   ))}
@@ -687,35 +664,24 @@ export default function AgentsClient() {
               </div>
 
               {/* Interrupteur Activation */}
-              <div className="flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50/60 px-5 py-4">
-                <div>
-                  <p className="text-sm font-bold text-emerald-950 flex items-center gap-1.5">
-                    <Globe size={16} className="text-emerald-600" /> Activer le Super Agent sur le site
-                  </p>
-                  <p className="text-[12.5px] text-emerald-800">
-                    Lorsqu'il est activé, le widget apparaît en bas du site pour répondre à vos visiteurs.
-                  </p>
-                </div>
-                <Toggle
+              <div className="rounded-xl border border-stone-200 px-5">
+                <ToggleRow
+                  title="Afficher l'agent sur le site"
+                  description="Une fois activé et enregistré, une fenêtre de conversation apparaît en bas des pages du site."
                   checked={form.enabled}
                   onChange={(next) => setForm({ ...form, enabled: next })}
-                  label="Afficher le Super Agent sur le site"
                 />
               </div>
             </CardBody>
-            <CardFooter>
-              <div className="flex items-center justify-between w-full gap-3">
-                <Button variant="ghost" onClick={() => setStep(2)}>
-                  <ArrowLeft size={16} className="mr-1 inline" /> Étape 2 : Savoir
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => void handleSaveForm()}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2.5 rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer active:scale-95 text-sm"
-                >
-                  <Check size={16} /> Valider & Activer le Super Agent
-                </button>
-              </div>
+            <CardFooter
+              hint={form.enabled !== agent.enabled ? "Modification non enregistrée : pensez à enregistrer." : undefined}
+            >
+              <Button variant="ghost" onClick={() => setStep(2)}>
+                <ArrowLeft size={16} /> Étape 2
+              </Button>
+              <Button variant="primary" icon={Check} loading={saving} onClick={() => void handleSaveForm()}>
+                Enregistrer
+              </Button>
             </CardFooter>
           </Card>
 
@@ -736,13 +702,17 @@ export default function AgentsClient() {
       <DocumentViewerModal
         doc={viewingDoc}
         onClose={() => setViewingDoc(null)}
+        onSaved={() => {
+          if (agent) void fetchAgentDocuments(agent.id).then(setDocs);
+        }}
       />
     </div>
   );
 }
 
 /**
- * Banc d'essai ludique pour tester le Super Agent.
+ * Banc d'essai : une vraie conversation avec l'agent, enregistrée comme
+ * « essai depuis l'administration » dans l'onglet Conversations.
  */
 function AgentTester({ agent }: { agent: Agent }) {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
@@ -776,10 +746,20 @@ function AgentTester({ agent }: { agent: Agent }) {
         body: JSON.stringify({ agentSlug: agent.slug, visitorRef: visitorRef.current, message: text }),
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.reply) throw new Error(payload?.error || "L'agent n'a pas répondu.");
+      if (response.status === 404) {
+        throw new Error("L'agent n'est pas encore affiché sur le site : activez-le, enregistrez, puis réessayez.");
+      }
+      // Netlify coupe une réponse trop lente et renvoie une page sans JSON.
+      if (!payload && (response.status === 502 || response.status === 504)) {
+        throw new Error("L'agent a mis trop de temps à répondre (délai de l'hébergeur dépassé). Réessayez ; si cela se répète, choisissez un modèle IA plus rapide dans Réglages.");
+      }
+      if (!response.ok || !payload?.reply) {
+        throw new Error(payload?.error || "L'agent n'a pas répondu. Réessayez dans un instant.");
+      }
       setMessages((prev) => [...prev, { role: 'assistant', content: payload.reply }]);
     } catch (err) {
-      setError((err as Error).message);
+      const text = (err as Error).message;
+      setError(text === 'Failed to fetch' ? 'Le serveur ne répond pas. Vérifiez votre connexion puis réessayez.' : text);
     } finally {
       setBusy(false);
     }
@@ -791,10 +771,10 @@ function AgentTester({ agent }: { agent: Agent }) {
   };
 
   return (
-    <Card className="border-stone-200 shadow-xs">
+    <Card>
       <CardHeader
-        title="Banc d'essai en direct : Testez votre Super Agent"
-        description="Essayez une vraie conversation pour vérifier ses réponses et son apprentissage."
+        title="Essayer l'agent"
+        description="Posez-lui les questions de vos clientes pour vérifier ses réponses. Chaque essai utilise votre budget IA et apparaît dans l'onglet Conversations."
         actions={
           messages.length > 1 && (
             <Button
@@ -805,55 +785,59 @@ function AgentTester({ agent }: { agent: Agent }) {
                 visitorRef.current = `apercu-admin-${Date.now().toString(36)}`;
               }}
             >
-              Recommencer le test
+              Recommencer
             </Button>
           )
         }
       />
       <CardBody className="space-y-4">
-        {/* Puces de test rapides colorées */}
+        {!agent.enabled && (
+          <Callout tone="warning">
+            L'essai ne fonctionne que lorsque l'agent est affiché sur le site : activez-le ci-dessus et enregistrez.
+          </Callout>
+        )}
+
+        {/* Questions d'essai */}
         <div className="flex flex-wrap items-center gap-2 pb-1">
-          <span className="text-[12px] font-bold text-stone-700 flex items-center gap-1 mr-1">
-            <Zap size={14} className="text-amber-500" /> Tests rapides 1-clic :
-          </span>
+          <span className="mr-1 text-[13px] font-medium text-stone-700">Questions d'essai :</span>
           <button
             type="button"
             disabled={busy}
-            onClick={() => void send("Présentez-moi votre entreprise, vos offres et vos valeurs.")}
-            className="bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 font-semibold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 transition-all"
+            onClick={() => void send("Présentez-moi votre institut et vos soins.")}
+            className="h-8 rounded-lg bg-stone-100 px-3 text-[13px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 cursor-pointer disabled:opacity-45"
           >
-            🎯 Ton & Positionnement
+            Présentation
           </button>
           <button
             type="button"
             disabled={busy}
             onClick={() => void send("Quels sont vos tarifs et vos prestations ?")}
-            className="bg-emerald-100 text-emerald-900 border border-emerald-300 hover:bg-emerald-200 font-semibold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 transition-all"
+            className="h-8 rounded-lg bg-stone-100 px-3 text-[13px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 cursor-pointer disabled:opacity-45"
           >
-            💰 Tarifs & Offres
+            Tarifs
           </button>
           <button
             type="button"
             disabled={busy}
             onClick={() => void send("Je souhaite prendre un rendez-vous rapide.")}
-            className="bg-indigo-100 text-indigo-900 border border-indigo-300 hover:bg-indigo-200 font-semibold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 transition-all"
+            className="h-8 rounded-lg bg-stone-100 px-3 text-[13px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 cursor-pointer disabled:opacity-45"
           >
-            📅 Prise de RDV
+            Rendez-vous
           </button>
           <button
             type="button"
             disabled={busy}
             onClick={() => void send("Quel temps fait-il sur Mars ?")}
-            className="bg-stone-100 text-stone-800 border border-stone-300 hover:bg-stone-200 font-semibold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 transition-all"
+            className="h-8 rounded-lg bg-stone-100 px-3 text-[13px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 cursor-pointer disabled:opacity-45"
           >
-            ❓ Question piège
+            Hors sujet
           </button>
         </div>
 
         {/* Zone de chat */}
-        <div ref={scrollRef} className="max-h-80 space-y-3 overflow-y-auto rounded-2xl border border-stone-200 bg-stone-900/95 p-4 text-stone-100 shadow-inner">
+        <div ref={scrollRef} className="max-h-80 space-y-3 overflow-y-auto rounded-xl border border-stone-200 bg-stone-50 p-4">
           {messages.length === 0 && (
-            <p className="text-[13px] text-stone-400">Écrivez un message ou cliquez sur une puce de test ci-dessus.</p>
+            <p className="text-[14px] text-stone-600">Écrivez un message ou choisissez une question d'essai ci-dessus.</p>
           )}
           {messages.map((message, index) => (
             <div
@@ -861,15 +845,15 @@ function AgentTester({ agent }: { agent: Agent }) {
               className={`flex items-start gap-2.5 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {message.role === 'assistant' && (
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-500/20 text-sm border border-indigo-500/30">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-sm">
                   {agent.avatar || '🤖'}
                 </div>
               )}
               <div
-                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed shadow-sm ${
+                className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-4 py-2.5 text-[14px] leading-relaxed ${
                   message.role === 'user'
-                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-tr-xs'
-                    : 'bg-stone-800 text-stone-100 border border-stone-700 rounded-tl-xs'
+                    ? 'bg-accent text-accent-fg'
+                    : 'border border-stone-200 bg-white text-stone-800'
                 }`}
               >
                 {message.content}
@@ -877,11 +861,11 @@ function AgentTester({ agent }: { agent: Agent }) {
             </div>
           ))}
           {busy && (
-            <p className="flex items-center gap-2 text-[12.5px] text-indigo-300">
-              <Loader2 size={14} className="animate-spin text-indigo-400" /> {agent.name} consulte son cerveau…
+            <p className="flex items-center gap-2 text-[13px] text-stone-600">
+              <Loader2 size={14} className="animate-spin" /> {agent.name} rédige sa réponse…
             </p>
           )}
-          {error && <p className="text-[12.5px] text-red-400">{error}</p>}
+          {error && <p className="text-[13px] text-red-700">{error}</p>}
         </div>
 
         <form onSubmit={handleFormSubmit} className="flex items-center gap-2">

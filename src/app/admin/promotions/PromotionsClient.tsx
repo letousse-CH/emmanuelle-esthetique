@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  Megaphone, Plus, Trash2, AlertCircle, X, Loader2, Mail, MessageCircle,
+  Plus, Trash2, Loader2, Mail, MessageCircle,
   Users, Check, Pencil,
 } from 'lucide-react';
 import {
@@ -12,6 +12,7 @@ import {
 import { CANAL_LABELS, segmentLabel } from '../../../types/promotions';
 import type { Promotion, PromotionSend } from '../../../types/promotions';
 import PromotionEditor from './PromotionEditor';
+import { Button, Callout, PageHeader } from '../../../components/admin/ui';
 
 const dateCH = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString('fr-CH') : '—';
@@ -49,7 +50,7 @@ export default function PromotionsClient() {
       }));
       setCounts(new Map(entries));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Chargement impossible.');
+      setError(`Les promotions n'ont pas pu être chargées${err instanceof Error ? ` (${err.message})` : ''}. Vérifiez la connexion puis rechargez la page.`);
     } finally {
       setLoading(false);
     }
@@ -70,7 +71,7 @@ export default function PromotionsClient() {
       setPromotions(prev => [p, ...prev]);
       setEditing(p);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Création impossible.');
+      setError(`La promotion n'a pas été créée${err instanceof Error ? ` (${err.message})` : ''}. Réessayez.`);
     } finally {
       setBusyId(null);
     }
@@ -88,7 +89,7 @@ export default function PromotionsClient() {
       await deletePromotion(p.id);
       setPromotions(prev => prev.filter(x => x.id !== p.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Suppression impossible.');
+      setError(`La promotion n'a pas été supprimée${err instanceof Error ? ` (${err.message})` : ''}. Réessayez.`);
     } finally {
       setBusyId(null);
     }
@@ -100,63 +101,51 @@ export default function PromotionsClient() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Audience</p>
-          <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
-            <Megaphone size={20} className="text-sage" /> Promotions
-          </h1>
-          <p className="mt-1 text-sm text-stone-600">
-            Offres envoyées par e-mail ou WhatsApp aux clientes et aux abonnés du site.
-            {total > 0 && ` ${total} envoi${total > 1 ? 's' : ''} au total.`}
-          </p>
-        </div>
-        <button
-          onClick={creer} disabled={busyId === 'new'}
-          className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white hover:bg-sage rounded-lg text-sm transition-all cursor-pointer shadow-sm self-start disabled:opacity-40"
-        >
-          {busyId === 'new' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Nouvelle promotion
-        </button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Promotions"
+        description={`Offres envoyées par e-mail ou WhatsApp aux clientes et aux abonnés du site.${total > 0 ? ` ${total} envoi${total > 1 ? 's' : ''} au total.` : ''}`}
+        actions={
+          <Button variant="primary" icon={Plus} onClick={creer} loading={busyId === 'new'}>
+            Créer une promotion
+          </Button>
+        }
+      />
 
       {/* Le consentement n'est pas un détail de conformité : c'est ce qui
           décide qui reçoit. Autant le dire là où on crée les envois. */}
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-xs text-stone-500 leading-relaxed">
+      <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-[13px] text-stone-600 leading-relaxed">
         Une promotion ne part qu&apos;aux personnes qui ont donné leur accord : les cases
         <strong className="text-stone-700"> Accords publicitaires </strong> de chaque
-        <Link href="/admin/caisse/clients" className="text-sage hover:underline mx-1">fiche cliente</Link>
-        et les abonnés de la <Link href="/admin/subscribers" className="text-sage hover:underline">newsletter du site</Link>.
+        <Link href="/admin/caisse/clients" className="text-accent hover:underline mx-1">fiche cliente</Link>
+        et les abonnés de la <Link href="/admin/subscribers" className="text-accent hover:underline">newsletter du site</Link>.
         Encaisser quelqu&apos;un ne vaut pas accord — la LCD (art. 3 al. 1 let. o) l&apos;exige au préalable.
       </div>
 
       {error && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <AlertCircle size={15} className="shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <span>{error}</span>
-            <p className="text-xs mt-1">
-              Si l&apos;erreur mentionne une table manquante, applique la migration
-              <code className="mx-1 px-1 bg-red-100 rounded">supabase/migrations/20260803_crm_clients_promotions.sql</code>
-              sur ton projet Supabase.
-            </p>
-          </div>
-          <button onClick={() => setError(null)} aria-label="Masquer" className="shrink-0 cursor-pointer"><X size={14} /></button>
-        </div>
+        <Callout
+          tone="danger"
+          actions={<Button size="sm" variant="ghost" onClick={() => setError(null)}>Masquer</Button>}
+        >
+          {error}
+        </Callout>
       )}
 
-      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+          <div className="flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
             <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : promotions.length === 0 ? (
-          <div className="p-10 text-center space-y-2">
-            <p className="text-sm text-stone-600">Aucune promotion.</p>
-            <p className="text-stone-500 text-xs">
+          <div className="p-10 text-center space-y-3">
+            <p className="text-sm text-stone-700">Aucune promotion pour l&apos;instant.</p>
+            <p className="text-stone-600 text-[13px] max-w-md mx-auto">
               Une remise de saison, un mot aux clientes qu&apos;on n&apos;a pas vues depuis six mois,
               une attention pour les anniversaires du mois.
             </p>
+            <Button size="sm" icon={Plus} onClick={creer} loading={busyId === 'new'}>
+              Créer une promotion
+            </Button>
           </div>
         ) : (
           <ul className="divide-y divide-stone-50">
@@ -168,59 +157,59 @@ export default function PromotionsClient() {
                     onClick={() => setEditing(p)}
                     className="flex-1 min-w-0 text-left cursor-pointer"
                   >
-                    <p className="text-sm font-medium text-stone-900 truncate hover:text-stone-900 transition-colors">
+                    <p className="text-sm font-medium text-stone-900 truncate hover:underline underline-offset-2">
                       {p.nom}
                     </p>
-                    <p className="truncate text-[12.5px] text-stone-500">
+                    <p className="truncate text-[12.5px] text-stone-600">
                       {CANAL_LABELS[p.canal]} · {segmentLabel(p.segment)} · {dateCH(p.created_at)}
                     </p>
                   </button>
 
                   <div className="hidden sm:flex items-center gap-2 shrink-0">
                     {(n?.email ?? 0) > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-stone-500 tabular-nums" title="E-mails envoyés">
-                        <Mail size={11} className="text-stone-500" /> {n!.email}
+                      <span className="inline-flex items-center gap-1 text-[13px] text-stone-600 tabular-nums" title="E-mails envoyés">
+                        <Mail size={13} className="text-stone-600" /> {n!.email}
                       </span>
                     )}
                     {(n?.whatsapp ?? 0) > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-stone-500 tabular-nums" title="Conversations WhatsApp ouvertes">
-                        <MessageCircle size={11} className="text-stone-500" /> {n!.whatsapp}
+                      <span className="inline-flex items-center gap-1 text-[13px] text-stone-600 tabular-nums" title="Conversations WhatsApp ouvertes">
+                        <MessageCircle size={13} className="text-stone-600" /> {n!.whatsapp}
                       </span>
                     )}
                     {!n?.email && !n?.whatsapp && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-stone-500">
-                        <Users size={11} /> aucun envoi
+                      <span className="inline-flex items-center gap-1 text-[13px] text-stone-600">
+                        <Users size={13} /> aucun envoi
                       </span>
                     )}
                   </div>
 
                   <span
                     className={`shrink-0 inline-flex items-center gap-1 text-[12px] font-semibold px-2 py-1 rounded ${
-                      p.status === 'envoyee' ? 'text-sage bg-sage/10'
+                      p.status === 'envoyee' ? 'text-emerald-700 bg-emerald-50'
                       : p.status === 'en_cours' ? 'text-amber-700 bg-amber-50'
-                      : 'text-stone-500 bg-stone-100'
+                      : 'text-stone-700 bg-stone-100'
                     }`}
                   >
-                    {p.status === 'envoyee' && <Check size={9} />}
+                    {p.status === 'envoyee' && <Check size={11} />}
                     {STATUS_LABELS[p.status]}
                   </span>
 
                   <div className="flex items-center gap-1 shrink-0">
                     {busyId === p.id ? (
-                      <Loader2 size={14} className="animate-spin text-stone-400 mx-2" />
+                      <Loader2 size={14} className="animate-spin text-stone-500 mx-2" />
                     ) : (
                       <>
                         <button
                           onClick={() => setEditing(p)}
                           aria-label={`Ouvrir ${p.nom}`} title="Ouvrir"
-                          className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
+                          className="p-1.5 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
                         >
                           <Pencil size={14} />
                         </button>
                         <button
                           onClick={() => supprimer(p)}
                           aria-label={`Supprimer ${p.nom}`} title="Supprimer"
-                          className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                          className="p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
                         >
                           <Trash2 size={14} />
                         </button>

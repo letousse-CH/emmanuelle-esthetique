@@ -6,6 +6,9 @@ import { emitAutomationEvent } from '../../../services/automationRunner';
 import { generateAndSendAiLeadReply } from '../../../services/aiLeadResponder';
 import { trackAnalyticsEvent } from '../../../services/analytics';
 
+// Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
+export const maxDuration = 60;
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')

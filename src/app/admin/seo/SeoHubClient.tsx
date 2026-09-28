@@ -11,7 +11,7 @@ import {
   ScanLine, AlertTriangle, ArrowDownToLine, Layers, Save, Filter,
   Share2, X, Calendar, HelpCircle, Link2, MapPin, MessageSquareQuote, Users,
   Bot, MessageCircle, FileText, CheckCircle2, ArrowRight, ExternalLink,
-  Check, Zap, Compass, Rocket, Play, Award, Star, Clock, ShieldCheck
+  Check, Zap, Compass, Rocket, Play, Award, Star, Clock, ShieldCheck, RefreshCw, Settings
 } from 'lucide-react';
 import {
   seoIdeas, CATEGORIES, CATEGORY_COLORS, CATEGORY_HINTS, CATEGORY_ICONS,
@@ -19,11 +19,13 @@ import {
 } from '../../../data/seoIdeas';
 import {
   Badge, Button, LinkButton, Callout, Card, CardBody, CardFooter, CardHeader, EmptyState,
-  Field, Input, PageHeader, Select
+  Field, Input, PageHeader, Select, Tabs, Spinner
 } from '../../../components/admin/ui';
 import { supabase } from '../../../services/supabase';
 import SocialContentGenerator from '../../../components/admin/SocialContentGenerator';
 import { useModuleFlags } from '../../../hooks/useModuleFlags';
+import { useAiJob } from '../../../hooks/useAiJob';
+import AiJobProgress from '../../../components/admin/AiJobProgress';
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -92,18 +94,18 @@ function calculateSeoGeoScore(priority: number, difficulty: string, volume: stri
 
 const ScoreBadge = ({ score }: { score: number }) => {
   let colorClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
-  let label = 'Excellent potentel';
+  let label = 'Excellent potentiel';
   if (score < 85) {
     colorClass = 'bg-amber-50 text-amber-800 border-amber-200';
     label = 'Fort potentiel';
   }
   if (score < 78) {
-    colorClass = 'bg-sky-50 text-sky-800 border-sky-200';
+    colorClass = 'bg-accent-soft text-accent border-accent/20';
     label = 'Bon potentiel';
   }
 
   return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold ${colorClass}`}>
+    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${colorClass}`}>
       <Star size={13} className="fill-current shrink-0" />
       <span>Score SEO/GEO : {score}/100</span>
     </div>
@@ -111,26 +113,29 @@ const ScoreBadge = ({ score }: { score: number }) => {
 };
 
 const DiffBadge = ({ v }: { v: string }) => {
-  const toneMap: Record<string, 'success' | 'warning' | 'danger'> = {
-    faible: 'success', moyen: 'warning', élevé: 'danger',
+  const map: Record<string, { tone: 'success' | 'neutral' | 'warning'; label: string }> = {
+    faible: { tone: 'success', label: 'Peu de concurrence' },
+    moyen: { tone: 'neutral', label: 'Concurrence moyenne' },
+    élevé: { tone: 'warning', label: 'Forte concurrence' },
   };
-  return <Badge tone={toneMap[v] ?? 'neutral'}>Diff. {v}</Badge>;
+  const c = map[v];
+  return <Badge tone={c?.tone ?? 'neutral'}>{c?.label ?? `Concurrence : ${v}`}</Badge>;
 };
 
 const VolBadge = ({ v }: { v: string }) => {
-  const toneMap: Record<string, 'neutral' | 'info' | 'success'> = {
-    faible: 'neutral', moyen: 'info', élevé: 'success',
+  const labels: Record<string, string> = {
+    faible: 'Peu recherché', moyen: 'Assez recherché', élevé: 'Très recherché',
   };
-  return <Badge tone={toneMap[v] ?? 'neutral'}>Vol. {v}</Badge>;
+  return <Badge tone="neutral">{labels[v] ?? `Recherches : ${v}`}</Badge>;
 };
 
 const SimpleFunnelBadge = ({ level }: { level: FunnelLevel }) => {
   const config: Record<FunnelLevel, { label: string; tone: 'info' | 'warning' | 'success' }> = {
-    découverte: { label: 'Attirer des curieux (SIO)', tone: 'info' },
-    comparaison: { label: 'Convaincre les hésitants (GEO)', tone: 'warning' },
-    conversion: { label: 'Obtenir un RDV / Client', tone: 'success' },
+    découverte: { label: 'Se faire connaître', tone: 'info' },
+    comparaison: { label: 'Rassurer celles qui hésitent', tone: 'info' },
+    conversion: { label: 'Obtenir des réservations', tone: 'info' },
   };
-  const c = config[level || 'découverte'];
+  const c = config[level || 'découverte'] ?? config['découverte'];
   return <Badge tone={c.tone}>{c.label}</Badge>;
 };
 
@@ -216,6 +221,55 @@ const getAuthHeader = async (): Promise<Record<string, string>> => {
   return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 };
 
+/**
+ * Appelle une route d'IA et rend une erreur lisible.
+ * Les routes renvoient des codes techniques (« Unauthorized », « parse_error »…),
+ * et une page de délai dépassé n'est même pas du JSON : on traduit tout ça ici.
+ */
+async function postJson<T>(url: string, body?: unknown): Promise<T> {
+  const auth = await getAuthHeader();
+  if (!auth.Authorization) throw new Error('Votre session a expiré. Reconnectez-vous puis réessayez.');
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...auth },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error('Le serveur ne répond pas. Vérifiez votre connexion internet puis réessayez.');
+  }
+  const data: any = await res.json().catch(() => null);
+  if (res.ok && data && !data.error) return data as T;
+  const code = String(data?.error ?? '');
+  if (res.status === 401 || code === 'Unauthorized') throw new Error('Votre session a expiré. Reconnectez-vous puis réessayez.');
+  if (/ANTHROPIC_API_KEY/i.test(code)) throw new Error("La clé de l'assistant IA n'est pas configurée. Renseignez-la dans Réglages, onglet « Clés des services ».");
+  if (/parse_error/i.test(code)) throw new Error("La réponse de l'assistant IA était incomplète. Relancez simplement l'opération.");
+  if (res.status === 403) throw new Error(code || "La génération par IA est désactivée dans Réglages, onglet « Modules ».");
+  // Page d'erreur non JSON (délai de l'hébergeur dépassé) ou 502/504 sans
+  // explication : la fonction serveur a été coupée avant la fin.
+  if (!data || ((res.status === 502 || res.status === 504) && !code)) {
+    const err = new Error("L'assistant IA a mis trop de temps à répondre et l'hébergeur a interrompu la demande. Réessayez dans un instant.");
+    (err as any).timeout = true;
+    throw err;
+  }
+  throw new Error(code || `Erreur inattendue du serveur (${res.status}). Réessayez dans un instant.`);
+}
+
+/** Dernier plan généré, gardé dans ce navigateur pour ne pas relancer l'IA à chaque visite. */
+const SCAN_CACHE_KEY = 'seoHub.lastScan.v1';
+function readScanCache(): { at: string; result: ScanResult } | null {
+  try {
+    const raw = localStorage.getItem(SCAN_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.result?.recommendations ? parsed : null;
+  } catch { return null; }
+}
+function writeScanCache(result: ScanResult) {
+  try { localStorage.setItem(SCAN_CACHE_KEY, JSON.stringify({ at: new Date().toISOString(), result })); } catch { /* stockage indisponible */ }
+}
+
 // ── Modale Réseaux Sociaux ────────────────────────────────────────────────────
 
 function SocialModal({ idea, onClose }: { idea: SeoIdea; onClose: () => void }) {
@@ -243,7 +297,7 @@ function SocialModal({ idea, onClose }: { idea: SeoIdea; onClose: () => void }) 
       >
         <div className="sticky top-0 z-10 px-6 py-4 border-b border-stone-200 bg-white flex items-center justify-between">
           <p id="social-modal-title" className="text-sm font-semibold text-stone-900 truncate pr-4">{idea.suggestedTitle}</p>
-          <button onClick={onClose} aria-label="Fermer" className="p-1.5 text-stone-500 hover:text-stone-900 rounded-lg hover:bg-stone-100 transition-colors shrink-0 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="p-1.5 text-stone-600 hover:text-stone-900 rounded-lg hover:bg-stone-100 transition-colors shrink-0 cursor-pointer">
             <X size={18} />
           </button>
         </div>
@@ -285,9 +339,13 @@ export default function SeoHub() {
   const [brandContext, setBrandContext] = useState<BrandSettings | null>(null);
 
   // ── State Scan SIO ────────────────────────────────────────────────────────
-  const [scanning, setScanning]     = useState(false);
+  // Le plan d'articles passe par une tâche de fond (plus de 60 s avec le
+  // modèle des réglages) ; son suivi reprend après un rechargement de la page.
+  const scanJob = useAiJob<ScanResult>('seo:keyword-scan');
+  const scanning = scanJob.isBusy;
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [scanError, setScanError]   = useState('');
+  const [scanAt, setScanAt]         = useState<string | null>(null);
 
   // ── State Recherche SIO ───────────────────────────────────────────────────
   const [seed, setSeed]             = useState('');
@@ -304,8 +362,11 @@ export default function SeoHub() {
   useEffect(() => {
     loadBrandSettings();
     loadLibrary();
-    // Lance un scan automatique initial pour alimenter la vue didactique si vide
-    handleScan();
+    // Le plan précédent est repris depuis ce navigateur : le scan coûte trois
+    // appels à l'IA et une trentaine de secondes, on ne le relance plus à
+    // chaque ouverture de la page, seulement à la demande.
+    const cached = readScanCache();
+    if (cached) { setScanResult(cached.result); setScanAt(cached.at); }
   }, []);
 
   const loadBrandSettings = async () => {
@@ -325,67 +386,86 @@ export default function SeoHub() {
     }
   };
 
+  const [libError, setLibError] = useState('');
   const loadLibrary = async () => {
-    setLoadingLib(true);
-    const { data: clusters } = await supabase
+    setLoadingLib(true); setLibError('');
+    const { data: clusters, error } = await supabase
       .from('seo_clusters')
       .select('*, seo_keywords(difficulty_label, volume_label, intent)')
       .order('created_at', { ascending: false });
-    setSavedClusters(clusters || []);
+    if (error) setLibError(`Vos sujets enregistrés n'ont pas pu être chargés (${error.message}).`);
+    else setSavedClusters(clusters || []);
     setLoadingLib(false);
   };
 
   // ── State Pilotage Automatique ────────────────────────────────────────────
+  // Mode réglé sur /admin/autopilot : publication directe ou brouillon à relire.
+  // null tant qu'il n'est pas connu : les textes restent alors prudents.
+  const [autopilotMode, setAutopilotMode] = useState<'autonomous' | 'review_required' | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const auth = await getAuthHeader();
+        if (!auth.Authorization) return;
+        const res = await fetch('/api/admin/autopilot', { headers: auth });
+        const data = await res.json().catch(() => null);
+        if (res.ok && (data?.mode === 'autonomous' || data?.mode === 'review_required')) setAutopilotMode(data.mode);
+      } catch { /* mode inconnu : textes prudents */ }
+    })();
+  }, []);
   const [autopilotGenerating, setAutopilotGenerating] = useState(false);
   const [autopilotResult, setAutopilotResult] = useState<{
     articleTitle?: string;
     articleSlug?: string;
     socialCount?: number;
     successMessage?: string;
+    uncertain?: boolean;
   } | null>(null);
 
+  /*
+    Raccourci vers le pilote automatique (/admin/autopilot).
+    L'ancienne version appelait /api/generate-page sans jeton (refus 401), ne
+    créait aucun article, publiait quand même une annonce sur les réseaux, puis
+    affichait « succès » dans tous les cas. On passe désormais par la même route
+    que la page Pilote automatique, qui enregistre réellement l'article.
+  */
   const handleRunAutopilot = async () => {
+    if (autopilotGenerating) return;
+    const next = savedClusters[0];
+    if (!next) return;
+    const subject = next.suggested_title || next.focus_keyword;
+    const effect = autopilotMode === 'review_required'
+      ? `L'article sera enregistré en brouillon, à relire depuis la page Blog avant publication. `
+      : autopilotMode === 'autonomous'
+        ? `L'article sera mis en ligne directement sur votre blog et une annonce sera publiée sur vos réseaux sociaux connectés. `
+        : `Selon le réglage du pilote automatique, l'article sera soit mis en ligne directement (avec une annonce sur vos réseaux sociaux), soit enregistré en brouillon. `;
+    const ok = confirm(
+      `Rédiger maintenant un article sur « ${subject} » ?\n\n${effect}` +
+      `Ce sujet sera retiré de vos sujets enregistrés. La rédaction prend une à deux minutes.`
+    );
+    if (!ok) return;
     setAutopilotGenerating(true);
     setAutopilotResult(null);
     try {
-      const topRec = (scanResult?.recommendations?.[0]) || (seoIdeas[0] as any);
-      const keyword = topRec.keyword || 'développement d\'activité';
-      const title = topRec.suggested_title || topRec.suggestedTitle || `Guide : ${keyword}`;
-      const slug = topRec.suggested_slug || topRec.suggestedSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
-      // 1. Génération et enregistrement de l'article de blog
-      const blogRes = await fetch('/api/generate-page', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: `Rédige un article de blog SEO complet sur le mot-clé : "${keyword}". Titre suggéré : "${title}".`,
-          pageType: 'blog',
-          saveToDb: true,
-          slug,
-          title,
-        }),
-      });
-
-      // 2. Génération et envoi des 3 posts sociaux déclinés
-      const socialRes = await fetch('/api/admin/social-publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform: 'all',
-          title: `Lot Hebdomadaire - ${title}`,
-          caption: `💡 NOUVEL ARTICLE : ${title}\n\nRetrouvez nos conseils exclusifs sur le blog !\n\n👉 Sujet clé : ${keyword}\n\nLisez l'article complet directement sur notre site !`,
-        }),
-      });
-
+      const data = await postJson<{ ok: boolean; articleTitle?: string; published?: boolean; error?: string }>('/api/admin/autopilot', { action: 'trigger_now' });
+      if (!data.ok) throw new Error(data.error || "La rédaction automatique n'a pas abouti.");
       setAutopilotResult({
-        articleTitle: title,
-        articleSlug: slug,
-        socialCount: 3,
-        successMessage: `🎉 Lot de la semaine généré et publié avec succès ! (1 Article + 3 Posts Réseaux Sociaux).`,
+        articleTitle: data.articleTitle,
+        successMessage: data.published === false
+          ? `Article rédigé et enregistré en brouillon : « ${data.articleTitle} ». Relisez-le puis publiez-le depuis la page Blog.`
+          : `Article publié : « ${data.articleTitle} ». Vous pouvez le relire depuis la page Blog.`,
       });
+      loadLibrary();
     } catch (e: any) {
       console.error('[Autopilot] Erreur:', e);
-      setAutopilotResult({ successMessage: `Erreur lors du pilotage automatique : ${e.message}` });
+      // Coupure par l'hébergeur : la rédaction a pu aller au bout côté serveur.
+      setAutopilotResult({
+        uncertain: Boolean(e?.timeout),
+        successMessage: e?.timeout
+          ? "La réponse a pris trop de temps et la page n'a pas reçu le résultat. L'article a peut-être quand même été créé : vérifiez la page Blog avant de relancer, pour éviter un doublon."
+          : `Aucun article n'a été créé : ${e.message}`,
+      });
+      loadLibrary();
     } finally {
       setAutopilotGenerating(false);
     }
@@ -394,44 +474,56 @@ export default function SeoHub() {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const handleScan = async () => {
-    setScanning(true); setScanError('');
-    try {
-      const auth = await getAuthHeader();
-      const res = await fetch('/api/keyword-scan', { method: 'POST', headers: auth });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setScanResult(data as ScanResult);
-    } catch (e: any) {
-      setScanError(e.message ?? 'Erreur lors du scan.');
-    } finally {
-      setScanning(false);
-    }
+    if (scanning) return;
+    setScanError('');
+    await scanJob.start('keyword-scan', {});
   };
+
+  // Résultat (ou erreur) de la tâche de scan, y compris après un rechargement.
+  const { status: scanJobStatus, result: scanJobResult, error: scanJobError, reset: resetScanJob } = scanJob;
+  useEffect(() => {
+    if (scanJobStatus === 'done') {
+      const data = (scanJobResult ?? {}) as ScanResult;
+      const result: ScanResult = { ...data, recommendations: Array.isArray(data.recommendations) ? data.recommendations : [] };
+      if (result.recommendations.length === 0) {
+        setScanError("L'assistant IA n'a proposé aucun sujet. Complétez la description de votre activité puis relancez.");
+      } else {
+        setScanResult(result);
+        setOpenAccordionId(null);
+        const at = new Date().toISOString();
+        setScanAt(at);
+        writeScanCache(result);
+      }
+      resetScanJob();
+    } else if (scanJobStatus === 'error') {
+      const code = scanJobError || '';
+      setScanError(
+        /parse_error/i.test(code)
+          ? "La réponse de l'assistant IA était incomplète. Relancez simplement l'opération."
+          : code || 'Le plan n\'a pas pu être généré.',
+      );
+      resetScanJob();
+    }
+  }, [scanJobStatus, scanJobResult, scanJobError, resetScanJob]);
 
   const handleAnalyze = async (queryToAnalyze?: string) => {
     const kw = (queryToAnalyze ?? seed).trim();
     if (!kw) return;
     if (queryToAnalyze) setSeed(queryToAnalyze);
+    if (analyzing) return;
     setAnalyzing(true); setAError(''); setAnalysis(null); setSavedOk(false);
     try {
-      const auth = await getAuthHeader();
-      const res = await fetch('/api/keyword-research', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...auth },
-        body: JSON.stringify({ keyword: kw }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setAnalysis(data as KeywordAnalysis);
+      const data = await postJson<KeywordAnalysis>('/api/keyword-research', { keyword: kw });
+      setAnalysis(data);
     } catch (e: any) {
-      setAError(e.message ?? 'Erreur lors de l\'analyse SIO.');
+      setAError(e.message ?? 'L\'analyse n\'a pas pu aboutir.');
     } finally {
       setAnalyzing(false);
     }
   };
 
   const handleSaveCluster = async () => {
-    if (!analysis) return;
+    if (!analysis || saving || savedOk) return;
     setSaving(true); setAError('');
     try {
       const { data: kwData, error: kwErr } = await supabase.from('seo_keywords').insert({
@@ -466,7 +558,7 @@ export default function SeoHub() {
       setSavedOk(true);
       loadLibrary();
     } catch (e: any) {
-      setAError(e.message ?? 'Erreur de sauvegarde.');
+      setAError(`Le sujet n'a pas pu être enregistré (${e?.message ?? 'erreur inconnue'}). Réessayez.`);
     } finally {
       setSaving(false);
     }
@@ -477,321 +569,230 @@ export default function SeoHub() {
     router.push(`/admin/blog/new?${new URLSearchParams({ title: brief.suggestedTitle, slug: brief.suggestedSlug })}`);
   };
 
-  // Recommandations filtrées selon l'horizon choisi
+  // Nombre d'articles = semaines de l'horizon × rythme choisi. Avant, le
+  // nombre était fixe (4/12/24) quel que soit le rythme : « 3 mois » à
+  // 3 articles par semaine ne couvrait en réalité que 4 semaines.
+  const horizonWeeks = horizon === 'top4' ? 4 : horizon === 'plan3m' ? 13 : 26;
+  const wantedCount = horizonWeeks * cadence;
   const displayedRecs = useMemo(() => {
     if (!scanResult?.recommendations) return [];
-    let count = 12; // 3 mois par défaut
-    if (horizon === 'top4') count = 4;
-    if (horizon === 'plan6m') count = 24;
-    return scanResult.recommendations.slice(0, count);
-  }, [scanResult, horizon]);
+    return scanResult.recommendations.slice(0, wantedCount);
+  }, [scanResult, wantedCount]);
+  const planIsShort = !!scanResult && displayedRecs.length < wantedCount;
 
   return (
-    <div className="max-w-5xl space-y-6">
-      {/* ── PageHeader Officiel Admin ───────────────────────────────────────── */}
+    <div className="space-y-6">
       <PageHeader
-        title="Plan Stratégique d'Articles (SEO & GEO)"
-        description="Une sélection didactique des articles prioritaires à publier pour attirer de nouveaux clients sans aucune connaissance technique requise."
-        actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setViewMode(m => m === 'didactic' ? 'expert' : 'didactic')}
-              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-lg border border-stone-300 bg-white text-xs font-semibold text-stone-800 hover:bg-stone-50 cursor-pointer transition-colors shadow-xs"
-            >
-              {viewMode === 'didactic' ? <Bot size={15} /> : <Compass size={15} />}
-              {viewMode === 'didactic' ? 'Passer au Mode Expert' : 'Mode Plan Simple (Débutant)'}
-            </button>
-
-            <Button
-              variant="primary"
-              icon={RefreshCwIcon}
-              loading={scanning}
-              onClick={handleScan}
-            >
-              Régénérer le plan
-            </Button>
-          </div>
-        }
+        title="SEO et mots-clés"
+        description="Les sujets d'articles à publier en priorité pour être trouvée sur Google et citée par les assistants IA (ChatGPT, Perplexity…), et un outil pour étudier une recherche précise."
+        actions={viewMode === 'didactic' && scanResult ? (
+          <Button variant="secondary" icon={RefreshCw} loading={scanning} onClick={handleScan}
+            title="Remplace le plan actuel par une nouvelle liste de sujets">
+            {scanning ? 'Génération en cours…' : 'Régénérer le plan'}
+          </Button>
+        ) : undefined}
       />
 
+      <Tabs
+        label="Outils de référencement"
+        active={viewMode}
+        onChange={(id) => setViewMode(id as 'didactic' | 'expert')}
+        items={[
+          { id: 'didactic', label: "Plan d'articles", icon: Calendar },
+          { id: 'expert', label: 'Étudier une recherche', icon: Search },
+        ]}
+      />
+
+      {brandContext && !brandContext.site_activity_context.trim() && (
+        <Callout
+          tone="warning"
+          title="Décrivez d'abord votre activité"
+          actions={<LinkButton href="/admin/settings?tab=editorial" size="sm" icon={Settings}>Compléter</LinkButton>}
+        >
+          Les suggestions s'appuient sur la description de votre activité, de vos clientes et de vos prestations. Tant qu'elle est vide, elles restent génériques.
+        </Callout>
+      )}
+
       {/* ─────────────────────────────────────────────────────────────────────── */}
-      {/* MODE 1 : PLAN STRATÉGIQUE DIDACTIQUE (CLIENT DÉBUTANT)                   */}
+      {/* ONGLET 1 : PLAN D'ARTICLES                                              */}
       {/* ─────────────────────────────────────────────────────────────────────── */}
       {viewMode === 'didactic' && (
         <div className="space-y-6">
-          {/* Bannière Pilotage Automatique Éditorial (1-Clic) */}
-          <Card className="border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/50 shadow-lg overflow-hidden">
-            <CardBody className="p-6 md:p-8 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-emerald-100 pb-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-extrabold text-xl shadow-md shadow-emerald-600/30 shrink-0">
-                    🤖
-                  </div>
-                  <div>
-                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-black uppercase tracking-wider mb-1">
-                      Pilotage Automatique 1-Clic
-                    </span>
-                    <h2 className="text-lg md:text-xl font-black text-stone-900">
-                      Générer & Publier le Lot Éditorial de la Semaine
-                    </h2>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleRunAutopilot}
-                  disabled={autopilotGenerating}
-                  className="px-6 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm font-extrabold rounded-xl shadow-lg shadow-emerald-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2 shrink-0 disabled:opacity-50"
-                >
-                  {autopilotGenerating ? <Loader2 size={18} className="animate-spin" /> : <Rocket size={18} />}
-                  <span>{autopilotGenerating ? 'Génération du lot en cours…' : '🚀 Générer & Publier tout le lot en 1-Clic'}</span>
-                </button>
-              </div>
-
-              {/* 3 Étapes Visuelles & Ludiques */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-white/80 border border-emerald-200/80 rounded-xl space-y-1.5 shadow-xs">
-                  <span className="text-[11px] font-extrabold text-emerald-700 uppercase tracking-wider block">Étape 1 · Mot-clé Cible</span>
-                  <p className="text-xs font-bold text-stone-900 truncate">
-                    🎯 {displayedRecs[0]?.keyword || seoIdeas[0]?.keyword || 'Stratégie Web'}
-                  </p>
-                  <p className="text-[11.5px] text-stone-500">Sélectionné automatiquement selon votre potentiel SEO.</p>
-                </div>
-
-                <div className="p-4 bg-white/80 border border-emerald-200/80 rounded-xl space-y-1.5 shadow-xs">
-                  <span className="text-[11px] font-extrabold text-indigo-700 uppercase tracking-wider block">Étape 2 · Contenus du Lot</span>
-                  <p className="text-xs font-bold text-stone-900">
-                    📄 1 Article SEO + 📱 3 Posts Sociaux
-                  </p>
-                  <p className="text-[11.5px] text-stone-500">LinkedIn, Instagram et Facebook synchronisés.</p>
-                </div>
-
-                <div className="p-4 bg-white/80 border border-emerald-200/80 rounded-xl space-y-1.5 shadow-xs">
-                  <span className="text-[11px] font-extrabold text-purple-700 uppercase tracking-wider block">Étape 3 · Publication</span>
-                  <p className="text-xs font-bold text-stone-900">
-                    ⚡ Validation 1-Clic Instantanée
-                  </p>
-                  <p className="text-[11.5px] text-stone-500">Mise en ligne automatique sur le blog et les canaux.</p>
-                </div>
-              </div>
-
-              {autopilotResult && (
-                <div className={`p-4 rounded-xl text-xs font-bold border ${autopilotResult.articleTitle ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                  {autopilotResult.successMessage}
-                </div>
-              )}
-            </CardBody>
-          </Card>
-
-          {/* Bannière de Choix de Cadence & Horizon */}
+          {/* Réglages du plan : horizon et rythme */}
           <Card>
-            <CardBody className="p-6 space-y-5">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-stone-200">
-                <div>
-                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Choisissez votre horizon stratégique</p>
-                  <h2 className="text-lg font-semibold text-stone-900">Combien d'articles souhaitez-vous planifier ?</h2>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setHorizon('top4')}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      horizon === 'top4'
-                        ? 'bg-stone-900 text-white shadow-xs'
-                        : 'bg-white border border-stone-300 text-stone-700 hover:bg-stone-50'
-                    }`}
-                  >
-                    📅 Top 4 du mois (4 articles)
-                  </button>
-                  <button
-                    onClick={() => setHorizon('plan3m')}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      horizon === 'plan3m'
-                        ? 'bg-stone-900 text-white shadow-xs'
-                        : 'bg-white border border-stone-300 text-stone-700 hover:bg-stone-50'
-                    }`}
-                  >
-                    🚀 Plan 3 Mois (12 articles)
-                  </button>
-                  <button
-                    onClick={() => setHorizon('plan6m')}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      horizon === 'plan6m'
-                        ? 'bg-stone-900 text-white shadow-xs'
-                        : 'bg-white border border-stone-300 text-stone-700 hover:bg-stone-50'
-                    }`}
-                  >
-                    🏆 Plan 6 Mois (24 articles)
-                  </button>
-                </div>
+            <CardBody className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-[14px] font-semibold text-stone-900">Sur quelle durée ?</p>
+                <Tabs
+                  label="Durée du plan"
+                  active={horizon}
+                  onChange={(id) => setHorizon(id as 'top4' | 'plan3m' | 'plan6m')}
+                  items={[
+                    { id: 'top4', label: '1 mois' },
+                    { id: 'plan3m', label: '3 mois' },
+                    { id: 'plan6m', label: '6 mois' },
+                  ]}
+                />
               </div>
-
-              {/* Réglage du Rythme conseillé */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm shrink-0">
-                    {cadence}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-stone-900">Rythme de publication conseillé</p>
-                    <p className="text-[12px] text-stone-500">
-                      {cadence === 1 ? '1 article par semaine (~4 articles/mois)' : cadence === 2 ? '2 articles par semaine (~8 articles/mois)' : '3 articles par semaine (~12 articles/mois)'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-xs text-stone-500 font-medium mr-1">Rythme :</span>
-                  {([1, 2, 3] as const).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setCadence(r)}
-                      className={`px-3 py-1 rounded-md text-xs font-bold transition-colors cursor-pointer ${
-                        cadence === r
-                          ? 'bg-stone-900 text-white'
-                          : 'bg-white border border-stone-300 text-stone-700 hover:bg-stone-100'
-                      }`}
-                    >
-                      {r}/semaine
-                    </button>
-                  ))}
-                </div>
+              <div className="space-y-2">
+                <p className="text-[14px] font-semibold text-stone-900">À quel rythme ?</p>
+                <Tabs
+                  label="Rythme de publication"
+                  active={String(cadence)}
+                  onChange={(id) => setCadence(Number(id) as 1 | 2 | 3)}
+                  items={[
+                    { id: '1', label: '1 par semaine' },
+                    { id: '2', label: '2 par semaine' },
+                    { id: '3', label: '3 par semaine' },
+                  ]}
+                />
               </div>
+              <p className="md:col-span-2 text-[13px] text-stone-600">
+                Soit {wantedCount} article{wantedCount > 1 ? 's' : ''} à écrire. Un article par semaine suffit pour progresser régulièrement sur Google.
+              </p>
             </CardBody>
           </Card>
 
-          {/* Loader Scan */}
           {scanning && (
             <Card>
-              <CardBody className="py-12 text-center space-y-3">
-                <Loader2 size={32} className="animate-spin text-stone-700 mx-auto" />
-                <p className="text-sm font-semibold text-stone-900">Calcul du plan d'articles personnalisé…</p>
-                <p className="text-xs text-stone-500 max-w-md mx-auto">
-                  Croisement des recherches des prospects avec les offres et la charte de votre marque.
+              <CardBody className="py-12 text-center space-y-2">
+                <p className="text-[15px] font-semibold text-stone-900">Préparation de votre plan d'articles…</p>
+                <p className="text-[13px] text-stone-600 max-w-md mx-auto">
+                  L'assistant compare les recherches de vos futures clientes avec vos prestations et les articles déjà publiés. Comptez une à trois minutes.
                 </p>
+                <div className="max-w-md mx-auto pt-2 text-left">
+                  <AiJobProgress label="Préparation en cours…" elapsedSeconds={scanJob.elapsedSeconds} />
+                </div>
               </CardBody>
             </Card>
           )}
 
-          {scanError && (
-            <Callout tone="danger" title="Erreur de génération">
+          {scanError && !scanning && (
+            <Callout tone="danger" title="Le plan n'a pas pu être généré"
+              actions={<Button variant="secondary" size="sm" icon={RefreshCw} onClick={handleScan}>Réessayer</Button>}>
               {scanError}
             </Callout>
           )}
 
-          {/* LISTE DIDACTIQUE SOUS FORME D'ACCORDÉONS */}
+          {!scanResult && !scanning && !scanError && (
+            <EmptyState
+              icon={Calendar}
+              title="Aucun plan d'articles pour l'instant"
+              description="Générez votre plan : l'assistant vous propose une liste de sujets classés par priorité, semaine par semaine. Comptez environ une minute."
+              action={<Button variant="primary" icon={RefreshCw} onClick={handleScan}>Générer mon plan</Button>}
+            />
+          )}
+
+          {/* LISTE DES SUJETS, SEMAINE PAR SEMAINE */}
           {scanResult && !scanning && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4 px-1">
-                <div>
-                  <h3 className="text-base font-semibold text-stone-900">
-                    Vos {displayedRecs.length} articles prioritaires recommandés
-                  </h3>
-                  <p className="text-xs text-stone-500">
-                    Cliquez sur une ligne pour voir les détails et lancer la rédaction en 1-clic.
-                  </p>
-                </div>
-                <Badge tone="success">{displayedRecs.length} sujets prêts</Badge>
+              <div className="px-1">
+                <h2 className="text-[18px] font-semibold text-stone-950">
+                  Vos {displayedRecs.length} sujet{displayedRecs.length > 1 ? 's' : ''} prioritaire{displayedRecs.length > 1 ? 's' : ''}
+                </h2>
+                <p className="mt-1 text-[14px] text-stone-600">
+                  Ouvrez un sujet pour savoir pourquoi il compte. « Rédiger » ouvre l'éditeur d'article avec le titre et l'adresse déjà remplis.
+                  {scanAt && <> Plan préparé le {new Date(scanAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}.</>}
+                </p>
               </div>
+
+              {planIsShort && (
+                <Callout tone="info">
+                  Le plan actuel contient {displayedRecs.length} sujets, soit {Math.ceil(displayedRecs.length / cadence)} semaine{Math.ceil(displayedRecs.length / cadence) > 1 ? 's' : ''} à ce rythme. Régénérez-le quand vous les aurez traités pour obtenir la suite.
+                </Callout>
+              )}
 
               <div className="space-y-3">
                 {displayedRecs.map((rec, index) => {
                   const weekNum = Math.floor(index / cadence) + 1;
-                  const score = calculateSeoGeoScore(rec.priority, rec.difficulty, rec.volume);
-                  const isOpen = openAccordionId === `item-${index}`;
+                  const itemId = `item-${index}`;
+                  const isOpen = openAccordionId === itemId;
 
                   return (
-                    <Card key={index} className="overflow-hidden transition-all">
-                      {/* LIGNE FERMÉE (ENTÊTE ACCORDÉON) */}
-                      <div
-                        onClick={() => setOpenAccordionId(isOpen ? null : `item-${index}`)}
-                        className={`p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-stone-50/80 transition-colors ${
-                          isOpen ? 'bg-stone-50/60 border-b border-stone-200' : ''
-                        }`}
-                      >
-                        <div className="flex items-start md:items-center gap-3.5 min-w-0 flex-1">
-                          <div className="px-2.5 py-1 bg-stone-100 border border-stone-200 rounded-lg text-xs font-bold text-stone-700 shrink-0">
+                    <Card key={`${rec.suggested_slug || rec.keyword}-${index}`} className="overflow-hidden">
+                      <div className={`p-4 md:p-5 flex flex-col md:flex-row md:items-center gap-3 ${isOpen ? 'bg-stone-50 border-b border-stone-200' : ''}`}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenAccordionId(isOpen ? null : itemId)}
+                          aria-expanded={isOpen}
+                          aria-controls={`seo-rec-${index}`}
+                          className="flex flex-1 items-start gap-3.5 min-w-0 text-left cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                        >
+                          <span className="px-2.5 py-1 bg-stone-100 rounded-lg text-[13px] font-semibold text-stone-700 shrink-0 whitespace-nowrap">
                             Semaine {weekNum}
-                          </div>
-
-                          <div className="min-w-0 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <ScoreBadge score={score} />
+                          </span>
+                          <span className="min-w-0 flex-1 space-y-1.5">
+                            <span className="block text-[15px] font-semibold text-stone-900 leading-snug">{rec.suggested_title}</span>
+                            <span className="flex flex-wrap items-center gap-2">
                               <SimpleFunnelBadge level={rec.funnel_level} />
-                            </div>
-                            <h4 className="text-sm font-semibold text-stone-900 leading-snug">{rec.suggested_title}</h4>
-                          </div>
-                        </div>
+                              {rec.covered_by && <Badge tone="neutral">Déjà abordé sur le site</Badge>}
+                            </span>
+                          </span>
+                          <span className="p-1 text-stone-600 shrink-0" aria-hidden="true">
+                            {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </span>
+                        </button>
 
-                        <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
+                        {!isOpen && (
                           <Button
-                            variant="primary"
+                            variant="secondary"
                             size="sm"
-                            icon={Rocket}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              goToEditor(scanRecToSeoBrief(rec));
-                            }}
+                            icon={PenLine}
+                            className="self-end md:self-center"
+                            onClick={() => goToEditor(scanRecToSeoBrief(rec))}
                           >
                             Rédiger
                           </Button>
-
-                          <div className="p-1 text-stone-400">
-                            {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                          </div>
-                        </div>
+                        )}
                       </div>
 
-                      {/* CONTENU DÉPLIÉ (DÉTAILS ACCORDÉON) */}
                       {isOpen && (
-                        <CardBody className="p-5 lg:p-6 bg-white space-y-5">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                            {/* Pourquoi cet article ? */}
+                        <CardBody className="space-y-5">
+                          <div id={`seo-rec-${index}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[14px]">
                             <div className="p-4 bg-stone-50 rounded-xl border border-stone-200 space-y-1.5">
                               <p className="font-semibold text-stone-900 flex items-center gap-1.5">
-                                <Lightbulb size={14} className="text-amber-600" />
-                                Pourquoi cet article va vous apporter des clients
+                                <Lightbulb size={15} className="text-stone-600" />
+                                Pourquoi ce sujet peut vous amener des clientes
                               </p>
-                              <p className="text-stone-600 leading-relaxed font-medium">{rec.opportunity}</p>
+                              <p className="text-stone-700 leading-relaxed">{rec.opportunity}</p>
                             </div>
 
-                            {/* La question posée */}
                             <div className="p-4 bg-stone-50 rounded-xl border border-stone-200 space-y-1.5">
                               <p className="font-semibold text-stone-900 flex items-center gap-1.5">
-                                <MessageSquareQuote size={14} className="text-sky-600" />
-                                La question posée par les prospects sur Google & IA
+                                <MessageSquareQuote size={15} className="text-stone-600" />
+                                Ce que tapent vos futures clientes
                               </p>
-                              <p className="text-stone-700 bg-white p-2.5 rounded border border-stone-200 font-mono">
-                                🔍 {rec.ai_prompt_example || rec.keyword}
-                              </p>
+                              <p className="text-stone-700 leading-relaxed">« {rec.ai_prompt_example || rec.keyword} »</p>
                             </div>
                           </div>
 
-                          {/* Pont vers vos services */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <DiffBadge v={rec.difficulty} />
+                            <VolBadge v={rec.volume} />
+                          </div>
+
                           {rec.rel_bridge && (
-                            <Callout tone="success" title="Le service mis en avant dans cet article">
+                            <Callout tone="info" title="La prestation à mettre en avant">
                               {rec.rel_bridge}
                             </Callout>
                           )}
 
-                          {/* Action de bas de carte */}
-                          <div className="pt-3 border-t border-stone-200 flex flex-wrap items-center justify-between gap-3">
-                            <div className="text-xs text-stone-500">
+                          <div className="pt-4 border-t border-stone-200 flex flex-wrap items-center justify-between gap-3">
+                            <div className="text-[13px] text-stone-600">
                               {rec.covered_by ? (
-                                <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                                  <Check size={14} /> Déjà traité sur votre site (/{rec.covered_by})
+                                <span className="flex items-center gap-1">
+                                  <Check size={14} className="text-emerald-700" /> Un contenu existant en parle déjà :{' '}
+                                  <a href={/^https?:\/\//.test(rec.covered_by) ? rec.covered_by : `/${rec.covered_by.replace(/^\//, '')}`} target="_blank" rel="noreferrer" className="font-semibold text-stone-900 underline underline-offset-2 hover:text-accent">
+                                    {/^https?:\/\//.test(rec.covered_by) ? rec.covered_by : `/${rec.covered_by.replace(/^\//, '')}`}
+                                  </a>
                                 </span>
                               ) : (
-                                <span>Article inédit prêt à publier sur votre blog.</span>
+                                <span>Aucun article de votre site ne traite encore ce sujet.</span>
                               )}
                             </div>
 
-                            <Button
-                              variant="primary"
-                              icon={Rocket}
-                              onClick={() => goToEditor(scanRecToSeoBrief(rec))}
-                            >
-                              🚀 Rédiger cet article maintenant
+                            <Button variant="primary" icon={PenLine} onClick={() => goToEditor(scanRecToSeoBrief(rec))}>
+                              Rédiger cet article
                             </Button>
                           </div>
                         </CardBody>
@@ -802,25 +803,67 @@ export default function SeoHub() {
               </div>
             </div>
           )}
+
+          {/* Raccourci vers le pilote automatique */}
+          <Card>
+            <CardHeader
+              title="Publication automatique"
+              description={autopilotMode === 'review_required'
+                ? "Le pilote automatique rédige un article à partir de votre dernier sujet enregistré et le garde en brouillon pour que vous le relisiez."
+                : "Le pilote automatique rédige un article à partir de votre dernier sujet enregistré, le publie sur le blog et l'annonce sur vos réseaux sociaux."}
+              actions={<LinkButton href="/admin/autopilot" variant="ghost" size="sm" icon={Settings}>Régler le pilote automatique</LinkButton>}
+            />
+            <CardBody className="space-y-3">
+              {savedClusters.length === 0 ? (
+                <p className="text-[14px] text-stone-700">
+                  Aucun sujet enregistré pour l'instant. Enregistrez un sujet depuis l'onglet « Étudier une recherche » pour pouvoir le confier au pilote automatique.
+                </p>
+              ) : (
+                <p className="text-[14px] text-stone-700">
+                  Prochain sujet traité : <span className="font-semibold text-stone-900">{savedClusters[0].suggested_title || savedClusters[0].focus_keyword}</span>
+                </p>
+              )}
+              {autopilotResult && (
+                <Callout tone={autopilotResult.articleTitle ? 'success' : autopilotResult.uncertain ? 'warning' : 'danger'}>
+                  {autopilotResult.successMessage}
+                </Callout>
+              )}
+            </CardBody>
+            <CardFooter hint={autopilotMode === 'review_required'
+              ? "L'article reste en brouillon tant que vous ne l'avez pas publié depuis la page Blog."
+              : "L'article est mis en ligne sans relecture préalable : relisez-le ensuite depuis la page Blog."}>
+              <Button
+                variant="secondary"
+                icon={Rocket}
+                loading={autopilotGenerating}
+                disabled={savedClusters.length === 0}
+                onClick={handleRunAutopilot}
+              >
+                {autopilotGenerating ? 'Rédaction en cours…' : autopilotMode === 'review_required' ? 'Rédiger maintenant' : 'Rédiger et publier maintenant'}
+              </Button>
+            </CardFooter>
+          </Card>
         </div>
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────── */}
-      {/* MODE 2 : EXPERT SIO & EXPLORATEUR POUSSÉ                                */}
+      {/* ONGLET 2 : ÉTUDIER UNE RECHERCHE PRÉCISE                               */}
       {/* ─────────────────────────────────────────────────────────────────────── */}
       {viewMode === 'expert' && (
         <div className="space-y-6">
           <Card>
             <CardHeader
-              title="Explorateur d'Intentions SIO (Mode Avancé)"
-              description="Recherchez un mot-clé précis pour extraire les prompts IA (ChatGPT/Perplexity) et les questions Reddit associées."
+              title="Étudier une recherche précise"
+              description="Saisissez ce qu'une cliente pourrait taper sur Google ou demander à ChatGPT. Vous obtiendrez les questions qui s'y rattachent et une proposition d'article."
             />
             <CardBody className="space-y-4">
               <form onSubmit={(e) => { e.preventDefault(); handleAnalyze(); }} className="flex flex-col sm:flex-row gap-3">
+                <label htmlFor="seo-seed" className="sr-only">Recherche à étudier</label>
                 <Input
+                  id="seo-seed"
                   value={seed}
                   onChange={(e) => setSeed(e.target.value)}
-                  placeholder="Ex: comment choisir son praticien, mal de dos chronique, tarif séance..."
+                  placeholder="Ex. : prix d'une séance, comment choisir une prestation…"
                 />
                 <Button
                   type="submit"
@@ -830,18 +873,19 @@ export default function SeoHub() {
                   disabled={!seed.trim()}
                   className="shrink-0"
                 >
-                  {analyzing ? 'Analyse…' : 'Analyser'}
+                  {analyzing ? 'Analyse en cours…' : 'Analyser'}
                 </Button>
               </form>
 
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
+              <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-stone-600">
                 <span className="font-semibold text-stone-700">Exemples :</span>
                 {['méthodes & conseils', 'comparatif de prestations', 'tarifs & réservation', 'problème fréquent'].map((s, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => handleAnalyze(s)}
-                    className="px-2.5 py-1 rounded bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors cursor-pointer"
+                    disabled={analyzing}
+                    className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-800 hover:bg-stone-200 transition-colors cursor-pointer disabled:opacity-45 disabled:pointer-events-none"
                   >
                     {s}
                   </button>
@@ -850,8 +894,18 @@ export default function SeoHub() {
             </CardBody>
           </Card>
 
+          {analyzing && (
+            <Card>
+              <CardBody className="py-10 text-center space-y-2">
+                <Loader2 size={24} className="animate-spin text-stone-600 mx-auto" />
+                <p className="text-[15px] font-semibold text-stone-900">Analyse de « {seed} »…</p>
+                <p className="text-[13px] text-stone-600">Comptez une vingtaine de secondes.</p>
+              </CardBody>
+            </Card>
+          )}
+
           {analysisError && (
-            <Callout tone="danger" title="Erreur d'analyse">
+            <Callout tone="danger" title="L'analyse n'a pas abouti">
               {analysisError}
             </Callout>
           )}
@@ -860,7 +914,7 @@ export default function SeoHub() {
             <Card>
               <CardHeader
                 title={analysis.suggestedTitle}
-                description={`URL suggérée : /blog/${analysis.suggestedSlug}`}
+                description={`Adresse proposée : /blog/${analysis.suggestedSlug}`}
                 actions={
                   <div className="flex items-center gap-2">
                     <Button
@@ -871,15 +925,7 @@ export default function SeoHub() {
                       disabled={savedOk}
                       onClick={handleSaveCluster}
                     >
-                      {savedOk ? 'Sauvegardé' : 'Sauvegarder'}
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={PenLine}
-                      onClick={() => goToEditor(analysisToSeoBrief(analysis))}
-                    >
-                      Rédiger l'article
+                      {savedOk ? 'Sujet enregistré' : 'Enregistrer le sujet'}
                     </Button>
                   </div>
                 }
@@ -892,41 +938,53 @@ export default function SeoHub() {
                   <VolBadge v={analysis.volume} />
                 </div>
 
+                {analysis.opportunity && (
+                  <p className="text-[14px] leading-relaxed text-stone-700">{analysis.opportunity}</p>
+                )}
+
                 {analysis.rel_bridge && (
-                  <Callout tone="warning" title="Pont Commercial Marque">
+                  <Callout tone="info" title="La prestation à mettre en avant">
                     {analysis.rel_bridge}
                   </Callout>
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-4 rounded-lg bg-stone-50 border border-stone-200 space-y-2">
-                    <p className="text-xs font-semibold text-stone-900 flex items-center gap-1.5">
-                      <Bot size={14} className="text-stone-600" /> Prompts IA posés aux Chatbots
+                    <p className="text-[14px] font-semibold text-stone-900 flex items-center gap-1.5">
+                      <Bot size={15} className="text-stone-600" /> Questions posées aux assistants IA
                     </p>
-                    <ul className="space-y-1.5">
-                      {analysis.aiPrompts?.map((p, i) => (
-                        <li key={i} className="text-xs text-stone-700 bg-white p-2.5 rounded border border-stone-200 font-mono">
-                          "{p}"
-                        </li>
-                      ))}
-                    </ul>
+                    {analysis.aiPrompts?.length ? (
+                      <ul className="space-y-1.5">
+                        {analysis.aiPrompts.map((p, i) => (
+                          <li key={i} className="text-[14px] text-stone-700 bg-white p-2.5 rounded-lg border border-stone-200">
+                            « {p} »
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[13px] text-stone-600">Aucune question trouvée.</p>
+                    )}
                   </div>
 
                   <div className="p-4 rounded-lg bg-stone-50 border border-stone-200 space-y-2">
-                    <p className="text-xs font-semibold text-stone-900 flex items-center gap-1.5">
-                      <MessageCircle size={14} className="text-stone-600" /> Questions Reddit & Communautés
+                    <p className="text-[14px] font-semibold text-stone-900 flex items-center gap-1.5">
+                      <MessageCircle size={15} className="text-stone-600" /> Questions posées sur les forums
                     </p>
-                    <ul className="space-y-1.5">
-                      {analysis.communityQuestions?.map((q, i) => (
-                        <li key={i} className="text-xs text-stone-700 bg-white p-2.5 rounded border border-stone-200">
-                          {q}
-                        </li>
-                      ))}
-                    </ul>
+                    {analysis.communityQuestions?.length ? (
+                      <ul className="space-y-1.5">
+                        {analysis.communityQuestions.map((q, i) => (
+                          <li key={i} className="text-[14px] text-stone-700 bg-white p-2.5 rounded-lg border border-stone-200">
+                            {q}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[13px] text-stone-600">Aucune question trouvée.</p>
+                    )}
                   </div>
                 </div>
               </CardBody>
-              <CardFooter hint="Transférez vers l'éditeur pour lancer la rédaction complète.">
+              <CardFooter hint="L'éditeur d'article s'ouvre avec le titre, l'adresse et ces pistes déjà préparés.">
                 <Button
                   variant="primary"
                   icon={PenLine}
@@ -938,40 +996,44 @@ export default function SeoHub() {
             </Card>
           )}
 
-          {/* Bibliothèque enregistrée */}
+          {/* Sujets enregistrés */}
           <div className="space-y-4">
-            <h3 className="text-base font-semibold text-stone-900">Vos briefs sauvegardés ({savedClusters.length})</h3>
-            {savedClusters.length === 0 ? (
+            <div>
+              <h2 className="text-[18px] font-semibold text-stone-950">
+                Vos sujets enregistrés{!loadingLib && savedClusters.length > 0 ? ` (${savedClusters.length})` : ''}
+              </h2>
+              <p className="mt-1 text-[14px] text-stone-600">Le pilote automatique puise dans cette liste, en commençant par le plus récent.</p>
+            </div>
+            {libError ? (
+              <Callout tone="danger" actions={<Button variant="secondary" size="sm" onClick={loadLibrary}>Réessayer</Button>}>
+                {libError}
+              </Callout>
+            ) : loadingLib && savedClusters.length === 0 ? (
+              <Spinner label="Chargement de vos sujets…" />
+            ) : savedClusters.length === 0 ? (
               <EmptyState
                 icon={Bookmark}
-                title="Aucun brief enregistré"
-                description="Sauvegardez vos recherches pour les retrouver ici à tout moment."
+                title="Aucun sujet enregistré"
+                description="Après une analyse, cliquez sur « Enregistrer le sujet » pour le retrouver ici et le rédiger plus tard."
               />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {savedClusters.map((cluster) => {
                   const brief = clusterToSeoBrief(cluster);
                   return (
-                    <Card key={cluster.id}>
+                    <Card key={cluster.id} className="flex flex-col">
                       <CardHeader
-                        title={brief.suggestedTitle}
-                        description={`Mot-clé : ${brief.keyword}`}
+                        title={brief.suggestedTitle || brief.keyword}
+                        description={`Recherche visée : ${brief.keyword}`}
                       />
-                      <CardBody className="space-y-2">
+                      <CardBody className="space-y-3 flex-1">
                         <SimpleFunnelBadge level={brief.funnel_level || 'découverte'} />
                         {brief.rel_bridge && (
-                          <p className="text-xs text-stone-600 bg-stone-50 p-2 rounded border border-stone-200">
-                            🎯 {brief.rel_bridge}
-                          </p>
+                          <p className="text-[14px] leading-relaxed text-stone-700">{brief.rel_bridge}</p>
                         )}
                       </CardBody>
-                      <CardFooter hint="Prêt à rédiger">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          icon={PenLine}
-                          onClick={() => goToEditor(brief)}
-                        >
+                      <CardFooter>
+                        <Button variant="secondary" size="sm" icon={PenLine} onClick={() => goToEditor(brief)}>
                           Rédiger
                         </Button>
                       </CardFooter>
@@ -987,28 +1049,3 @@ export default function SeoHub() {
   );
 }
 
-function RefreshCwIcon(props: any) {
-  return <RefreshCw {...props} />;
-}
-
-function RefreshCw(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-      <path d="M21 3v5h-5" />
-      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-      <path d="M3 21v-5h5" />
-    </svg>
-  );
-}

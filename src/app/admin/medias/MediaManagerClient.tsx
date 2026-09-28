@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../../../services/supabase';
-import { Upload, Trash2, Copy, CheckCircle, Zap, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { Upload, Trash2, Copy, CheckCircle, Image as ImageIcon, RefreshCw, Loader2 } from 'lucide-react';
+import { PageHeader, Button, EmptyState } from '../../../components/admin/ui';
 import AddMediaByUrl from '../../../components/AddMediaByUrl';
 
 interface MediaAsset {
@@ -113,9 +114,17 @@ export default function MediaManager() {
   const [batch, setBatch]       = useState<BatchState | null>(null);
   const [repatriating, setRepatriating] = useState(false);
   const [repatriateNotice, setRepatriateNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  // État d'enregistrement de la description de chaque image (sauvée à la sortie du champ).
+  const [altStatus, setAltStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({});
+  const [listNotice, setListNotice] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleRepatriateImages = async () => {
+    const ok = window.confirm(
+      "Les images venant d'autres sites (dans la médiathèque et dans vos pages) vont être copiées sur votre propre hébergement, " +
+      "puis les pages seront mises à jour pour utiliser ces copies.\n\nCette opération modifie toutes vos pages et peut prendre plusieurs minutes. Continuer ?"
+    );
+    if (!ok) return;
     setRepatriating(true);
     setRepatriateNotice(null);
     try {
@@ -128,15 +137,15 @@ export default function MediaManager() {
           'Authorization': `Bearer ${token}`
         }
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({} as { success?: boolean; message?: string; error?: string }));
       if (data.success) {
         setRepatriateNotice({ kind: 'ok', text: data.message });
         await fetchMedias();
       } else {
-        setRepatriateNotice({ kind: 'error', text: data.error || 'Erreur lors du rapatriement' });
+        setRepatriateNotice({ kind: 'error', text: data.error || "Les images n'ont pas pu être copiées. Réessayez dans un instant." });
       }
     } catch (err: any) {
-      setRepatriateNotice({ kind: 'error', text: err?.message || 'Erreur réseau lors du rapatriement' });
+      setRepatriateNotice({ kind: 'error', text: "La connexion a été interrompue pendant la copie des images. Vérifiez votre connexion puis relancez l'opération." });
     } finally {
       setRepatriating(false);
     }
@@ -151,10 +160,20 @@ export default function MediaManager() {
       .select('*')
       .order('created_at', { ascending: false });
     if (data && !error) setMedias(data);
+    else if (error) setListNotice("Les images n'ont pas pu être chargées. Rechargez la page.");
     setLoading(false);
   };
 
   const uploadSingleFile = async (rawFile: File): Promise<boolean> => {
+    try {
+      return await uploadSingleFileUnsafe(rawFile);
+    } catch (err) {
+      console.error('[MediaManager] envoi', rawFile.name, err);
+      return false;
+    }
+  };
+
+  const uploadSingleFileUnsafe = async (rawFile: File): Promise<boolean> => {
     let compressedFile = rawFile;
     let originalSize   = rawFile.size;
     let compressedSize = rawFile.size;
@@ -184,8 +203,8 @@ export default function MediaManager() {
       body: JSON.stringify({ fileName: compressedFile.name, contentType: compressedFile.type, fileBase64 }),
     });
 
-    const uploadData = await uploadRes.json();
-    if (!uploadRes.ok) return false;
+    const uploadData = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok || !uploadData.url) return false;
 
     const { error: dbError } = await supabase
       .from('media_assets')
@@ -207,14 +226,24 @@ export default function MediaManager() {
         setBatch(b => b ? { ...b, current: file.name } : null);
         const ok = await uploadSingleFile(file);
         if (ok) done++; else failed++;
-        setBatch(b => b ? { ...b, done: done + failed } : null);
+        setBatch(b => b ? { ...b, done: done + failed, failed } : null);
       }
       await fetchMedias();
-      setTimeout(() => setBatch(null), 4000);
+      // Un échec reste affiché plus longtemps pour laisser le temps de le lire.
+      setTimeout(() => setBatch(null), failed > 0 ? 10000 : 4000);
       return;
     }
 
-    const rawFile = files[0];
+    try {
+      await uploadOne(files[0]);
+    } catch (err) {
+      console.error('[MediaManager] envoi', err);
+      setUpload({ stage: 'error', error: "L'image n'a pas pu être envoyée. Réessayez, ou collez l'adresse d'une image déjà en ligne." });
+      setTimeout(() => setUpload({ stage: 'idle' }), 8000);
+    }
+  };
+
+  const uploadOne = async (rawFile: File) => {
 
     // ── 1. Compression ────────────────────────────────────
     setUpload({ stage: 'compressing', originalKB: rawFile.size });
@@ -253,10 +282,15 @@ export default function MediaManager() {
       body: JSON.stringify({ fileName: compressedFile.name, contentType: compressedFile.type, fileBase64 }),
     });
 
-    const uploadData = await uploadRes.json();
-    if (!uploadRes.ok) {
-      setUpload({ stage: 'error', error: uploadData.error || 'Erreur upload R2' });
-      setTimeout(() => setUpload({ stage: 'idle' }), 4000);
+    const uploadData = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok || !uploadData.url) {
+      setUpload({
+        stage: 'error',
+        error: uploadData.error
+          ? `${uploadData.error} Vous pouvez aussi coller l'adresse d'une image déjà en ligne.`
+          : "L'envoi du fichier a échoué. Réessayez, ou collez l'adresse d'une image déjà en ligne.",
+      });
+      setTimeout(() => setUpload({ stage: 'idle' }), 8000);
       return;
     }
 
@@ -265,8 +299,8 @@ export default function MediaManager() {
       .insert([{ file_name: compressedFile.name, url: uploadData.url, alt_text: rawFile.name.split('.')[0] }]);
 
     if (dbError) {
-      setUpload({ stage: 'error', error: dbError.message });
-      setTimeout(() => setUpload({ stage: 'idle' }), 4000);
+      setUpload({ stage: 'error', error: `L'image a été envoyée mais n'a pas pu être ajoutée à la médiathèque (${dbError.message}). Réessayez.` });
+      setTimeout(() => setUpload({ stage: 'idle' }), 8000);
       return;
     }
 
@@ -276,24 +310,44 @@ export default function MediaManager() {
     setTimeout(() => setUpload({ stage: 'idle' }), 5000);
   };
 
-  const handleAltChange = async (id: string, newAlt: string) => {
-    setMedias(medias.map(m => m.id === id ? { ...m, alt_text: newAlt } : m));
-    await supabase.from('media_assets').update({ alt_text: newAlt }).eq('id', id);
+  /*
+    La description se modifie localement à chaque frappe et ne s'enregistre
+    qu'à la sortie du champ : avant, chaque lettre tapée partait en base, sans
+    retour en cas d'échec.
+  */
+  const handleAltChange = (id: string, newAlt: string) => {
+    setMedias(prev => prev.map(m => m.id === id ? { ...m, alt_text: newAlt } : m));
+    setAltStatus(prev => { const next = { ...prev }; delete next[id]; return next; });
+  };
+
+  const saveAlt = async (id: string, value: string) => {
+    setAltStatus(prev => ({ ...prev, [id]: 'saving' }));
+    const { error } = await supabase.from('media_assets').update({ alt_text: value }).eq('id', id);
+    setAltStatus(prev => ({ ...prev, [id]: error ? 'error' : 'saved' }));
   };
 
   const handleDelete = async (asset: MediaAsset) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer définitivement cette image ?')) return;
-    await supabase.from('media_assets').delete().eq('id', asset.id);
-    setMedias(medias.filter(m => m.id !== asset.id));
+    if (!window.confirm("Supprimer définitivement cette image de la médiathèque ? Elle ne sera plus proposée dans la liste des images.")) return;
+    setListNotice(null);
+    const { error } = await supabase.from('media_assets').delete().eq('id', asset.id);
+    if (error) {
+      setListNotice("L'image n'a pas pu être supprimée. Vérifiez votre connexion puis réessayez.");
+      return;
+    }
+    setMedias(prev => prev.filter(m => m.id !== asset.id));
   };
 
-  const copyToClipboard = (url: string, id: string) => {
-    navigator.clipboard.writeText(url);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const copyToClipboard = async (url: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      setListNotice("L'adresse n'a pas pu être copiée automatiquement.");
+    }
   };
 
-  const isUploading = upload.stage === 'compressing' || upload.stage === 'uploading' || batch !== null;
+  const isUploading = upload.stage === 'compressing' || upload.stage === 'uploading' || (batch !== null && batch.done < batch.total);
 
   // ── Upload status banner ───────────────────────────────
   const UploadBanner = () => {
@@ -302,13 +356,13 @@ export default function MediaManager() {
     const banners: Record<UploadStage, { bg: string; icon: React.ReactNode; text: React.ReactNode }> = {
       idle: { bg: '', icon: null, text: null },
       compressing: {
-        bg: 'bg-amber-50 border-amber-200 text-amber-800',
-        icon: <Zap size={16} className="animate-pulse shrink-0" />,
-        text: <span>Compression en cours… <span className="font-medium">{formatKB(upload.originalKB ?? 0)}</span></span>,
+        bg: 'bg-stone-50 border-stone-200 text-stone-800',
+        icon: <Loader2 size={16} className="animate-spin shrink-0" />,
+        text: <span>Préparation de l'image… <span className="font-medium">{formatKB(upload.originalKB ?? 0)}</span></span>,
       },
       uploading: {
-        bg: 'bg-blue-50 border-blue-200 text-blue-800',
-        icon: <Upload size={16} className="animate-bounce shrink-0" />,
+        bg: 'bg-stone-50 border-stone-200 text-stone-800',
+        icon: <Loader2 size={16} className="animate-spin shrink-0" />,
         text: (
           <span>
             Envoi en cours…{' '}
@@ -321,20 +375,18 @@ export default function MediaManager() {
         ),
       },
       done: {
-        bg: 'bg-green-50 border-green-200 text-green-800',
+        bg: 'bg-emerald-50 border-emerald-200 text-emerald-800',
         icon: <CheckCircle size={16} className="shrink-0" />,
         text: (
           <span>
-            Image ajoutée avec succès !{' '}
+            Image ajoutée.{' '}
             {upload.savings! > 0 ? (
               <span className="font-medium">
                 {formatKB(upload.originalKB ?? 0)} → {formatKB(upload.compressedKB ?? 0)}{' '}
-                <span className="bg-green-200 text-green-800 px-1.5 py-0.5 rounded text-[11px] font-bold ml-1">
-                  −{upload.savings}%
-                </span>
+                <span className="ml-1">(−{upload.savings} %)</span>
               </span>
             ) : (
-              <span className="text-green-600 text-xs">(déjà optimisée)</span>
+              <span>(déjà légère, laissée telle quelle)</span>
             )}
           </span>
         ),
@@ -342,7 +394,7 @@ export default function MediaManager() {
       error: {
         bg: 'bg-red-50 border-red-200 text-red-700',
         icon: <ImageIcon size={16} className="shrink-0" />,
-        text: <span>Erreur : {upload.error}</span>,
+        text: <span>{upload.error}</span>,
       },
     };
 
@@ -350,7 +402,7 @@ export default function MediaManager() {
     if (!b.text) return null;
 
     return (
-      <div className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-sm mb-6 ${b.bg}`}>
+      <div role="status" className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-[14px] mb-6 ${b.bg}`}>
         {b.icon}
         {b.text}
       </div>
@@ -359,48 +411,25 @@ export default function MediaManager() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 bg-white p-6 rounded-2xl border border-zinc-200/90 shadow-2xs">
-        <div>
-          <span className="px-3 py-1 rounded-full bg-purple-100/80 text-purple-900 border border-purple-200 text-[10.5px] font-extrabold uppercase tracking-wider">Stockage & Médias</span>
-          <h1 className="text-2xl font-extrabold text-zinc-900 mt-2">Médiathèque</h1>
-          <p className="text-xs text-zinc-600 font-medium mt-1">Gérez vos images et optimisez leur référencement (SEO).</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleRepatriateImages}
-            disabled={repatriating}
-            className="bg-white hover:bg-zinc-50 border border-zinc-300 text-zinc-800 px-5 py-3 rounded-full text-xs font-bold shadow-2xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={repatriating ? 'animate-spin' : ''} />
-            <span>{repatriating ? 'Rapatriement en cours…' : 'Rapatrier les images externes sur le CDN R2'}</span>
-          </button>
-
-          <label className={`cursor-pointer bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white px-6 py-3 rounded-full text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 shrink-0 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-            <Upload size={16} />
-            {upload.stage === 'compressing' ? 'Compression…' : upload.stage === 'uploading' ? 'Envoi…' : 'Ajouter une image'}
+      <PageHeader
+        title="Médiathèque"
+        description="Toutes les images du site. Ajoutez-en, décrivez-les pour Google et copiez leur adresse pour les réutiliser."
+        actions={
+          <label className={`inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-accent text-accent-fg hover:bg-accent-hover text-[14px] font-semibold transition-colors cursor-pointer shrink-0 focus-within:ring-2 focus-within:ring-accent/40 focus-within:ring-offset-2 ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            {isUploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+            {upload.stage === 'compressing' ? 'Préparation…' : upload.stage === 'uploading' || (batch && batch.done < batch.total) ? 'Envoi en cours…' : 'Ajouter des images'}
             <input
               ref={inputRef}
               type="file"
               accept="image/*"
               multiple
-              className="hidden"
+              className="sr-only"
               onChange={handleUpload}
               disabled={isUploading}
             />
           </label>
-        </div>
-      </div>
-
-      {repatriateNotice && (
-        <div className={`p-4 rounded-xl text-xs font-semibold flex items-center gap-2 mb-6 border ${
-          repatriateNotice.kind === 'ok' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-red-50 text-red-900 border-red-200'
-        }`}>
-          {repatriateNotice.kind === 'ok' ? <CheckCircle size={16} className="text-emerald-600 shrink-0" /> : <ImageIcon size={16} className="text-red-600 shrink-0" />}
-          <span>{repatriateNotice.text}</span>
-        </div>
-      )}
+        }
+      />
 
       {/* Ajout par URL — seul chemin disponible tant que R2 n'est pas
           configuré (l'upload de fichier répond alors 501). */}
@@ -410,20 +439,28 @@ export default function MediaManager() {
         onAdded={(asset) => setMedias((prev) => [asset, ...prev])}
       />
 
-      {/* Compression info capsule */}
-      <div className="flex items-center gap-2 mb-6 text-[12.5px] text-stone-500 font-bold">
-        <Zap size={12} className="text-amber-400" />
-        Compression automatique activée — WebP · max 1920 px · qualité 82%
-      </div>
+      <p className="mb-6 text-[13px] text-stone-600">
+        Les photos envoyées depuis votre ordinateur sont allégées automatiquement pour que le site reste rapide.
+      </p>
 
       {/* Batch upload banner */}
       {batch && (
-        <div className="flex items-center gap-3 px-4 py-3 border rounded-lg text-sm mb-6 bg-blue-50 border-blue-200 text-blue-800">
-          <Upload size={16} className="animate-bounce shrink-0" />
+        <div role="status" className={`flex items-center gap-3 px-4 py-3 border rounded-lg text-[14px] mb-6 ${
+          batch.done < batch.total ? 'bg-stone-50 border-stone-200 text-stone-800'
+          : batch.failed > 0 ? 'bg-amber-50 border-amber-200 text-amber-900'
+          : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+        }`}>
+          {batch.done < batch.total
+            ? <Loader2 size={16} className="animate-spin shrink-0" />
+            : <CheckCircle size={16} className="shrink-0" />}
           <span>
-            Envoi en lot — <span className="font-medium">{batch.done}/{batch.total}</span> fichiers
-            {batch.done < batch.total && <span className="text-blue-600 ml-2">· {batch.current}</span>}
-            {batch.done === batch.total && <span className="ml-2 font-bold text-green-700">· Terminé {batch.failed > 0 ? `(${batch.failed} erreur(s))` : '✓'}</span>}
+            {batch.done < batch.total ? (
+              <>Envoi des images : <span className="font-medium">{batch.done} sur {batch.total}</span><span className="ml-2 text-stone-600">({batch.current})</span></>
+            ) : batch.failed > 0 ? (
+              <>{batch.total - batch.failed} image{batch.total - batch.failed > 1 ? 's' : ''} sur {batch.total} ajoutée{batch.total - batch.failed > 1 ? 's' : ''}. {batch.failed} n&apos;{batch.failed > 1 ? 'ont' : 'a'} pas pu être envoyée{batch.failed > 1 ? 's' : ''} : réessayez avec {batch.failed > 1 ? 'ces fichiers' : 'ce fichier'}.</>
+            ) : (
+              <>{batch.total} images ajoutées.</>
+            )}
           </span>
         </div>
       )}
@@ -431,62 +468,81 @@ export default function MediaManager() {
       {/* Upload status banner */}
       {!batch && <UploadBanner />}
 
+      {listNotice && (
+        <div role="alert" className="flex items-center justify-between gap-3 p-4 rounded-xl text-[14px] font-medium mb-6 border bg-red-50 text-red-900 border-red-200">
+          <span>{listNotice}</span>
+          <button type="button" onClick={() => setListNotice(null)} className="text-[13px] font-semibold underline underline-offset-2 cursor-pointer">Fermer</button>
+        </div>
+      )}
+
       {/* Grid */}
-      <div className="bg-white border border-stone-100 shadow-sm p-6">
+      <div className="bg-white border border-stone-200 rounded-xl p-6">
         {loading ? (
-          <div className="py-12 text-center text-stone-600">Chargement...</div>
+          <div className="py-12 text-center text-[14px] text-stone-700">Chargement des images…</div>
         ) : medias.length === 0 ? (
-          <div className="py-12 text-center text-stone-600">Aucune image. Commencez par en ajouter une.</div>
+          <EmptyState
+            icon={ImageIcon}
+            title="Aucune image pour l'instant"
+            description="Ajoutez des photos depuis votre ordinateur avec le bouton « Ajouter des images », ou collez l'adresse d'une image déjà en ligne."
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {medias.map((asset) => (
-              <div key={asset.id} className="border border-stone-100 flex flex-col bg-stone-50 group">
+              <div key={asset.id} className="border border-stone-200 rounded-xl overflow-hidden flex flex-col bg-white">
                 <div className="aspect-[4/3] bg-stone-200 overflow-hidden relative">
                   <img
                     src={asset.url}
                     alt={asset.alt_text}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    className="w-full h-full object-cover"
                   />
-                  <button
-                    onClick={() => handleDelete(asset)}
-                    className="absolute top-2 right-2 bg-white/90 text-red-500 p-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity hover:bg-white shadow-sm"
-                    title="Supprimer"
-                    aria-label={`Supprimer l'image ${asset.file_name}`}
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
 
                 <div className="p-4 space-y-4">
                   <div className="space-y-1">
                     <label htmlFor={`media-alt-${asset.id}`} className="text-[13px] font-medium text-stone-800">
-                      Texte Alternatif (Alt)
+                      Description de l&apos;image
                     </label>
                     <input
                       id={`media-alt-${asset.id}`}
                       type="text"
-                      value={asset.alt_text}
+                      value={asset.alt_text ?? ''}
                       onChange={(e) => handleAltChange(asset.id, e.target.value)}
-                      className="w-full border-b border-stone-300 bg-transparent py-1 focus:border-stone-900 outline-none transition-colors text-sm"
-                      placeholder="Décrivez l'image pour Google..."
+                      onBlur={(e) => { const st = altStatus[asset.id]; if (st !== 'saving' && st !== 'saved') void saveAlt(asset.id, e.target.value); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                      className="w-full h-10 rounded-lg border border-stone-300 bg-white px-3 text-[14px] text-stone-900 placeholder:text-stone-500 focus:border-accent focus:ring-3 focus:ring-accent/15 outline-none transition-colors"
+                      placeholder="Ex. : soin du visage dans le cabinet"
                     />
+                    <p className="text-[13px] text-stone-600" aria-live="polite">
+                      {altStatus[asset.id] === 'saving' ? 'Enregistrement…'
+                        : altStatus[asset.id] === 'saved' ? <span className="text-emerald-700">Description enregistrée</span>
+                        : altStatus[asset.id] === 'error' ? <span className="text-red-700">Non enregistrée. Cliquez dans le champ puis ailleurs pour réessayer.</span>
+                        : 'Lue par Google et par les personnes malvoyantes. Enregistrée quand vous quittez le champ.'}
+                    </p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-stone-200">
-                    <span className="truncate text-[12.5px] text-stone-500 w-3/4" title={asset.url}>
-                      {asset.url.split('/').pop()}
-                    </span>
-                    <button
-                      onClick={() => copyToClipboard(asset.url, asset.id)}
-                      className="text-stone-500 hover:text-stone-900 transition-colors"
-                      title="Copier l'URL"
-                      aria-label={copiedId === asset.id ? 'URL copiée' : "Copier l'URL de l'image"}
+                  <p className="truncate text-[13px] text-stone-600 pt-3 border-t border-stone-200" title={asset.url}>
+                    {asset.url.split('/').pop()}
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      icon={copiedId === asset.id ? CheckCircle : Copy}
+                      onClick={() => void copyToClipboard(asset.url, asset.id)}
                     >
-                      {copiedId === asset.id
-                        ? <CheckCircle size={16} className="text-sage" />
-                        : <Copy size={16} />
-                      }
-                    </button>
+                      {copiedId === asset.id ? 'Adresse copiée' : "Copier l'adresse"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="danger"
+                      icon={Trash2}
+                      onClick={() => handleDelete(asset)}
+                      aria-label={`Supprimer l'image ${asset.alt_text || asset.file_name}`}
+                    >
+                      Supprimer
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -494,6 +550,31 @@ export default function MediaManager() {
           </div>
         )}
       </div>
+
+      <details className="mt-8 rounded-xl border border-stone-200 bg-white">
+        <summary className="cursor-pointer px-6 py-4 text-[14px] font-semibold text-stone-900">Avancé</summary>
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-stone-200 px-6 py-5">
+          <p className="max-w-2xl text-[14px] text-stone-700">
+            Copie sur votre hébergement les images qui viennent d&apos;autres sites (par exemple après un import),
+            pour qu&apos;elles ne disparaissent pas si ces sites les retirent. Vos pages sont mises à jour automatiquement.
+          </p>
+          <Button type="button" variant="secondary" icon={RefreshCw} loading={repatriating} onClick={handleRepatriateImages}>
+            {repatriating ? 'Copie en cours…' : 'Copier les images externes'}
+          </Button>
+        </div>
+        {repatriateNotice && (
+          <div className="px-6 pb-5">
+      {(
+        <div role="status" className={`p-4 rounded-xl text-[14px] font-medium flex items-center gap-2 border ${
+          repatriateNotice.kind === 'ok' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-red-50 text-red-900 border-red-200'
+        }`}>
+          {repatriateNotice.kind === 'ok' ? <CheckCircle size={16} className="text-emerald-600 shrink-0" /> : <ImageIcon size={16} className="text-red-600 shrink-0" />}
+          <span>{repatriateNotice.text}</span>
+        </div>
+      )}
+          </div>
+        )}
+      </details>
     </div>
   );
 }

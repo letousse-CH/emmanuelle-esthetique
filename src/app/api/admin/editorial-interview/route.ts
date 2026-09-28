@@ -1,9 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { callClaude, extractJson } from '../../../../utils/ai';
+import { validateSupabaseToken } from '../../../../utils/apiAuth';
+import { synthesizeEditorialInterview } from '../../../../services/aiTasks/editorial';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  // Route ouverte jusqu'ici : n'importe qui pouvait faire travailler l'IA aux
+  // frais du site. Réservée désormais à une session admin valide.
+  const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (!(await validateSupabaseToken(token))) {
+    return NextResponse.json({ error: 'Session expirée : reconnectez-vous puis réessayez.' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { action } = body;
@@ -58,6 +68,7 @@ Dernière réponse vocale du client : "${transcript}"
         system: systemPrompt,
         max_tokens: 1000,
         feature: 'editorial-interview',
+        mode: 'quick',
       });
 
       const result = extractJson(aiResponse.content[0].text);
@@ -65,43 +76,9 @@ Dernière réponse vocale du client : "${transcript}"
     }
 
     if (action === 'synthesize_all') {
-      const { answers } = body;
-
-      const systemPrompt = `Tu es un expert en stratégie de marque, copywriting et ligne éditoriale web.
-On te fournit les retranscriptions complètes d'une interview vocale menée avec un professionnel/client.
-
-Ton rôle est d'analyser l'ensemble des échanges et de rédiger un dossier éditorial parfait, structuré et professionnel composé de 5 éléments distincts.
-
-Consignes pour chaque champ :
-1. "site_activity_context" : Présentation complète de l'activité, du secteur, des spécialisations et de l'offre (2-4 paragraphes fluides).
-2. "site_target_persona" : Description précise de la clientèle cible (profils, tranche d'âge, problématiques, attentes et désirs) (2-3 paragraphes).
-3. "site_tone_of_voice" : Style et registre de communication (ex: tutoiement/vouvoiement, chaleureux, rassurant, expert, conversationnel) avec des exemples d'expressions (2-3 paragraphes).
-4. "site_brand_tone" : Valeurs fondamentales, promesse phare de la marque, mots clés à privilégier et termes à éviter (2-3 paragraphes).
-5. "site_blog_topics" : Liste numérotée et détaillée de 4 à 6 piliers thématiques majeurs pour la création de contenu et le blog.
-
-Format de réponse OBLIGATOIRE (JSON strict uniquement) :
-{
-  "site_activity_context": "...",
-  "site_target_persona": "...",
-  "site_tone_of_voice": "...",
-  "site_brand_tone": "...",
-  "site_blog_topics": "..."
-}`;
-
-      const userPrompt = `Voici les données de l'interview vocale du client :
-
-${JSON.stringify(answers, null, 2)}
-
-Génère la synthèse éditoriale complète sous forme de JSON strict.`;
-
-      const aiResponse = await callClaude({
-        messages: [{ role: 'user', content: userPrompt }],
-        system: systemPrompt,
-        max_tokens: 4000,
-        feature: 'editorial-interview-synthesis',
-      });
-
-      const result = extractJson(aiResponse.content[0].text);
+      // Synchrone, en mode rapide : l'écran d'entretien passe désormais par une
+      // tâche de fond (/api/admin/ai-jobs, type « editorial-synthesis »).
+      const result = await synthesizeEditorialInterview({ answers: body.answers }, 'quick');
       return NextResponse.json(result);
     }
 

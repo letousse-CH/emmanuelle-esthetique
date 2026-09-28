@@ -13,11 +13,16 @@ import { callClaude, extractJson } from '../../../utils/ai';
 import { getSettingsServer } from '../../../services/settingsServer';
 import { getAnthropicKey } from '../../../services/secrets';
 
+// Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
+export const maxDuration = 60;
+
 async function fetchGoogleSuggestions(keyword: string): Promise<string[]> {
   const queries = [keyword, `comment ${keyword}`, `pourquoi ${keyword}`];
-  const all: string[] = [];
 
-  for (const q of queries) {
+  // Les trois requêtes partent en parallèle : en série, elles pouvaient
+  // ajouter jusqu'à 9 s avant même l'appel à l'IA, sur une fonction Netlify
+  // dont le temps d'exécution est limité.
+  const results = await Promise.all(queries.map(async (q): Promise<string[]> => {
     try {
       const url = `https://suggestqueries.google.com/complete/search?q=${encodeURIComponent(q)}&hl=fr&client=firefox&gl=fr`;
       const res = await fetch(url, {
@@ -26,9 +31,10 @@ async function fetchGoogleSuggestions(keyword: string): Promise<string[]> {
       });
       const text = await res.text();
       const data = JSON.parse(text);
-      if (Array.isArray(data[1])) all.push(...(data[1] as string[]));
-    } catch { /* silently ignore — Claude compensera */ }
-  }
+      return Array.isArray(data[1]) ? (data[1] as string[]) : [];
+    } catch { return []; /* silently ignore — Claude compensera */ }
+  }));
+  const all: string[] = results.flat();
 
   return [...new Set(all)]
     .filter(s => s.toLowerCase() !== keyword.toLowerCase())
@@ -145,15 +151,26 @@ export async function POST(req: NextRequest) {
   ]);
 
   // 2. Claude — enrichissement sémantique
+  let raw: string;
   try {
     const response = await callClaude({
       feature: 'keyword-research',
+      mode: 'quick',
       max_tokens: 2000,
       messages: [{ role: 'user', content: buildPrompt(keyword, suggestions, brandContext) }],
       timeout: 25000
     });
+    raw = (response.content[0] as { type: string; text: string }).text.trim();
+  } catch (err: any) {
+    // Délai dépassé, clé invalide, limite atteinte… : le message de callClaude
+    // est déjà rédigé pour l'écran. Avant, tout était masqué en « parse_error ».
+    console.error('[keyword-research] Appel IA échoué:', err);
+    const message = String(err?.message || "L'assistant IA n'a pas répondu.");
+    const status = /délai|timeout|timed out/i.test(message) ? 504 : 502;
+    return NextResponse.json({ error: message }, { status });
+  }
 
-    const raw = (response.content[0] as { type: string; text: string }).text.trim();
+  try {
     const analysis = extractJson(raw);
     return NextResponse.json({ keyword, googleSuggestions: suggestions, ...analysis });
   } catch (err) {

@@ -8,6 +8,9 @@ import { validateSupabaseToken } from '../../../../utils/apiAuth';
 import { isModuleEnabledServer } from '../../../../config/modules';
 import { runSocialAutomation } from '../../../../services/socialAutomation';
 
+// Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   if (!(await validateSupabaseToken(token))) {

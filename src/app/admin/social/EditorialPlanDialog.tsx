@@ -5,7 +5,7 @@ import { X, Sparkles, Loader2, AlertCircle, CalendarRange, Trash2, CheckCircle2 
 import { supabase } from '../../../services/supabase';
 import { addDaysToKey, fromDateKey, toDateKey, todayKey } from '../../../utils/dateKey';
 import {
-  PERIOD_LABELS, PERIOD_SIZES, PILLAR_STYLES,
+  PERIOD_LABELS, PERIOD_SIZES,
   type EditorialPeriod, type EditorialTopic,
 } from '../../../types/editorial';
 
@@ -102,10 +102,10 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
   }, []);
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose(); };
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) closeRef.current(); };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [busy, onClose]);
+  }, [busy]);
 
   // Annulation au démontage réel uniquement. Regrouper ce nettoyage avec l'effet
   // clavier ci-dessus armerait l'annulation à chaque changement de `busy` — donc
@@ -140,8 +140,8 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
       if (!res.ok || !data || data.error) {
         throw new Error(
           data?.error === 'not_configured'
-            ? "Clé API IA non configurée — ajoutez ANTHROPIC_API_KEY dans les variables d'environnement."
-            : data?.error || `Plan impossible à générer (HTTP ${res.status}).`
+            ? "La rédaction automatique n'est pas activée sur ce site. Contactez la personne qui gère le site."
+            : data?.error || `Le plan n'a pas pu être proposé (erreur ${res.status}). Réessayez dans un instant.`
         );
       }
       const proposed: EditorialTopic[] = Array.isArray(data.topics) ? data.topics : [];
@@ -220,7 +220,12 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
 
     setBusy(false);
     setStep('done');
-    if (failures.length > 0) setError(failures.join(' · '));
+    if (failures.length > 0) {
+      setError(
+        `Non rédigé${failures.length > 1 ? 's' : ''} : ${failures.join(' · ')}. ` +
+        `Ces sujets sont gardés de côté : rouvrez « Planifier une série » pour les relancer.`
+      );
+    }
   };
 
   /** Le brouillon suit chaque édition : une interruption ne perd pas les retouches. */
@@ -234,10 +239,16 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
     else onClose();
   };
 
+  // Une fois la série rédigée, toute fermeture (croix, Échap, clic à côté) doit
+  // rafraîchir le calendrier, sinon les nouveaux posts n'y apparaissent pas.
+  const close = () => { if (step === 'done') dismiss(); else onClose(); };
+  const closeRef = useRef(close);
+  closeRef.current = close;
+
   return (
     <div
       className="fixed inset-0 z-[9999] bg-stone-900/70 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={() => { if (!busy) onClose(); }}
+      onClick={() => { if (!busy) close(); }}
     >
       <div
         ref={panelRef}
@@ -246,18 +257,18 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
         aria-labelledby="editorial-plan-title"
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full max-w-2xl max-h-[88vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden outline-none"
+        className="bg-white w-full max-w-2xl max-h-[88vh] flex flex-col rounded-xl shadow-2xl overflow-hidden outline-none"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100 shrink-0">
-          <h3 id="editorial-plan-title" className="text-sm font-bold text-stone-900 flex items-center gap-2">
-            <CalendarRange size={15} className="text-sage" /> Planifier une série de posts
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 shrink-0">
+          <h3 id="editorial-plan-title" className="text-[16px] font-semibold text-stone-950 flex items-center gap-2">
+            <CalendarRange size={16} className="text-stone-700" /> Planifier une série de posts
           </h3>
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             disabled={busy}
             aria-label="Fermer"
-            className="p-1.5 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
+            className="p-1.5 text-stone-600 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -268,7 +279,7 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
           {step === 'configure' && (
             <>
               <div className="space-y-2">
-                <span id="period-label" className="block text-[13px] font-medium text-stone-800">
+                <span id="period-label" className="block text-[14px] font-semibold text-stone-900">
                   Période à couvrir
                 </span>
                 <div role="radiogroup" aria-labelledby="period-label" className="grid grid-cols-2 gap-3">
@@ -279,12 +290,12 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
                       role="radio"
                       aria-checked={period === p}
                       onClick={() => setPeriod(p)}
-                      className={`p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
-                        period === p ? 'border-sage bg-sage/5' : 'border-stone-200 bg-stone-50 hover:border-stone-300'
+                      className={`p-4 rounded-xl border-2 text-left transition-colors cursor-pointer ${
+                        period === p ? 'border-accent bg-accent-soft' : 'border-stone-200 bg-white hover:border-stone-300'
                       }`}
                     >
-                      <p className="font-bold text-stone-900 text-sm">{PERIOD_LABELS[p]}</p>
-                      <p className="text-[11px] text-stone-500 mt-0.5">
+                      <p className="font-semibold text-stone-900 text-sm">{PERIOD_LABELS[p]}</p>
+                      <p className="text-[13px] text-stone-700 mt-0.5">
                         {PERIOD_SIZES[p]} posts · lundi, mercredi, vendredi
                       </p>
                     </button>
@@ -293,7 +304,7 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="plan-start" className="block text-[13px] font-medium text-stone-800">
+                <label htmlFor="plan-start" className="block text-[14px] font-semibold text-stone-900">
                   À partir du
                 </label>
                 <input
@@ -303,15 +314,15 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
                   onChange={(e) => e.target.value && setStartDate(e.target.value)}
                   className="rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                 />
-                <p className="text-[12.5px] text-stone-500">
+                <p className="text-[13px] text-stone-600">
                   Les sujets seront répartis sur les prochains lundis, mercredis et vendredis.
                 </p>
               </div>
 
-              <p className="text-[11px] text-stone-500 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 leading-relaxed">
-                L'IA propose d'abord les sujets, adossés à vos trois piliers (Reconnaître, Comprendre,
-                Passer à l'action) et à vos offres définies dans Paramètres &gt; Éditorial &amp; Marque.
-                Vous validez le plan avant toute rédaction.
+              <p className="text-[13px] text-stone-700 bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 leading-relaxed">
+                L&apos;IA propose d&apos;abord une liste de sujets, en s&apos;appuyant sur votre ton et vos prestations
+                (Paramètres &gt; Éditorial &amp; Marque). Vous relisez et corrigez cette liste avant que les posts
+                soient rédigés.
               </p>
             </>
           )}
@@ -320,35 +331,37 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
           {step === 'review' && (
             <>
               {resumed && (
-                <p className="flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                  <AlertCircle size={13} className="shrink-0 mt-px" />
-                  Série interrompue reprise : ces sujets n'ont pas encore été rédigés.
+                <p className="flex items-start gap-1.5 text-[13px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                  Reprise d&apos;une série interrompue : ces sujets n&apos;ont pas encore été rédigés.
                 </p>
               )}
-              <p className="text-xs text-stone-500">
+              <p className="text-[14px] text-stone-700">
                 {topics.length} sujet{topics.length > 1 ? 's' : ''} à rédiger.
                 Corrigez les titres et les angles, retirez ce qui ne vous parle pas.
               </p>
               <div className="space-y-2.5">
                 {topics.map((topic, i) => (
-                  <div key={`${topic.date}-${i}`} className="border border-stone-100 rounded-xl p-3.5 space-y-1.5">
+                  <div key={`${topic.date}-${i}`} className="border border-stone-200 rounded-xl p-3.5 space-y-1.5">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[12px] font-bold text-stone-500 bg-stone-100 px-2 py-1 rounded-full capitalize">
+                        <span className="text-[13px] font-semibold text-stone-800 first-letter:uppercase">
                           {DAY_LABEL.format(fromDateKey(topic.date))}
                         </span>
-                        <span className={`text-[12px] font-bold px-2 py-1 rounded-full ${PILLAR_STYLES[topic.pillar] || 'bg-stone-100 text-stone-500'}`}>
-                          {topic.pillar}
-                        </span>
+                        {topic.pillar && (
+                          <span className="text-[12px] font-medium px-2 py-0.5 rounded-full border border-stone-200 bg-stone-100 text-stone-700">
+                            {topic.pillar}
+                          </span>
+                        )}
                       </div>
                       <button
                         type="button"
                         onClick={() => removeTopic(i)}
                         aria-label={`Retirer « ${topic.title} » du plan`}
                         title="Retirer"
-                        className="text-stone-500 hover:text-red-700 transition-colors cursor-pointer shrink-0 p-0.5"
+                        className="text-stone-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer shrink-0 p-1"
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
                     <label className="sr-only" htmlFor={`topic-title-${i}`}>Titre du sujet</label>
@@ -357,7 +370,7 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
                       type="text"
                       value={topic.title}
                       onChange={(e) => updateTopic(i, { title: e.target.value })}
-                      className="w-full text-sm font-medium text-stone-800 leading-snug bg-transparent border-b border-transparent hover:border-stone-200 focus:border-stone-900 outline-none transition-colors"
+                      className="w-full text-sm font-semibold text-stone-900 leading-snug bg-transparent border-b border-stone-200 hover:border-stone-300 focus:border-stone-900 outline-none transition-colors py-0.5"
                     />
                     <label className="sr-only" htmlFor={`topic-angle-${i}`}>Angle du sujet</label>
                     <textarea
@@ -365,14 +378,14 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
                       rows={3}
                       value={topic.angle}
                       onChange={(e) => updateTopic(i, { angle: e.target.value })}
-                      placeholder="Angle : la scène concrète, le mécanisme, ce que le lecteur comprend à la fin."
-                      className="w-full text-xs text-stone-500 leading-relaxed bg-stone-50 rounded-lg px-2.5 py-2 border border-transparent focus:border-stone-900 focus:bg-white outline-none transition-colors resize-none"
+                      placeholder="L'idée à faire passer, un exemple concret, ce que vos clientes doivent retenir."
+                      className="w-full text-[13px] text-stone-700 leading-relaxed bg-stone-50 rounded-lg px-2.5 py-2 border border-transparent focus:border-stone-900 focus:bg-white outline-none transition-colors resize-none"
                     />
                   </div>
                 ))}
               </div>
               {topics.length === 0 && (
-                <p className="text-sm text-stone-600">Tous les sujets ont été retirés.</p>
+                <p className="text-sm text-stone-700">Tous les sujets ont été retirés.</p>
               )}
             </>
           )}
@@ -382,22 +395,22 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 {step === 'generating'
-                  ? <Loader2 size={18} className="animate-spin text-sage shrink-0" />
-                  : <CheckCircle2 size={18} className="text-green-600 shrink-0" />}
+                  ? <Loader2 size={18} className="animate-spin text-accent shrink-0" />
+                  : <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />}
                 <p className="text-sm text-stone-700">
                   {step === 'generating'
-                    ? `Rédaction en cours — ${progress.done + progress.failed} / ${progress.total}`
-                    : `${progress.done} post${progress.done > 1 ? 's' : ''} créé${progress.done > 1 ? 's' : ''}${progress.failed > 0 ? ` · ${progress.failed} en échec` : ''}.`}
+                    ? `Rédaction en cours : ${progress.done + progress.failed} sur ${progress.total}`
+                    : `${progress.done} post${progress.done > 1 ? 's' : ''} créé${progress.done > 1 ? 's' : ''}${progress.failed > 0 ? `, ${progress.failed} non rédigé${progress.failed > 1 ? 's' : ''}` : ''}.`}
                 </p>
               </div>
               <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-sage rounded-full transition-all duration-300"
+                  className="h-full bg-accent rounded-full transition-all duration-300"
                   style={{ width: `${progress.total ? ((progress.done + progress.failed) / progress.total) * 100 : 0}%` }}
                 />
               </div>
               {step === 'generating' && (
-                <p className="text-[12.5px] text-stone-500">
+                <p className="text-[13px] text-stone-700">
                   Chaque post demande une dizaine de secondes. Laissez cette fenêtre ouverte.
                 </p>
               )}
@@ -405,22 +418,22 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
           )}
 
           {error && (
-            <p className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              <AlertCircle size={13} className="shrink-0 mt-px" /> {error}
+            <p role="alert" className="flex items-start gap-1.5 text-[13px] text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" /> {error}
             </p>
           )}
         </div>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-6 py-4 border-t border-stone-100 shrink-0">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-6 py-4 border-t border-stone-200 shrink-0">
           {step === 'configure' && (
             <>
               <button type="button" onClick={onClose} disabled={busy}
-                className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-sm font-medium hover:bg-stone-50 transition-colors disabled:opacity-40 cursor-pointer">
+                className="px-4 h-10 rounded-lg bg-stone-100 text-stone-900 text-sm font-semibold hover:bg-stone-200 transition-colors disabled:opacity-45 cursor-pointer">
                 Annuler
               </button>
               <button type="button" onClick={proposePlan} disabled={busy}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-stone-900 text-white text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50 cursor-pointer">
-                {busy ? <><Loader2 size={15} className="animate-spin" /> Analyse…</> : <><Sparkles size={15} /> Proposer un plan</>}
+                className="flex items-center justify-center gap-2 px-4 h-10 rounded-lg bg-accent text-accent-fg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-45 cursor-pointer">
+                {busy ? <><Loader2 size={15} className="animate-spin" /> Préparation…</> : <><Sparkles size={15} /> Proposer des sujets</>}
               </button>
             </>
           )}
@@ -428,26 +441,26 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
           {step === 'review' && (
             <>
               <button type="button" onClick={() => setStep('configure')} disabled={busy}
-                className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-sm font-medium hover:bg-stone-50 transition-colors disabled:opacity-40 cursor-pointer">
+                className="px-4 h-10 rounded-lg bg-stone-100 text-stone-900 text-sm font-semibold hover:bg-stone-200 transition-colors disabled:opacity-45 cursor-pointer">
                 Retour
               </button>
               <button type="button" onClick={generateAll} disabled={busy || topics.length === 0}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-stone-900 text-white text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50 cursor-pointer">
-                <Sparkles size={15} /> Rédiger les {topics.length} posts
+                className="flex items-center justify-center gap-2 px-4 h-10 rounded-lg bg-accent text-accent-fg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-45 cursor-pointer">
+                <Sparkles size={15} /> Rédiger {topics.length > 1 ? `les ${topics.length} posts` : 'le post'}
               </button>
             </>
           )}
 
           {step === 'generating' && (
             <button type="button" onClick={() => { cancelRef.current = true; }}
-              className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-sm font-medium hover:bg-stone-50 transition-colors cursor-pointer">
+              className="px-4 h-10 rounded-lg bg-stone-100 text-stone-900 text-sm font-semibold hover:bg-stone-200 transition-colors disabled:opacity-45 cursor-pointer">
               Arrêter après le post en cours
             </button>
           )}
 
           {step === 'done' && (
             <button type="button" onClick={dismiss}
-              className="px-5 py-2.5 rounded-xl bg-stone-900 text-white text-sm font-medium hover:bg-stone-700 transition-colors cursor-pointer">
+              className="flex items-center justify-center gap-2 px-4 h-10 rounded-lg bg-accent text-accent-fg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-45 cursor-pointer">
               Voir le calendrier
             </button>
           )}

@@ -7,6 +7,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { isModuleEnabledServer } from '../../../../config/modules';
+import { hasCronSecret } from '../../../../utils/apiAuth';
 import { publishScheduledArticles } from '../../../../services/publishScheduled';
 import { emitAutomationEvent } from '../../../../services/automationRunner';
 
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   }
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   const urlSecret = req.nextUrl.searchParams.get('secret');
-  if (token !== cronSecret && urlSecret !== cronSecret) {
+  if (!hasCronSecret(token) && !hasCronSecret(urlSecret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

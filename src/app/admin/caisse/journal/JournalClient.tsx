@@ -4,10 +4,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  BookOpenCheck, Download, RefreshCw, AlertCircle, Loader2, FileText, Ban,
+  Download, RefreshCw, Loader2, FileText, Ban,
   ChevronDown, ChevronRight, TrendingUp, X, Check, PenLine, Ticket, Package,
 } from 'lucide-react';
 import { cancelTransaction, listTransactions } from '../../../../services/caisse';
+import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import { downloadFacture } from '../../../../utils/factureDownload';
 import { setCaisseCorrection } from '../../../../utils/caissePrefill';
 import {
@@ -305,49 +306,42 @@ export default function JournalClient() {
     const a = document.createElement('a');
     a.href = url;
     a.download = `livre-de-caisse-${slug}.csv`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    // Révoquer tout de suite peut interrompre le téléchargement sur Safari.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Caisse</p>
-          <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
-            <BookOpenCheck size={20} className="text-sage" /> Journal &amp; chiffre d&apos;affaires
-          </h1>
-          <p className="mt-1 text-sm text-stone-600">Livre de caisse — {periodLabel}</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={load}
-            className="flex items-center gap-2 px-4 py-2 border border-stone-200 text-stone-500 hover:text-stone-800 hover:border-stone-300 rounded-lg text-sm transition-all cursor-pointer"
-          >
-            <RefreshCw size={13} /> Actualiser
-          </button>
-          <button
-            onClick={exportCSV}
-            disabled={rows.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white hover:bg-sage rounded-lg text-sm transition-all disabled:opacity-40 cursor-pointer shadow-sm"
-          >
-            <Download size={13} /> Export fiducie
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Journal et chiffre d'affaires"
+        description={`Livre de caisse — ${periodLabel}`}
+        actions={
+          <>
+            <Button icon={RefreshCw} onClick={load} loading={loading} aria-label="Actualiser" title="Actualiser">
+              <span className="hidden sm:inline">Actualiser</span>
+            </Button>
+            <Button
+              variant="primary" icon={Download} onClick={exportCSV} disabled={rows.length === 0}
+              title="Fichier CSV de la période affichée, à transmettre à la fiducie"
+            >
+              Exporter pour la fiducie
+            </Button>
+          </>
+        }
+      />
 
       {error && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <AlertCircle size={15} className="shrink-0 mt-0.5" />
-          <div>
-            <span className="font-mono text-xs">{error}</span>
-            <p className="text-xs mt-1">
-              Si l&apos;erreur mentionne une table manquante, applique
-              <code className="mx-1 px-1 bg-red-100 rounded">supabase/migrations/20260731_caisse.sql</code>
-              sur ton projet Supabase.
-            </p>
-          </div>
-        </div>
+        <Callout
+          tone="danger"
+          title="Une opération n'a pas abouti"
+          actions={<Button size="sm" variant="ghost" onClick={() => setError(null)}>Masquer</Button>}
+        >
+          <p>Vérifiez la connexion puis réessayez, par exemple avec « Actualiser ».</p>
+          <p className="mt-1 text-[13px] text-red-800/80 break-words">Détail technique : {error}</p>
+        </Callout>
       )}
 
       {/* KPIs — toujours « à maintenant », quelle que soit la période affichée */}
@@ -355,11 +349,11 @@ export default function JournalClient() {
         <Kpi label="Aujourd'hui"    value={formatCHF(kpis.jour)}    loading={loading} />
         <Kpi label="Cette semaine"  value={formatCHF(kpis.semaine)} loading={loading} />
         <Kpi label="Ce mois"        value={formatCHF(kpis.mois)}    loading={loading} />
-        <Kpi label={`Année ${new Date().getFullYear()}`} value={formatCHF(kpis.annee)} loading={loading} accent />
+        <Kpi label={`Depuis le 1er janvier ${new Date().getFullYear()}`} value={formatCHF(kpis.annee)} loading={loading} accent />
       </div>
 
       {/* Sélecteur de période */}
-      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-4 flex flex-wrap items-center gap-3">
+      <div className="bg-white border border-stone-200 rounded-xl p-4 flex flex-wrap items-center gap-3">
         <div className="flex rounded-lg border border-stone-200 overflow-hidden">
           {(['mois', 'annee'] as PeriodMode[]).map(m => (
             <button
@@ -367,7 +361,7 @@ export default function JournalClient() {
               onClick={() => setMode(m)}
               aria-pressed={mode === m}
               className={`px-4 py-2 text-sm transition-colors cursor-pointer ${
-                mode === m ? 'bg-sage/10 text-sage font-medium' : 'text-stone-500 hover:bg-stone-50'
+                mode === m ? 'bg-accent-soft text-accent font-semibold' : 'text-stone-700 hover:bg-stone-50'
               }`}
             >
               {m === 'mois' ? 'Par mois' : 'Par année'}
@@ -396,7 +390,7 @@ export default function JournalClient() {
         </select>
 
         <div className="ml-auto flex items-baseline gap-2">
-          <span className="text-[12.5px] text-stone-500">CA {periodLabel}</span>
+          <span className="text-[13px] text-stone-600">Recettes {periodLabel}</span>
           <span className="text-lg font-semibold text-stone-900 tabular-nums">{formatCHF(totals.ttc)}</span>
         </div>
       </div>
@@ -404,17 +398,17 @@ export default function JournalClient() {
       {/* Marge sur marchandises — délibérément séparée du CA, qu'elle ne
           complète pas : c'est un indicateur de rentabilité, pas de recette. */}
       {margeProduits.articles > 0 && (
-        <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5">
+        <div className="bg-white border border-stone-200 rounded-xl p-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="w-9 h-9 rounded-xl bg-sage/10 flex items-center justify-center shrink-0">
-                <Package size={16} className="text-sage" />
+              <span className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+                <Package size={16} className="text-accent" />
               </span>
               <div>
                 <p className="text-[13px] font-medium text-stone-800">
                   Marge sur produits — {periodLabel}
                 </p>
-                <p className="text-[12.5px] text-stone-500 mt-0.5">
+                <p className="text-[12.5px] text-stone-600 mt-0.5">
                   {qteLabel(margeProduits.articles)} article{margeProduits.articles > 1 ? 's' : ''} vendu
                   {margeProduits.articles > 1 ? 's' : ''} pour {formatCHF(margeProduits.ventes)}
                 </p>
@@ -424,12 +418,12 @@ export default function JournalClient() {
               {formatCHF(margeProduits.marge)}
             </p>
           </div>
-          <p className="text-[12px] text-stone-500 leading-relaxed mt-3 pt-3 border-t border-stone-50">
+          <p className="text-[12px] text-stone-600 leading-relaxed mt-3 pt-3 border-t border-stone-50">
             Vente hors taxe moins le prix d&apos;achat figé au moment de chaque vente. Ce montant
             n&apos;est pas une recette et ne s&apos;ajoute pas au chiffre d&apos;affaires : il dit ce
             que la marchandise a rapporté au-delà de ce qu&apos;elle a coûté.
             {margeProduits.sansCout > 0 && (
-              <span className="text-amber-600">
+              <span className="text-amber-700">
                 {' '}{margeProduits.sansCout} ligne{margeProduits.sansCout > 1 ? 's' : ''} sans prix
                 d&apos;achat enregistré {margeProduits.sansCout > 1 ? 'sont exclues' : 'est exclue'} du calcul.
               </span>
@@ -440,24 +434,24 @@ export default function JournalClient() {
 
       {/* Graphiques */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div className="lg:col-span-3 bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6">
+        <div className="lg:col-span-3 bg-white border border-stone-200 rounded-xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-[13px] font-medium text-stone-800">
               {mode === 'mois' ? 'Recettes par jour' : 'Recettes par mois'}
             </h2>
-            <span className="text-[12.5px] text-stone-500 font-medium">{paidRows.length} encaissement{paidRows.length !== 1 ? 's' : ''}</span>
+            <span className="text-[12.5px] text-stone-600 font-medium">{paidRows.length} encaissement{paidRows.length !== 1 ? 's' : ''}</span>
           </div>
           <SeriesChart data={series} loading={loading} />
         </div>
 
-        <div className="lg:col-span-2 bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6">
+        <div className="lg:col-span-2 bg-white border border-stone-200 rounded-xl p-6">
           <h2 className="text-[13px] font-medium text-stone-800 mb-6">Par mode de paiement</h2>
           {loading ? (
             <div className="space-y-4">
               {[...Array(4)].map((_, i) => <div key={i} className="h-8 bg-stone-100 rounded animate-pulse" />)}
             </div>
           ) : totals.ttc === 0 ? (
-            <p className="text-sm text-stone-600">Aucune recette sur la période.</p>
+            <p className="text-sm text-stone-700">Aucune recette sur la période.</p>
           ) : (
             <ul className="space-y-4">
               {byPayment.map(m => {
@@ -466,12 +460,12 @@ export default function JournalClient() {
                   <li key={m.value}>
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-sm text-stone-700 font-medium">{m.label}</span>
-                      <span className="text-[12.5px] text-stone-500 tabular-nums">
-                        {formatCHF(m.total)} <span className="text-stone-500">· {Math.round(pct)} %</span>
+                      <span className="text-[12.5px] text-stone-600 tabular-nums">
+                        {formatCHF(m.total)} <span className="text-stone-600">· {Math.round(pct)} %</span>
                       </span>
                     </div>
                     <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-sage/50 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-accent/50 rounded-full transition-all" style={{ width: `${pct}%` }} />
                     </div>
                   </li>
                 );
@@ -479,21 +473,21 @@ export default function JournalClient() {
             </ul>
           )}
 
-          <dl className="mt-6 pt-4 border-t border-stone-100 space-y-1.5">
-            <div className="flex justify-between text-xs"><dt className="text-stone-500">Total HT</dt><dd className="text-stone-600 tabular-nums">{formatCHF(totals.ht)}</dd></div>
-            <div className="flex justify-between text-xs"><dt className="text-stone-500">TVA</dt><dd className="text-stone-600 tabular-nums">{formatCHF(totals.tva)}</dd></div>
+          <dl className="mt-6 pt-4 border-t border-stone-200 space-y-1.5">
+            <div className="flex justify-between text-xs"><dt className="text-stone-600">Total HT</dt><dd className="text-stone-700 tabular-nums">{formatCHF(totals.ht)}</dd></div>
+            <div className="flex justify-between text-xs"><dt className="text-stone-600">TVA</dt><dd className="text-stone-700 tabular-nums">{formatCHF(totals.tva)}</dd></div>
             <div className="flex justify-between text-sm pt-1.5 border-t border-stone-50"><dt className="text-stone-700 font-medium">Recettes encaissées</dt><dd className="text-stone-900 font-semibold tabular-nums">{formatCHF(totals.ttc)}</dd></div>
           </dl>
 
           {totals.bons > 0 && (
-            <div className="mt-3 rounded-lg bg-sage/5 border border-sage/20 px-3.5 py-2.5">
+            <div className="mt-3 rounded-lg bg-accent/5 border border-accent/20 px-3.5 py-2.5">
               <div className="flex justify-between text-xs">
-                <span className="text-stone-500 flex items-center gap-1.5">
-                  <Ticket size={11} className="text-sage" /> Prestations réglées par bon
+                <span className="text-stone-600 flex items-center gap-1.5">
+                  <Ticket size={11} className="text-accent" /> Prestations réglées par bon
                 </span>
-                <span className="text-stone-600 tabular-nums">{formatCHF(totals.bons)}</span>
+                <span className="text-stone-700 tabular-nums">{formatCHF(totals.bons)}</span>
               </div>
-              <p className="text-[12px] text-stone-500 mt-1.5 leading-relaxed">
+              <p className="text-[12px] text-stone-600 mt-1.5 leading-relaxed">
                 Hors recettes : cet argent est entré en caisse le jour où les bons
                 ont été vendus. L&apos;ajouter ici doublerait le chiffre d&apos;affaires.
               </p>
@@ -503,20 +497,20 @@ export default function JournalClient() {
       </div>
 
       {/* Journal */}
-      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-stone-100 flex items-center justify-between">
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between">
           <h2 className="text-[13px] font-medium text-stone-800">Journal des recettes</h2>
-          <span className="text-[12.5px] text-stone-500">{rows.length} écriture{rows.length !== 1 ? 's' : ''}</span>
+          <span className="text-[12.5px] text-stone-600">{rows.length} écriture{rows.length !== 1 ? 's' : ''}</span>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+          <div className="flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
             <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
           </div>
         ) : rows.length === 0 ? (
           <div className="p-10 text-center space-y-2">
-            <p className="text-sm text-stone-600">Aucun encaissement sur cette période.</p>
-            <Link href="/admin/caisse" className="text-sage text-sm font-medium hover:underline">Encaisser un soin →</Link>
+            <p className="text-sm text-stone-700">Aucun encaissement sur cette période.</p>
+            <Link href="/admin/caisse" className="text-accent text-sm font-medium hover:underline">Encaisser un soin →</Link>
           </div>
         ) : (
           <ul className="divide-y divide-stone-50">
@@ -576,9 +570,9 @@ function Kpi({ label, value, loading, accent }: {
   label: string; value: string; loading?: boolean; accent?: boolean;
 }) {
   return (
-    <div className={`bg-white border rounded-2xl shadow-sm p-5 space-y-2 ${accent ? 'border-sage/30' : 'border-stone-100'}`}>
-      <p className="text-[12.5px] text-stone-500 font-medium flex items-center gap-1.5">
-        {accent && <TrendingUp size={12} className="text-sage" />}{label}
+    <div className={`bg-white border rounded-xl p-5 space-y-2 ${accent ? 'border-accent/30' : 'border-stone-200'}`}>
+      <p className="text-[13px] text-stone-600 font-medium flex items-center gap-1.5">
+        {accent && <TrendingUp size={13} className="text-accent" />}{label}
       </p>
       {loading
         ? <div className="h-7 w-24 bg-stone-100 rounded animate-pulse" />
@@ -603,7 +597,7 @@ function SeriesChart({ data, loading }: { data: { label: string; value: number }
   if (total === 0) {
     return (
       <div className="h-44 flex items-center justify-center">
-        <p className="text-sm text-stone-600">Aucune recette sur la période</p>
+        <p className="text-sm text-stone-700">Aucune recette sur la période</p>
       </div>
     );
   }
@@ -614,15 +608,19 @@ function SeriesChart({ data, loading }: { data: { label: string; value: number }
         const h = d.value > 0 ? Math.max((d.value / max) * 100, 4) : 0;
         return (
           <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group min-w-0">
-            <span className="text-[11.5px] font-semibold text-stone-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tabular-nums">
+            <span className="text-[12px] font-semibold text-stone-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tabular-nums">
               {formatAmount(d.value)}
             </span>
             <div
-              className="w-full rounded-t bg-sage/25 group-hover:bg-sage/50 transition-colors duration-150"
+              className="w-full rounded-t bg-accent/25 group-hover:bg-accent/50 transition-colors duration-150"
               style={{ height: `${h}%` }}
               title={`${d.label} — ${formatCHF(d.value)}`}
             />
-            <span className="text-[11.5px] text-stone-500 truncate w-full text-center">{d.label}</span>
+            {/* Sur un mois, un repère tous les cinq jours : 31 libellés côte à
+                côte deviennent illisibles sur un téléphone. */}
+            <span className="text-[12px] text-stone-600 w-full text-center overflow-visible whitespace-nowrap">
+              {data.length <= 12 || i === 0 || (i + 1) % 5 === 0 ? d.label : '\u00a0'}
+            </span>
           </div>
         );
       })}
@@ -651,31 +649,31 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
           onClick={onToggle}
           aria-expanded={open}
           aria-label={`${open ? 'Masquer' : 'Afficher'} le détail de la facture ${tx.numero}`}
-          className="shrink-0 p-1 text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
+          className="shrink-0 p-1 text-stone-600 hover:text-stone-900 transition-colors cursor-pointer"
         >
           {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
         </button>
 
         <div className="w-28 shrink-0 hidden sm:block">
-          <p className="text-xs text-stone-500 tabular-nums">{d.toLocaleDateString('fr-CH')}</p>
-          <p className="text-[12px] text-stone-500 tabular-nums">{d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}</p>
+          <p className="text-xs text-stone-600 tabular-nums">{d.toLocaleDateString('fr-CH')}</p>
+          <p className="text-[12px] text-stone-600 tabular-nums">{d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}</p>
         </div>
 
         <div className="flex-1 min-w-0">
           <p className="text-sm text-stone-900 font-medium truncate">
             {tx.client_label}
-            {cancelled && <span className="ml-2 text-[12px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Annulée</span>}
+            {cancelled && <span className="ml-2 text-[12px] font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">Annulée</span>}
           </p>
-          <p className="text-[12.5px] text-stone-500 tabular-nums flex items-center gap-1.5 flex-wrap">
+          <p className="text-[12.5px] text-stone-600 tabular-nums flex items-center gap-1.5 flex-wrap">
             <span>{tx.numero} · {MODE_PAIEMENT_LABELS[tx.mode_paiement]}</span>
             {bon > 0 && (
-              <span className="inline-flex items-center gap-1 text-sage">
-                <Ticket size={10} /> {formatCHF(bon)}
+              <span className="inline-flex items-center gap-1 text-accent" title="Part réglée par bon cadeau">
+                <Ticket size={12} /> bon {formatCHF(bon)}
               </span>
             )}
             {tx.corrige_transaction_id && (
-              <span className="inline-flex items-center gap-1 text-amber-600">
-                <PenLine size={10} /> rectificative
+              <span className="inline-flex items-center gap-1 text-amber-700">
+                <PenLine size={12} /> rectificative
               </span>
             )}
             <span className="sm:hidden">· {d.toLocaleDateString('fr-CH')}</span>
@@ -683,11 +681,11 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
         </div>
 
         <div className="shrink-0 text-right">
-          <span className={`block text-sm font-medium tabular-nums ${cancelled ? 'text-stone-500 line-through' : 'text-stone-900'}`}>
+          <span className={`block text-sm font-medium tabular-nums ${cancelled ? 'text-stone-600 line-through' : 'text-stone-900'}`}>
             {formatCHF(recette)}
           </span>
           {bon > 0 && !cancelled && (
-            <span className="block text-[12px] text-stone-500 tabular-nums">
+            <span className="block text-[12px] text-stone-600 tabular-nums">
               sur {formatCHF(tx.total_ttc)}
             </span>
           )}
@@ -698,7 +696,7 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
             onClick={onDownload}
             disabled={downloading}
             aria-label={`Télécharger la facture ${tx.numero}`} title="Quittance PDF"
-            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors disabled:opacity-40 cursor-pointer"
+            className="p-1.5 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors disabled:opacity-40 cursor-pointer"
           >
             {downloading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
           </button>
@@ -707,14 +705,14 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
               <button
                 onClick={onCorrect}
                 aria-label={`Corriger la facture ${tx.numero}`} title="Corriger cette écriture"
-                className="p-1.5 text-stone-500 hover:text-amber-700 rounded-md hover:bg-amber-50 transition-all cursor-pointer"
+                className="p-1.5 text-stone-600 hover:text-amber-700 rounded-md hover:bg-amber-50 transition-all cursor-pointer"
               >
                 <PenLine size={14} />
               </button>
               <button
                 onClick={onCancel}
                 aria-label={`Annuler la facture ${tx.numero}`} title="Annuler cette écriture"
-                className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                className="p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
               >
                 <Ban size={14} />
               </button>
@@ -726,32 +724,32 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
       {open && (
         <div className="px-5 pb-4 pl-14 space-y-1.5 bg-stone-50/40">
           {tx.transaction_items.map(item => (
-            <div key={item.id} className="flex items-center justify-between text-xs text-stone-500 gap-3">
+            <div key={item.id} className="flex items-center justify-between text-xs text-stone-600 gap-3">
               <span className="truncate">
-                {Number(item.quantite) !== 1 && <span className="text-stone-500">{Number(item.quantite)} × </span>}
+                {Number(item.quantite) !== 1 && <span className="text-stone-600">{Number(item.quantite)} × </span>}
                 {item.description}
-                {Number(item.taux_tva) > 0 && <span className="text-stone-500"> (TVA {Number(item.taux_tva)} %)</span>}
+                {Number(item.taux_tva) > 0 && <span className="text-stone-600"> (TVA {Number(item.taux_tva)} %)</span>}
               </span>
               <span className="tabular-nums shrink-0">{formatCHF(item.total_ttc)}</span>
             </div>
           ))}
-          <div className="flex items-center justify-between text-xs pt-1.5 mt-1.5 border-t border-stone-200/60">
-            <span className="text-stone-500">HT {formatCHF(tx.total_ht)} · TVA {formatCHF(tx.total_tva)}</span>
+          <div className="flex items-center justify-between text-xs pt-1.5 mt-1.5 border-t border-stone-200">
+            <span className="text-stone-600">HT {formatCHF(tx.total_ht)} · TVA {formatCHF(tx.total_tva)}</span>
             <span className="text-stone-700 font-medium tabular-nums">{formatCHF(tx.total_ttc)}</span>
           </div>
           {bon > 0 && (
-            <div className="flex items-center justify-between text-xs text-sage">
+            <div className="flex items-center justify-between text-xs text-accent">
               <span className="flex items-center gap-1.5"><Ticket size={11} /> Réglé par bon cadeau</span>
               <span className="tabular-nums">− {formatCHF(bon)}</span>
             </div>
           )}
           {tx.corrige_transaction_id && (
-            <p className="text-xs text-amber-600 pt-1">
+            <p className="text-xs text-amber-700 pt-1">
               Cette facture rectifie une écriture annulée.
             </p>
           )}
-          {tx.note && <p className="text-[12.5px] text-stone-500 italic pt-1">Note : {tx.note}</p>}
-          {tx.cancel_reason && <p className="text-xs text-red-500 pt-1">Motif d&apos;annulation : {tx.cancel_reason}</p>}
+          {tx.note && <p className="text-[12.5px] text-stone-600 italic pt-1">Note : {tx.note}</p>}
+          {tx.cancel_reason && <p className="text-xs text-red-700 pt-1">Motif d&apos;annulation : {tx.cancel_reason}</p>}
         </div>
       )}
     </li>
@@ -788,44 +786,45 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
       if (isCorrection) onCorrected(tx);
       else onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opération impossible.');
+      setError(`La facture n'a pas été modifiée${err instanceof Error ? ` (${err.message})` : ''}. Réessayez dans un instant.`);
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4" onClick={() => { if (!saving) onClose(); }}>
       <div
         role="dialog" aria-modal="true"
         aria-label={`${isCorrection ? 'Corriger' : 'Annuler'} la facture ${tx.numero}`}
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
             {isCorrection
-              ? <><PenLine size={15} className="text-amber-600" /> Corriger {tx.numero}</>
-              : <><Ban size={15} className="text-red-500" /> Annuler {tx.numero}</>}
+              ? <><PenLine size={15} className="text-amber-700" /> Corriger {tx.numero}</>
+              : <><Ban size={15} className="text-red-600" /> Annuler {tx.numero}</>}
           </h3>
-          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
+          <button onClick={onClose} disabled={saving} aria-label="Fermer" className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer disabled:opacity-40">
             <X size={16} />
           </button>
         </div>
 
         {isCorrection ? (
-          <div className="space-y-2 text-sm text-stone-500 leading-relaxed">
+          <div className="space-y-2 text-sm text-stone-600 leading-relaxed">
             <p>
-              Mauvais mode de paiement, mauvais soin, mauvais montant : tu vas repartir
-              de cette facture sur l&apos;écran de caisse, avec le panier déjà rempli.
+              Mauvais mode de paiement, mauvais soin, mauvais montant : la facture est
+              annulée <strong className="text-stone-800">dès maintenant</strong>, puis l&apos;écran de caisse
+              s&apos;ouvre avec le panier déjà rempli. Il vous reste à rectifier et à encaisser à nouveau.
             </p>
-            <p className="text-xs bg-stone-50 border border-stone-100 rounded-lg px-3.5 py-2.5">
+            <p className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-3.5 py-2.5">
               La facture <strong className="text-stone-700">{tx.numero}</strong> ne disparaît pas :
               elle reste au journal, annulée, et la nouvelle y sera rattachée. C&apos;est ce qu&apos;exige
               le Code des obligations — une écriture ne se réécrit pas, elle se corrige au vu de tous.
             </p>
           </div>
         ) : (
-          <p className="text-sm text-stone-500 leading-relaxed">
+          <p className="text-sm text-stone-600 leading-relaxed">
             L&apos;écriture de <strong className="text-stone-700">{formatCHF(tx.total_ttc)}</strong> restera dans le
             journal avec son numéro — c&apos;est ce qu&apos;exige la traçabilité comptable. Elle sera simplement
             exclue du chiffre d&apos;affaires.
@@ -833,7 +832,7 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
         )}
 
         {Number(tx.montant_bon ?? 0) > 0 && (
-          <p className="text-xs text-sage bg-sage/5 border border-sage/20 rounded-lg px-3.5 py-2.5">
+          <p className="text-xs text-accent bg-accent/5 border border-accent/20 rounded-lg px-3.5 py-2.5">
             Les {formatCHF(tx.montant_bon)} réglés par bon cadeau seront recrédités sur le bon.
           </p>
         )}
@@ -844,7 +843,7 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
             <input
               id="cancel-reason" type="text" value={reason} onChange={e => setReason(e.target.value)}
               required autoFocus placeholder="Erreur de saisie, soin non réalisé…"
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
             />
           </div>
 
@@ -852,21 +851,21 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
 
           <div className="flex gap-2">
             <button
-              type="button" onClick={onClose}
-              className="flex-1 py-2.5 rounded-lg border border-stone-200 text-stone-600 text-sm hover:border-stone-300 transition-all cursor-pointer"
+              type="button" onClick={onClose} disabled={saving}
+              className="flex-1 py-2.5 rounded-lg bg-stone-100 text-stone-900 font-semibold text-sm hover:bg-stone-200 transition-colors cursor-pointer disabled:opacity-40"
             >
-              Revenir
+              Ne rien changer
             </button>
             <button
               type="submit" disabled={saving || !reason.trim()}
-              className={`flex-1 flex items-center justify-center gap-2 text-white py-2.5 rounded-lg text-sm transition-colors disabled:opacity-40 cursor-pointer ${
-                isCorrection ? 'bg-stone-900 hover:bg-stone-700' : 'bg-red-600 hover:bg-red-700'
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40 cursor-pointer ${
+                isCorrection ? 'bg-accent text-accent-fg hover:bg-accent-hover' : 'bg-red-600 text-white hover:bg-red-700'
               }`}
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               {saving
                 ? 'En cours…'
-                : isCorrection ? 'Corriger sur la caisse' : "Confirmer l'annulation"}
+                : isCorrection ? 'Annuler et ressaisir' : "Annuler la facture"}
             </button>
           </div>
         </form>

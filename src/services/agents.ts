@@ -6,6 +6,31 @@ import type {
   AgentMessage,
 } from '../types/agents';
 
+/**
+ * En-têtes des appels à `/api/admin/agents-knowledge`. La route écrit avec la
+ * clé de service : elle n'accepte donc que les requêtes d'une session admin.
+ */
+async function knowledgeHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return {
+    'Content-Type': 'application/json',
+    ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+  };
+}
+
+/**
+ * Vérifie que les tables de l'agent existent. Renvoie un message à afficher,
+ * ou `null` si tout est en place.
+ */
+export async function checkAgentsSetup(): Promise<string | null> {
+  const { error } = await supabase.from('agents').select('id').limit(1);
+  if (!error) return null;
+  if (error.code === 'PGRST205' || /schema cache|does not exist/i.test(error.message)) {
+    return "L'agent IA n'est pas encore installé dans la base de données. La personne qui gère le site doit exécuter une fois le fichier supabase/migrations/20260819_agents.sql dans l'éditeur SQL de Supabase.";
+  }
+  return `L'agent n'a pas pu être chargé (${error.message}). Rechargez la page.`;
+}
+
 export async function fetchAgents(): Promise<Agent[]> {
   const [{ data, error }, avatarRes] = await Promise.all([
     supabase.from('agents').select('*').order('created_at', { ascending: false }),
@@ -57,7 +82,10 @@ export async function saveAgent(
   const { avatar, ...dbAgent } = agent;
 
   if (avatar) {
-    await supabase.from('settings').upsert({ key: 'agent_avatar', value: avatar }, { onConflict: 'key' });
+    const { error: avatarError } = await supabase
+      .from('settings')
+      .upsert({ key: 'agent_avatar', value: avatar }, { onConflict: 'key' });
+    if (avatarError) return { success: false, error: `Avatar non enregistré : ${avatarError.message}` };
   }
 
   const { data, error } = await supabase
@@ -77,7 +105,10 @@ export async function deleteAgent(id: string): Promise<{ success: boolean; error
 
 export async function fetchAgentDocuments(agentId: string): Promise<AgentDocument[]> {
   try {
-    const res = await fetch(`/api/admin/agents-knowledge?agentId=${encodeURIComponent(agentId)}`, { cache: 'no-store' });
+    const res = await fetch(`/api/admin/agents-knowledge?agentId=${encodeURIComponent(agentId)}`, {
+      cache: 'no-store',
+      headers: await knowledgeHeaders(),
+    });
     if (res.ok) {
       const payload = await res.json();
       if (Array.isArray(payload.documents)) return payload.documents as AgentDocument[];
@@ -102,7 +133,7 @@ export async function saveAgentDocument(
   try {
     const res = await fetch('/api/admin/agents-knowledge', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await knowledgeHeaders(),
       body: JSON.stringify({
         action: 'add',
         agentId: doc.agent_id,
@@ -127,11 +158,42 @@ export async function saveAgentDocument(
   return error ? { success: false, error: error.message } : { success: true };
 }
 
+/**
+ * Modifie le texte d'un document existant, identifié par son id.
+ *
+ * Passer par `saveAgentDocument` recalculait la référence à partir du titre et
+ * forçait le type « texte » : modifier une page créait un doublon au lieu de
+ * corriger l'original.
+ */
+export async function updateAgentDocument(
+  id: string,
+  content: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/admin/agents-knowledge', {
+      method: 'POST',
+      headers: await knowledgeHeaders(),
+      body: JSON.stringify({ action: 'update', docId: id, content }),
+    });
+    const payload = await res.json().catch(() => null);
+    if (res.ok && payload?.success) return { success: true };
+    if (payload?.error) return { success: false, error: payload.error };
+  } catch (err) {
+    console.error('[agents] updateAgentDocument API error:', err);
+  }
+
+  const { error } = await supabase
+    .from('agent_documents')
+    .update({ content, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  return error ? { success: false, error: error.message } : { success: true };
+}
+
 export async function deleteAgentDocument(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     const res = await fetch('/api/admin/agents-knowledge', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await knowledgeHeaders(),
       body: JSON.stringify({ action: 'delete', docId: id }),
     });
     const payload = await res.json().catch(() => null);
@@ -154,7 +216,7 @@ export async function reindexAgentKnowledge(
   try {
     const res = await fetch('/api/admin/agents-knowledge', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await knowledgeHeaders(),
       body: JSON.stringify({ action: 'reindex', agentId }),
     });
     const payload = await res.json().catch(() => null);
@@ -175,11 +237,9 @@ export async function reindexAgentKnowledge(
 export async function ensureSuperAgent(): Promise<Agent> {
   const agents = await fetchAgents();
   if (agents.length > 0) {
-    const existing = agents.find((a) => a.slug === 'super-agent') || agents[0];
-    if (!existing.enabled) {
-      await saveAgent({ ...existing, enabled: true });
-    }
-    return existing;
+    // L'agent existant est renvoyé tel quel. Il était auparavant réactivé à
+    // chaque ouverture de l'écran : impossible de le laisser éteint.
+    return agents.find((a) => a.slug === 'super-agent') || agents[0];
   }
 
   const res = await saveAgent({
@@ -195,7 +255,9 @@ export async function ensureSuperAgent(): Promise<Agent> {
       { key: 'telephone', label: 'Téléphone', required: false },
       { key: 'demande', label: 'Besoin / Demande', required: true },
     ],
-    enabled: true,
+    // Créé éteint : le widget n'apparaît sur le site public qu'une fois
+    // l'agent relu et activé à l'étape 3, pas dès la première visite de l'écran.
+    enabled: false,
   });
 
   const rows = await fetchAgents();
@@ -216,7 +278,7 @@ export interface EditorialBriefSettings {
 }
 
 export async function fetchEditorialSettings(): Promise<EditorialBriefSettings> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('settings')
     .select('key, value')
     .in('key', [
@@ -227,6 +289,9 @@ export async function fetchEditorialSettings(): Promise<EditorialBriefSettings> 
       'site_blog_topics',
       'site_address_mode',
     ]);
+  // Un échec de lecture renvoyait un brief vide : l'enregistrer effaçait alors
+  // le brief existant. On le signale plutôt.
+  if (error) throw new Error(error.message);
 
   const map: Record<string, string> = {};
   (data ?? []).forEach((row: { key: string; value: string | null }) => {

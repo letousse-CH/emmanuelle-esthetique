@@ -22,6 +22,8 @@ import MediaPickerModal from '../../../components/pagebuilder/MediaPickerModal';
 import { PageEditorContext } from '../../../contexts/PageEditorContext';
 import { SITE_CONFIG } from '../../../config/site';
 import { useModuleFlags } from '../../../hooks/useModuleFlags';
+import { runAiJob } from '../../../hooks/useAiJob';
+import AiJobProgress from '../../../components/admin/AiJobProgress';
 
 type Status = 'idle' | 'generating' | 'saving' | 'success' | 'error';
 type Viewport = 'mobile' | 'tablet' | 'desktop';
@@ -283,19 +285,10 @@ export default function PageBuilderClient() {
     if (!promptText.trim()) return;
     setStatus('generating'); setErrorMsg('');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || '';
-      const res = await fetch('/api/generate-page', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ prompt: promptText })
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erreur API lors de la génération.');
-      if (!Array.isArray(json.sections) || json.sections.length === 0) {
+      // Tâche de fond : une page complète dépasse souvent les 60 s d'une
+      // fonction Netlify synchrone (ancienne route : /api/generate-page).
+      const json = await runAiJob<{ sections?: PageSection[] }>('page', { prompt: promptText });
+      if (!Array.isArray(json?.sections) || json.sections.length === 0) {
         throw new Error("La réponse de l'IA ne contient aucune section exploitable.");
       }
       const known = json.sections.filter((s: PageSection) => s && WIREFRAME_REGISTRY[s.type]);
@@ -316,23 +309,14 @@ export default function PageBuilderClient() {
     if (!promptText.trim()) return;
     setStatus('generating'); setErrorMsg('');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || '';
-      const res = await fetch('/api/admin/modify-page-with-ai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          pageTitle: title || 'Page',
-          sections,
-          prompt: promptText
-        })
+      // Tâche de fond (ancienne route synchrone : /api/admin/modify-page-with-ai,
+      // conservée pour les modales de section).
+      const json = await runAiJob<{ sections?: PageSection[] }>('page-modify', {
+        pageTitle: title || 'Page',
+        sections,
+        prompt: promptText,
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erreur API lors de la modification.');
-      if (!Array.isArray(json.sections) || json.sections.length === 0) {
+      if (!Array.isArray(json?.sections) || json.sections.length === 0) {
         throw new Error("La réponse de l'IA ne contient aucune section modifiée.");
       }
       const known = json.sections.filter((s: PageSection) => s && WIREFRAME_REGISTRY[s.type]);
@@ -351,29 +335,35 @@ export default function PageBuilderClient() {
 
   const [isOptimizingStyle, setIsOptimizingStyle] = useState(false);
 
+  // Temps écoulé d'une génération IA en cours (tâche de fond suivie ici).
+  const aiBusy = status === 'generating' || isOptimizingStyle;
+  const [aiJobSeconds, setAiJobSeconds] = useState(0);
+  useEffect(() => {
+    if (!aiBusy) return;
+    const t0 = Date.now();
+    setAiJobSeconds(0);
+    const timer = setInterval(() => setAiJobSeconds(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [aiBusy]);
+
   const handleOptimizeStyle = async () => {
     if (sections.length === 0) {
       setErrorMsg('Ajoutez au moins une section avant d\'optimiser le style.');
       return;
     }
+    if (!window.confirm("La mise en forme de toutes les sections de la page va être revue automatiquement. Vous pourrez revenir en arrière avec le bouton « Annuler » de la barre d'outils. Continuer ?")) return;
 
     setIsOptimizingStyle(true);
     setErrorMsg('');
 
     try {
-      const res = await fetch('/api/admin/optimize-page-style', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pageTitle: title || 'Page',
-          sections,
-        }),
+      // Tâche de fond (ancienne route synchrone : /api/admin/optimize-page-style).
+      const data = await runAiJob<{ sections?: PageSection[] }>('page-style', {
+        pageTitle: title || 'Page',
+        sections,
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur lors de l’optimisation du style.');
-
-      if (Array.isArray(data.sections) && data.sections.length > 0) {
+      if (Array.isArray(data?.sections) && data.sections.length > 0) {
         replaceAll(data.sections);
         setStatus('success');
         setTimeout(() => setStatus(s => s === 'success' ? 'idle' : s), 2500);
@@ -387,7 +377,7 @@ export default function PageBuilderClient() {
   };
 
   const save = async () => {
-    if (!title.trim() || !slug.trim() || sections.length === 0) { setErrorMsg('Titre, slug et au moins une section sont obligatoires.'); setStatus('error'); return; }
+    if (!title.trim() || !slug.trim() || sections.length === 0) { setErrorMsg("Pour enregistrer, donnez un titre à la page, vérifiez son adresse et ajoutez au moins une section."); setStatus('error'); return; }
     setStatus('saving'); setErrorMsg('');
     try {
       if (isEditing && id) await updatePage(id, { title, slug, sections, published, show_header: showHeader, show_footer: showFooter });
@@ -403,7 +393,8 @@ export default function PageBuilderClient() {
           { key: `${prefix}_og_image`, value: seoOgImage.trim() },
           { key: `${prefix}_keywords`, value: seoKeywords.trim() }
         ];
-        await supabase.from('settings').upsert(upserts, { onConflict: 'key' });
+        const { error: seoError } = await supabase.from('settings').upsert(upserts, { onConflict: 'key' });
+        if (seoError) throw new Error(`La page est enregistrée, mais pas ses réglages Google (${seoError.message}). Cliquez à nouveau sur « Enregistrer ».`);
       }
 
       markClean();
@@ -550,157 +541,196 @@ export default function PageBuilderClient() {
   }, [undo]);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col bg-stone-50">
+    <div className="flex h-[calc(100vh-4rem)] flex-col bg-stone-50">
 
-      {/* ── Topbar ─────────────────────────────────────────────────────── */}
-      <header className="bg-white border-b border-stone-100 px-5 py-0 flex items-center justify-between shrink-0 h-14 shadow-sm">
-        <div className="flex items-center gap-4 min-w-0">
-          <Link href="/admin/pages" className="p-2 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-all">
+      {/* ── Barre d'outils ─────────────────────────────────────────────── */}
+      <header className="bg-white border-b border-stone-200 px-5 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 shrink-0 min-h-14">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link
+            href="/admin/pages"
+            aria-label="Retour à la liste des pages"
+            title="Retour à la liste des pages"
+            className="p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+          >
             <ArrowLeft size={16} />
           </Link>
           <div className="h-5 w-px bg-stone-200" />
           <div className="min-w-0">
             <input
+              aria-label="Titre de la page"
               placeholder="Titre de la page"
-              className="font-semibold text-stone-900 text-sm bg-transparent focus:outline-none w-48 placeholder:text-stone-400 border-b border-transparent focus:border-stone-900/40 transition-colors"
+              className="font-semibold text-stone-900 text-[15px] bg-transparent focus:outline-none w-52 placeholder:text-stone-500 border-b border-transparent focus:border-accent transition-colors"
               value={title}
               onChange={e => handleTitleChange(e.target.value)}
             />
             <div className="flex items-center gap-0.5 mt-0.5">
-              <span className="text-stone-500 text-[11px]">/</span>
+              <span className="text-stone-600 text-[13px]" aria-hidden="true">/</span>
               <input
-                placeholder="slug"
+                aria-label="Adresse de la page (sans accent ni espace)"
+                placeholder="adresse-de-la-page"
                 title="Adresse de la page (sans accent ni espace)"
-                className="text-stone-500 text-[11px] bg-transparent focus:outline-none border-b border-transparent focus:border-stone-300 transition-colors w-32 placeholder:text-stone-200"
+                className="text-stone-600 text-[13px] bg-transparent focus:outline-none border-b border-transparent focus:border-accent transition-colors w-40 placeholder:text-stone-500"
                 value={slug}
                 onChange={e => setSlug(generateSlug(e.target.value))}
               />
-              {slug === 'home' && <span className="text-stone-500 text-[12px] ml-1">(page d'accueil)</span>}
+              {slug === 'home' && <span className="text-stone-600 text-[13px] ml-1">(page d'accueil)</span>}
             </div>
           </div>
 
-          <div className="h-5 w-px bg-stone-200 hidden sm:block shrink-0" />
-
-          {/* Duo de Boutons d'Action IA - Grand Format, Colorés & Sexy */}
           {moduleFlags.ai_generation && (
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setAiModalOpen(true)}
-                className="flex items-center gap-2 bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer border border-white/30 shrink-0"
-              >
-                <Wand2 size={16} className="text-amber-300 animate-pulse" />
-                <span>Assistant IA</span>
-                <span className="bg-white/25 text-white text-[10.5px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 hidden md:flex">
-                  Vocale <Mic size={10} />
-                </span>
-              </button>
+            <>
+              <div className="h-5 w-px bg-stone-200 hidden sm:block shrink-0" />
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setAiModalOpen(true)}
+                  title="Créer ou modifier toute la page en décrivant ce que vous voulez, à l'écrit ou à la voix"
+                  className="flex items-center gap-2 bg-stone-100 hover:bg-stone-200 text-stone-900 px-3.5 h-9 rounded-lg text-[14px] font-semibold transition-colors cursor-pointer shrink-0"
+                >
+                  <Wand2 size={15} className="text-stone-700" />
+                  <span>Assistant</span>
+                  <Mic size={13} className="text-stone-600 hidden md:inline" aria-hidden="true" />
+                </button>
 
-              <button
-                type="button"
-                onClick={handleOptimizeStyle}
-                disabled={isOptimizingStyle || sections.length === 0}
-                className="flex items-center gap-2 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer border border-white/30 shrink-0 disabled:opacity-40"
-              >
-                {isOptimizingStyle ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Sparkles size={16} className="text-amber-200 animate-pulse" />
-                )}
-                <span>{isOptimizingStyle ? 'Optimisation…' : 'Optimiser le style'}</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={handleOptimizeStyle}
+                  disabled={isOptimizingStyle || sections.length === 0}
+                  className="flex items-center gap-2 bg-stone-100 hover:bg-stone-200 text-stone-900 px-3.5 h-9 rounded-lg text-[14px] font-semibold transition-colors cursor-pointer shrink-0 disabled:opacity-45 disabled:cursor-default"
+                >
+                  {isOptimizingStyle ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={15} className="text-stone-700" />
+                  )}
+                  <span>{isOptimizingStyle ? 'Mise en forme…' : 'Revoir la mise en forme'}</span>
+                </button>
+              </div>
+            </>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {status === 'success' && <span className="flex items-center gap-1.5 text-green-600 text-xs font-medium"><CheckCircle2 size={13} /> Sauvegardé</span>}
-          {status === 'error' && <span className="flex items-center gap-1.5 text-red-500 text-xs font-medium max-w-48 truncate" title={errorMsg}><AlertCircle size={13} /> {errorMsg}</span>}
-          {/* Avertissement non bloquant (ex. sections générées ignorées). */}
-          {status === 'idle' && errorMsg && (
-            <span className="flex items-center gap-1.5 text-amber-600 text-xs font-medium max-w-48 truncate" title={errorMsg}><AlertCircle size={13} /> {errorMsg}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {aiBusy && (
+            <AiJobProgress
+              compact
+              label={isOptimizingStyle ? 'Mise en forme en cours…' : 'Génération en cours…'}
+              elapsedSeconds={aiJobSeconds}
+              canLeave={false}
+            />
           )}
-          {status !== 'success' && status !== 'error' && !errorMsg && isDirty && (
-            <span className="text-amber-600 text-xs font-medium">Modifications non enregistrées</span>
-          )}
+          <span aria-live="polite" className="flex items-center">
+            {status === 'success' && <span className="flex items-center gap-1.5 text-emerald-700 text-[13px] font-medium"><CheckCircle2 size={14} /> Enregistré</span>}
+            {status === 'saving' && <span className="text-stone-600 text-[13px]">Enregistrement…</span>}
+            {status !== 'success' && status !== 'saving' && !errorMsg && isDirty && (
+              <span className="text-amber-800 text-[13px] font-medium">Modifications non enregistrées</span>
+            )}
+          </span>
 
           <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={undo}
               disabled={!canUndo}
+              aria-label="Annuler la dernière modification"
               title="Annuler la dernière modification (⌘/Ctrl + Z)"
-              className="p-2 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg disabled:opacity-25 transition-all cursor-pointer"
+              className="p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg disabled:opacity-30 transition-colors cursor-pointer disabled:cursor-default"
             >
-              <Undo2 size={14} />
+              <Undo2 size={15} />
             </button>
             <button
+              type="button"
               onClick={redo}
               disabled={!canRedo}
+              aria-label="Rétablir la dernière modification"
               title="Rétablir la dernière modification (⌘/Ctrl + Shift + Z)"
-              className="p-2 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg disabled:opacity-25 transition-all cursor-pointer"
+              className="p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg disabled:opacity-30 transition-colors cursor-pointer disabled:cursor-default"
             >
-              <Redo2 size={14} />
+              <Redo2 size={15} />
             </button>
           </div>
 
           <button
+            type="button"
             onClick={() => setPublished(!published)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${published ? 'bg-green-50 text-green-700 border-green-200' : 'bg-stone-100 text-stone-500 border-stone-200 hover:border-stone-300'}`}
+            aria-pressed={published}
+            title={published ? 'Page visible sur le site. Cliquez pour la repasser en brouillon.' : 'Page cachée aux visiteuses. Cliquez pour la publier.'}
+            className={`flex items-center gap-1.5 px-3 h-9 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${published ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-stone-100 text-stone-700 border-stone-200 hover:border-stone-300'}`}
           >
-            {published ? <Eye size={12} /> : <EyeOff size={12} />}
-            {published ? 'Publié' : 'Brouillon'}
+            {published ? <Eye size={14} /> : <EyeOff size={14} />}
+            {published ? 'Publiée' : 'Brouillon'}
           </button>
 
           <div className="h-4 w-px bg-stone-200" />
 
           <button
+            type="button"
             onClick={() => setShowHeader(!showHeader)}
-            title="Afficher / masquer le header sur cette page"
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${showHeader ? 'bg-stone-50 text-stone-600 border-stone-200' : 'bg-stone-100 text-stone-500 border-stone-200 line-through'}`}
+            aria-pressed={showHeader}
+            title={showHeader ? "L'en-tête du site (logo et menu) s'affiche sur cette page. Cliquez pour le masquer." : "L'en-tête du site est masqué sur cette page. Cliquez pour l'afficher."}
+            className={`flex items-center gap-1.5 px-2.5 h-9 rounded-lg text-[13px] font-medium border transition-colors cursor-pointer ${showHeader ? 'bg-white text-stone-800 border-stone-200' : 'bg-stone-100 text-stone-600 border-stone-200'}`}
           >
+            {showHeader ? <Eye size={14} /> : <EyeOff size={14} />}
             En-tête
           </button>
           <button
+            type="button"
             onClick={() => setShowFooter(!showFooter)}
-            title="Afficher / masquer le footer sur cette page"
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${showFooter ? 'bg-stone-50 text-stone-600 border-stone-200' : 'bg-stone-100 text-stone-500 border-stone-200 line-through'}`}
+            aria-pressed={showFooter}
+            title={showFooter ? 'Le pied de page du site s\'affiche sur cette page. Cliquez pour le masquer.' : 'Le pied de page est masqué sur cette page. Cliquez pour l\'afficher.'}
+            className={`flex items-center gap-1.5 px-2.5 h-9 rounded-lg text-[13px] font-medium border transition-colors cursor-pointer ${showFooter ? 'bg-white text-stone-800 border-stone-200' : 'bg-stone-100 text-stone-600 border-stone-200'}`}
           >
+            {showFooter ? <Eye size={14} /> : <EyeOff size={14} />}
             Pied de page
           </button>
 
           {published && slug && (
-            <a href={getPagePath(slug)} target="_blank" rel="noopener noreferrer" className="p-2 text-stone-500 hover:text-stone-900 hover:bg-sage/5 rounded-lg transition-all">
-              <ExternalLink size={14} />
+            <a
+              href={getPagePath(slug)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Voir la page sur le site (nouvel onglet)"
+              title="Voir la page sur le site"
+              className="p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+            >
+              <ExternalLink size={15} />
             </a>
           )}
 
-          {moduleFlags.ai_generation && (
-            <button
-              type="button"
-              onClick={() => setAiModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-stone-100 hover:bg-stone-200 text-stone-900 border border-stone-200 transition-all cursor-pointer"
-              title="Générer ou modifier toute la page par IA"
-            >
-              <Sparkles size={14} className="text-amber-600" />
-              <span>Assistant IA</span>
-            </button>
-          )}
-
           <button
+            type="button"
             onClick={save}
             disabled={status === 'saving'}
-            title="Enregistrer la page (Raccourci ⌘ / Ctrl + S)"
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer shadow-md ${
-              isDirty
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30 scale-105 animate-pulse-subtle ring-2 ring-emerald-400/50'
-                : 'bg-stone-900 hover:bg-stone-800 text-white'
-            } disabled:opacity-50`}
+            title="Enregistrer la page (⌘/Ctrl + S)"
+            className="flex items-center gap-2 px-4 h-9 rounded-lg text-[14px] font-semibold transition-colors cursor-pointer bg-accent hover:bg-accent-hover text-accent-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 disabled:opacity-50"
           >
             {status === 'saving' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            <span>{status === 'saving' ? 'Sauvegarde…' : 'Sauvegarder'}</span>
+            <span>{status === 'saving' ? 'Enregistrement…' : 'Enregistrer'}</span>
           </button>
         </div>
       </header>
+
+      {/* Erreurs et avertissements en toutes lettres (ils étaient tronqués dans la barre). */}
+      {errorMsg && (
+        <div
+          role={status === 'error' ? 'alert' : 'status'}
+          className={`flex items-start justify-between gap-3 border-b px-5 py-2.5 text-[14px] shrink-0 ${
+            status === 'error' ? 'bg-red-50 border-red-200 text-red-900' : 'bg-amber-50 border-amber-200 text-amber-900'
+          }`}
+        >
+          <span className="flex items-start gap-2 min-w-0">
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            <span>{errorMsg}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => { setErrorMsg(''); if (status === 'error') setStatus('idle'); }}
+            className="shrink-0 text-[13px] font-semibold underline underline-offset-2 cursor-pointer"
+          >
+            Fermer
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
 
@@ -724,13 +754,13 @@ export default function PageBuilderClient() {
         )}
 
         {/* ── Panneau gauche ──────────────────────────────────────────── */}
-        <aside className="w-full lg:w-72 max-h-[50vh] lg:max-h-none bg-white border-b lg:border-b-0 lg:border-r border-stone-100 flex flex-col overflow-hidden shrink-0">
+        <aside className="w-full lg:w-72 max-h-[50vh] lg:max-h-none bg-white border-b lg:border-b-0 lg:border-r border-stone-200 flex flex-col overflow-hidden shrink-0">
           {/* Onglets de la Sidebar */}
-          <div className="flex border-b border-stone-100 bg-stone-50/50 shrink-0">
+          <div className="flex border-b border-stone-200 bg-stone-50/50 shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab('content')}
-              className={`flex-1 py-3 text-xs font-bold text-center transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'content' ? 'border-stone-900 text-stone-900 bg-white' : 'border-transparent text-stone-500 hover:text-stone-600'}`}
+              className={`flex-1 py-3 text-xs font-semibold text-center transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'content' ? 'border-stone-900 text-stone-900 bg-white' : 'border-transparent text-stone-600 hover:text-stone-700'}`}
             >
               <LayoutGrid size={13} />
               Structure
@@ -738,7 +768,7 @@ export default function PageBuilderClient() {
             <button
               type="button"
               onClick={() => setActiveTab('seo')}
-              className={`flex-1 py-3 text-xs font-bold text-center transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'seo' ? 'border-stone-900 text-stone-900 bg-white' : 'border-transparent text-stone-500 hover:text-stone-600'}`}
+              className={`flex-1 py-3 text-xs font-semibold text-center transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'seo' ? 'border-stone-900 text-stone-900 bg-white' : 'border-transparent text-stone-600 hover:text-stone-700'}`}
             >
               <Sparkles size={13} />
               SEO
@@ -751,9 +781,9 @@ export default function PageBuilderClient() {
               <div ref={sidebarRef} className="flex-1 overflow-y-auto">
                 <div className="px-4 pt-4 pb-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <LayoutGrid size={13} className="text-stone-500" />
+                    <LayoutGrid size={13} className="text-stone-600" />
                     <p className="text-[12.5px] font-medium text-stone-700">
-                      Sections {sections.length > 0 && <span className="text-stone-500">({sections.length})</span>}
+                      Sections {sections.length > 0 && <span className="text-stone-600">({sections.length})</span>}
                     </p>
                   </div>
                 </div>
@@ -761,9 +791,9 @@ export default function PageBuilderClient() {
                 {sections.length === 0 ? (
                   <div className="px-4 py-8 text-center">
                     <div className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center mx-auto mb-3">
-                      <LayoutGrid size={18} className="text-stone-500" />
+                      <LayoutGrid size={18} className="text-stone-600" />
                     </div>
-                    <p className="text-sm text-stone-600 font-light leading-relaxed">
+                    <p className="text-sm text-stone-700 font-light leading-relaxed">
                       Générez une page ou<br />ajoutez des sections.
                     </p>
                   </div>
@@ -777,7 +807,7 @@ export default function PageBuilderClient() {
                           key={i}
                           data-section-item={i}
                           className={`rounded-xl overflow-hidden transition-all ${
-                            dropIndex === i && dragIndex !== i ? 'ring-2 ring-sage ring-offset-1' : ''
+                            dropIndex === i && dragIndex !== i ? 'ring-2 ring-accent ring-offset-1' : ''
                           } ${dragIndex === i ? 'opacity-40' : ''}`}
                           onDragOver={e => { e.preventDefault(); setDropIndex(i); }}
                           onDragLeave={() => setDropIndex(prev => (prev === i ? null : prev))}
@@ -791,22 +821,22 @@ export default function PageBuilderClient() {
                             onClick={() => { selectSection(i); setEditorOpen(true); }}
                             className={`p-3.5 cursor-pointer transition-all group/item ${
                               isActive
-                                ? 'bg-gradient-to-r from-purple-50 via-fuchsia-50/60 to-amber-50/40 text-zinc-900 border-2 border-purple-500 shadow-[0_4px_15px_rgba(168,85,247,0.15)]'
+                                ? 'bg-accent-soft text-stone-900 border-2 border-accent '
                                 : isVisible
-                                ? 'bg-slate-50/90 border border-purple-200 hover:border-purple-400 hover:shadow-xs'
-                                : 'bg-white border border-zinc-200 hover:border-purple-300 hover:shadow-2xs'
+                                ? 'bg-stone-50/90 border border-accent/20 hover:border-accent hover:shadow-xs'
+                                : 'bg-white border border-stone-200 hover:border-accent/20 hover:shadow-2xs'
                             } rounded-xl`}
                           >
                             {/* Ligne Haute : Poignée + Titre complet + Résumé complet sans truncate */}
                             <div className="flex items-start gap-2.5">
                               <span title="Glisser pour réordonner" className="shrink-0 cursor-grab active:cursor-grabbing mt-0.5">
-                                <GripVertical size={14} className={isActive ? 'text-purple-600' : 'text-zinc-400'} />
+                                <GripVertical size={14} className={isActive ? 'text-accent' : 'text-stone-500'} />
                               </span>
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-extrabold leading-snug break-words ${isActive ? 'text-purple-900 font-extrabold' : 'text-zinc-900'}`}>
+                                <p className={`text-sm font-semibold leading-snug break-words ${isActive ? 'text-accent font-semibold' : 'text-stone-900'}`}>
                                   {SECTION_LABELS[section.type] ?? section.type}
                                 </p>
-                                <p className={`text-xs font-medium leading-relaxed mt-1 break-words ${isActive ? 'text-purple-800/80' : 'text-zinc-600'}`}>
+                                <p className={`text-xs font-medium leading-relaxed mt-1 break-words ${isActive ? 'text-accent' : 'text-stone-700'}`}>
                                   {sectionSummary(section) || WIREFRAME_REGISTRY[section.type]?.description}
                                 </p>
                               </div>
@@ -814,20 +844,20 @@ export default function PageBuilderClient() {
 
                             {/* Ligne Basse DÉDIÉE : Boutons d'actions et numéro à la ligne */}
                             <div
-                              className="mt-2.5 pt-2 border-t border-stone-200/80 flex items-center justify-between select-none"
+                              className="mt-2.5 pt-2 border-t border-stone-200 flex items-center justify-between select-none"
                               onClick={e => e.stopPropagation()}
                             >
-                              <span className="text-[11px] font-mono font-bold text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded">
+                              <span className="text-[11px] font-mono font-semibold text-stone-700 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded">
                                 #{i + 1} {section.type}
                               </span>
 
                               <div className="flex items-center gap-1">
                                 <button type="button" title="Monter" onClick={e => { e.stopPropagation(); move(i, -1); }} disabled={i === 0}
-                                  className="p-1 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-md disabled:opacity-20 transition-all cursor-pointer">
+                                  className="p-1 text-stone-700 hover:text-stone-900 hover:bg-stone-200 rounded-md disabled:opacity-20 transition-all cursor-pointer">
                                   <ChevronUp size={13} />
                                 </button>
                                 <button type="button" title="Descendre" onClick={e => { e.stopPropagation(); move(i, 1); }} disabled={i === sections.length - 1}
-                                  className="p-1 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-md disabled:opacity-20 transition-all cursor-pointer">
+                                  className="p-1 text-stone-700 hover:text-stone-900 hover:bg-stone-200 rounded-md disabled:opacity-20 transition-all cursor-pointer">
                                   <ChevronDown size={13} />
                                 </button>
                                 <button type="button" title="Changer de variante" onClick={e => { e.stopPropagation(); selectSection(i); setEditorOpen(true); }}
@@ -835,7 +865,7 @@ export default function PageBuilderClient() {
                                   <RefreshCw size={12} />
                                 </button>
                                 <button type="button" title="Dupliquer" onClick={e => { e.stopPropagation(); duplicate(i); setActiveSection(i + 1); }}
-                                  className="p-1 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-md transition-all cursor-pointer">
+                                  className="p-1 text-stone-700 hover:text-stone-900 hover:bg-stone-200 rounded-md transition-all cursor-pointer">
                                   <Copy size={12} />
                                 </button>
                                 <button type="button" title="Supprimer" onClick={e => { e.stopPropagation(); handleRemoveSection(i); }}
@@ -854,27 +884,27 @@ export default function PageBuilderClient() {
               </div>
 
               {/* Ajouter une section */}
-              <div className="border-t border-stone-100 shrink-0 bg-white">
+              <div className="border-t border-stone-200 shrink-0 bg-white">
 
                 <button
                   type="button"
                   onClick={() => setTemplatePickerOpen(true)}
-                  className="w-full flex items-center gap-2 border-b border-stone-100 px-4 py-3 text-xs font-semibold text-stone-500 transition-all hover:bg-stone-50 hover:text-stone-800 cursor-pointer"
+                  className="w-full flex items-center gap-2 border-b border-stone-200 px-4 py-3 text-xs font-semibold text-stone-600 transition-all hover:bg-stone-50 hover:text-stone-800 cursor-pointer"
                 >
-                  <LayoutTemplate size={13} className="text-sage" />
+                  <LayoutTemplate size={13} className="text-accent" />
                   Partir d&apos;une structure
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setLibraryOpen(true)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-sm text-stone-500 hover:text-stone-800 hover:bg-stone-50 transition-all cursor-pointer"
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm text-stone-600 hover:text-stone-800 hover:bg-stone-50 transition-all cursor-pointer"
                 >
                   <span className="flex items-center gap-2 text-xs font-semibold">
-                    <Plus size={13} className="text-sage" />
+                    <Plus size={13} className="text-accent" />
                     {activeSection !== null ? `Insérer après la section ${activeSection + 1}` : 'Ajouter une section'}
                   </span>
-                  <ChevronRight size={13} className="text-stone-500" />
+                  <ChevronRight size={13} className="text-stone-600" />
                 </button>
 
               </div>
@@ -884,15 +914,15 @@ export default function PageBuilderClient() {
               {/* Génération IA SEO */}
               <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-3 bg-stone-50/50">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={13} className="text-sage" />
-                  <p className="text-[12px] font-bold text-stone-500">Optimisation SEO par IA</p>
+                  <Sparkles size={13} className="text-accent" />
+                  <p className="text-[12px] font-semibold text-stone-600">Optimisation SEO par IA</p>
                 </div>
                 
                 <button
                   type="button"
                   onClick={generateSeoMeta}
                   disabled={genMetaStatus === 'generating' || sections.length === 0}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-sage to-wood hover:opacity-95 text-white py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40 shadow-sm cursor-pointer"
+                  className="bg-accent hover:bg-accent-hover w-full flex items-center justify-center gap-2 hover:opacity-95 text-accent-fg py-2.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 shadow-sm cursor-pointer"
                 >
                   {genMetaStatus === 'generating' ? (
                     <><Loader2 size={12} className="animate-spin" /> Génération…</>
@@ -909,7 +939,7 @@ export default function PageBuilderClient() {
                   </p>
                 )}
                 
-                <p className="text-[12px] text-stone-500 font-light leading-relaxed">
+                <p className="text-[12px] text-stone-600 font-light leading-relaxed">
                   L'IA analysera le contenu des sections de votre page pour générer des balises optimisées.
                 </p>
               </div>
@@ -918,7 +948,7 @@ export default function PageBuilderClient() {
               <div className="space-y-1">
                 <div className="flex justify-between text-[12px]">
                   <label className="text-[13px] font-medium text-stone-800">Meta Title</label>
-                  <span className={seoTitle.length > 60 ? 'text-orange-600' : 'text-stone-600'}>{seoTitle.length}/60</span>
+                  <span className={seoTitle.length > 60 ? 'text-amber-600' : 'text-stone-700'}>{seoTitle.length}/60</span>
                 </div>
                 <input
                   type="text"
@@ -933,7 +963,7 @@ export default function PageBuilderClient() {
               <div className="space-y-1">
                 <div className="flex justify-between text-[12px]">
                   <label className="text-[13px] font-medium text-stone-800">Meta Description</label>
-                  <span className={seoDescription.length > 160 ? 'text-orange-600' : 'text-stone-600'}>{seoDescription.length}/160</span>
+                  <span className={seoDescription.length > 160 ? 'text-amber-600' : 'text-stone-700'}>{seoDescription.length}/160</span>
                 </div>
                 <textarea
                   rows={4}
@@ -948,7 +978,7 @@ export default function PageBuilderClient() {
               <div className="space-y-1">
                 <div className="flex justify-between text-[12px]">
                   <label className="text-[13px] font-medium text-stone-800">OG Title</label>
-                  <span className="text-stone-500">{seoOgTitle.length}</span>
+                  <span className="text-stone-600">{seoOgTitle.length}</span>
                 </div>
                 <input
                   type="text"
@@ -963,7 +993,7 @@ export default function PageBuilderClient() {
               <div className="space-y-1">
                 <div className="flex justify-between text-[12px]">
                   <label className="text-[13px] font-medium text-stone-800">OG Description</label>
-                  <span className="text-stone-500">{seoOgDescription.length}</span>
+                  <span className="text-stone-600">{seoOgDescription.length}</span>
                 </div>
                 <textarea
                   rows={3}
@@ -993,7 +1023,7 @@ export default function PageBuilderClient() {
                   <button
                     type="button"
                     onClick={() => setMediaPickerOpen(true)}
-                    className="px-3 bg-stone-100 hover:bg-sage hover:text-white rounded-xl text-xs text-stone-600 transition-colors"
+                    className="px-3 bg-stone-100 hover:bg-accent hover:text-white rounded-lg text-[14px] text-stone-700 transition-colors"
                   >
                     📁
                   </button>
@@ -1018,12 +1048,12 @@ export default function PageBuilderClient() {
         {/* ── Zone de prévisualisation ─────────────────────────────── */}
         <div ref={previewRef} className="flex-1 overflow-y-auto bg-white">
           {sections.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-stone-500 select-none">
-              <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center mb-5">
-                <Sparkles size={28} className="text-stone-500" />
+            <div className="flex flex-col items-center justify-center h-full text-stone-600 select-none">
+              <div className="w-16 h-16 rounded-xl bg-stone-100 flex items-center justify-center mb-5">
+                <Sparkles size={28} className="text-stone-600" />
               </div>
-              <p className="text-xl font-light text-stone-500 mb-2">Votre page apparaîtra ici</p>
-              <p className="text-sm text-stone-600">Utilisez le panneau gauche pour composer</p>
+              <p className="text-xl font-light text-stone-600 mb-2">Votre page apparaîtra ici</p>
+              <p className="text-sm text-stone-700">Utilisez le panneau gauche pour composer</p>
             </div>
           ) : (
             <>
@@ -1049,8 +1079,8 @@ export default function PageBuilderClient() {
                           aria-pressed={viewport === v}
                           className={`rounded px-2 py-0.5 text-[12px] font-medium transition-colors cursor-pointer ${
                             viewport === v
-                              ? 'bg-stone-900 text-white'
-                              : 'text-stone-600 hover:bg-stone-200'
+                              ? 'bg-accent text-accent-fg'
+                              : 'text-stone-700 hover:bg-stone-200'
                           }`}
                         >
                           {VIEWPORTS[v].short}

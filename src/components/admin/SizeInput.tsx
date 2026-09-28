@@ -73,7 +73,7 @@ export default function SizeInput({
       disabled={!parsed}
       aria-label={ariaLabel ? `${ariaLabel} — ${label}` : label}
       title={parsed ? label : 'Valeur non numérique : à modifier à la main.'}
-      className="grid h-[18px] w-6 place-items-center text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900
+      className="grid h-[18px] w-6 place-items-center text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900
         disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-default
         focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
     >
@@ -99,7 +99,7 @@ export default function SizeInput({
           if (e.key === 'ArrowUp') { e.preventDefault(); bump(1); }
           if (e.key === 'ArrowDown') { e.preventDefault(); bump(-1); }
         }}
-        className="min-w-0 flex-1 bg-transparent px-3 font-mono text-[13px] text-stone-900 placeholder:font-sans placeholder:text-stone-400 focus:outline-none"
+        className="min-w-0 flex-1 bg-transparent px-3 font-mono text-[13px] text-stone-900 placeholder:font-sans placeholder:text-stone-500 focus:outline-none"
       />
       <span className="flex flex-col border-l border-stone-200">
         {button(1, Plus, 'augmenter')}

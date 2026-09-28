@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Check, Sparkles, X } from 'lucide-react';
+import {
+  Check, Sparkles, X,
+} from 'lucide-react';
 import {
   fetchEditorialSettings,
   saveEditorialSettings,
@@ -37,57 +39,63 @@ export default function EditorialBriefModal({
     site_blog_topics: '',
   });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Tant que le brief n'a pas été lu, l'enregistrer écraserait l'existant par des champs vides.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
       setMessage(null);
-      fetchEditorialSettings().then((data) => {
-        setForm(data);
-        setLoading(false);
-      });
+      setLoadFailed(false);
+      fetchEditorialSettings()
+        .then((data) => setForm(data))
+        .catch(() => { setLoadFailed(true); setMessage({ type: 'error', text: 'Le brief n’a pas pu être chargé. Fermez puis rouvrez cette fenêtre.' }); })
+        .finally(() => setLoading(false));
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
   async function handleSave() {
+    if (loadFailed || loading) return;
     setSaving(true);
     setMessage(null);
     const res = await saveEditorialSettings(form);
     setSaving(false);
 
     if (res.success) {
-      setMessage({ type: 'success', text: 'Brief Éditorial enregistré. Re-synchronisation du savoir...' });
+      setMessage({ type: 'success', text: 'Brief enregistré. L’agent relit maintenant le site…' });
       setTimeout(() => {
         onSaved();
         onClose();
       }, 700);
     } else {
-      setMessage({ type: 'error', text: res.error || 'Erreur lors de l’enregistrement.' });
+      setMessage({ type: 'error', text: `Le brief n’a pas été enregistré${res.error ? ` (${res.error})` : ''}. Réessayez.` });
     }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-xs transition-opacity animate-in fade-in">
-      <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-label="Brief éditorial" className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-amber-200 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 px-6 py-4 text-white">
+        <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-white shadow-xs">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-100 text-stone-700">
               <Sparkles size={20} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Brief Éditorial & Identité de Marque</h2>
-              <p className="text-[12px] text-amber-100">
-                La boussole de marque qui apprend à votre Super Agent votre ton, vos valeurs et votre métier.
+              <h2 className="text-[18px] font-semibold text-stone-950">Brief éditorial</h2>
+              <p className="text-[13px] text-stone-600">
+                Votre activité, votre clientèle et votre ton : l’agent s’en sert pour répondre comme vous le feriez.
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
+            disabled={saving}
             aria-label="Fermer"
-            className="rounded-lg p-1.5 text-amber-100 hover:bg-white/10 hover:text-white cursor-pointer"
+            className="rounded-lg p-1.5 text-stone-600 hover:bg-stone-100 hover:text-stone-900 cursor-pointer disabled:opacity-45"
           >
             <X size={18} />
           </button>
@@ -104,42 +112,42 @@ export default function EditorialBriefModal({
           ) : (
             <div className="space-y-4">
               <Field
-                label="1. Périmètre & Activité"
+                label="Votre activité"
                 htmlFor="brief-activity"
-                hint="Présentez votre entreprise, votre métier et ce que vous proposez précisément."
+                hint="Votre métier et ce que vous proposez, en quelques phrases."
               >
                 <Textarea
                   id="brief-activity"
                   rows={3}
                   value={form.site_activity_context}
                   onChange={(e) => setForm({ ...form, site_activity_context: e.target.value })}
-                  placeholder="Ex: Studio spécialisé dans la création de sites web haute performance pour PME et indépendants..."
+                  placeholder="Ex. Institut de beauté à domicile : soins du visage, Head Spa, massages relaxants…"
                 />
               </Field>
 
               <Field
-                label="2. Clientèle Cible & Persona"
+                label="Votre clientèle"
                 htmlFor="brief-persona"
-                hint="Qui s'adresse à vous ? Quels sont leurs besoins et leurs attentes principales ?"
+                hint="Qui vient vous voir, et ce que ces personnes attendent."
               >
                 <Textarea
                   id="brief-persona"
                   rows={3}
                   value={form.site_target_persona}
                   onChange={(e) => setForm({ ...form, site_target_persona: e.target.value })}
-                  placeholder="Ex: Entrepreneurs, artisans et dirigeants de TPE/PME qui souhaitent une image professionnelle..."
+                  placeholder="Ex. Femmes de la région qui cherchent un moment de détente sans se déplacer…"
                 />
               </Field>
 
               <Field
-                label="3. Formule d'adresse (Tutoiement / Vouvoiement)"
+                label="Tutoiement ou vouvoiement"
                 hint="Définit comment l'agent, le blog et les rédacteurs s'adressent à vos visiteurs sur l'ensemble du site."
               >
                 <div className="grid gap-3 sm:grid-cols-2 pt-1">
                   <label
                     className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
                       (form.site_address_mode || 'vouvoiement') === 'vouvoiement'
-                        ? 'border-amber-500 bg-amber-50/80 text-amber-950 font-bold ring-2 ring-amber-400/30'
+                        ? 'border-accent bg-accent-soft text-stone-900'
                         : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                     }`}
                   >
@@ -149,18 +157,18 @@ export default function EditorialBriefModal({
                       value="vouvoiement"
                       checked={(form.site_address_mode || 'vouvoiement') === 'vouvoiement'}
                       onChange={() => setForm({ ...form, site_address_mode: 'vouvoiement' })}
-                      className="text-amber-600 focus:ring-amber-500"
+                      className="accent-[var(--color-accent)]"
                     />
                     <div>
-                      <p className="text-sm font-bold">Vouvoiement ("Vous")</p>
-                      <p className="text-[11px] font-normal text-stone-600">Style professionnel, courtois et respectueux.</p>
+                      <p className="text-sm font-semibold">Vouvoiement</p>
+                      <p className="text-[13px] font-normal text-stone-600">Courtois et professionnel.</p>
                     </div>
                   </label>
 
                   <label
                     className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
                       form.site_address_mode === 'tutoiement'
-                        ? 'border-amber-500 bg-amber-50/80 text-amber-950 font-bold ring-2 ring-amber-400/30'
+                        ? 'border-accent bg-accent-soft text-stone-900'
                         : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                     }`}
                   >
@@ -170,53 +178,53 @@ export default function EditorialBriefModal({
                       value="tutoiement"
                       checked={form.site_address_mode === 'tutoiement'}
                       onChange={() => setForm({ ...form, site_address_mode: 'tutoiement' })}
-                      className="text-amber-600 focus:ring-amber-500"
+                      className="accent-[var(--color-accent)]"
                     />
                     <div>
-                      <p className="text-sm font-bold">Tutoiement ("Tu")</p>
-                      <p className="text-[11px] font-normal text-stone-600">Style proche, dynamique et décontracté.</p>
+                      <p className="text-sm font-semibold">Tutoiement</p>
+                      <p className="text-[13px] font-normal text-stone-600">Proche et décontracté.</p>
                     </div>
                   </label>
                 </div>
               </Field>
 
               <Field
-                label="4. Ton de Voix & Style"
+                label="Ton"
                 htmlFor="brief-tone"
-                hint="Comment s'exprime la marque ? (Ex: Chaleureux, direct, professionnel, sans jargon)"
+                hint="Comment vous parlez à vos clientes. Ex. chaleureux, simple, sans jargon."
               >
                 <Input
                   id="brief-tone"
                   value={form.site_tone_of_voice}
                   onChange={(e) => setForm({ ...form, site_tone_of_voice: e.target.value })}
-                  placeholder="Conversationnel, direct et accessible."
+                  placeholder="Chaleureux, simple et rassurant."
                 />
               </Field>
 
               <Field
-                label="4. Charte de Marque & Promesses"
+                label="Vos valeurs et engagements"
                 htmlFor="brief-brand"
-                hint="Vos valeurs fondamentales, vos promesses clés et les principes à toujours respecter."
+                hint="Ce à quoi vous tenez, et ce que l’agent doit toujours respecter."
               >
                 <Textarea
                   id="brief-brand"
                   rows={3}
                   value={form.site_brand_tone}
                   onChange={(e) => setForm({ ...form, site_brand_tone: e.target.value })}
-                  placeholder="Ex: Réactivité, transparence totale sur les tarifs, qualité artisanale."
+                  placeholder="Ex. Produits naturels, tarifs clairs, écoute."
                 />
               </Field>
 
               <Field
-                label="5. Thématiques & Domaines d'Expertise"
+                label="Sujets que vous maîtrisez"
                 htmlFor="brief-topics"
-                hint="Les grands sujets sur lesquels votre entreprise fait autorité."
+                hint="Les thèmes sur lesquels l’agent peut répondre avec assurance."
               >
                 <Input
                   id="brief-topics"
                   value={form.site_blog_topics}
                   onChange={(e) => setForm({ ...form, site_blog_topics: e.target.value })}
-                  placeholder="Ex: Stratégie digitale, UX design, automatisation, référencement SEO."
+                  placeholder="Ex. Soins du visage, routine beauté, bien-être."
                 />
               </Field>
             </div>
@@ -224,16 +232,16 @@ export default function EditorialBriefModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-stone-100 bg-stone-50/50 px-6 py-4">
-          <p className="text-[12px] text-stone-600">
-            L'enregistrement réindexera la base de savoirs de l'agent.
+        <div className="flex items-center justify-between border-t border-stone-200 bg-stone-50/50 px-6 py-4">
+          <p className="text-[13px] text-stone-600">
+            Ces réglages servent aussi à la rédaction des articles.
           </p>
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={onClose} disabled={saving}>
               Annuler
             </Button>
-            <Button variant="primary" icon={Check} loading={saving} onClick={() => void handleSave()}>
-              Enregistrer & Synchroniser
+            <Button variant="primary" icon={Check} loading={saving} disabled={loading || loadFailed} onClick={() => void handleSave()}>
+              Enregistrer
             </Button>
           </div>
         </div>

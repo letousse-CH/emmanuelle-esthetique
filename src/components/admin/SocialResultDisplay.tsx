@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Loader2, Download, Instagram, Linkedin, Facebook, Send, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Loader2, Download, Instagram, Linkedin, Facebook, Send, Check } from 'lucide-react';
+import { supabase } from '../../services/supabase';
 import {
   renderCarouselSlide, renderHookCard, downloadCanvas, downloadImageFromUrl,
   FORMAT_LABELS, BrandTokens, SocialCardFormat,
@@ -31,21 +32,30 @@ export function deriveVisual(visual: SocialVisual | undefined, fallback: string)
 }
 
 export function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const copy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setState('copied');
+    } catch {
+      // Presse-papiers refusé (navigateur ou autorisation) : on le dit au lieu de ne rien faire.
+      setState('failed');
+    }
+    setTimeout(() => setState('idle'), 2500);
   };
   return (
     <button
       type="button"
       onClick={copy}
-      className={`inline-flex h-8 items-center rounded-lg border px-3 text-[13px] font-medium transition-colors cursor-pointer ${
-        copied ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+      aria-live="polite"
+      title={state === 'failed' ? 'Sélectionnez le texte et copiez-le à la main (Ctrl+C ou Cmd+C).' : undefined}
+      className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold transition-colors cursor-pointer ${
+        state === 'copied' ? 'bg-emerald-50 text-emerald-800'
+        : state === 'failed' ? 'bg-red-50 text-red-800'
+        : 'bg-stone-100 text-stone-900 hover:bg-stone-200'
       }`}
     >
-      {copied ? '✓ Copié' : 'Copier'}
+      {state === 'copied' ? <><Check size={14} /> Copié</> : state === 'failed' ? 'Copie impossible' : 'Copier'}
     </button>
   );
 }
@@ -70,23 +80,30 @@ export function DirectPublishButton({
   const [publishing, setPublishing] = useState(false);
   const [status, setStatus] = useState<{ success?: boolean; message?: string } | null>(null);
 
+  const label = PLATFORMS.find((p) => p.id === platform)?.label ?? platform;
+
   const handlePublish = async () => {
+    // Une publication sur un réseau est visible tout de suite par vos abonnés :
+    // on demande confirmation avant d'envoyer.
+    if (!window.confirm(`Publier maintenant ce post sur ${label} ? Il sera visible immédiatement par vos abonnés.`)) return;
     setPublishing(true);
     setStatus(null);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
       const res = await fetch('/api/admin/social-publish', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ platform, title, caption, imageUrl }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
-        setStatus({ success: true, message: data.result?.message || 'Publication postée en direct avec succès !' });
+        setStatus({ success: true, message: data.result?.message || `Post publié sur ${label}.` });
       } else {
-        setStatus({ success: false, message: data.error || 'Erreur lors de la publication' });
+        setStatus({ success: false, message: `La publication sur ${label} a échoué${data.error ? ` : ${data.error}` : '.'} Vérifiez que le compte est bien connecté dans les Paramètres.` });
       }
-    } catch (e: any) {
-      setStatus({ success: false, message: e.message || 'Erreur réseau' });
+    } catch {
+      setStatus({ success: false, message: 'La publication a échoué : la connexion a été interrompue. Réessayez.' });
     } finally {
       setPublishing(false);
     }
@@ -98,14 +115,14 @@ export function DirectPublishButton({
         type="button"
         onClick={handlePublish}
         disabled={publishing}
-        className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs sm:text-sm font-black shadow-lg shadow-emerald-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+        className="bg-accent hover:bg-accent-hover flex items-center gap-2 px-4 h-10 text-accent-fg rounded-lg text-[14px] font-semibold transition-colors cursor-pointer disabled:opacity-45 whitespace-nowrap"
       >
         {publishing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-        <span>{publishing ? 'Publication en direct…' : '🚀 Poster la publication en direct'}</span>
+        <span>{publishing ? 'Publication…' : `Publier sur ${label}`}</span>
       </button>
 
       {status && (
-        <div className={`p-2.5 rounded-xl text-xs font-bold border ${status.success ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+        <div role={status.success ? 'status' : 'alert'} className={`p-2.5 rounded-lg text-[13px] border ${status.success ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
           {status.message}
         </div>
       )}
@@ -136,14 +153,16 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
   return (
     <div className="space-y-6">
       {/* Onglets plateforme */}
-      <div className="flex gap-2 border-b border-stone-100 pb-px">
+      <div role="tablist" aria-label="Réseau" className="flex gap-1 border-b border-stone-200 overflow-x-auto">
         {PLATFORMS.map((p) => (
           <button
             key={p.id}
             type="button"
+            role="tab"
+            aria-selected={platform === p.id}
             onClick={() => setPlatform(p.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-t-xl transition-all cursor-pointer ${
-              platform === p.id ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-500' : 'text-stone-500 hover:text-stone-700'
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px whitespace-nowrap transition-colors cursor-pointer ${
+              platform === p.id ? 'border-accent text-stone-950' : 'border-transparent text-stone-700 hover:text-stone-950'
             }`}
           >
             <p.icon size={14} /> {p.label}
@@ -154,10 +173,10 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
       {/* ── Instagram ────────────────────────────────────── */}
       {platform === 'instagram' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4">
-            <div>
-              <h4 className="text-sm font-bold text-stone-900">Publication Instagram Directe</h4>
-              <p className="text-xs text-stone-600">Publiez directement le visuel et la légende sur votre compte connecté.</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-stone-50 border border-stone-200 rounded-xl p-4">
+            <div className="min-w-0">
+              <h4 className="text-[15px] font-semibold text-stone-900">Publier directement sur Instagram</h4>
+              <p className="text-[13px] text-stone-700">La photo de couverture et la légende partent sur votre compte connecté.</p>
             </div>
             <DirectPublishButton
               platform="instagram"
@@ -170,15 +189,15 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
           <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-[13px] font-medium text-stone-800">
-                Visuels du carrousel ({result.instagram.slides.length} slides)
+                Images du carrousel ({result.instagram.slides.length})
               </p>
               <button
                 type="button"
                 onClick={downloadAllSlides}
                 disabled={downloadingAll}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[13px] font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-stone-100 px-3 text-[13px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 disabled:opacity-45 cursor-pointer"
               >
-                {downloadingAll ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                {downloadingAll ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                 Tout télécharger
               </button>
             </div>
@@ -201,22 +220,22 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
               <p className="text-[13px] font-medium text-stone-800">Légende Instagram</p>
               <CopyButton text={`${result.instagram.caption.hook}\n\n${result.instagram.caption.body}\n\n${result.instagram.caption.cta}\n\n${result.instagram.caption.hashtags}`} />
             </div>
-            <div className="bg-stone-50 rounded-xl border border-stone-100 divide-y divide-stone-100">
+            <div className="bg-stone-50 rounded-xl border border-stone-200 divide-y divide-stone-200">
               <div className="p-4">
-                <span className="block text-[13px] font-medium text-purple-800 mb-1.5">Hook</span>
+                <span className="block text-[13px] font-semibold text-stone-800 mb-1.5">Accroche</span>
                 <p className="text-stone-900 font-medium text-sm">{result.instagram.caption.hook}</p>
               </div>
               <div className="p-4">
-                <span className="block text-[12.5px] font-medium text-stone-700 mb-1.5">Corps</span>
+                <span className="block text-[13px] font-semibold text-stone-800 mb-1.5">Texte</span>
                 <p className="text-stone-700 text-sm leading-relaxed whitespace-pre-line">{result.instagram.caption.body}</p>
               </div>
               <div className="p-4">
-                <span className="block text-[13px] font-medium text-indigo-800 mb-1.5">Call-to-action</span>
+                <span className="block text-[13px] font-semibold text-stone-800 mb-1.5">Invitation finale</span>
                 <p className="text-stone-700 text-sm">{result.instagram.caption.cta}</p>
               </div>
               <div className="p-4">
-                <span className="block text-[12.5px] font-medium text-stone-700 mb-1.5"># Hashtags</span>
-                <p className="text-indigo-600 text-sm font-mono leading-relaxed">{result.instagram.caption.hashtags}</p>
+                <span className="block text-[13px] font-semibold text-stone-800 mb-1.5">Hashtags</span>
+                <p className="text-stone-700 text-sm leading-relaxed">{result.instagram.caption.hashtags}</p>
               </div>
             </div>
           </div>
@@ -226,10 +245,10 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
       {/* ── LinkedIn ─────────────────────────────────────── */}
       {platform === 'linkedin' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4">
-            <div>
-              <h4 className="text-sm font-bold text-stone-900">Publication LinkedIn Directe</h4>
-              <p className="text-xs text-stone-600">Publiez immédiatement ce post sur votre profil ou page entreprise LinkedIn.</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-stone-50 border border-stone-200 rounded-xl p-4">
+            <div className="min-w-0">
+              <h4 className="text-[15px] font-semibold text-stone-900">Publier directement sur LinkedIn</h4>
+              <p className="text-[13px] text-stone-700">Le post part sur votre profil ou votre page LinkedIn connectée.</p>
             </div>
             <DirectPublishButton
               platform="linkedin"
@@ -247,11 +266,11 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
           />
 
           <div>
-            <p className="text-[13px] font-medium text-stone-800 mb-3">Variantes d'accroche (1ère ligne)</p>
+            <p className="text-[13px] font-medium text-stone-800 mb-3">Autres premières lignes possibles</p>
             <div className="space-y-2">
               {result.linkedin.hook_variants.map((hook, i) => (
-                <div key={i} className="flex items-start gap-3 bg-stone-50 rounded-xl border border-stone-100 p-3">
-                  <span className="text-xs font-bold text-stone-500 mt-0.5">{i + 1}</span>
+                <div key={i} className="flex items-start gap-3 bg-stone-50 rounded-xl border border-stone-200 p-3">
+                  <span className="text-[13px] font-semibold text-stone-600 mt-0.5">{i + 1}</span>
                   <p className="flex-1 text-sm text-stone-700">{hook}</p>
                   <CopyButton text={hook} />
                 </div>
@@ -264,10 +283,10 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
               <p className="text-[13px] font-medium text-stone-800">Post complet</p>
               <CopyButton text={result.linkedin.hashtags ? `${result.linkedin.post}\n\n${result.linkedin.hashtags}` : result.linkedin.post} />
             </div>
-            <div className="bg-stone-50 rounded-xl border border-stone-100 p-5">
+            <div className="bg-stone-50 rounded-xl border border-stone-200 p-5">
               <p className="text-stone-800 text-sm leading-relaxed whitespace-pre-line">{result.linkedin.post}</p>
               {result.linkedin.hashtags && (
-                <p className="text-indigo-600 text-sm font-mono mt-3">{result.linkedin.hashtags}</p>
+                <p className="text-stone-700 text-sm mt-3">{result.linkedin.hashtags}</p>
               )}
             </div>
           </div>
@@ -279,10 +298,10 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
       {/* ── Facebook ─────────────────────────────────────── */}
       {platform === 'facebook' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4">
-            <div>
-              <h4 className="text-sm font-bold text-stone-900">Publication Facebook Directe</h4>
-              <p className="text-xs text-stone-600">Publiez directement le post sur votre page Facebook connectée.</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-stone-50 border border-stone-200 rounded-xl p-4">
+            <div className="min-w-0">
+              <h4 className="text-[15px] font-semibold text-stone-900">Publier directement sur Facebook</h4>
+              <p className="text-[13px] text-stone-700">Le post part sur votre page Facebook connectée.</p>
             </div>
             <DirectPublishButton
               platform="facebook"
@@ -304,7 +323,7 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
               <p className="text-[13px] font-medium text-stone-800">Post Facebook</p>
               <CopyButton text={result.facebook.post} />
             </div>
-            <div className="bg-stone-50 rounded-xl border border-stone-100 p-5">
+            <div className="bg-stone-50 rounded-xl border border-stone-200 p-5">
               <p className="text-stone-800 text-sm leading-relaxed whitespace-pre-line">{result.facebook.post}</p>
             </div>
           </div>
@@ -317,9 +336,9 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
         <button
           type="button"
           onClick={onRegenerate}
-          className="text-[12.5px] text-stone-500 hover:text-stone-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="text-[13px] font-semibold text-stone-800 hover:text-stone-950 flex items-center gap-1.5 transition-colors cursor-pointer"
         >
-          <Sparkles size={12} /> Régénérer
+          <Sparkles size={14} /> Proposer une autre version
         </button>
       )}
     </div>
@@ -345,19 +364,19 @@ function SlideCard({ slide, total, dark, brand, registerCanvas }: {
   }, [slide.text, slide.highlight, slide.number, total, dark, brand.accent, brand.dark, brand.headingFont, brand.bodyFont]);
 
   return (
-    <div className="bg-stone-50 rounded-xl border border-stone-100 overflow-hidden">
+    <div className="bg-stone-50 rounded-xl border border-stone-200 overflow-hidden">
       <canvas ref={canvasRef} className="w-full aspect-[4/5] block bg-stone-200" />
       <div className="p-2.5 flex items-center justify-between gap-2">
-        <p className="text-[11px] text-stone-500 leading-snug line-clamp-2 flex-1">{slide.text}</p>
+        <p className="text-[13px] text-stone-700 leading-snug line-clamp-2 flex-1">{slide.text}</p>
         <button
           type="button"
           disabled={!ready}
           onClick={() => canvasRef.current && downloadCanvas(canvasRef.current, `slide-${String(slide.number).padStart(2, '0')}.png`)}
-          className="shrink-0 p-1.5 text-stone-500 hover:text-stone-900 hover:bg-sage/10 rounded-lg transition-colors disabled:opacity-30 cursor-pointer"
-          title="Télécharger ce visuel"
-          aria-label={`Télécharger la slide ${slide.number}`}
+          className="shrink-0 p-1.5 text-stone-700 hover:text-stone-950 hover:bg-stone-200 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
+          title="Télécharger cette image"
+          aria-label={`Télécharger l'image ${slide.number}`}
         >
-          <Download size={13} />
+          <Download size={15} />
         </button>
       </div>
     </div>
@@ -404,16 +423,16 @@ function HookCardBlock({ format, text, highlight, brand, filename }: {
           type="button"
           disabled={!ready}
           onClick={() => canvasRef.current && downloadCanvas(canvasRef.current, filename)}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[13px] font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-stone-100 px-3 text-[13px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 disabled:opacity-45 cursor-pointer"
         >
-          <Download size={12} /> Télécharger
+          <Download size={14} /> Télécharger
         </button>
       </div>
       <canvas
         ref={canvasRef}
         role="img"
         aria-label={`Visuel : ${text}`}
-        className={`w-full max-w-md ${FORMAT_ASPECT[format]} block rounded-xl border border-stone-100 bg-stone-200`}
+        className={`w-full max-w-md ${FORMAT_ASPECT[format]} block rounded-xl border border-stone-200 bg-stone-200`}
       />
     </div>
   );
@@ -433,12 +452,12 @@ function CoverImageBlock({ coverImage, label }: { coverImage?: string; label: st
         <button
           type="button"
           onClick={() => downloadImageFromUrl(coverImage, 'photo-couverture.jpg')}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold bg-stone-100 text-stone-500 hover:bg-stone-200 transition-colors cursor-pointer"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-stone-100 px-3 text-[13px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 disabled:opacity-45 cursor-pointer"
         >
-          <Download size={12} /> Télécharger
+          <Download size={14} /> Télécharger
         </button>
       </div>
-      <img src={coverImage} alt="Couverture de l'article" className="w-full max-w-sm aspect-video object-cover rounded-xl border border-stone-100" />
+      <img src={coverImage} alt="Couverture de l'article" className="w-full max-w-sm aspect-video object-cover rounded-xl border border-stone-200" />
     </div>
   );
 }

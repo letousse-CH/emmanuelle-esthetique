@@ -22,9 +22,9 @@ type PlatformLens = 'all' | SocialPlatformId;
 
 const PLATFORM_LENSES: { id: PlatformLens; label: string; icon: typeof Layers; color: string }[] = [
   { id: 'all',       label: 'Tous les réseaux', icon: Layers,    color: 'text-stone-700' },
-  { id: 'instagram', label: 'Instagram',        icon: Instagram, color: 'text-pink-600' },
-  { id: 'linkedin',  label: 'LinkedIn',         icon: Linkedin,  color: 'text-sky-600' },
-  { id: 'facebook',  label: 'Facebook',         icon: Facebook,  color: 'text-indigo-600' },
+  { id: 'instagram', label: 'Instagram',        icon: Instagram, color: 'text-accent' },
+  { id: 'linkedin',  label: 'LinkedIn',         icon: Linkedin,  color: 'text-accent' },
+  { id: 'facebook',  label: 'Facebook',         icon: Facebook,  color: 'text-accent' },
 ];
 
 const PLATFORM_FORMATS: Record<SocialPlatformId, SocialCardFormat> = {
@@ -65,10 +65,11 @@ interface SocialPostRow {
 type StatusFilter = 'all' | SocialPostRow['status'];
 
 const SOURCE_META: Record<string, { label: string; icon: typeof FileText; color: string }> = {
-  article:    { label: 'Article',    icon: FileText,  color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-  rss:        { label: 'Flux RSS',   icon: Rss,       color: 'text-orange-700 bg-orange-50 border-orange-200' },
-  suggestion: { label: 'Suggestion', icon: Lightbulb, color: 'text-amber-700 bg-amber-50 border-amber-200' },
-  manual:     { label: 'Création',   icon: PenLine,   color: 'text-indigo-700 bg-indigo-50 border-indigo-200' },
+  // Couleurs neutres : le vert et l'ambre sont réservés aux statuts (publié, à publier, en retard).
+  article:    { label: 'Article',    icon: FileText,  color: 'text-stone-700 bg-stone-100 border-stone-200' },
+  rss:        { label: 'Flux RSS',   icon: Rss,       color: 'text-stone-700 bg-stone-100 border-stone-200' },
+  suggestion: { label: 'Suggestion', icon: Lightbulb, color: 'text-stone-700 bg-stone-100 border-stone-200' },
+  manual:     { label: 'Création',   icon: PenLine,   color: 'text-stone-700 bg-stone-100 border-stone-200' },
 };
 const FALLBACK_SOURCE = { label: 'Post', icon: PenLine, color: 'text-stone-700 bg-stone-100 border-stone-200' };
 const sourceMeta = (type: string) => SOURCE_META[type] ?? FALLBACK_SOURCE;
@@ -76,7 +77,7 @@ const sourceMeta = (type: string) => SOURCE_META[type] ?? FALLBACK_SOURCE;
 const STATUS_META: Record<SocialPostRow['status'], { label: string; dot: string; chip: string }> = {
   ready:    { label: 'À publier', dot: 'bg-amber-400',  chip: 'text-amber-800 bg-amber-50 border-amber-200' },
   posted:   { label: 'Publié',    dot: 'bg-emerald-500', chip: 'text-emerald-800 bg-emerald-50 border-emerald-200' },
-  archived: { label: 'Archivé',   dot: 'bg-stone-300',  chip: 'text-stone-600 bg-stone-100 border-stone-200' },
+  archived: { label: 'Archivé',   dot: 'bg-stone-300',  chip: 'text-stone-700 bg-stone-100 border-stone-200' },
 };
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
@@ -125,7 +126,13 @@ export default function SocialCalendarClient() {
     return () => clearTimeout(timer);
   }, [flash]);
 
+  // Chaque chargement porte un numéro : une réponse arrivée après un changement
+  // de mois (ou un autre rechargement) est ignorée au lieu d'écraser la bonne.
+  const loadIdRef = React.useRef(0);
+  const [reloadKey, setReloadKey] = useState(0);
+
   const load = useCallback(async () => {
+    const loadId = ++loadIdRef.current;
     setLoading(true);
     setError(null);
     const query = view === 'calendar'
@@ -136,6 +143,7 @@ export default function SocialCalendarClient() {
           .order('planned_date', { ascending: false }).limit(200);
 
     const { data, error: queryError } = await query;
+    if (loadId !== loadIdRef.current) return;
     if (queryError) {
       setError(`Chargement impossible : ${queryError.message}`);
       setPosts([]);
@@ -145,7 +153,7 @@ export default function SocialCalendarClient() {
     setLoading(false);
   }, [view, monthStart, monthEnd]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, reloadKey]);
 
   const visiblePosts = useMemo(
     () => (statusFilter === 'all' ? posts : posts.filter((p) => p.status === statusFilter)),
@@ -214,11 +222,12 @@ export default function SocialCalendarClient() {
       return;
     }
     setFlash(`« ${post.title} » déplacé au ${DAY_LABEL.format(fromDateKey(newDate))}.`);
+    setError(null);
     if (view === 'calendar' && (newDate < monthStart || newDate > monthEnd)) load();
   };
 
   const deletePost = async (post: SocialPostRow) => {
-    if (!window.confirm(`Supprimer le post « ${post.title} » du calendrier ?`)) return;
+    if (!window.confirm(`Supprimer définitivement le post « ${post.title} » ? Le texte et les visuels générés seront perdus.`)) return;
     const snapshot = posts;
     setPosts((prev) => prev.filter((p) => p.id !== post.id));
     const { error: deleteError } = await supabase.from('social_posts').delete().eq('id', post.id);
@@ -271,9 +280,9 @@ export default function SocialCalendarClient() {
           onClose={() => setShowPlanDialog(false)}
           onCreated={(date) => {
             setShowPlanDialog(false);
-            setFlash(`Série créée — premier post planifié au ${DAY_LABEL.format(fromDateKey(date))}.`);
+            setFlash(`Série créée. Premier post planifié le ${DAY_LABEL.format(fromDateKey(date))}.`);
             goToDate(date);
-            load();
+            setReloadKey((k) => k + 1);
           }}
         />
       )}
@@ -285,67 +294,68 @@ export default function SocialCalendarClient() {
           onCreated={(date) => {
             setShowNewDialog(false);
             setNewPostDate(undefined);
-            setFlash(`Post créé et planifié au ${DAY_LABEL.format(fromDateKey(date))}.`);
+            setFlash(`Post créé et planifié le ${DAY_LABEL.format(fromDateKey(date))}.`);
             goToDate(date);
-            load();
+            setReloadKey((k) => k + 1);
           }}
         />
       )}
 
-      {/* ── Cartes Synthétiques & Statistiques Conviviales ────────────────── */}
+      {/* ── Chiffres clés ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-white border border-stone-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(28,25,23,0.04)] flex items-center gap-3">
+        <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-stone-100 text-stone-700 flex items-center justify-center shrink-0">
             <CalendarDays size={20} />
           </div>
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Posts ce mois</p>
-            <p className="text-xl font-bold text-stone-900">{counts.all}</p>
+            <p className="text-[13px] font-medium text-stone-700">{view === 'calendar' ? 'Posts ce mois' : 'Posts affichés'}</p>
+            <p className="text-xl font-semibold text-stone-900">{counts.all}</p>
           </div>
         </div>
 
-        <div className="bg-white border border-stone-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(28,25,23,0.04)] flex items-center gap-3">
+        <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
             <Clock size={20} />
           </div>
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">À publier</p>
-            <p className="text-xl font-bold text-amber-900">{counts.ready}</p>
+            <p className="text-[13px] font-medium text-stone-700">À publier</p>
+            <p className="text-xl font-semibold text-amber-900">{counts.ready}</p>
           </div>
         </div>
 
-        <div className="bg-white border border-stone-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(28,25,23,0.04)] flex items-center gap-3">
+        <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
             <CheckCircle2 size={20} />
           </div>
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Déjà publiés</p>
-            <p className="text-xl font-bold text-emerald-900">{counts.posted}</p>
+            <p className="text-[13px] font-medium text-stone-700">Déjà publiés</p>
+            <p className="text-xl font-semibold text-emerald-900">{counts.posted}</p>
           </div>
         </div>
 
-        <div className={`bg-white border rounded-xl p-4 shadow-[0_1px_2px_rgba(28,25,23,0.04)] flex items-center gap-3 ${lateCount > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-stone-200'}`}>
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${lateCount > 0 ? 'bg-amber-100 text-amber-800 font-bold' : 'bg-stone-100 text-stone-500'}`}>
+        <div className={`bg-white border rounded-xl p-4 flex items-center gap-3 ${lateCount > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-stone-200'}`}>
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${lateCount > 0 ? 'bg-amber-100 text-amber-800 font-semibold' : 'bg-stone-100 text-stone-600'}`}>
             <AlertCircle size={20} />
           </div>
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">En retard</p>
-            <p className={`text-xl font-bold ${lateCount > 0 ? 'text-amber-800' : 'text-stone-900'}`}>{lateCount}</p>
+            <p className="text-[13px] font-medium text-stone-700">En retard</p>
+            <p className={`text-xl font-semibold ${lateCount > 0 ? 'text-amber-800' : 'text-stone-900'}`}>{lateCount}</p>
           </div>
         </div>
       </div>
 
       {/* ── Barre d'outils Principale ───────────────────────────────────────── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white border border-stone-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white border border-stone-200 rounded-xl p-4 ">
         {/* Bascule Mode Calendrier vs Liste */}
         <div role="group" aria-label="Mode d'affichage" className="flex items-center gap-1 bg-stone-100 p-1 rounded-lg shrink-0">
-          {([['calendar', 'Vue Calendrier', CalendarDays], ['list', 'Vue Liste', List]] as const).map(([id, label, Icon]) => (
+          {([['calendar', 'Calendrier', CalendarDays], ['list', 'Liste', List]] as const).map(([id, label, Icon]) => (
             <button
               key={id}
+              type="button"
               aria-pressed={view === id}
               onClick={() => setView(id)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                view === id ? 'bg-stone-900 text-white shadow-xs' : 'text-stone-600 hover:text-stone-900'
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] font-semibold transition-colors cursor-pointer ${
+                view === id ? 'bg-white text-stone-950 shadow-xs' : 'text-stone-700 hover:text-stone-950'
               }`}
             >
               <Icon size={14} /> {label}
@@ -354,19 +364,20 @@ export default function SocialCalendarClient() {
         </div>
 
         {/* Filtres de statut */}
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div role="group" aria-label="Filtrer par statut" className="flex flex-wrap items-center gap-1.5">
           {STATUS_FILTERS.map(({ id, label }) => (
             <button
               key={id}
+              type="button"
               onClick={() => setStatusFilter(id)}
               aria-pressed={statusFilter === id}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${
                 statusFilter === id
-                  ? 'bg-stone-900 border-stone-900 text-white'
-                  : 'bg-white border-stone-200 text-stone-600 hover:border-stone-300 hover:bg-stone-50'
+                  ? 'bg-accent-soft border-accent/30 text-accent'
+                  : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300 hover:bg-stone-50'
               }`}
             >
-              {label} <span className="opacity-70 font-mono text-[11px]">({counts[id]})</span>
+              {label} <span className="font-normal tabular-nums">({counts[id]})</span>
             </button>
           ))}
         </div>
@@ -374,96 +385,102 @@ export default function SocialCalendarClient() {
         {/* Boutons d'action */}
         <div className="flex items-center gap-2 shrink-0">
           <button
+            type="button"
             onClick={() => setShowPlanDialog(true)}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white text-xs font-extrabold hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-[0_4px_14px_rgba(249,115,22,0.3)]"
+            className="bg-stone-100 hover:bg-stone-200 inline-flex items-center gap-2 px-4 h-10 rounded-lg text-stone-900 text-[14px] font-semibold transition-colors cursor-pointer"
           >
-            <Sparkles size={14} className="text-amber-200 animate-pulse" /> Planifier une série IA
+            <Sparkles size={15} /> Planifier une série
           </button>
           <button
+            type="button"
             onClick={() => handleOpenNewPost()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white text-xs font-extrabold hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-[0_4px_14px_rgba(168,85,247,0.3)]"
+            className="bg-accent hover:bg-accent-hover inline-flex items-center gap-2 px-4 h-10 rounded-lg text-accent-fg text-[14px] font-semibold transition-colors cursor-pointer"
           >
-            <Plus size={14} /> Nouveau post
+            <Plus size={15} /> Nouveau post
           </button>
         </div>
       </div>
 
       {/* Lentille par réseau social */}
-      <div className="flex items-center gap-2 bg-white p-3 rounded-2xl border border-zinc-200/90 shadow-2xs">
-        <span className="text-xs font-extrabold text-zinc-900 ml-1 mr-1">Filtre Réseau :</span>
-        <div role="group" aria-label="Plateforme affichée" className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-xl border border-stone-200">
+        <span className="text-[13px] font-semibold text-stone-900 ml-1 mr-1">Afficher l&apos;aperçu pour :</span>
+        <div role="group" aria-label="Réseau affiché" className="flex flex-wrap gap-1.5">
           {PLATFORM_LENSES.map(({ id, label, icon: Icon, color }) => (
             <button
               key={id}
+              type="button"
               aria-pressed={lens === id}
               onClick={() => setLens(id)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-extrabold border transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${
                 lens === id
-                  ? 'bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white border-transparent shadow-[0_2px_10px_rgba(168,85,247,0.3)]'
-                  : 'bg-zinc-100/80 border-zinc-200 text-zinc-700 hover:bg-purple-50 hover:text-purple-900'
+                  ? 'bg-accent-soft border-accent/30 text-accent'
+                  : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
               }`}
             >
-              <Icon size={14} className={lens === id ? 'text-white' : color} /> {label}
+              <Icon size={14} className={lens === id ? 'text-accent' : color} /> {label}
             </button>
           ))}
         </div>
       </div>
 
       {lateCount > 0 && statusFilter !== 'archived' && statusFilter !== 'posted' && (
-        <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-900 font-medium">
+        <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[14px] text-amber-900">
           <Clock size={16} className="shrink-0 text-amber-700" />
-          <span>{lateCount} post{lateCount > 1 ? 's' : ''} à publier {lateCount > 1 ? 'ont' : 'a'} dépassé {lateCount > 1 ? 'leur' : 'sa'} date prévue. Cliquez pour ajuster la date.</span>
+          <span>{lateCount} post{lateCount > 1 ? 's' : ''} à publier {lateCount > 1 ? 'ont' : 'a'} dépassé {lateCount > 1 ? 'leur' : 'sa'} date prévue. Marquez-{lateCount > 1 ? 'les' : 'le'} comme publié{lateCount > 1 ? 's' : ''} ou changez la date dans la fiche du post.</span>
         </div>
       )}
 
       {error && (
-        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-700">
-          <AlertCircle size={16} className="shrink-0 mt-px" />
-          <span className="flex-1 font-medium">{error}</span>
-          <button onClick={() => setError(null)} aria-label="Masquer l'erreur" className="text-red-400 hover:text-red-700 cursor-pointer">
+        <div role="alert" className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-[14px] text-red-800">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <span className="flex-1">{error} Réessayez ; si cela persiste, rechargez la page.</span>
+          <button type="button" onClick={() => setError(null)} aria-label="Masquer l'erreur" className="text-red-700 hover:text-red-900 cursor-pointer">
             <X size={14} />
           </button>
         </div>
       )}
 
       {flash && (
-        <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-xs text-emerald-900 font-medium">
-          <CheckCircle2 size={16} className="shrink-0 mt-px text-emerald-600" />
+        <div role="status" className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-[14px] text-emerald-900">
+          <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-600" />
           <span className="flex-1">{flash}</span>
-          <button onClick={() => setFlash(null)} aria-label="Masquer le message" className="text-emerald-500 hover:text-emerald-800 cursor-pointer">
+          <button type="button" onClick={() => setFlash(null)} aria-label="Masquer le message" className="text-emerald-700 hover:text-emerald-900 cursor-pointer">
             <X size={14} />
           </button>
         </div>
       )}
 
       {/* ───────────────────────────────────────────────────────────────────── */}
-      {/* VUE CALENDRIER GRANDE LISIBILITÉ                                     */}
+      {/* VUE CALENDRIER                                                       */}
       {/* ───────────────────────────────────────────────────────────────────── */}
       {view === 'calendar' ? (
         <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
           {/* Grille du mois avec cartes visuelles pour chaque post */}
-          <div className="bg-white border border-stone-200 rounded-2xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
             {/* Header du mois */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-stone-50/50">
-              <h2 className="text-base font-bold text-stone-900 capitalize">{MONTH_LABEL.format(currentMonth)}</h2>
+              <h2 className="text-base font-semibold text-stone-900 capitalize">{MONTH_LABEL.format(currentMonth)}</h2>
               <div className="flex items-center gap-1.5">
                 <button
+                  type="button"
                   onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
                   aria-label="Mois précédent"
-                  className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 text-stone-700 hover:text-stone-900 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer"
                 >
                   <ChevronLeft size={18} />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setCurrentMonth(() => { const d = new Date(); d.setDate(1); return d; })}
-                  className="px-3 py-1.5 text-xs font-bold text-stone-700 bg-white border border-stone-200 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+                  className="px-3 py-1.5 text-[13px] font-semibold text-stone-900 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors cursor-pointer"
                 >
                   Aujourd'hui
                 </button>
                 <button
+                  type="button"
                   onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
                   aria-label="Mois suivant"
-                  className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 text-stone-700 hover:text-stone-900 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer"
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -473,7 +490,7 @@ export default function SocialCalendarClient() {
             {/* Jours de la semaine */}
             <div className="grid grid-cols-7 border-b border-stone-200 bg-stone-50/80">
               {WEEKDAYS.map((w) => (
-                <div key={w} className="text-center text-xs font-bold uppercase tracking-wider text-stone-500 py-2.5 border-r border-stone-100 last:border-r-0">
+                <div key={w} className="text-center text-[13px] font-semibold text-stone-700 py-2.5 border-r border-stone-200 last:border-r-0">
                   {w}
                 </div>
               ))}
@@ -482,7 +499,7 @@ export default function SocialCalendarClient() {
             {/* Grille des cellules du mois */}
             <div className={`grid grid-cols-7 transition-opacity ${loading ? 'opacity-50' : ''}`}>
               {cells.map((dateStr, i) => {
-                if (!dateStr) return <div key={`blank-${i}`} className="min-h-[120px] border-b border-r border-stone-100 bg-stone-50/30" />;
+                if (!dateStr) return <div key={`blank-${i}`} className="min-h-[120px] border-b border-r border-stone-200 bg-stone-50/30" />;
                 const dayPosts = postsByDate[dateStr] || [];
                 const isToday = dateStr === today;
                 const isSelected = dateStr === selectedDate;
@@ -490,19 +507,25 @@ export default function SocialCalendarClient() {
                 return (
                   <div
                     key={dateStr}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    aria-label={`${DAY_LABEL.format(fromDateKey(dateStr))}${dayPosts.length ? `, ${dayPosts.length} post${dayPosts.length > 1 ? 's' : ''}` : ''}`}
                     onClick={() => setSelectedDate(dateStr)}
-                    className={`group min-h-[120px] p-2 border-b border-r border-stone-200 transition-all cursor-pointer flex flex-col justify-between ${
-                      isSelected ? 'bg-sage/10 ring-2 ring-inset ring-sage' : 'bg-white hover:bg-stone-50/80'
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedDate(dateStr); }
+                    }}
+                    className={`group min-h-[120px] p-2 border-b border-r border-stone-200 transition-colors cursor-pointer flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40 ${
+                      isSelected ? 'bg-accent-soft ring-2 ring-inset ring-accent' : 'bg-white hover:bg-stone-50'
                     }`}
                   >
                     {/* Header de la cellule (Numéro + Bouton +) */}
                     <div className="flex items-center justify-between gap-1 mb-1.5">
-                      <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center transition-colors ${
+                      <span className={`w-6 h-6 rounded-full text-[13px] font-semibold flex items-center justify-center transition-colors ${
                         isToday
-                          ? 'bg-stone-900 text-white shadow-xs'
-                          : isSelected
-                          ? 'bg-sage text-white'
-                          : 'text-stone-700 bg-stone-100 group-hover:bg-stone-200'
+                          ? 'bg-accent text-accent-fg'
+                          : 'text-stone-800'
                       }`}>
                         {Number(dateStr.slice(-2))}
                       </span>
@@ -512,9 +535,10 @@ export default function SocialCalendarClient() {
                           e.stopPropagation();
                           handleOpenNewPost(dateStr);
                         }}
-                        title={`Planifier un post le ${dateStr}`}
-                        aria-label={`Planifier un post le ${dateStr}`}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-stone-900 rounded-md hover:bg-stone-200/60 transition-all cursor-pointer"
+                        type="button"
+                        title="Planifier un post ce jour-là"
+                        aria-label={`Planifier un post le ${DAY_LABEL.format(fromDateKey(dateStr))}`}
+                        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-200/60 transition-opacity cursor-pointer"
                       >
                         <Plus size={14} />
                       </button>
@@ -527,13 +551,15 @@ export default function SocialCalendarClient() {
                         const meta = sourceMeta(p.source_type);
 
                         return (
-                          <div
+                          <button
+                            type="button"
                             key={p.id}
                             onClick={(e) => {
                               e.stopPropagation();
                               setPreviewId(p.id);
                             }}
-                            className={`w-full text-left p-2 rounded-lg border text-xs font-medium transition-all shadow-2xs hover:scale-[1.02] cursor-pointer ${
+                            aria-label={`Aperçu : ${p.title}`}
+                            className={`block w-full text-left p-2 rounded-lg border text-[12px] font-medium transition-colors cursor-pointer ${
                               p.status === 'posted'
                                 ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
                                 : isLate
@@ -542,8 +568,8 @@ export default function SocialCalendarClient() {
                             }`}
                           >
                             <div className="flex items-center justify-between gap-1 mb-1">
-                              <span className="inline-flex items-center gap-1 font-bold text-[10px] uppercase tracking-wider text-stone-500">
-                                <meta.icon size={11} className="shrink-0" />
+                              <span className="inline-flex items-center gap-1 font-medium text-[12px] text-stone-600 min-w-0">
+                                <meta.icon size={12} className="shrink-0" />
                                 <span className="truncate">{meta.label}</span>
                               </span>
 
@@ -551,15 +577,15 @@ export default function SocialCalendarClient() {
                               {isLate && <Clock size={12} className="text-amber-600 shrink-0" />}
                             </div>
 
-                            <p className="line-clamp-2 text-[11.5px] font-semibold leading-tight text-stone-900">
+                            <p className="line-clamp-2 text-[12px] font-semibold leading-tight text-stone-900">
                               {p.title}
                             </p>
-                          </div>
+                          </button>
                         );
                       })}
 
                       {dayPosts.length > 3 && (
-                        <div className="text-center py-0.5 text-[11px] font-bold text-stone-500 bg-stone-100 rounded-md">
+                        <div className="text-center py-0.5 text-[12px] font-semibold text-stone-700 bg-stone-100 rounded-md">
                           +{dayPosts.length - 3} autre{dayPosts.length - 3 > 1 ? 's' : ''}
                         </div>
                       )}
@@ -570,7 +596,7 @@ export default function SocialCalendarClient() {
             </div>
 
             {/* Légende bas de grille */}
-            <div className="flex flex-wrap gap-4 px-6 py-3 border-t border-stone-200 bg-stone-50 text-xs font-medium text-stone-600">
+            <div className="flex flex-wrap gap-4 px-6 py-3 border-t border-stone-200 bg-stone-50 text-[13px] text-stone-700">
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" /> À publier</span>
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Publié</span>
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-600" /> En retard</span>
@@ -579,39 +605,40 @@ export default function SocialCalendarClient() {
           </div>
 
           {/* Détail de la journée sélectionnée */}
-          <div className="bg-white border border-stone-200 rounded-2xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-4 lg:sticky lg:top-6">
+          <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-4 lg:sticky lg:top-6">
             {!selectedDate ? (
               <div className="text-center py-8 space-y-2">
-                <CalendarDays className="mx-auto text-stone-400" size={28} />
-                <p className="text-sm font-semibold text-stone-800">Sélectionnez un jour</p>
-                <p className="text-xs text-stone-500">Cliquez sur une case du calendrier pour voir et gérer les publications du jour.</p>
+                <CalendarDays className="mx-auto text-stone-500" size={28} />
+                <p className="text-[15px] font-semibold text-stone-900">Choisissez un jour</p>
+                <p className="text-[13px] text-stone-600">Cliquez sur une case du calendrier pour voir et gérer les publications de ce jour.</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2 pb-3 border-b border-stone-200">
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-stone-400">Journée sélectionnée</p>
-                    <h3 className="text-base font-serif font-bold text-stone-900 capitalize">
+                    <h3 className="text-base font-semibold text-stone-950 first-letter:uppercase">
                       {DAY_LABEL.format(fromDateKey(selectedDate))}
                     </h3>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setSelectedDate(null)}
-                    aria-label="Fermer"
-                    className="p-1.5 text-stone-400 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+                    aria-label="Fermer le détail du jour"
+                    className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
                   >
                     <X size={16} />
                   </button>
                 </div>
 
                 {loading ? (
-                  <p className="text-xs text-stone-500">Chargement…</p>
+                  <p className="text-[13px] text-stone-600">Chargement…</p>
                 ) : selectedPosts.length === 0 ? (
                   <div className="text-center py-6 space-y-3">
-                    <p className="text-xs text-stone-500">Aucun post planifié pour ce jour.</p>
+                    <p className="text-[13px] text-stone-700">Aucun post planifié ce jour-là.</p>
                     <button
+                      type="button"
                       onClick={() => handleOpenNewPost(selectedDate)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-stone-900 text-white text-xs font-semibold hover:bg-stone-800 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg bg-stone-100 text-stone-900 text-[13px] font-semibold hover:bg-stone-200 transition-colors cursor-pointer"
                     >
                       <Plus size={14} /> Planifier un post ici
                     </button>
@@ -627,31 +654,34 @@ export default function SocialCalendarClient() {
         </div>
       ) : (
         /* ── Vue Liste Visuelle ───────────────────────────────── */
-        <div className="bg-white border border-stone-200 rounded-2xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6">
+        <div className="bg-white border border-stone-200 rounded-xl p-6">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-stone-500 text-sm">
+            <div className="flex items-center justify-center gap-2 py-12 text-stone-600 text-sm">
               <Loader2 size={18} className="animate-spin text-stone-700" /> Chargement des publications…
             </div>
           ) : listGroups.length === 0 ? (
             <div className="text-center py-12 space-y-3">
-              <CalendarDays className="mx-auto text-stone-300" size={32} />
-              <p className="text-sm font-semibold text-stone-800">Aucune publication trouvée</p>
+              <CalendarDays className="mx-auto text-stone-500" size={32} />
+              <p className="text-[15px] font-semibold text-stone-900">Aucune publication</p>
+              <p className="text-[13px] text-stone-600">{statusFilter === 'all' ? 'Créez un post ou planifiez une série pour commencer.' : 'Aucun post ne correspond à ce filtre.'}</p>
             </div>
           ) : (
             <div className="space-y-6">
               {listGroups.map(({ date, items }) => (
                 <div key={date} className="space-y-3">
-                  <div className="flex items-center gap-2 sticky top-0 bg-white py-2 z-10 border-b border-stone-100">
+                  <div className="flex items-center gap-2 sticky top-0 bg-white py-2 z-10 border-b border-stone-200">
                     <button
+                      type="button"
+                      title="Voir ce jour dans le calendrier"
                       onClick={() => goToDate(date)}
-                      className="text-sm font-bold text-stone-900 hover:text-stone-700 transition-colors capitalize cursor-pointer flex items-center gap-2"
+                      className="text-sm font-semibold text-stone-900 hover:text-stone-700 transition-colors capitalize cursor-pointer flex items-center gap-2"
                     >
-                      <CalendarDays size={14} className="text-stone-500" />
+                      <CalendarDays size={14} className="text-stone-600" />
                       {SHORT_DAY_LABEL.format(fromDateKey(date))}
                     </button>
-                    {date === today && <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Aujourd'hui</span>}
+                    {date === today && <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Aujourd'hui</span>}
                     {date < today && items.some((p) => p.status === 'ready') && (
-                      <span className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">En retard</span>
+                      <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">En retard</span>
                     )}
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">{items.map(renderPost)}</div>
@@ -682,70 +712,78 @@ function SocialPostItem({ post, today, lens, brand, onPreview, onStatus, onDate,
   const isLate = post.status === 'ready' && post.planned_date < today;
 
   return (
-    <div className={`border rounded-xl overflow-hidden bg-white shadow-2xs transition-all hover:shadow-xs ${isLate ? 'border-amber-300 bg-amber-50/20' : 'border-stone-200'}`}>
+    <div className={`border rounded-xl overflow-hidden bg-white ${isLate ? 'border-amber-300' : 'border-stone-200'}`}>
       <div className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md border ${meta.color}`}>
-              <meta.icon size={11} /> {meta.label}
+            <span className={`inline-flex items-center gap-1 text-[12px] font-medium px-2 py-0.5 rounded-md border ${meta.color}`}>
+              <meta.icon size={12} /> {meta.label}
             </span>
-            <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md border ${status.chip}`}>
-              {status.label}
+            <span className={`inline-flex items-center gap-1 text-[12px] font-semibold px-2 py-0.5 rounded-md border ${isLate ? 'text-amber-900 bg-amber-100 border-amber-300' : status.chip}`}>
+              {isLate ? 'En retard' : status.label}
             </span>
           </div>
 
           <button
+            type="button"
             onClick={onDelete}
             aria-label={`Supprimer le post « ${post.title} »`}
             title="Supprimer"
-            className="text-stone-400 hover:text-red-600 transition-colors cursor-pointer p-1 rounded-md hover:bg-stone-100"
+            className="text-stone-600 hover:text-red-700 transition-colors cursor-pointer p-1.5 rounded-md hover:bg-red-50"
           >
-            <Trash2 size={14} />
+            <Trash2 size={15} />
           </button>
         </div>
 
-        <button onClick={onPreview} className="text-left w-full cursor-pointer group space-y-1">
-          <p className="text-sm font-semibold text-stone-900 leading-snug group-hover:text-stone-700 transition-colors">
+        <button type="button" onClick={onPreview} className="text-left w-full cursor-pointer group space-y-1">
+          <p className="text-[15px] font-semibold text-stone-900 leading-snug group-hover:text-accent transition-colors">
             {post.title}
           </p>
-          <p className="text-xs text-stone-500 flex items-center gap-1.5 group-hover:text-stone-800 transition-colors">
-            <Eye size={12} /> Aperçu du contenu généré
+          <p className="text-[13px] text-stone-700 flex items-center gap-1.5 group-hover:text-stone-950 transition-colors">
+            <Eye size={14} /> Voir les textes et visuels
           </p>
         </button>
 
         {lens !== 'all' && <PlatformPreview content={post.content} platform={lens} brand={brand} onOpen={onPreview} />}
 
-        <div className="pt-2 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2">
-          <input
-            type="date"
-            value={post.planned_date}
-            onChange={(e) => onDate(e.target.value)}
-            className="text-xs border border-stone-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-stone-900 bg-stone-50 text-stone-700 font-medium cursor-pointer"
-          />
+        <div className="pt-2 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2">
+          <label className="flex items-center gap-2 text-[13px] text-stone-700">
+            <span>Prévu le</span>
+            <input
+              type="date"
+              value={post.planned_date}
+              onChange={(e) => onDate(e.target.value)}
+              className="text-[13px] border border-stone-300 rounded-lg px-2.5 py-1 focus:outline-none focus:border-stone-900 bg-white text-stone-900 cursor-pointer"
+            />
+          </label>
 
           <div className="flex items-center gap-1.5">
             {post.status !== 'posted' && (
               <button
+                type="button"
                 onClick={() => onStatus('posted')}
-                className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                title="Indiquer que vous avez publié ce post sur les réseaux"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-stone-900 bg-stone-100 hover:bg-stone-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
               >
-                <CheckCircle2 size={12} /> Publié
+                <CheckCircle2 size={14} /> Marquer publié
               </button>
             )}
             {post.status === 'ready' && (
               <button
+                type="button"
                 onClick={() => onStatus('archived')}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-stone-600 bg-white hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-stone-800 hover:bg-stone-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
               >
-                <Archive size={12} /> Archiver
+                <Archive size={14} /> Archiver
               </button>
             )}
             {post.status !== 'ready' && (
               <button
+                type="button"
                 onClick={() => onStatus('ready')}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-stone-600 bg-white hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-stone-800 hover:bg-stone-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
               >
-                <RotateCcw size={12} /> Reprogrammer
+                <RotateCcw size={14} /> Remettre à publier
               </button>
             )}
           </div>
@@ -798,12 +836,12 @@ function PlatformPreview({ content, platform, brand, onOpen }: {
   }, [visible, brand, visual.text, visual.highlight, platform, format, slideCount]);
 
   if (!visual.text) {
-    return <p className="text-xs text-stone-400 italic">Aucun visuel pour cette plateforme.</p>;
+    return <p className="text-[13px] text-stone-600">Aucun visuel pour ce réseau.</p>;
   }
 
   return (
     <div ref={wrapperRef} className="space-y-2 pt-1">
-      <p className="text-xs text-stone-600 leading-relaxed border-l-2 border-stone-300 pl-2.5 italic">
+      <p className="text-[13px] text-stone-700 leading-relaxed border-l-2 border-stone-300 pl-2.5">
         « {visual.text} »
       </p>
       <button
@@ -831,10 +869,14 @@ function SocialPostPreviewDialog({ post, brand, initialPlatform, onClose }: {
 }) {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const meta = sourceMeta(post.source_type);
+  // onClose change à chaque rendu du parent : on le garde dans une ref pour ne
+  // pas relancer l'effet (qui remettait le focus sur la modale en pleine lecture).
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     panelRef.current?.focus();
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     document.addEventListener('keydown', onKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -842,7 +884,7 @@ function SocialPostPreviewDialog({ post, brand, initialPlatform, onClose }: {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div
@@ -856,22 +898,23 @@ function SocialPostPreviewDialog({ post, brand, initialPlatform, onClose }: {
         aria-labelledby="social-preview-title"
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full max-w-3xl max-h-[88vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden outline-none border border-stone-200"
+        className="bg-white w-full max-w-3xl max-h-[88vh] flex flex-col rounded-xl shadow-2xl overflow-hidden outline-none border border-stone-200"
       >
         <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-stone-200 bg-stone-50/50 shrink-0">
           <div className="min-w-0">
-            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-md mb-1 border ${meta.color}`}>
+            <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-0.5 rounded-md mb-1 border ${meta.color}`}>
               <meta.icon size={12} /> {meta.label}
             </span>
-            <h3 id="social-preview-title" className="text-base font-bold text-stone-900 leading-snug">{post.title}</h3>
-            <p className="text-xs text-stone-500 mt-0.5 capitalize">
+            <h3 id="social-preview-title" className="text-base font-semibold text-stone-900 leading-snug">{post.title}</h3>
+            <p className="text-[13px] text-stone-700 mt-0.5">
               Planifié le {DAY_LABEL.format(fromDateKey(post.planned_date))}
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Fermer l'aperçu"
-            className="p-1.5 text-stone-400 hover:text-stone-800 hover:bg-stone-200/60 rounded-lg transition-colors shrink-0 cursor-pointer"
+            className="p-1.5 text-stone-500 hover:text-stone-800 hover:bg-stone-200/60 rounded-lg transition-colors shrink-0 cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -886,7 +929,7 @@ function SocialPostPreviewDialog({ post, brand, initialPlatform, onClose }: {
               initialPlatform={initialPlatform}
             />
           ) : (
-            <p className="text-sm text-stone-600">Chargement de la charte graphique…</p>
+            <p className="text-sm text-stone-700">Chargement de la charte graphique…</p>
           )}
         </div>
       </div>

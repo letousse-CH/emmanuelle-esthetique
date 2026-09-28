@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Rss, Loader2, Sparkles, AlertCircle, CheckCircle2, CalendarDays } from 'lucide-react';
 import { supabase } from '../../../services/supabase';
+import { Toggle } from '../../../components/admin/ui';
 import { fromDateKey } from '../../../utils/dateKey';
 
 interface RssFeed {
@@ -54,13 +55,13 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
     try {
       new URL(url);
     } catch {
-      setAddError('URL invalide.');
+      setAddError("Cette adresse n'est pas valide. Copiez l'adresse complète du flux, qui commence par https://");
       return;
     }
     setAdding(true);
     const { error } = await supabase.from('rss_feeds').insert({ url, label: newLabel.trim() || null, active: true });
     if (error) {
-      setAddError(error.code === '23505' ? 'Ce flux est déjà enregistré.' : error.message);
+      setAddError(error.code === '23505' ? 'Ce flux est déjà dans la liste.' : `Le flux n'a pas pu être ajouté. Réessayez. (Détail : ${error.message})`);
     } else {
       setNewUrl(''); setNewLabel('');
       loadFeeds();
@@ -76,7 +77,7 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
   };
 
   const deleteFeed = async (feed: RssFeed) => {
-    if (!window.confirm(`Supprimer le flux "${feed.label || feed.url}" ?`)) return;
+    if (!window.confirm(`Retirer le flux « ${feed.label || feed.url} » de vos sources ? Les posts déjà créés à partir de ce flux sont conservés.`)) return;
     const snapshot = feeds;
     setFeeds((prev) => prev.filter((f) => f.id !== feed.id));
     const { error } = await supabase.from('rss_feeds').delete().eq('id', feed.id);
@@ -108,7 +109,7 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
       if (data.error) throw new Error(data.error);
       setSummary(data);
     } catch (e: any) {
-      setGenError(e.message || 'Erreur inconnue');
+      setGenError(e.message || 'Erreur inconnue.');
     } finally {
       setGenerating(false);
     }
@@ -117,45 +118,45 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
   return (
     <div className="space-y-6">
       {/* Génération automatique */}
-      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-4">
+      <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-4">
         <div>
-          <h2 className="text-sm font-bold text-stone-900">Automatisation</h2>
-          <p className="text-[12.5px] text-stone-500 mt-1 leading-relaxed">
-            Une tâche planifiée détecte les nouveaux articles publiés, les nouvelles entrées des flux RSS actifs ci-dessous
-            et les suggestions SEO sauvegardées, puis pré-génère du contenu prêt à relire dans le{' '}
-            <span className="font-medium text-stone-600">Calendrier</span>. Vous pouvez aussi forcer un cycle immédiatement :
+          <h2 className="text-[18px] font-semibold text-stone-950">Préparation automatique</h2>
+          <p className="text-[14px] text-stone-700 mt-1 leading-relaxed">
+            Chaque jour, le site repère vos nouveaux articles publiés, les nouveautés des flux actifs ci-dessous
+            et les idées de sujets que vous avez gardées, puis prépare des posts à relire dans le{' '}
+            <span className="font-medium text-stone-900">Calendrier</span>. Vous pouvez aussi lancer la préparation tout de suite.
           </p>
         </div>
         <button
           type="button"
           onClick={generateNow}
           disabled={generating}
-          className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+          className="bg-accent hover:bg-accent-hover flex items-center gap-2 text-accent-fg px-4 h-10 rounded-lg font-semibold text-[14px] transition-colors disabled:opacity-45 cursor-pointer"
         >
-          {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-          Générer maintenant
+          {generating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+          {generating ? 'Préparation en cours… (une à deux minutes)' : 'Préparer les posts maintenant'}
         </button>
         {genError && (
-          <p className="text-xs text-red-500 flex items-center gap-1.5"><AlertCircle size={12} /> {genError}</p>
+          <p role="alert" className="text-[13px] text-red-700 flex items-start gap-1.5"><AlertCircle size={15} className="mt-0.5 shrink-0" /> <span>La préparation n&apos;a pas abouti : {genError}</span></p>
         )}
         {summary && (
-          <div className="text-xs bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 space-y-2">
+          <div role="status" className="text-[14px] bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 space-y-2">
             {summary.generated > 0 ? (
-              <p className="flex items-center gap-1.5 text-green-700 font-medium">
-                <CheckCircle2 size={12} /> {summary.generated} post{summary.generated !== 1 ? 's' : ''} généré{summary.generated !== 1 ? 's' : ''}
+              <p className="flex items-center gap-1.5 text-emerald-800 font-medium">
+                <CheckCircle2 size={15} /> {summary.generated} post{summary.generated !== 1 ? 's' : ''} généré{summary.generated !== 1 ? 's' : ''}
                 {summary.skipped > 0 && ` · ${summary.skipped} déjà traité${summary.skipped !== 1 ? 's' : ''}`}
               </p>
             ) : (
-              <p className="text-stone-500 font-medium">
-                Aucun nouveau contenu à générer — toutes les sources détectées ont déjà leur post.
+              <p className="text-stone-700">
+                Rien de nouveau à préparer : chaque source a déjà son post.
               </p>
             )}
 
             {summary.plannedDates && summary.plannedDates.length > 0 && (
               <>
-                <p className="text-stone-500">
-                  Planifié{summary.plannedDates.length > 1 ? 's' : ''} au{' '}
-                  <span className="font-medium text-stone-700">
+                <p className="text-stone-700">
+                  Planifié{summary.plannedDates.length > 1 ? 's' : ''} le{' '}
+                  <span className="font-medium text-stone-900">
                     {summary.plannedDates.map((d) => DAY_LABEL.format(fromDateKey(d))).join(', ')}
                   </span>.
                 </p>
@@ -163,16 +164,16 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
                   <button
                     type="button"
                     onClick={onGenerated}
-                    className="flex items-center gap-1.5 text-sage hover:text-stone-900/70 font-bold transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 text-accent hover:underline font-semibold cursor-pointer"
                   >
-                    <CalendarDays size={12} /> Voir dans le calendrier
+                    <CalendarDays size={15} /> Voir dans le calendrier
                   </button>
                 )}
               </>
             )}
 
             {summary.errors.length > 0 && (
-              <ul className="text-red-500 space-y-0.5 pt-1">
+              <ul className="text-red-700 text-[13px] space-y-0.5 pt-1">
                 {summary.errors.map((err, i) => <li key={i}>· {err}</li>)}
               </ul>
             )}
@@ -181,58 +182,54 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
       </div>
 
       {/* Flux RSS */}
-      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 space-y-5">
+      <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-5">
         <div>
-          <h2 className="text-sm font-bold text-stone-900 flex items-center gap-2"><Rss size={15} className="text-sage" /> Flux RSS</h2>
-          <p className="text-[12.5px] text-stone-500 mt-1">1 à 3 flux recommandés — chaque nouvelle entrée devient une source de contenu potentielle.</p>
+          <h2 className="text-[18px] font-semibold text-stone-950 flex items-center gap-2"><Rss size={16} className="text-stone-700" /> Flux d&apos;actualités (RSS)</h2>
+          <p className="text-[14px] text-stone-700 mt-1">Les sites que vous suivez (magazines beauté, marques…). Chaque nouvel article d&apos;un flux actif peut devenir un post. Un à trois flux suffisent.</p>
         </div>
 
         {loadError && (
-          <p className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+          <p role="alert" className="flex items-start gap-1.5 text-[13px] text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             <AlertCircle size={13} className="shrink-0 mt-px" /> {loadError}
           </p>
         )}
 
         {loading ? (
-          <p className="text-sm text-stone-600">Chargement…</p>
+          <p className="text-sm text-stone-700">Chargement…</p>
         ) : (
           <div className="space-y-2">
-            {feeds.length === 0 && <p className="text-sm text-stone-600">Aucun flux configuré.</p>}
+            {feeds.length === 0 && <p className="text-sm text-stone-700">Aucun flux pour l&apos;instant. Ajoutez-en un ci-dessous.</p>}
             {feeds.map((feed) => (
-              <div key={feed.id} className="flex items-center gap-3 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={feed.active}
-                  aria-label={`${feed.active ? 'Désactiver' : 'Activer'} le flux ${feed.label || feed.url}`}
-                  onClick={() => toggleActive(feed)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${feed.active ? 'bg-sage' : 'bg-stone-200'}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${feed.active ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
+              <div key={feed.id} className="flex items-center gap-3 bg-stone-50 border border-stone-200 rounded-xl px-4 py-3">
+                <Toggle
+                  checked={feed.active}
+                  onChange={() => toggleActive(feed)}
+                  label={`Flux ${feed.label || feed.url} actif`}
+                />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-stone-800 truncate">{feed.label || feed.url}</p>
-                  {feed.label && <p className="truncate text-[12.5px] text-stone-500 font-mono">{feed.url}</p>}
+                  <p className="text-sm font-medium text-stone-900 truncate">{feed.label || feed.url}</p>
+                  {feed.label && <p className="truncate text-[13px] text-stone-600">{feed.url}</p>}
+                  {!feed.active && <p className="text-[13px] text-stone-600">En pause : ce flux n&apos;est pas lu.</p>}
                 </div>
-                <button onClick={() => deleteFeed(feed)} aria-label={`Supprimer le flux ${feed.label || feed.url}`} title="Supprimer" className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer">
-                  <Trash2 size={14} />
+                <button type="button" onClick={() => deleteFeed(feed)} aria-label={`Supprimer le flux ${feed.label || feed.url}`} title="Supprimer" className="p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer">
+                  <Trash2 size={15} />
                 </button>
               </div>
             ))}
           </div>
         )}
 
-        <form onSubmit={addFeed} className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-stone-100">
+        <form onSubmit={addFeed} className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-stone-200">
           <label htmlFor="rss-new-label" className="sr-only">Libellé du flux (facultatif)</label>
           <input
             id="rss-new-label"
             type="text"
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
-            placeholder="Libellé (facultatif)"
-            className="sm:w-48 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
+            placeholder="Nom (facultatif)"
+            className="sm:w-48 h-10 border border-stone-300 rounded-lg px-3 text-sm focus:outline-none focus:border-stone-900"
           />
-          <label htmlFor="rss-new-url" className="sr-only">URL du flux RSS</label>
+          <label htmlFor="rss-new-url" className="sr-only">Adresse du flux</label>
           <input
             id="rss-new-url"
             type="url"
@@ -240,18 +237,18 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
             onChange={(e) => setNewUrl(e.target.value)}
             placeholder="https://exemple.com/flux.xml"
             required
-            className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-stone-900"
+            className="flex-1 min-w-0 h-10 border border-stone-300 rounded-lg px-3 text-sm focus:outline-none focus:border-stone-900"
           />
           <button
             type="submit"
             disabled={adding}
-            className="flex items-center justify-center gap-1.5 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50 cursor-pointer shrink-0"
+            className="flex items-center justify-center gap-1.5 bg-stone-100 text-stone-900 px-4 h-10 rounded-lg text-sm font-semibold hover:bg-stone-200 transition-colors disabled:opacity-45 cursor-pointer shrink-0"
           >
-            {adding ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-            Ajouter
+            {adding ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+            Ajouter le flux
           </button>
         </form>
-        {addError && <p className="text-xs text-red-500">{addError}</p>}
+        {addError && <p role="alert" className="text-[13px] text-red-700">{addError}</p>}
       </div>
     </div>
   );

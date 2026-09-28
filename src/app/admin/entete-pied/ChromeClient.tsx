@@ -17,10 +17,10 @@ import PaletteColorInput, { type PaletteSwatch } from '../../../components/admin
 /** Palette du site, proposée pour le fond du pied de page. */
 const PALETTE_TOKEN_LABELS = [
   { key: 'style_color_bg', label: 'Fond du site' },
-  { key: 'style_color_surface', label: 'Surface' },
-  { key: 'style_color_primary', label: 'Primaire' },
-  { key: 'style_color_text', label: 'Sombre' },
-  { key: 'style_color_border', label: 'Bordure' },
+  { key: 'style_color_surface', label: 'Fond des blocs' },
+  { key: 'style_color_primary', label: 'Couleur principale' },
+  { key: 'style_color_text', label: 'Texte (sombre)' },
+  { key: 'style_color_border', label: 'Traits et bordures' },
 ];
 const PALETTE_TOKEN_KEYS = PALETTE_TOKEN_LABELS.map((t) => t.key);
 
@@ -46,18 +46,44 @@ export default function ChromeClient() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [swatches, setSwatches] = useState<PaletteSwatch[]>([]);
+  /*
+    Si la lecture échoue, les choix affichés ne sont que des valeurs par défaut :
+    les enregistrer écraserait les vrais réglages. L'enregistrement est donc
+    bloqué tant que le chargement n'a pas réussi.
+  */
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState('');
 
   const load = useCallback(async () => {
-    const [{ data }, { data: tokens }] = await Promise.all([
-      supabase.from('settings').select('key, value')
-        .in('key', [HEADER_KEY, FOOTER_KEY, FOOTER_THEME_KEY, FOOTER_BG_KEY]),
-      supabase.from('settings').select('key, value').in('key', PALETTE_TOKEN_KEYS),
-    ]);
+    setLoading(true);
+    setLoadFailed(false);
+    let results;
+    try {
+      results = await Promise.all([
+        supabase.from('settings').select('key, value')
+          .in('key', [HEADER_KEY, FOOTER_KEY, FOOTER_THEME_KEY, FOOTER_BG_KEY]),
+        supabase.from('settings').select('key, value').in('key', PALETTE_TOKEN_KEYS),
+      ]);
+    } catch (err) {
+      console.error('[ChromeClient] chargement', err);
+      results = null;
+    }
+    if (!results || results[0].error) {
+      setLoadFailed(true);
+      setLoading(false);
+      return;
+    }
+    const [{ data }, { data: tokens }] = results;
     const map = Object.fromEntries((data ?? []).map((row: any) => [row.key, (row.value ?? '').trim()]));
-    setHeader((map[HEADER_KEY] as HeaderVariant) || 'classique');
-    setFooter((map[FOOTER_KEY] as FooterVariant) || 'complet');
-    setFooterTheme(map[FOOTER_THEME_KEY] === 'light' ? 'light' : 'dark');
-    setFooterBg(map[FOOTER_BG_KEY] ?? '');
+    const loadedHeader = (map[HEADER_KEY] as HeaderVariant) || 'classique';
+    const loadedFooter = (map[FOOTER_KEY] as FooterVariant) || 'complet';
+    const loadedTheme: 'dark' | 'light' = map[FOOTER_THEME_KEY] === 'light' ? 'light' : 'dark';
+    const loadedBg = map[FOOTER_BG_KEY] ?? '';
+    setHeader(loadedHeader);
+    setFooter(loadedFooter);
+    setFooterTheme(loadedTheme);
+    setFooterBg(loadedBg);
+    setSavedSnapshot(JSON.stringify([loadedHeader, loadedFooter, loadedTheme, loadedBg.trim()]));
 
     const palette = Object.fromEntries((tokens ?? []).map((row: any) => [row.key, (row.value ?? '').trim()]));
     setSwatches(
@@ -70,7 +96,11 @@ export default function ChromeClient() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const isDirty = !loading && !loadFailed
+    && JSON.stringify([header, footer, footerTheme, (footerBg || '').trim()]) !== savedSnapshot;
+
   async function save() {
+    if (loadFailed) return;
     setSaving(true);
     setMessage(null);
     try {
@@ -85,25 +115,44 @@ export default function ChromeClient() {
       setSaving(false);
       if (error) {
         console.error('[ChromeClient] Error saving footer settings:', error);
-        setMessage({ type: 'error', text: `Erreur d’enregistrement : ${error.message}` });
+        setMessage({ type: 'error', text: `Les modèles n’ont pas pu être enregistrés (${error.message}). Vos choix sont toujours là : réessayez.` });
         return;
       }
       settingsCache.set(HEADER_KEY, header);
       settingsCache.set(FOOTER_KEY, footer);
       settingsCache.set(FOOTER_THEME_KEY, footerTheme);
       settingsCache.set(FOOTER_BG_KEY, cleanBg);
-      setMessage({ type: 'success', text: 'Modèles d’en-tête et de pied de page enregistrés avec succès.' });
+      setSavedSnapshot(JSON.stringify([header, footer, footerTheme, cleanBg]));
+      setMessage({ type: 'success', text: 'Modèles enregistrés. Rechargez le site pour les voir.' });
     } catch (err: any) {
       setSaving(false);
       console.error('[ChromeClient] Exception:', err);
-      setMessage({ type: 'error', text: `Une erreur s’est produite : ${err?.message || 'Impossible d’enregistrer'}` });
+      setMessage({ type: 'error', text: `Les modèles n’ont pas pu être enregistrés${err?.message ? ` (${err.message})` : ''}. Vérifiez votre connexion puis réessayez.` });
     }
   }
 
   if (loading) return <Spinner label="Chargement des modèles…" />;
 
+  if (loadFailed) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="En-tête & pied de page"
+          description="L’habillage qui entoure toutes vos pages : la barre de menu en haut, le pied en bas."
+        />
+        <Callout
+          tone="danger"
+          title="Les réglages n’ont pas pu être chargés"
+          actions={<Button size="sm" onClick={() => void load()}>Réessayer</Button>}
+        >
+          Vérifiez votre connexion puis cliquez sur « Réessayer ». Rien n’a été modifié.
+        </Callout>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="En-tête & pied de page"
         description="L’habillage qui entoure toutes vos pages : la barre de menu en haut, le pied en bas."
@@ -155,7 +204,7 @@ export default function ChromeClient() {
           <div className="mt-6 grid gap-5 border-t border-stone-200 pt-5 sm:grid-cols-2">
             <div className="space-y-2">
               <p className="text-[13px] font-medium text-stone-800">Ambiance</p>
-              <p className="text-[12.5px] leading-snug text-stone-600">
+              <p className="text-[13px] leading-snug text-stone-700">
                 Elle décide de la couleur du texte et des séparations.
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -171,8 +220,8 @@ export default function ChromeClient() {
                       aria-pressed={active}
                       onClick={() => setFooterTheme(option.id)}
                       className={`flex items-center gap-2.5 rounded-lg border p-2.5 text-left transition-colors cursor-pointer
-                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
-                          active ? 'border-stone-900 ring-1 ring-stone-900' : 'border-stone-300 hover:border-stone-400'
+                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 ${
+                          active ? 'border-accent ring-1 ring-accent' : 'border-stone-300 hover:border-stone-400'
                         }`}
                     >
                       <span
@@ -205,9 +254,9 @@ export default function ChromeClient() {
         </CardBody>
       </Card>
 
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-6 py-4">
-        <p className="text-[13px] text-stone-600">
-          Les modèles ne s’appliquent au site qu’une fois enregistrés.
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-6 py-4">
+        <p className={`text-[13px] ${isDirty ? 'font-medium text-amber-800' : 'text-stone-700'}`} aria-live="polite">
+          {isDirty ? 'Modifications non enregistrées.' : 'Les modèles ne s’appliquent au site qu’une fois enregistrés.'}
         </p>
         <Button variant="primary" icon={saving ? undefined : Save} loading={saving} onClick={() => void save()}>
           Enregistrer
@@ -236,18 +285,18 @@ function VariantGrid<T extends string>({
               aria-pressed={active}
               onClick={() => onPick(item.id)}
               className={`h-full w-full overflow-hidden rounded-xl border text-left transition-colors cursor-pointer
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
-                  active ? 'border-stone-900 ring-1 ring-stone-900' : 'border-stone-200 hover:border-stone-400'
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 ${
+                  active ? 'border-accent ring-1 ring-accent' : 'border-stone-200 hover:border-stone-400'
                 }`}
             >
               <span className="block border-b border-stone-200 bg-stone-50 p-4">{sketch(item.id)}</span>
               <span className="block px-4 py-3">
                 <span className="flex items-center justify-between gap-2">
-                  <span className="text-[13.5px] font-medium text-stone-900">{item.label}</span>
-                  {active && <Check size={14} className="shrink-0 text-stone-900" />}
+                  <span className="text-[14px] font-medium text-stone-900">{item.label}</span>
+                  {active && <Check size={15} className="shrink-0 text-accent" aria-hidden="true" />}
                 </span>
-                <span className="mt-0.5 block text-[12.5px] leading-snug text-stone-600">{item.description}</span>
-                <span className="mt-1 block text-[12px] leading-snug text-stone-500">{item.fits}</span>
+                <span className="mt-0.5 block text-[13px] leading-snug text-stone-700">{item.description}</span>
+                <span className="mt-1 block text-[13px] leading-snug text-stone-600">{item.fits}</span>
               </span>
             </button>
           </li>

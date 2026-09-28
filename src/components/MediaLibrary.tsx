@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
-import { X, Upload, Trash2, Image as ImageIcon, Copy, Check } from 'lucide-react';
+import { X, Upload, Image as ImageIcon, Copy, Check, Loader2 } from 'lucide-react';
 import AddMediaByUrl from './AddMediaByUrl';
 
 interface MediaLibraryProps {
@@ -48,13 +48,18 @@ export default function MediaLibrary({ onClose, onSelect }: MediaLibraryProps) {
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const panelRef = React.useRef<HTMLDivElement | null>(null);
 
   const copyUrl = async (e: React.MouseEvent, asset: MediaAsset) => {
     e.stopPropagation();
-    await navigator.clipboard.writeText(asset.url);
-    setCopiedId(asset.id);
-    setTimeout(() => setCopiedId(null), 2000);
+    try {
+      await navigator.clipboard.writeText(asset.url);
+      setCopiedId(asset.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      setMessage({ type: 'error', text: "L'adresse n'a pas pu être copiée. Sélectionnez-la à la main sous l'image." });
+    }
   };
 
   useEffect(() => {
@@ -79,15 +84,19 @@ export default function MediaLibrary({ onClose, onSelect }: MediaLibraryProps) {
 
     if (data && !error) {
       setMedias(data);
+    } else if (error) {
+      setMessage({ type: 'error', text: "Les images n'ont pas pu être chargées. Fermez puis rouvrez la médiathèque." });
     }
     setLoading(false);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
+    const input = e.target;
     setUploading(true);
+    setMessage(null);
 
-    const raw = e.target.files[0];
+    const raw = input.files![0];
 
     try {
       const file = await compressImage(raw);
@@ -120,12 +129,16 @@ export default function MediaLibrary({ onClose, onSelect }: MediaLibraryProps) {
         .from('media_assets')
         .insert([{ file_name: key, url, alt_text: raw.name.split('.')[0] }]);
 
-      if (!dbError) await fetchMedias();
+      if (dbError) throw new Error(dbError.message);
+      await fetchMedias();
+      setMessage({ type: 'success', text: "Image ajoutée. Cliquez dessus pour l'insérer." });
     } catch (err: any) {
-      alert("Erreur lors de l'upload : " + err.message);
+      setMessage({ type: 'error', text: `L'image n'a pas pu être envoyée${err?.message ? ` (${err.message})` : ''}. Réessayez, ou collez l'adresse d'une image déjà en ligne.` });
+    } finally {
+      setUploading(false);
+      // Permet de renvoyer le même fichier après un échec.
+      input.value = '';
     }
-
-    setUploading(false);
   };
 
   if (!mounted) return null;
@@ -142,43 +155,48 @@ export default function MediaLibrary({ onClose, onSelect }: MediaLibraryProps) {
         aria-labelledby="media-library-title"
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full max-w-4xl h-[80vh] flex flex-col shadow-2xl rounded-2xl overflow-hidden outline-none"
+        className="bg-white w-full max-w-4xl h-[80vh] flex flex-col shadow-2xl rounded-xl overflow-hidden outline-none"
       >
-        <div className="flex justify-between items-center p-6 border-b border-stone-200 bg-stone-50">
-          <h2 id="media-library-title" className="text-lg uppercase tracking-widest font-bold text-stone-900 flex items-center">
-            <ImageIcon className="mr-3" size={20} /> Médiathèque
+        <div className="flex justify-between items-center px-6 py-4 border-b border-stone-200 bg-white">
+          <h2 id="media-library-title" className="text-[18px] font-semibold tracking-tight text-stone-950 flex items-center">
+            <ImageIcon className="mr-2.5 text-stone-600" size={20} /> Médiathèque
           </h2>
-          <button onClick={onClose} aria-label="Fermer la médiathèque" className="text-stone-500 hover:text-stone-900 transition-colors cursor-pointer">
-            <X size={24} />
+          <button type="button" onClick={onClose} aria-label="Fermer la médiathèque" className="p-2 -mr-2 rounded-lg text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer">
+            <X size={20} />
           </button>
         </div>
 
-        <div className="p-6 border-b border-stone-100 bg-white flex justify-between items-center">
-          <p className="text-sm text-stone-500 italic">Cliquez pour insérer · <Copy size={12} className="inline mb-0.5" /> pour copier l'URL.</p>
-          <label className={`cursor-pointer bg-stone-900 text-white px-6 py-2 uppercase tracking-widest text-xs hover:bg-sage transition-colors flex items-center ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-            <Upload size={14} className="mr-2" />
-            {uploading ? 'Envoi...' : 'Uploader une image'}
-            <input 
-              type="file" 
-              accept="image/*" 
-              className="hidden" 
-              onChange={handleUpload} 
+        <div className="px-6 py-4 border-b border-stone-200 bg-white flex flex-wrap gap-3 justify-between items-center">
+          <p className="text-[14px] text-stone-700">Cliquez sur une image pour l'insérer.</p>
+          <label className={`inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover transition-colors cursor-pointer focus-within:ring-2 focus-within:ring-accent/40 focus-within:ring-offset-2 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+            {uploading ? 'Envoi en cours…' : 'Ajouter une image'}
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={handleUpload}
               disabled={uploading}
             />
           </label>
+          {message && (
+            <p role="status" className={`w-full text-[13px] font-medium ${message.type === 'success' ? 'text-emerald-700' : 'text-red-700'}`}>
+              {message.text}
+            </p>
+          )}
         </div>
 
         {/* Ajout par URL — utilisable même sans stockage configuré */}
         <AddMediaByUrl
-          className="px-6 py-3 border-b border-stone-100 bg-white shrink-0"
+          className="px-6 py-3 border-b border-stone-200 bg-white shrink-0"
           onAdded={(asset) => setMedias((prev) => [asset, ...prev])}
         />
 
         <div className="flex-1 overflow-y-auto p-6 bg-stone-50">
           {loading ? (
-            <div className="text-center py-12 text-stone-400 italic">Chargement de la médiathèque...</div>
+            <div className="text-center py-12 text-[14px] text-stone-600">Chargement des images…</div>
           ) : medias.length === 0 ? (
-            <div className="text-center py-12 text-stone-400 italic">Aucune image. Commencez par en uploader une !</div>
+            <div className="text-center py-12 text-[14px] text-stone-600">Aucune image pour l'instant. Ajoutez-en une avec le bouton « Ajouter une image » ou collez l'adresse d'une image déjà en ligne.</div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {medias.map((asset) => (
@@ -186,7 +204,7 @@ export default function MediaLibrary({ onClose, onSelect }: MediaLibraryProps) {
                   <button
                     type="button"
                     aria-label={`Insérer l'image ${asset.alt_text || 'sans titre'}`}
-                    className="group relative aspect-square bg-stone-200 overflow-hidden cursor-pointer border-2 border-transparent hover:border-sage transition-all"
+                    className="group relative aspect-square bg-stone-200 overflow-hidden rounded-lg cursor-pointer border-2 border-transparent hover:border-accent focus-visible:border-accent focus-visible:outline-none transition-colors"
                     onClick={() => onSelect(asset.url, asset.alt_text)}
                   >
                     <img
@@ -194,43 +212,28 @@ export default function MediaLibrary({ onClose, onSelect }: MediaLibraryProps) {
                       alt={asset.alt_text}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-stone-900/0 group-hover:bg-stone-900/40 transition-all" />
+                    <div className="absolute inset-0 bg-stone-900/0 group-hover:bg-stone-900/20 transition-colors" />
 
-                    {/* Bouton copier URL */}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => copyUrl(e, asset)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyUrl(e as unknown as React.MouseEvent, asset); } }}
-                      title="Copier l'URL"
-                      aria-label={copiedId === asset.id ? 'URL copiée' : "Copier l'URL de l'image"}
-                      className="absolute top-2 right-2 bg-white/90 hover:bg-white text-stone-700 rounded-full p-1.5 opacity-0 group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-all shadow cursor-pointer"
-                    >
-                      {copiedId === asset.id
-                        ? <Check size={13} className="text-green-600" />
-                        : <Copy size={13} />}
-                    </span>
-
-                    <div className="absolute bottom-0 w-full p-2 bg-gradient-to-t from-stone-900/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs truncate">
+                    <div className="absolute bottom-0 w-full p-2 bg-stone-900/70 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity text-white text-[13px] truncate text-left">
                       {asset.alt_text}
                     </div>
                   </button>
 
                   {/* URL copiable sous la vignette */}
-                  <div className="flex items-center gap-1 bg-stone-100 rounded px-2 py-1 min-w-0">
-                    <span className="text-stone-400 text-[10px] truncate flex-1 font-mono leading-none" title={asset.url}>
+                  <div className="flex items-center gap-1 bg-stone-100 rounded-lg px-2 py-1 min-w-0">
+                    <span className="text-stone-600 text-[12px] truncate flex-1 font-mono" title={asset.url}>
                       {asset.url.replace(/^https?:\/\/[^/]+/, '…')}
                     </span>
                     <button
                       type="button"
                       onClick={(e) => copyUrl(e, asset)}
-                      title="Copier l'URL complète"
-                      aria-label="Copier l'URL complète de l'image"
-                      className="shrink-0 text-stone-400 hover:text-sage transition-colors cursor-pointer"
+                      title="Copier l'adresse de l'image"
+                      aria-label={copiedId === asset.id ? 'Adresse copiée' : "Copier l'adresse de l'image"}
+                      className="shrink-0 p-1 rounded text-stone-600 hover:text-accent transition-colors cursor-pointer"
                     >
                       {copiedId === asset.id
-                        ? <Check size={11} className="text-green-500" />
-                        : <Copy size={11} />}
+                        ? <Check size={14} className="text-emerald-700" />
+                        : <Copy size={14} />}
                     </button>
                   </div>
                 </div>

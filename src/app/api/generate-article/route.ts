@@ -10,6 +10,8 @@ import { getAnthropicKey } from '../../../services/secrets';
 import { buildPrompt } from '../../../utils/articleGeneration';
 
 export const dynamic = 'force-dynamic';
+// Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || '';

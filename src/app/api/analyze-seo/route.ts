@@ -5,6 +5,9 @@ import { getSettingsServer } from '../../../services/settingsServer';
 import { SITE_CONFIG } from '../../../config/site';
 import { getAnthropicKey } from '../../../services/secrets';
 
+// Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
+export const maxDuration = 60;
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface SeoFix {
   field: 'title' | 'meta_title' | 'meta_description' | 'content';
@@ -174,6 +177,7 @@ export async function POST(req: NextRequest) {
       // le timeout des fonctions Netlify (10s) et tuent la réponse (corps vide).
       const resp = await callClaude({
         feature: 'seo-analyze',
+        mode: 'quick',
         max_tokens: 1500,
         messages: [{ role: 'user', content: prompt }],
         timeout: 25000

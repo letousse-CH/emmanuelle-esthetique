@@ -20,19 +20,34 @@ export default function ConversationsClient() {
   const [selected, setSelected] = useState<AgentConversation | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
 
   useEffect(() => {
     void (async () => {
-      const [agentRows, rows] = await Promise.all([fetchAgents(), fetchConversations()]);
-      setAgents(agentRows);
-      setConversations(rows);
-      setLoading(false);
+      try {
+        const [agentRows, rows] = await Promise.all([fetchAgents(), fetchConversations()]);
+        setAgents(agentRows);
+        setConversations(rows);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
   useEffect(() => {
-    if (!selected) return setMessages([]);
-    void fetchMessages(selected.id).then(setMessages);
+    if (!selected) {
+      setMessages([]);
+      return;
+    }
+    // Ignore la réponse d'une conversation quittée entre-temps : sans ce
+    // garde-fou, un clic rapide affichait les messages de la précédente.
+    let cancelled = false;
+    setLoadingMessages(true);
+    void fetchMessages(selected.id)
+      .then((rows) => { if (!cancelled) setMessages(rows); })
+      .catch(() => { if (!cancelled) setMessages([]); })
+      .finally(() => { if (!cancelled) setLoadingMessages(false); });
+    return () => { cancelled = true; };
   }, [selected]);
 
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? 'Agent supprimé';
@@ -60,26 +75,27 @@ export default function ConversationsClient() {
             return (
               <li key={conversation.id}>
                 <button
+                  type="button"
                   onClick={() => setSelected(conversation)}
                   aria-current={isSelected ? 'true' : undefined}
                   className={`w-full px-5 py-3.5 text-left transition-colors cursor-pointer
                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-stone-900 ${
-                      isSelected ? 'bg-stone-900 text-white' : 'hover:bg-stone-50'
+                      isSelected ? 'bg-accent-soft' : 'hover:bg-stone-50'
                     }`}
                 >
                   <span className="flex items-center justify-between gap-2">
-                    <span className={`text-sm font-medium ${isSelected ? 'text-white' : 'text-stone-900'}`}>
+                    <span className="text-sm font-semibold text-stone-900">
                       {agentName(conversation.agent_id)}
                     </span>
-                    <span className={`shrink-0 text-[11.5px] ${isSelected ? 'text-stone-500' : 'text-stone-600'}`}>
+                    <span className="shrink-0 text-[13px] text-stone-700">
                       {STATUS_LABEL[conversation.status]}
                     </span>
                   </span>
-                  <span className={`mt-0.5 block text-[12.5px] tabular-nums ${isSelected ? 'text-stone-500' : 'text-stone-500'}`}>
+                  <span className="mt-0.5 block text-[13px] tabular-nums text-stone-600">
                     {new Date(conversation.created_at).toLocaleString('fr-CH')}
                   </span>
                   {collected.length > 0 && (
-                    <span className={`mt-1 block truncate text-[12.5px] ${isSelected ? 'text-stone-500' : 'text-stone-600'}`}>
+                    <span className="mt-1 block truncate text-[13px] text-stone-700">
                       {collected.map(([key, value]) => `${key} : ${value}`).join(' · ')}
                     </span>
                   )}
@@ -97,22 +113,28 @@ export default function ConversationsClient() {
             description={`Visiteur ${selected.visitor_ref.slice(0, 12)}${selected.visitor_ref.startsWith('apercu-admin') ? ' — essai depuis l’administration' : ''}`}
           />
           <CardBody>
+            {loadingMessages ? (
+              <Spinner label="Chargement de l’échange…" />
+            ) : messages.length === 0 ? (
+              <p className="text-[14px] text-stone-600">Aucun message dans cette conversation.</p>
+            ) : (
             <ul className="max-h-[28rem] space-y-3 overflow-y-auto">
               {messages.map((message) => (
                 <li key={message.id} className="flex gap-2.5">
                   <span
                     className={`grid size-6 shrink-0 place-items-center rounded-md ${
-                      message.role === 'user' ? 'bg-stone-100 text-stone-600' : 'bg-stone-900 text-white'
+                      message.role === 'user' ? 'bg-stone-100 text-stone-700' : 'bg-accent text-accent-fg'
                     }`}
                   >
                     {message.role === 'user' ? <User size={12} /> : <Bot size={12} />}
                   </span>
-                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-stone-800">
+                  <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-stone-800">
                     {message.content}
                   </p>
                 </li>
               ))}
             </ul>
+            )}
           </CardBody>
         </Card>
       ) : (

@@ -102,6 +102,9 @@ const CURATED_STOCK_COLLECTIONS: Record<string, Array<{ id: string; url: string;
   ],
 };
 
+// Laissée sans authentification volontairement : elle ne renvoie qu'une liste
+// statique d'URL Unsplash (aucune clé, aucune écriture, aucun coût), et son
+// appelant (components/pagebuilder/StockImageSearch.tsx) n'envoie pas de jeton.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const query = (searchParams.get('q') || 'spa').toLowerCase().trim();

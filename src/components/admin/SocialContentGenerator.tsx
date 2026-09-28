@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Sparkles, AlertCircle, CalendarPlus, Check, Loader2 } from 'lucide-react';
+import { Sparkles, AlertCircle, CalendarPlus, Check, Loader2, Share2 } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 import { SITE_CONFIG } from '../../config/site';
 import { fetchBrandTokens, BrandTokens } from '../../utils/socialCards';
@@ -35,10 +35,6 @@ export default function SocialContentGenerator({
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [result, setResult] = useState<SocialGenerationResult | null>(null);
   const [error, setError] = useState('');
-
-  if (!moduleFlags.ai_generation) {
-    return null;
-  }
   const [brand, setBrand] = useState<BrandTokens | null>(null);
 
   // ── Planification ──
@@ -65,15 +61,15 @@ export default function SocialContentGenerator({
       if (!res.ok || !data || data.error) {
         throw new Error(
           data?.error === 'not_configured'
-            ? "Clé API IA non configurée."
-            : data?.error || `Génération impossible (HTTP ${res.status}).`,
+            ? "La rédaction automatique n'est pas activée sur ce site. Contactez la personne qui gère le site."
+            : data?.error || `La rédaction a échoué (erreur ${res.status}). Réessayez dans un instant.`,
         );
       }
       setBrand(brandTokens);
       setResult(data);
       setStatus('done');
     } catch (e: any) {
-      setError(e.message || 'Erreur inconnue');
+      setError(e.message || 'Erreur inconnue.');
       setStatus('error');
     }
   };
@@ -108,7 +104,7 @@ export default function SocialContentGenerator({
           },
           { onConflict: 'source_type,source_ref' },
         );
-      if (upsertError) throw new Error(upsertError.message);
+      if (upsertError) throw new Error(`L'ajout au calendrier a échoué. Réessayez. (Détail : ${upsertError.message})`);
       setSaveState('saved');
     } catch (e: any) {
       setSaveError(e?.message || 'Enregistrement impossible.');
@@ -116,15 +112,22 @@ export default function SocialContentGenerator({
     }
   };
 
+  // Le retour anticipé vient après tous les hooks : placé avant, il changeait
+  // leur nombre dès que les réglages des modules finissaient de charger, et
+  // React plantait (« Rendered more hooks than during the previous render »).
+  if (!moduleFlags.ai_generation) {
+    return null;
+  }
+
   return (
-    <div className="rounded-2xl border border-indigo-100 bg-white overflow-hidden shadow-sm">
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-indigo-100 bg-indigo-50/40">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
-          📱
+    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-stone-200">
+        <div className="bg-stone-100 w-8 h-8 rounded-lg flex items-center justify-center text-stone-700">
+          <Share2 size={16} aria-hidden="true" />
         </div>
         <div>
-          <p className="text-sm font-bold text-stone-900">Contenu Réseaux Sociaux</p>
-          <p className="text-[12.5px] text-stone-500">Instagram, LinkedIn & Facebook — {content ? "généré depuis l'article" : "généré depuis la suggestion"}</p>
+          <p className="text-[15px] font-semibold text-stone-900">Publications pour les réseaux sociaux</p>
+          <p className="text-[13px] text-stone-600">Instagram, LinkedIn et Facebook, rédigées à partir {content ? "de l'article" : 'de cette idée de sujet'}.</p>
         </div>
       </div>
 
@@ -134,23 +137,24 @@ export default function SocialContentGenerator({
             <button
               type="button"
               onClick={generate}
-              className="flex items-center gap-3 bg-stone-900 hover:bg-stone-700 text-white px-4 h-10 rounded-lg font-medium text-sm transition-all shadow-sm cursor-pointer"
+              disabled={!title.trim()}
+              className="flex items-center gap-2 bg-stone-100 hover:bg-stone-200 text-stone-900 px-4 h-10 rounded-lg font-semibold text-sm transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
             >
               <Sparkles size={16} />
-              Générer le contenu réseaux sociaux
+              {status === 'error' ? 'Réessayer' : 'Rédiger les publications'}
             </button>
             {status === 'error' && (
-              <p className="text-xs text-red-500 flex items-center gap-1.5">
-                <AlertCircle size={12} /> {error}
+              <p role="alert" className="text-[13px] text-red-700 flex items-start gap-1.5">
+                <AlertCircle size={15} className="mt-0.5 shrink-0" /> {error}
               </p>
             )}
           </div>
         )}
 
         {status === 'loading' && (
-          <div className="flex items-center gap-3 text-sm text-stone-500 py-4">
-            <div className="w-5 h-5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-            Génération en cours… (Instagram, LinkedIn, Facebook)
+          <div role="status" className="flex items-center gap-3 text-sm text-stone-700 py-4">
+            <div className="w-5 h-5 rounded-full border-2 border-stone-300 border-t-stone-800 animate-spin" />
+            Rédaction en cours (Instagram, LinkedIn, Facebook)… comptez une dizaine de secondes.
           </div>
         )}
 
@@ -158,8 +162,8 @@ export default function SocialContentGenerator({
           <>
             <div className="flex flex-wrap items-end gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
               <div className="space-y-1.5">
-                <label htmlFor="social-planned-date" className="block text-[11px] font-semibold text-stone-500">
-                  Planifier le
+                <label htmlFor="social-planned-date" className="block text-[13px] font-semibold text-stone-800">
+                  À publier le
                 </label>
                 <input
                   id="social-planned-date"
@@ -167,30 +171,30 @@ export default function SocialContentGenerator({
                   value={plannedDate}
                   onChange={(e) => { if (e.target.value) { setPlannedDate(e.target.value); setSaveState('idle'); } }}
                   disabled={saveState === 'saving'}
-                  className="px-3 py-2 border border-stone-200 rounded-lg text-sm outline-none focus:border-indigo-400 bg-white transition-colors disabled:opacity-60"
+                  className="px-3 h-10 border border-stone-300 rounded-lg text-sm outline-none focus:border-accent bg-white transition-colors disabled:opacity-60"
                 />
               </div>
               <button
                 type="button"
                 onClick={planify}
                 disabled={saveState === 'saving' || saveState === 'saved'}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 cursor-pointer"
+                className="flex items-center gap-2 px-4 h-10 rounded-lg bg-stone-100 text-stone-900 text-sm font-semibold hover:bg-stone-200 transition-colors disabled:opacity-45 cursor-pointer"
               >
                 {saveState === 'saving' && <><Loader2 size={14} className="animate-spin" /> Enregistrement…</>}
                 {saveState === 'saved' && <><Check size={14} /> Dans le calendrier</>}
                 {(saveState === 'idle' || saveState === 'error') && <><CalendarPlus size={14} /> Ajouter au calendrier</>}
               </button>
               {saveState === 'saved' && (
-                <Link href="/admin/social" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline underline-offset-2">
+                <Link href="/admin/social" className="text-[13px] font-semibold text-accent hover:underline underline-offset-2 self-center">
                   Ouvrir le calendrier
                 </Link>
               )}
               {saveState === 'error' && (
-                <p className="text-xs text-red-500 flex items-center gap-1.5 basis-full">
-                  <AlertCircle size={12} /> {saveError}
+                <p role="alert" className="text-[13px] text-red-700 flex items-start gap-1.5 basis-full">
+                  <AlertCircle size={15} className="mt-0.5 shrink-0" /> {saveError}
                 </p>
               )}
-              <p className="basis-full text-[12.5px] text-stone-500">
+              <p className="basis-full text-[13px] text-stone-700">
                 Tant que le post n&apos;est pas ajouté au calendrier, il n&apos;est enregistré nulle part.
               </p>
             </div>

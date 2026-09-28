@@ -176,8 +176,23 @@ export interface Product {
   seuil_alerte: number;
   active: boolean;
   ordre: number;
+  usage_type?: 'vente' | 'cabine' | 'consommable' | 'testeur' | 'echantillon';
+  contenance?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export function isVenteProduct(p: Product): boolean {
+  if (p.usage_type && p.usage_type !== 'vente') return false;
+  const nom = (p.nom || '').toLowerCase();
+  const ref = (p.reference || '').toLowerCase();
+  if (ref.startsWith('11') || ref.startsWith('12') || ref.startsWith('13') || ref.startsWith('15') || ref.startsWith('16')) {
+    if (p.usage_type !== 'vente') return false;
+  }
+  if (nom.includes('1 l') || nom.includes('2 l') || nom.includes('2 kg') || nom.includes('cabine') || nom.includes('drap')) {
+    if (p.usage_type !== 'vente') return false;
+  }
+  return true;
 }
 
 export type StockMovementType = 'reception' | 'vente' | 'retour' | 'inventaire' | 'perte';

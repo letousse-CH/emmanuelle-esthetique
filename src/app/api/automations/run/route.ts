@@ -9,11 +9,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { getSupabaseAdmin } from '../../../../utils/supabaseAdmin';
-import { validateSupabaseToken } from '../../../../utils/apiAuth';
+import { hasCronSecret, isAdminRequest } from '../../../../utils/apiAuth';
 import { runAutomation } from '../../../../services/automationRunner';
 import type { Automation } from '../../../../types/automations';
 
 export const runtime = 'nodejs';
+// Les actions IA (rédaction d'article, posts) dépassent souvent les 10 s par
+// défaut des fonctions Netlify : on demande le plafond utilisé par le cron.
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const admin = getSupabaseAdmin();
@@ -26,10 +29,10 @@ export async function POST(req: NextRequest) {
   const triggeredBy = (body?.triggeredBy ?? 'manual').trim();
 
   // Deux portes d'entrée : une session admin, ou le secret de la tâche planifiée.
-  const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  const cronSecret = req.headers.get('x-cron-secret') || '';
-  const isCron = Boolean(process.env.CRON_SECRET) && cronSecret === process.env.CRON_SECRET;
-  if (!isCron && !(await validateSupabaseToken(token))) {
+  // x-cron-secret (ancien en-tête) reste accepté ; x-internal-secret et la
+  // session admin passent par isAdminRequest.
+  const isCron = hasCronSecret(req.headers.get('x-cron-secret'));
+  if (!isCron && !(await isAdminRequest(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

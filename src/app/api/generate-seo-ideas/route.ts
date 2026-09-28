@@ -4,6 +4,9 @@ import { callClaude, extractJson } from '../../../utils/ai';
 import { getSettingsServer } from '../../../services/settingsServer';
 import { getAnthropicKey } from '../../../services/secrets';
 
+// Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   if (!await validateSupabaseToken(token)) {
@@ -39,6 +42,7 @@ export async function POST(req: NextRequest) {
   try {
     response = await callClaude({
       feature: 'seo-ideas',
+      mode: 'quick',
       max_tokens: 2000,
       messages: [{
         role: 'user',

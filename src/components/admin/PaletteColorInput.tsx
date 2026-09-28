@@ -151,14 +151,14 @@ export default function PaletteColorInput({
             }}
           />
           <span className="min-w-0 flex-1">
-            <span className="block text-[12.5px] font-medium text-stone-800">{autoLabel}</span>
-            {autoHint && <span className="block text-[11.5px] leading-snug text-stone-600">{autoHint}</span>}
+            <span className="block text-[13px] font-medium text-stone-800">{autoLabel}</span>
+            {autoHint && <span className="block text-[12.5px] leading-snug text-stone-600">{autoHint}</span>}
           </span>
           {!current && <Check size={13} className="shrink-0 text-stone-900" />}
         </button>
       )}
 
-      <p className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-stone-600">
+      <p className="mb-1.5 text-[13px] font-medium text-stone-700">
         Palette du site
       </p>
       <div className="grid grid-cols-6 gap-1.5">
@@ -172,9 +172,9 @@ export default function PaletteColorInput({
               aria-pressed={active}
               aria-label={swatch.label}
               title={swatch.hint ? `${swatch.label} — ${swatch.hint}` : swatch.label}
-              className={`aspect-square rounded-lg border transition-transform cursor-pointer
+              className={`aspect-square rounded-lg border transition-colors cursor-pointer
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-1 ${
-                  active ? 'border-stone-900 ring-2 ring-stone-900 ring-offset-1' : 'border-stone-300 hover:scale-110'
+                  active ? 'border-stone-900 ring-2 ring-stone-900 ring-offset-1' : 'border-stone-300 hover:border-stone-600'
                 }`}
               style={{ backgroundColor: swatch.value }}
             />

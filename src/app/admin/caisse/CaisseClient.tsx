@@ -2,12 +2,14 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  CreditCard, Search, UserPlus, X, Plus, Minus, Trash2, Check, Download,
+  Search, UserPlus, X, Plus, Minus, Trash2, Check, Download,
   Receipt, AlertCircle, Loader2, Pencil, Gift, Ticket, PenLine, Layers, Package,
-  Cake, Mail, MessageCircle,
+  Cake, Mail, MessageCircle, Target, CheckCircle2, Sparkles,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
+import { Button, Callout, LinkButton, PageHeader } from '../../../components/admin/ui';
 import {
   createClient, createTransaction, findGiftCardByCode, listClients, listGiftCardsForSale,
   listProducts, listServiceCategories, listServices, matchClient,
@@ -16,7 +18,7 @@ import { downloadBonCadeau, downloadFacture } from '../../../utils/factureDownlo
 import { takeCaisseCorrection } from '../../../utils/caissePrefill';
 import {
   CLIENT_DE_PASSAGE, MODES_PAIEMENT, TAUX_TVA_CH, cartTotals, clientFullName, formatCHF,
-  giftCardStatusLabel, isGiftCardUsable, stockLevel,
+  giftCardStatusLabel, isGiftCardUsable, isVenteProduct, stockLevel,
 } from '../../../types/caisse';
 import { toWhatsAppNumber } from '../../../types/promotions';
 import { notifyAutomationEvent } from '../../../utils/automationEvent';
@@ -63,6 +65,16 @@ export default function CaisseClient() {
 
   useEffect(() => { load(); }, []);
 
+  // Lien « Vendre un bon » de l'écran Bons cadeaux : ouvre directement la vente.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  useEffect(() => {
+    if (searchParams.get('vendre') !== 'bon') return;
+    setShowGiftSale(true);
+    // On retire le paramètre : recharger la page ne doit pas rouvrir la vente.
+    router.replace('/admin/caisse', { scroll: false });
+  }, [searchParams, router]);
+
   useEffect(() => {
     const pending = takeCaisseCorrection();
     if (!pending) return;
@@ -73,48 +85,42 @@ export default function CaisseClient() {
     if (pending.clientId) {
       // La fiche est chargée par `load()` : on la retrouve dès qu'elle arrive.
       setPendingClientId(pending.clientId);
+      setPendingClientLabel(pending.clientLabel);
     }
   }, []);
 
   const [pendingClientId, setPendingClientId] = useState<string | null>(null);
+  const [pendingClientLabel, setPendingClientLabel] = useState<string | null>(null);
+  // Cliente de la facture corrigée introuvable (fiche archivée entre-temps) :
+  // sans avertissement, la facture rectifiée partirait en « client de passage ».
+  const [missingClientLabel, setMissingClientLabel] = useState<string | null>(null);
   useEffect(() => {
-    if (!pendingClientId || clients.length === 0) return;
+    // Pas de verdict tant que la liste n'est pas là (chargement ou échec :
+    // « Réessayer » relancera la recherche).
+    if (!pendingClientId || loading || loadError) return;
     const found = clients.find(c => c.id === pendingClientId);
     if (found) setClient(found);
+    else setMissingClientLabel(pendingClientLabel);
     setPendingClientId(null);
-  }, [pendingClientId, clients]);
+  }, [pendingClientId, clients, loading, loadError, pendingClientLabel]);
 
   const load = async () => {
     setLoading(true); setLoadError(null);
     try {
-      const [c, s] = await Promise.all([
-        listClients().catch(() => [
-          { id: '1', nom: 'Martin', prenom: 'Sophie', telephone: '+41 79 123 45 67', email: 'sophie.martin@lausanne.ch', consent_email: true, consent_whatsapp: font => true, created_at: new Date().toISOString() }
-        ] as any),
-        listServices(false).catch(() => [
-          { id: '1', nom: 'Soin Signature Naturo', prix_chf: 140, duree_minutes: 60, actif: true, tva_taux: 8.1 },
-          { id: '2', nom: 'Massage Thérapeutique & Reflexo', prix_chf: 120, duree_minutes: 45, actif: true, tva_taux: 8.1 },
-          { id: '3', nom: 'Consultation Bilan de Santé', prix_chf: 160, duree_minutes: 75, actif: true, tva_taux: 0 },
-        ] as any),
-      ]);
+      // Clientes et prestations sont indispensables : sans elles, on affiche
+      // l'erreur plutôt qu'un catalogue fictif qui produirait de fausses
+      // factures. Catégories et produits sont un confort : leur absence
+      // (migration pas encore appliquée) ne bloque pas l'encaissement.
+      const [c, s] = await Promise.all([listClients(), listServices(false)]);
       setClients(c); setServices(s);
 
       const [cats, prod] = await Promise.all([
         listServiceCategories().catch(() => [] as ServiceCategory[]),
-        listProducts(false).catch(() => [
-          { id: 'p1', nom: 'Huile Essentielle Bio Lavande 50ml', prix_chf: 32, stock_actuel: 12, actif: true, tva_taux: 8.1 }
-        ] as any),
+        listProducts(false).catch(() => [] as Product[]),
       ]);
-      setCategories(cats); setProducts(prod);
+      setCategories(cats); setProducts(prod.filter(isVenteProduct));
     } catch (err) {
-      // En mode démonstration / screenshot, on fournit une liste minimale de secours
-      setClients([
-        { id: '1', nom: 'Martin', prenom: 'Sophie', telephone: '+41 79 123 45 67', email: 'sophie.martin@lausanne.ch', consent_email: true, consent_whatsapp: true, created_at: new Date().toISOString() } as any
-      ]);
-      setServices([
-        { id: '1', nom: 'Soin Signature Naturo', prix_chf: 140, duree_minutes: 60, actif: true, tva_taux: 8.1 },
-        { id: '2', nom: 'Massage Thérapeutique', prix_chf: 120, duree_minutes: 45, actif: true, tva_taux: 8.1 },
-      ] as any);
+      setLoadError(err instanceof Error ? err.message : 'Erreur inconnue.');
     } finally {
       setLoading(false);
     }
@@ -211,11 +217,15 @@ export default function CaisseClient() {
 
   const resetCart = () => {
     setClient(null); setLines([]); setNote(''); setSubmitError(null); setReceipt(null);
-    setGiftCard(null); setCorrection(null);
+    setGiftCard(null); setCorrection(null); setMissingClientLabel(null);
   };
 
+  // Verrou synchrone : l'état `submitting` n'est visible qu'au rendu suivant,
+  // un double appui rapide pourrait sinon émettre deux factures.
+  const submitLock = useRef(false);
   const handleSubmit = async () => {
-    if (lines.length === 0 || submitting) return;
+    if (lines.length === 0 || submitting || submitLock.current) return;
+    submitLock.current = true;
     setSubmitting(true); setSubmitError(null);
     try {
       const tx = await createTransaction({
@@ -235,8 +245,12 @@ export default function CaisseClient() {
       // d'où ce signalement explicite.
       void notifyAutomationEvent('sale.created');
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "L'encaissement a échoué.");
+      setSubmitError(
+        `L'encaissement n'a pas été enregistré${err instanceof Error ? ` (${err.message})` : ''}. `
+        + 'Aucune facture n\'a été créée : vérifiez la connexion puis réessayez.',
+      );
     } finally {
+      submitLock.current = false;
       setSubmitting(false);
     }
   };
@@ -262,57 +276,58 @@ export default function CaisseClient() {
   }
 
   return (
-    <div className={`max-w-6xl mx-auto space-y-6 ${lines.length > 0 ? 'pb-24 lg:pb-0' : ''}`}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Caisse</p>
-          <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
-            <CreditCard size={20} className="text-sage" /> Encaissement
-          </h1>
-          <p className="mt-1 text-sm text-stone-600">
-            {new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <Link
-          href="/admin/caisse/journal"
-          className="flex items-center gap-2 px-4 py-2 border border-stone-200 text-stone-500 hover:text-stone-800 hover:border-stone-300 rounded-lg text-sm transition-all self-start"
-        >
-          <Receipt size={13} /> Journal des recettes
-        </Link>
-      </div>
+    <div className={`space-y-6 ${lines.length > 0 ? 'pb-24 lg:pb-0' : ''}`}>
+      <PageHeader
+        title="Encaissement"
+        description={new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        actions={
+          <div className="flex items-center gap-2">
+            <LinkButton href="/admin/caisse/cockpit" icon={Target} variant="secondary">
+              Cockpit Hebdo (2 clientes/j)
+            </LinkButton>
+            <LinkButton href="/admin/caisse/journal" icon={Receipt}>
+              Journal des recettes
+            </LinkButton>
+          </div>
+        }
+      />
 
       {correction && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">
           <PenLine size={16} className="shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="font-semibold">Correction de la facture {correction.numero}</p>
-            <p className="text-xs mt-0.5 leading-relaxed">
-              Elle a été annulée et reste au journal avec son numéro. Rectifie ce qu&apos;il faut
+            <p className="text-[13px] mt-0.5 leading-relaxed">
+              Elle a été annulée et reste au journal avec son numéro. Rectifiez ce qu&apos;il faut
               ci-dessous : la nouvelle facture y sera rattachée, pour que la correction reste visible.
+              Si un bon cadeau avait servi au paiement, il a été recrédité : présentez-le à nouveau.
             </p>
+            {missingClientLabel && !client && (
+              <p className="text-[13px] mt-1.5 font-semibold">
+                La fiche de {missingClientLabel} n&apos;a pas été retrouvée (peut-être archivée) :
+                choisissez la cliente ci-dessous avant d&apos;encaisser.
+              </p>
+            )}
           </div>
           <button
             onClick={() => setCorrection(null)}
-            className="shrink-0 text-[11px] font-semibold underline underline-offset-2 hover:no-underline cursor-pointer"
+            title="La nouvelle facture ne sera pas liée à l'ancienne"
+            className="shrink-0 text-[13px] font-semibold underline underline-offset-2 hover:no-underline cursor-pointer"
           >
-            Détacher
+            Ne pas rattacher
           </button>
         </div>
       )}
 
       {loadError && (
-        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700">
-          <AlertCircle size={16} className="shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold">Chargement impossible</p>
-            <p className="text-xs font-mono mt-0.5">{loadError}</p>
-            <p className="text-xs mt-1">
-              Si l&apos;erreur mentionne une table manquante, applique la migration
-              <code className="mx-1 px-1 bg-red-100 rounded">supabase/migrations/20260731_caisse.sql</code>
-              sur ton projet Supabase.
-            </p>
-          </div>
-        </div>
+        <Callout
+          tone="danger"
+          title="Les clientes et le catalogue n'ont pas pu être chargés"
+          actions={<Button size="sm" onClick={load} loading={loading}>Réessayer</Button>}
+        >
+          <p>Vérifiez la connexion internet puis réessayez. N&apos;encaissez pas tant que ce message est affiché.</p>
+          <p className="mt-1 text-[13px] text-red-800/80 break-words">Détail technique : {loadError}</p>
+        </Callout>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
@@ -339,22 +354,25 @@ export default function CaisseClient() {
 
         {/* ── Colonne droite : panier ──────────────────────────────────── */}
         <div className="lg:col-span-2 lg:sticky lg:top-20 space-y-4">
-          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-stone-100 flex items-center justify-between">
+          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between">
               <h2 className="text-[13px] font-medium text-stone-800">Panier</h2>
               {lines.length > 0 && (
                 <button
-                  onClick={() => setLines([])}
-                  className="text-[12.5px] text-stone-500 hover:text-red-500 transition-colors cursor-pointer"
+                  onClick={() => {
+                    if (lines.length > 1 && !confirm(`Retirer les ${lines.length} lignes du panier ?`)) return;
+                    setLines([]);
+                  }}
+                  className="text-[13px] text-stone-600 hover:text-red-700 transition-colors cursor-pointer"
                 >
-                  Vider
+                  Vider le panier
                 </button>
               )}
             </div>
 
             {lines.length === 0 ? (
-              <p className="p-8 text-center text-sm text-stone-600">
-                Sélectionne une prestation pour commencer.
+              <p className="p-8 text-center text-sm text-stone-700">
+                Choisissez une prestation dans le catalogue pour commencer.
               </p>
             ) : (
               <ul className="divide-y divide-stone-50">
@@ -370,7 +388,7 @@ export default function CaisseClient() {
               </ul>
             )}
 
-            <div className="px-5 py-4 border-t border-stone-100 bg-stone-50/50 space-y-1.5 text-sm">
+            <div className="px-5 py-4 border-t border-stone-200 bg-stone-50/50 space-y-1.5 text-sm">
               {tvaActive && (
                 <>
                   <Row label="Total HT" value={formatCHF(totals.ht)} />
@@ -383,76 +401,73 @@ export default function CaisseClient() {
                   <Row label={`Bon ${giftCard?.code ?? ''}`} value={`− ${formatCHF(montantBon)}`} />
                 </>
               )}
-              <div className="flex items-center justify-between pt-1.5 border-t border-stone-100">
+              <div className="flex items-center justify-between pt-1.5 border-t border-stone-200">
                 <span className="text-sm font-medium text-stone-800">
                   {montantBon > 0 ? 'Reste à encaisser' : 'Total à encaisser'}
                 </span>
                 <span className="text-xl font-semibold text-stone-900 tabular-nums">{formatCHF(resteAPayer)}</span>
               </div>
               {!tvaActive && (
-                <p className="text-[12px] text-stone-500 pt-1">TVA 0 % — activité non assujettie</p>
+                <p className="text-[12px] text-stone-600 pt-1">TVA 0 % — activité non assujettie</p>
               )}
             </div>
           </div>
 
           {/* ── Bon cadeau présenté en paiement ────────────────────────── */}
-          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5">
+          <div className="bg-white border border-stone-200 rounded-xl p-5">
             {giftCard ? (
               <div className="space-y-2.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-stone-900 flex items-center gap-2">
-                      <Ticket size={14} className="text-sage shrink-0" /> {giftCard.code}
+                      <Ticket size={14} className="text-accent shrink-0" /> {giftCard.code}
                     </p>
-                    <p className="truncate text-[12.5px] text-stone-500">{giftCard.libelle}</p>
+                    <p className="truncate text-[12.5px] text-stone-600">{giftCard.libelle}</p>
                   </div>
                   <button
                     onClick={() => setGiftCard(null)}
                     aria-label="Retirer le bon cadeau"
-                    className="shrink-0 p-1.5 text-stone-500 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                    className="shrink-0 p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer"
                   >
                     <X size={14} />
                   </button>
                 </div>
                 <dl className="text-xs space-y-1">
                   <div className="flex justify-between">
-                    <dt className="text-stone-500">Solde du bon</dt>
-                    <dd className="text-stone-600 tabular-nums">{formatCHF(giftCard.montant_restant)}</dd>
+                    <dt className="text-stone-600">Solde du bon</dt>
+                    <dd className="text-stone-700 tabular-nums">{formatCHF(giftCard.montant_restant)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-stone-500">Appliqué à cette vente</dt>
-                    <dd className="text-sage font-medium tabular-nums">− {formatCHF(montantBon)}</dd>
+                    <dt className="text-stone-600">Appliqué à cette vente</dt>
+                    <dd className="text-accent font-medium tabular-nums">− {formatCHF(montantBon)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-stone-500">Restera sur le bon</dt>
-                    <dd className="text-stone-600 tabular-nums">
+                    <dt className="text-stone-600">Restera sur le bon</dt>
+                    <dd className="text-stone-700 tabular-nums">
                       {formatCHF(Number(giftCard.montant_restant) - montantBon)}
                     </dd>
                   </div>
                 </dl>
-                <p className="text-[12px] text-stone-500 leading-relaxed pt-1">
+                <p className="text-[12px] text-stone-600 leading-relaxed pt-1">
                   Cette part n&apos;entre pas dans les recettes : elle a été encaissée
                   le jour où le bon a été vendu.
                 </p>
               </div>
             ) : (
-              <button
-                onClick={() => setShowGiftUse(true)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 text-sm transition-all cursor-pointer"
-              >
-                <Ticket size={15} /> La cliente a un bon cadeau
-              </button>
+              <Button icon={Ticket} onClick={() => setShowGiftUse(true)} className="w-full">
+                Utiliser un bon cadeau
+              </Button>
             )}
           </div>
 
-          <div ref={paymentRef} className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5 space-y-4 scroll-mt-4">
+          <div ref={paymentRef} className="bg-white border border-stone-200 rounded-xl p-5 space-y-4 scroll-mt-4">
             <div>
               <p className="text-[13px] font-medium text-stone-800 mb-2.5">
                 {montantBon > 0 ? 'Reste à régler' : 'Mode de paiement'}
               </p>
               {resteAPayer === 0 && montantBon > 0 ? (
-                <div className="flex items-center gap-2.5 rounded-lg border border-sage/30 bg-sage/5 px-4 py-3 text-sm text-stone-700">
-                  <Ticket size={15} className="text-sage shrink-0" />
+                <div className="flex items-center gap-2.5 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-stone-700">
+                  <Ticket size={15} className="text-accent shrink-0" />
                   Intégralement réglé par le bon {giftCard?.code}. Rien à encaisser.
                 </div>
               ) : (
@@ -464,8 +479,8 @@ export default function CaisseClient() {
                       aria-pressed={mode === m.value}
                       className={`py-2.5 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
                         mode === m.value
-                          ? 'border-sage bg-sage/8 text-sage'
-                          : 'border-stone-200 text-stone-500 hover:border-stone-300 hover:text-stone-700'
+                          ? 'border-accent bg-accent/8 text-accent'
+                          : 'border-stone-200 text-stone-600 hover:border-stone-300 hover:text-stone-700'
                       }`}
                     >
                       {m.label}
@@ -477,7 +492,7 @@ export default function CaisseClient() {
 
             <div>
               <label htmlFor="caisse-note" className="block text-[13px] font-medium text-stone-800 mb-2">
-                Note <span className="normal-case tracking-normal font-normal text-stone-500">(facultatif)</span>
+                Note <span className="normal-case tracking-normal font-normal text-stone-600">(facultatif)</span>
               </label>
               <input
                 id="caisse-note"
@@ -485,21 +500,48 @@ export default function CaisseClient() {
                 value={note}
                 onChange={e => setNote(e.target.value)}
                 placeholder="Bon cadeau, remarque…"
-                className="w-full px-3.5 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+                className="w-full px-3.5 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
               />
             </div>
 
             {submitError && (
-              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-700">
+              <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] text-red-700">
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />
                 <span>{submitError}</span>
+              </div>
+            )}
+
+            {lines.length > 0 && resteAPayer > 0 && (
+              <div className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 transition-all ${
+                resteAPayer >= 250 && resteAPayer <= 450
+                  ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
+                  : resteAPayer > 450
+                  ? 'bg-purple-50 text-purple-950 border-purple-200'
+                  : 'bg-amber-50/80 text-amber-950 border-amber-200'
+              }`}>
+                {resteAPayer >= 250 && resteAPayer <= 450 ? (
+                  <>
+                    <CheckCircle2 size={15} className="text-emerald-700 shrink-0" />
+                    <span><strong>Panier cible atteint :</strong> {formatCHF(resteAPayer)} est parfaitement dans la fourchette 250–450 CHF !</span>
+                  </>
+                ) : resteAPayer > 450 ? (
+                  <>
+                    <Sparkles size={15} className="text-purple-700 shrink-0" />
+                    <span><strong>Panier d&apos;excellence (&gt; 450 CHF) :</strong> Bravo pour cette belle vente conseil !</span>
+                  </>
+                ) : (
+                  <>
+                    <Target size={15} className="text-amber-700 shrink-0" />
+                    <span><strong>Objectif panier (250–450 CHF) :</strong> Proposez 1 produit conseil en plus pour atteindre le palier.</span>
+                  </>
+                )}
               </div>
             )}
 
             <button
               onClick={handleSubmit}
               disabled={lines.length === 0 || submitting}
-              className="w-full inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 via-teal-600 to-indigo-600 hover:from-emerald-600 hover:to-indigo-700 text-white text-sm font-extrabold shadow-[0_4px_15px_rgba(16,185,129,0.3)] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-40 cursor-pointer"
+              className="bg-accent hover:bg-accent-hover w-full inline-flex h-12 items-center justify-center gap-2 rounded-lg text-accent-fg text-[15px] font-semibold transition-colors disabled:opacity-40 cursor-pointer"
             >
               {submitting
                 ? <><Loader2 size={15} className="animate-spin" /> Encaissement…</>
@@ -507,7 +549,7 @@ export default function CaisseClient() {
                   ? <><Check size={15} /> Valider la prestation</>
                   : <><Check size={15} /> Encaisser {formatCHF(resteAPayer)}</>}
             </button>
-            <p className="text-[12px] text-stone-500 text-center leading-relaxed">
+            <p className="text-[12px] text-stone-600 text-center leading-relaxed">
               La facture est numérotée et enregistrée définitivement.
               Une erreur se corrige depuis le journal, avec le bouton « Corriger ».
             </p>
@@ -526,14 +568,14 @@ export default function CaisseClient() {
         >
           <button
             onClick={() => paymentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-            className="w-full flex items-center justify-between gap-3 bg-stone-900 text-white pl-5 pr-4 py-3.5 rounded-xl shadow-lg active:bg-sage transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between gap-3 bg-accent text-accent-fg pl-5 pr-4 py-3.5 rounded-xl shadow-lg active:bg-accent-hover transition-colors cursor-pointer"
           >
-            <span className="text-xs text-white/60">
+            <span className="text-[13px] text-accent-fg/80">
               {lines.length} ligne{lines.length !== 1 ? 's' : ''}
             </span>
             <span className="flex items-center gap-2">
               <span className="text-base font-semibold tabular-nums">{formatCHF(resteAPayer)}</span>
-              <span className="text-xs text-white/70">Paiement →</span>
+              <span className="text-[13px] text-accent-fg/80">Paiement →</span>
             </span>
           </button>
         </div>
@@ -546,7 +588,7 @@ export default function CaisseClient() {
         />
       )}
 
-      {showGiftSale && (
+      {showGiftSale && !loading && (
         <GiftCardSaleDialog
           services={services}
           validiteMois={bonValiditeMois}
@@ -575,7 +617,7 @@ function GiftCardUseDialog({ onClose, onFound }: {
     try {
       const card = await findGiftCardByCode(code);
       if (!card) {
-        setError(`Aucun bon ne porte le code « ${code.trim()} ».`);
+        setError(`Aucun bon ne porte le code « ${code.trim()} ». Vérifiez l'orthographe, ou retrouvez-le dans l'écran Bons cadeaux.`);
       } else if (!isGiftCardUsable(card)) {
         setError(`Ce bon n'est pas utilisable : ${giftCardStatusLabel(card).toLowerCase()}.`);
       } else {
@@ -594,13 +636,13 @@ function GiftCardUseDialog({ onClose, onFound }: {
       <div
         role="dialog" aria-modal="true" aria-label="Utiliser un bon cadeau"
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4"
+        className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-            <Ticket size={15} className="text-sage" /> Bon cadeau
+            <Ticket size={15} className="text-accent" /> Bon cadeau
           </h3>
-          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -614,7 +656,7 @@ function GiftCardUseDialog({ onClose, onFound }: {
               id="gift-code" type="text" value={code} autoFocus autoCapitalize="characters"
               onChange={e => setCode(e.target.value)}
               placeholder={`BON-${new Date().getFullYear()}-0001`}
-              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors uppercase tracking-wide"
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors uppercase tracking-wide"
             />
           </div>
 
@@ -622,7 +664,7 @@ function GiftCardUseDialog({ onClose, onFound }: {
 
           <button
             type="submit" disabled={searching || !code.trim()}
-            className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 bg-accent text-accent-fg py-2.5 rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-40 cursor-pointer"
           >
             {searching ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
             {searching ? 'Recherche…' : 'Appliquer le bon'}
@@ -661,13 +703,13 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
     if (kind === 'montant') {
       const value = Number(montant.replace(',', '.'));
       if (!Number.isFinite(value) || value <= 0) {
-        setError('Indique un montant supérieur à zéro.');
+        setError('Indiquez un montant supérieur à zéro.');
         return;
       }
       onAdd(Math.round(value * 100) / 100, 'Bon cadeau', beneficiaire.trim());
     } else {
       if (pickedServices.length === 0) {
-        setError('Choisis au moins un soin.');
+        setError('Choisissez au moins un soin.');
         return;
       }
       onAdd(
@@ -679,17 +721,17 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto">
       <div
         role="dialog" aria-modal="true" aria-label="Vendre un bon cadeau"
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 my-8"
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 my-8"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-            <Gift size={15} className="text-sage" /> Vendre un bon cadeau
+            <Gift size={15} className="text-accent" /> Vendre un bon cadeau
           </h3>
-          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -701,7 +743,7 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
                 key={k} type="button" onClick={() => { setKind(k); setError(null); }}
                 aria-pressed={kind === k}
                 className={`flex-1 px-4 py-2 text-sm transition-colors cursor-pointer ${
-                  kind === k ? 'bg-sage/10 text-sage font-medium' : 'text-stone-500 hover:bg-stone-50'
+                  kind === k ? 'bg-accent-soft text-accent font-semibold' : 'text-stone-700 hover:bg-stone-50'
                 }`}
               >
                 {label}
@@ -718,14 +760,14 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
                 id="gift-montant" type="text" inputMode="decimal" autoFocus
                 value={montant} onChange={e => setMontant(e.target.value)}
                 placeholder="150.00"
-                className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
+                className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
               />
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-[11px] font-medium text-stone-500">Soins offerts *</p>
+              <p className="text-[13px] font-medium text-stone-700">Soins offerts *</p>
               {services.length === 0 ? (
-                <p className="text-[12.5px] text-stone-500 italic">Le catalogue est vide.</p>
+                <p className="text-[12.5px] text-stone-600 italic">Le catalogue est vide.</p>
               ) : (
                 <div className="max-h-52 overflow-y-auto rounded-lg border border-stone-200 divide-y divide-stone-50">
                   {services.map(s => {
@@ -735,10 +777,10 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
                         <input
                           type="checkbox" checked={checked}
                           onChange={() => setPicked(p => checked ? p.filter(id => id !== s.id) : [...p, s.id])}
-                          className="accent-sage"
+                          className="accent-accent"
                         />
                         <span className="flex-1 text-sm text-stone-700 truncate">{s.nom}</span>
-                        <span className="text-[12.5px] text-stone-500 tabular-nums">{formatCHF(s.prix_chf)}</span>
+                        <span className="text-[12.5px] text-stone-600 tabular-nums">{formatCHF(s.prix_chf)}</span>
                       </label>
                     );
                   })}
@@ -754,7 +796,7 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
 
           <div>
             <label htmlFor="gift-benef" className="block text-[12.5px] font-medium text-stone-700 mb-1">
-              Bénéficiaire <span className="text-stone-500">(facultatif — la personne à qui il est offert)</span>
+              Bénéficiaire <span className="text-stone-600">(facultatif — la personne à qui il est offert)</span>
             </label>
             <input
               id="gift-benef" type="text" value={beneficiaire} onChange={e => setBeneficiaire(e.target.value)}
@@ -762,7 +804,7 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
             />
           </div>
 
-          <div className="rounded-lg bg-stone-50 border border-stone-100 px-4 py-3 text-[11px] text-stone-500 leading-relaxed">
+          <div className="rounded-lg bg-stone-50 border border-stone-200 px-4 py-3 text-[13px] text-stone-600 leading-relaxed">
             Valable {validiteMois} mois — jusqu&apos;au{' '}
             <strong className="text-stone-700">{echeance.toLocaleDateString('fr-CH')}</strong>.
             L&apos;échéance est figée à l&apos;émission : changer la durée dans les réglages
@@ -774,13 +816,13 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
           <div className="flex gap-2">
             <button
               type="button" onClick={onClose}
-              className="flex-1 py-2.5 rounded-lg border border-stone-200 text-stone-600 text-sm hover:border-stone-300 transition-all cursor-pointer"
+              className="flex-1 py-2.5 rounded-lg bg-stone-100 text-stone-900 font-semibold text-sm hover:bg-stone-200 transition-colors cursor-pointer"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="flex-1 flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-fg py-2.5 rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors cursor-pointer"
             >
               <Plus size={14} /> Ajouter au panier
             </button>
@@ -793,7 +835,7 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between text-stone-500">
+    <div className="flex items-center justify-between text-stone-600">
       <span className="text-xs">{label}</span>
       <span className="text-xs tabular-nums">{value}</span>
     </div>
@@ -828,23 +870,23 @@ function ClientPicker({ clients, selected, onSelect, onCreated }: {
   );
 
   return (
-    <div ref={containerRef} className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5 relative">
+    <div ref={containerRef} className="bg-white border border-stone-200 rounded-xl p-5 relative">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[13px] font-medium text-stone-800">Cliente</h2>
         <button
           onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 text-[11px] text-sage hover:text-stone-900/70 font-semibold transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 text-[13px] text-accent hover:underline font-semibold cursor-pointer"
         >
-          <UserPlus size={12} /> Nouvelle fiche
+          <UserPlus size={14} /> Nouvelle cliente
         </button>
       </div>
 
       {selected ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-sage/30 bg-sage/5 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3">
           <div className="min-w-0">
             <p className="text-sm font-medium text-stone-900 truncate">{clientFullName(selected)}</p>
             {(selected.telephone || selected.email) && (
-              <p className="truncate text-[12.5px] text-stone-500">
+              <p className="truncate text-[12.5px] text-stone-600">
                 {[selected.telephone, selected.email].filter(Boolean).join(' · ')}
               </p>
             )}
@@ -852,7 +894,7 @@ function ClientPicker({ clients, selected, onSelect, onCreated }: {
           <button
             onClick={() => { onSelect(null); setSearch(''); }}
             aria-label="Retirer la cliente sélectionnée"
-            className="shrink-0 p-1.5 text-stone-500 hover:text-red-500 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+            className="shrink-0 p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer"
           >
             <X size={14} />
           </button>
@@ -862,7 +904,7 @@ function ClientPicker({ clients, selected, onSelect, onCreated }: {
           {/* Le menu est ancré sur le champ lui-même (`top-full`) : pas de
               décalage codé en dur qui casserait si le libellé change. */}
           <div className="relative">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-500 pointer-events-none" />
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-600 pointer-events-none" />
             <label htmlFor="caisse-client-search" className="sr-only">Rechercher une cliente</label>
             <input
               id="caisse-client-search"
@@ -872,13 +914,13 @@ function ClientPicker({ clients, selected, onSelect, onCreated }: {
               onFocus={() => setOpen(true)}
               placeholder="Nom, prénom ou téléphone…"
               autoComplete="off"
-              className="w-full pl-9 pr-4 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+              className="w-full pl-9 pr-4 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
             />
 
             {open && search.trim() !== '' && (
               <ul className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden max-h-72 overflow-y-auto">
                 {results.length === 0 ? (
-                  <li className="px-4 py-3 text-sm text-stone-600 italic">Aucune cliente trouvée.</li>
+                  <li className="px-4 py-3 text-sm text-stone-700 italic">Aucune cliente trouvée.</li>
                 ) : results.map(c => (
                   <li key={c.id}>
                     <button
@@ -886,15 +928,15 @@ function ClientPicker({ clients, selected, onSelect, onCreated }: {
                       className="w-full text-left px-4 py-2.5 hover:bg-stone-50 transition-colors cursor-pointer"
                     >
                       <span className="block text-sm text-stone-800">{clientFullName(c)}</span>
-                      {c.telephone && <span className="block text-[12.5px] text-stone-500">{c.telephone}</span>}
+                      {c.telephone && <span className="block text-[12.5px] text-stone-600">{c.telephone}</span>}
                     </button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
-          <p className="mt-2 text-[12.5px] text-stone-500">
-            Laisse vide pour encaisser en <strong className="font-medium text-stone-500">{CLIENT_DE_PASSAGE}</strong>.
+          <p className="mt-2 text-[12.5px] text-stone-600">
+            Sans cliente choisie, la facture est établie au nom de <strong className="font-medium text-stone-700">{CLIENT_DE_PASSAGE}</strong>.
           </p>
         </>
       )}
@@ -964,20 +1006,17 @@ function QuickClientDialog({ onClose, onCreated }: {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Nouvelle fiche cliente"
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4 my-8"
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4 my-8"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-stone-900">Nouvelle cliente</h3>
-          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -993,8 +1032,8 @@ function QuickClientDialog({ onClose, onCreated }: {
           </div>
 
           <div>
-            <label htmlFor="qc-naissance" className="text-[11px] font-medium text-stone-500 mb-1 flex items-center gap-1.5">
-              <Cake size={11} className="text-stone-500" /> Date de naissance
+            <label htmlFor="qc-naissance" className="text-[12.5px] font-medium text-stone-700 mb-1 flex items-center gap-1.5">
+              <Cake size={13} className="text-stone-600" /> Date de naissance
             </label>
             <input
               id="qc-naissance" type="date" value={dateNaissance}
@@ -1005,7 +1044,7 @@ function QuickClientDialog({ onClose, onCreated }: {
 
           <div>
             <label htmlFor="qc-notes" className="block text-[12.5px] font-medium text-stone-700 mb-1">
-              Notes <span className="text-stone-500">(préférences, habitudes…)</span>
+              Notes <span className="text-stone-600">(préférences, habitudes…)</span>
             </label>
             <textarea
               id="qc-notes" rows={2} value={notes} onChange={e => setNotes(e.target.value)}
@@ -1014,14 +1053,14 @@ function QuickClientDialog({ onClose, onCreated }: {
           </div>
 
           <fieldset className="rounded-xl border border-stone-200 p-3.5 space-y-2.5">
-            <legend className="text-[11px] font-medium text-stone-500 px-1">Accords publicitaires</legend>
-            <p className="text-[12px] text-stone-500 leading-relaxed">
+            <legend className="text-[13px] font-medium text-stone-700 px-1">Accords publicitaires</legend>
+            <p className="text-[12px] text-stone-600 leading-relaxed">
               À cocher seulement si elle vient de le dire. Sans ces cases, elle ne recevra
               aucune promotion.
             </p>
             <QuickConsent
               id="qc-consent-email" icon={Mail} label="Offres par e-mail"
-              detail={emailClean || 'Renseigne une adresse pour l’activer'}
+              detail={emailClean || 'Saisissez une adresse pour l’activer'}
               checked={consentEmail} disabled={!emailClean}
               onToggle={() => setConsentEmail(v => !v)}
             />
@@ -1029,7 +1068,7 @@ function QuickClientDialog({ onClose, onCreated }: {
               id="qc-consent-wa" icon={MessageCircle} label="Offres par WhatsApp"
               detail={waNumber
                 ? `+${waNumber}`
-                : telephone.trim() ? 'Numéro non exploitable' : 'Renseigne un numéro pour l’activer'}
+                : telephone.trim() ? 'Numéro non reconnu : vérifiez l’indicatif' : 'Saisissez un numéro pour l’activer'}
               checked={consentWa} disabled={!waNumber}
               onToggle={() => setConsentWa(v => !v)}
             />
@@ -1040,10 +1079,10 @@ function QuickClientDialog({ onClose, onCreated }: {
           <button
             type="submit"
             disabled={saving || !nom.trim()}
-            className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 bg-accent text-accent-fg py-2.5 rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-40 cursor-pointer"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            {saving ? 'Enregistrement…' : 'Créer et sélectionner'}
+            {saving ? 'Enregistrement…' : 'Créer la fiche et la choisir'}
           </button>
         </form>
       </div>
@@ -1059,17 +1098,17 @@ function QuickConsent({ id, icon: Icon, label, detail, checked, disabled, onTogg
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-start gap-2.5 min-w-0">
-        <Icon size={13} className="text-stone-500 shrink-0 mt-0.5" />
+        <Icon size={13} className="text-stone-600 shrink-0 mt-0.5" />
         <div className="min-w-0">
           <label htmlFor={id} className="text-sm text-stone-700 cursor-pointer">{label}</label>
-          <p className="text-[12.5px] text-stone-500 truncate">{detail}</p>
+          <p className="text-[12.5px] text-stone-600 truncate">{detail}</p>
         </div>
       </div>
       <button
         id={id} type="button" role="switch" aria-checked={checked} aria-label={label}
         onClick={onToggle} disabled={disabled}
         className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
-          checked ? 'bg-sage' : 'bg-stone-200'
+          checked ? 'bg-accent' : 'bg-stone-200'
         }`}
       >
         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -1123,6 +1162,7 @@ function ServiceCatalog({
   const [search, setSearch] = useState('');
   const [customLabel, setCustomLabel] = useState('');
   const [customAmount, setCustomAmount] = useState('');
+  const [customError, setCustomError] = useState<string | null>(null);
 
   // Seules les catégories qui ont quelque chose à montrer deviennent un onglet :
   // une rangée d'onglets vides ferait perdre plus de temps qu'elle n'en gagne.
@@ -1164,37 +1204,41 @@ function ServiceCatalog({
   const submitCustom = (e: React.FormEvent) => {
     e.preventDefault();
     const prix = Number(customAmount.replace(',', '.'));
-    if (!Number.isFinite(prix) || prix <= 0) return;
-    onCustom(customLabel.trim() || 'Prestation', prix);
+    if (!Number.isFinite(prix) || prix <= 0) {
+      setCustomError('Montant non reconnu : saisissez un nombre, par exemple 45 ou 45.50.');
+      return;
+    }
+    setCustomError(null);
+    onCustom(customLabel.trim() || 'Prestation', Math.round(prix * 100) / 100);
     setCustomLabel(''); setCustomAmount('');
   };
 
   return (
-    <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-5 space-y-4">
+    <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-[13px] font-medium text-stone-800 flex items-center gap-2">
           Catalogue
           {/* Seul accès au catalogue en mode app : la barre d'onglets n'a que
               quatre places, et la barre latérale de l'admin y est masquée. */}
-          <Link href="/admin/caisse/prestations" className="normal-case tracking-normal font-normal text-[11px] text-stone-500 hover:text-stone-900 transition-colors">
-            gérer
+          <Link href="/admin/caisse/prestations" className="font-normal text-[13px] text-stone-600 underline underline-offset-2 hover:text-stone-900 transition-colors">
+            Gérer le catalogue
           </Link>
         </h2>
         <button
           onClick={onSellGiftCard}
-          className="flex items-center gap-1.5 text-[11px] text-sage hover:text-stone-900/70 font-semibold transition-colors cursor-pointer self-start sm:order-last"
+          className="flex items-center gap-1.5 text-[13px] text-accent hover:underline font-semibold cursor-pointer self-start sm:order-last"
         >
-          <Gift size={12} /> Vendre un bon cadeau
+          <Gift size={14} /> Vendre un bon cadeau
         </button>
         {(services.length + products.length > 6) && (
           <div className="relative sm:w-56">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-600" />
             <label htmlFor="caisse-service-search" className="sr-only">Filtrer le catalogue</label>
             <input
               id="caisse-service-search"
               type="text" value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Filtrer…"
-              className="w-full pl-8 pr-3 py-1.5 border border-stone-200 rounded-lg text-xs text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none"
+              className="w-full pl-8 pr-3 py-1.5 border border-stone-200 rounded-lg text-[13px] text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none"
             />
           </div>
         )}
@@ -1207,13 +1251,13 @@ function ServiceCatalog({
               key={t.id}
               onClick={() => setTab(t.id)}
               aria-pressed={activeTab === t.id}
-              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+              className={`shrink-0 px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors cursor-pointer ${
                 activeTab === t.id
-                  ? 'border-sage bg-sage/8 text-sage'
-                  : 'border-stone-200 text-stone-500 hover:border-stone-300 hover:text-stone-700'
+                  ? 'border-accent bg-accent/8 text-accent'
+                  : 'border-stone-200 text-stone-600 hover:border-stone-300 hover:text-stone-700'
               }`}
             >
-              {t.id === 'produits' && <Package size={11} className="inline mr-1 -mt-0.5" />}
+              {t.id === 'produits' && <Package size={13} className="inline mr-1 -mt-0.5" />}
               {t.label}
             </button>
           ))}
@@ -1226,8 +1270,8 @@ function ServiceCatalog({
         </div>
       ) : services.length === 0 && products.length === 0 ? (
         <div className="rounded-xl border border-dashed border-stone-200 px-5 py-6 text-center">
-          <p className="text-sm text-stone-600 mb-2">Le catalogue est vide.</p>
-          <Link href="/admin/caisse/prestations" className="text-sage text-sm font-medium hover:underline">
+          <p className="text-sm text-stone-700 mb-2">Le catalogue est vide.</p>
+          <Link href="/admin/caisse/prestations" className="text-accent text-sm font-medium hover:underline">
             Créer le catalogue →
           </Link>
         </div>
@@ -1239,11 +1283,11 @@ function ServiceCatalog({
                 <button
                   key={s.id}
                   onClick={() => onPick(s)}
-                  className="text-left px-3.5 py-3 rounded-xl border border-stone-200 hover:border-sage hover:bg-sage/5 transition-all cursor-pointer group"
+                  className="text-left px-3.5 py-3 rounded-xl border border-stone-200 hover:border-accent hover:bg-accent/5 transition-all cursor-pointer group"
                 >
                   <span className="block text-sm text-stone-800 font-medium leading-snug line-clamp-2 group-hover:text-stone-900">{s.nom}</span>
-                  <span className="flex items-center gap-1.5 text-[12.5px] text-stone-500 mt-1 tabular-nums">
-                    {s.type === 'forfait' && <Layers size={10} className="text-sage shrink-0" />}
+                  <span className="flex items-center gap-1.5 text-[12.5px] text-stone-600 mt-1 tabular-nums">
+                    {s.type === 'forfait' && <Layers size={12} className="text-accent shrink-0" aria-label="Forfait" />}
                     {formatCHF(s.prix_chf)}
                   </span>
                 </button>
@@ -1254,7 +1298,7 @@ function ServiceCatalog({
           {showProducts && (
             <div className="space-y-2">
               {activeTab === 'all' && (
-                <p className="text-[12px] font-semibold text-stone-500">Produits</p>
+                <p className="text-[13px] font-semibold text-stone-700">Produits</p>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 {filteredProducts.map(p => {
@@ -1268,16 +1312,16 @@ function ServiceCatalog({
                     <button
                       key={p.id}
                       onClick={() => onPickProduct(p)}
-                      className="text-left px-3.5 py-3 rounded-xl border border-stone-200 hover:border-sage hover:bg-sage/5 transition-all cursor-pointer group"
+                      className="text-left px-3.5 py-3 rounded-xl border border-stone-200 hover:border-accent hover:bg-accent/5 transition-all cursor-pointer group"
                     >
                       <span className="block text-sm text-stone-800 font-medium leading-snug line-clamp-2 group-hover:text-stone-900">{p.nom}</span>
                       <span className="flex items-center justify-between gap-2 mt-1">
-                        <span className="text-[12.5px] text-stone-500 tabular-nums">{formatCHF(p.prix_vente_chf)}</span>
+                        <span className="text-[12.5px] text-stone-600 tabular-nums">{formatCHF(p.prix_vente_chf)}</span>
                         <span
                           className={`text-[12px] font-semibold tabular-nums px-1.5 py-0.5 rounded ${
                             niveau === 'rupture' ? 'bg-red-50 text-red-600'
                             : niveau === 'bas' ? 'bg-amber-50 text-amber-700'
-                            : 'bg-stone-100 text-stone-500'
+                            : 'bg-stone-100 text-stone-600'
                           }`}
                           title={niveau === 'rupture' ? 'Stock épuisé — la vente reste possible' : 'Stock restant'}
                         >
@@ -1292,7 +1336,7 @@ function ServiceCatalog({
           )}
 
           {!showServices && !showProducts && (
-            <p className="rounded-xl border border-dashed border-stone-200 px-5 py-6 text-center text-sm text-stone-600">
+            <p className="rounded-xl border border-dashed border-stone-200 px-5 py-6 text-center text-sm text-stone-700">
               Rien ne correspond{term ? ' à ce filtre' : ' dans cette catégorie'}.
             </p>
           )}
@@ -1306,23 +1350,24 @@ function ServiceCatalog({
           id="caisse-custom-label"
           type="text" value={customLabel} onChange={e => setCustomLabel(e.target.value)}
           placeholder="Montant libre — libellé"
-          className="flex-1 px-3.5 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+          className="flex-1 px-3.5 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
         />
         <label htmlFor="caisse-custom-amount" className="sr-only">Montant en francs</label>
         <input
           id="caisse-custom-amount"
-          type="text" inputMode="decimal" value={customAmount} onChange={e => setCustomAmount(e.target.value)}
+          type="text" inputMode="decimal" value={customAmount} onChange={e => { setCustomAmount(e.target.value); setCustomError(null); }}
           placeholder="CHF"
-          className="sm:w-28 px-3.5 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
+          className="sm:w-28 px-3.5 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
         />
         <button
           type="submit"
           disabled={!customAmount.trim()}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 text-sm transition-all disabled:opacity-40 cursor-pointer"
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-stone-100 text-stone-900 font-semibold hover:bg-stone-200 text-sm transition-colors disabled:opacity-40 cursor-pointer"
         >
           <Plus size={14} /> Ajouter
         </button>
       </form>
+      {customError && <p role="alert" className="-mt-2 text-[13px] text-red-700">{customError}</p>}
     </div>
   );
 }
@@ -1346,7 +1391,7 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
         <button
           onClick={onRemove}
           aria-label={`Retirer ${line.description}`}
-          className="shrink-0 p-1 text-stone-500 hover:text-red-700 rounded hover:bg-red-50 transition-all cursor-pointer"
+          className="shrink-0 p-1 text-stone-600 hover:text-red-700 rounded hover:bg-red-50 transition-all cursor-pointer"
         >
           <Trash2 size={13} />
         </button>
@@ -1357,7 +1402,7 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
           <button
             onClick={() => onPatch({ quantite: Math.max(1, line.quantite - 1) })}
             aria-label="Diminuer la quantité"
-            className="px-2 py-1 text-stone-500 hover:text-stone-800 hover:bg-stone-50 transition-colors cursor-pointer"
+            className="px-2 py-1 text-stone-600 hover:text-stone-800 hover:bg-stone-50 transition-colors cursor-pointer"
           >
             <Minus size={12} />
           </button>
@@ -1365,7 +1410,7 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
           <button
             onClick={() => onPatch({ quantite: line.quantite + 1 })}
             aria-label="Augmenter la quantité"
-            className="px-2 py-1 text-stone-500 hover:text-stone-800 hover:bg-stone-50 transition-colors cursor-pointer"
+            className="px-2 py-1 text-stone-600 hover:text-stone-800 hover:bg-stone-50 transition-colors cursor-pointer"
           >
             <Plus size={12} />
           </button>
@@ -1384,12 +1429,12 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
               setEditingPrice(false);
             }}
             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-            className="w-24 px-2 py-1 border border-sage rounded-lg text-xs tabular-nums text-stone-700 outline-none"
+            className="w-24 px-2 py-1 border border-accent rounded-lg text-xs tabular-nums text-stone-700 outline-none"
           />
         ) : (
           <button
             onClick={() => setEditingPrice(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-stone-200 text-[12.5px] text-stone-500 hover:text-stone-700 hover:border-stone-300 transition-all cursor-pointer tabular-nums"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-stone-200 text-[12.5px] text-stone-600 hover:text-stone-700 hover:border-stone-300 transition-all cursor-pointer tabular-nums"
           >
             <Pencil size={10} /> {formatCHF(line.prix_unitaire_ttc)}
           </button>
@@ -1402,7 +1447,7 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
               id={`tva-${line.key}`}
               value={line.taux_tva}
               onChange={e => onPatch({ taux_tva: Number(e.target.value) })}
-              className="px-2 py-1 border border-stone-200 rounded-lg text-xs text-stone-500 focus:border-stone-900 outline-none cursor-pointer"
+              className="px-2 py-1 border border-stone-200 rounded-lg text-xs text-stone-600 focus:border-stone-900 outline-none cursor-pointer"
             >
               {TAUX_TVA_CH.map(t => (
                 <option key={t.value} value={t.value}>TVA {t.value} %</option>
@@ -1453,42 +1498,42 @@ function ReceiptPanel({ transaction, onNew }: { transaction: Transaction; onNew:
 
   return (
     <div className="max-w-md mx-auto py-8">
-      <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-8 text-center space-y-5">
-        <div className="w-14 h-14 rounded-full bg-sage/10 text-sage flex items-center justify-center mx-auto">
+      <div className="bg-white border border-stone-200 rounded-xl p-8 text-center space-y-5">
+        <div className="w-14 h-14 rounded-full bg-accent/10 text-accent flex items-center justify-center mx-auto">
           <Check size={26} />
         </div>
         <div>
-          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Encaissement enregistré</p>
+          <p className="text-[14px] font-medium text-stone-700 mb-1">Encaissement enregistré</p>
           <p className="text-3xl font-semibold text-stone-900 tabular-nums">{formatCHF(transaction.total_ttc)}</p>
-          <p className="text-sm text-stone-600 mt-2">
-            Facture <span className="font-medium text-stone-600">{transaction.numero}</span> · {transaction.client_label}
+          <p className="text-sm text-stone-700 mt-2">
+            Facture <span className="font-medium text-stone-700">{transaction.numero}</span> · {transaction.client_label}
           </p>
         </div>
 
         {emitted.length > 0 && (
-          <div className="rounded-xl border border-sage/30 bg-sage/5 p-4 space-y-3 text-left">
-            <p className="text-[12px] font-semibold text-sage">
+          <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 space-y-3 text-left">
+            <p className="text-[12px] font-semibold text-accent">
               Bon{emitted.length > 1 ? 's' : ''} à remettre
             </p>
             {emitted.map(card => (
               <div key={card.id} className="space-y-1.5">
                 <p className="text-lg font-semibold text-stone-900 tracking-wide tabular-nums">{card.code}</p>
-                <p className="text-xs text-stone-500">
+                <p className="text-xs text-stone-600">
                   {card.libelle} · {formatCHF(card.montant_initial)} · valable jusqu&apos;au{' '}
                   {new Date(`${card.expire_le}T00:00:00`).toLocaleDateString('fr-CH')}
                 </p>
                 <button
                   onClick={() => downloadBon(card)}
                   disabled={bonBusy === card.id}
-                  className="flex items-center gap-1.5 text-xs text-sage hover:text-stone-900/70 font-semibold transition-colors disabled:opacity-40 cursor-pointer"
+                  className="flex items-center gap-1.5 text-[13px] text-accent hover:underline font-semibold disabled:opacity-40 cursor-pointer"
                 >
-                  {bonBusy === card.id ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                  {bonBusy === card.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                   Imprimer le bon
                 </button>
               </div>
             ))}
-            <p className="text-[12px] text-stone-500 leading-relaxed">
-              Recopie ce code sur le bon papier si tu en remets un : c&apos;est lui
+            <p className="text-[12px] text-stone-600 leading-relaxed">
+              Si vous remettez un bon papier, recopiez-y ce code : c&apos;est lui
               qu&apos;il faudra saisir le jour où la cliente viendra.
             </p>
           </div>
@@ -1502,20 +1547,20 @@ function ReceiptPanel({ transaction, onNew }: { transaction: Transaction; onNew:
           <button
             onClick={download}
             disabled={downloading}
-            className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white py-3 rounded-xl text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50 cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 bg-accent text-accent-fg py-3 rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer"
           >
             {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
             {downloading ? 'Génération…' : 'Télécharger la quittance PDF'}
           </button>
           <button
             onClick={onNew}
-            className="w-full py-3 rounded-xl border border-stone-200 text-stone-600 text-sm hover:border-stone-300 hover:text-stone-900 transition-all cursor-pointer"
+            className="w-full py-3 rounded-lg bg-stone-100 text-stone-900 text-sm font-semibold hover:bg-stone-200 transition-colors cursor-pointer"
           >
             Nouvel encaissement
           </button>
           <Link
             href="/admin/caisse/journal"
-            className="block w-full py-2 text-stone-500 text-xs hover:text-stone-700 transition-colors"
+            className="block w-full py-2 text-stone-600 text-[13px] hover:text-stone-900 underline-offset-2 hover:underline transition-colors"
           >
             Voir le journal des recettes
           </Link>

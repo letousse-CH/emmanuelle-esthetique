@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { publishSocialPost } from '../../../../services/socialPublisher';
+import { isAdminRequest } from '../../../../utils/apiAuth';
 
 export async function POST(req: NextRequest) {
+  // Session admin, ou appel interne de l'autopilote.
+  if (!(await isAdminRequest(req))) {
+    return NextResponse.json({ error: 'Session expirée, reconnectez-vous.' }, { status: 401 });
+  }
+
   let body: any;
   try {
     body = await req.json();

@@ -3,11 +3,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  Sparkles, Plus, Pencil, Trash2, X, Check, Loader2, AlertCircle, ArrowUp, ArrowDown,
-  Layers, FolderCog, GripVertical,
+  Plus, Pencil, Trash2, X, Check, Loader2, ArrowUp, ArrowDown,
+  Layers, FolderCog,
 } from 'lucide-react';
 import { useSettings } from '../../../../hooks/useSettings';
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
+import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import {
   createService, createServiceCategory, deleteService, deleteServiceCategory,
   listAllForfaitItems, listServiceCategories, listServices, setForfaitItems,
@@ -58,7 +59,7 @@ export default function PrestationsClient() {
       ]);
       setCategories(c); setComposition(f);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Chargement impossible.');
+      setError(`Le catalogue n'a pas pu être chargé${err instanceof Error ? ` (${err.message})` : ''}.`);
     } finally {
       setLoading(false);
     }
@@ -100,7 +101,8 @@ export default function PrestationsClient() {
       setServices(prev => prev.filter(x => x.id !== s.id));
       setComposition(prev => prev.filter(x => x.forfait_id !== s.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Suppression impossible.');
+      // Le message du service nomme déjà le forfait qui bloque la suppression.
+      setError(err instanceof Error ? err.message : 'La suppression a échoué. Réessayez.');
     } finally {
       setBusyId(null);
     }
@@ -112,7 +114,7 @@ export default function PrestationsClient() {
       const updated = await updateService(s.id, { active: !s.active });
       setServices(prev => prev.map(x => (x.id === s.id ? updated : x)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Modification impossible.');
+      setError(`La modification n'a pas été enregistrée${err instanceof Error ? ` (${err.message})` : ''}.`);
     } finally {
       setBusyId(null);
     }
@@ -131,13 +133,16 @@ export default function PrestationsClient() {
 
     setBusyId(group.items[index].id);
     try {
-      await Promise.all(next.map((s, i) => updateService(s.id, { ordre: i })));
+      await Promise.all(next
+        .map((s, i) => ({ s, i }))
+        .filter(({ s, i }) => s.ordre !== i)
+        .map(({ s, i }) => updateService(s.id, { ordre: i })));
       const renumbered = new Map(next.map((s, i) => [s.id, i]));
       setServices(prev => [...prev]
         .map(s => (renumbered.has(s.id) ? { ...s, ordre: renumbered.get(s.id)! } : s))
         .sort((a, b) => a.ordre - b.ordre || a.nom.localeCompare(b.nom, 'fr')));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Réordonnancement impossible.');
+      setError(`Le nouvel ordre n'a pas été enregistré${err instanceof Error ? ` (${err.message})` : ''}.`);
     } finally {
       setBusyId(null);
     }
@@ -146,76 +151,61 @@ export default function PrestationsClient() {
   const prestations = useMemo(() => services.filter(s => s.type !== 'forfait'), [services]);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <p className="text-[12.5px] font-medium text-stone-700 mb-1">Caisse</p>
-          <h1 className="text-2xl font-semibold text-stone-900 flex items-center gap-2.5">
-            <Sparkles size={20} className="text-sage" /> Prestations
-          </h1>
-          <p className="mt-1 text-sm text-stone-600">
-            Le catalogue de l&apos;écran d&apos;encaissement. Les prix sont TTC.
-          </p>
-          <div className="mt-3"><CaisseCatalogNav /></div>
-        </div>
-        <div className="flex flex-wrap gap-2 self-start">
-          <button
-            onClick={() => setShowCategories(true)}
-            className="flex items-center gap-2 px-3.5 py-2 border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 rounded-lg text-sm transition-all cursor-pointer"
-          >
-            <FolderCog size={14} /> Catégories
-          </button>
-          <button
-            onClick={() => setEditing({ service: null, type: 'forfait' })}
-            className="flex items-center gap-2 px-3.5 py-2 border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 rounded-lg text-sm transition-all cursor-pointer"
-          >
-            <Layers size={14} /> Nouveau forfait
-          </button>
-          <button
-            onClick={() => setEditing({ service: null, type: 'prestation' })}
-            className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white hover:bg-sage rounded-lg text-sm transition-all cursor-pointer shadow-sm"
-          >
-            <Plus size={14} /> Nouvelle prestation
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <CaisseCatalogNav />
+
+      <PageHeader
+        title="Prestations"
+        description="Les soins et forfaits proposés sur l'écran d'encaissement, rangés par catégorie. Les prix sont TTC."
+        actions={
+          <div className="flex flex-wrap justify-end gap-2 max-w-[calc(100vw-2rem)]">
+            <Button icon={FolderCog} onClick={() => setShowCategories(true)}>Catégories</Button>
+            <Button icon={Layers} onClick={() => setEditing({ service: null, type: 'forfait' })}>Ajouter un forfait</Button>
+            <Button variant="primary" icon={Plus} onClick={() => setEditing({ service: null, type: 'prestation' })}>
+              Ajouter une prestation
+            </Button>
+          </div>
+        }
+      />
 
       {error && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <AlertCircle size={15} className="shrink-0 mt-0.5" />
-          <span className="flex-1">{error}</span>
-          <button onClick={() => setError(null)} aria-label="Masquer l'erreur" className="shrink-0 cursor-pointer">
-            <X size={14} />
-          </button>
-        </div>
+        <Callout
+          tone="danger"
+          actions={<Button size="sm" variant="ghost" onClick={() => setError(null)}>Masquer</Button>}
+        >
+          {error}
+        </Callout>
       )}
 
       {loading ? (
-        <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] flex items-center justify-center gap-2 p-8 text-stone-500 text-sm">
+        <div className="bg-white border border-stone-200 rounded-xl flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
           <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
         </div>
       ) : services.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-10 text-center space-y-2">
-          <p className="text-sm text-stone-600">Le catalogue est vide.</p>
-          <p className="text-stone-500 text-xs">
-            Ajoute les soins proposés — ils apparaîtront en un clic sur l&apos;
-            <Link href="/admin/caisse" className="text-sage hover:underline">écran d&apos;encaissement</Link>,
+        <div className="bg-white border border-stone-200 rounded-xl p-10 text-center space-y-3">
+          <p className="text-sm text-stone-700">Le catalogue est vide.</p>
+          <p className="text-stone-600 text-[13px] max-w-md mx-auto">
+            Ajoutez les soins que vous proposez : ils apparaîtront en un clic sur l&apos;
+            <Link href="/admin/caisse" className="text-accent hover:underline">écran d&apos;encaissement</Link>,
             rangés par catégorie.
           </p>
+          <Button size="sm" icon={Plus} onClick={() => setEditing({ service: null, type: 'prestation' })}>
+            Ajouter une prestation
+          </Button>
         </div>
       ) : (
         <div className="space-y-5">
           {groups.map(group => (
-            <section key={group.id ?? 'orphans'} className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-              <div className="px-5 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
+            <section key={group.id ?? 'orphans'} className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-stone-200 flex items-center justify-between bg-stone-50/50">
                 <h2 className="text-[13px] font-medium text-stone-800">{group.nom}</h2>
-                <span className="text-[12.5px] text-stone-500 tabular-nums">
+                <span className="text-[12.5px] text-stone-600 tabular-nums">
                   {group.items.length} {group.items.length > 1 ? 'entrées' : 'entrée'}
                 </span>
               </div>
 
               {group.items.length === 0 ? (
-                <p className="px-5 py-6 text-center text-stone-500 text-xs italic">
+                <p className="px-5 py-6 text-center text-stone-600 text-[13px]">
                   Aucune prestation dans cette catégorie.
                 </p>
               ) : (
@@ -226,20 +216,20 @@ export default function PrestationsClient() {
                     return (
                       <li
                         key={s.id}
-                        className={`flex items-center gap-3 px-5 py-4 hover:bg-stone-50/50 transition-colors ${!s.active ? 'opacity-50' : ''}`}
+                        className={`flex items-center gap-3 px-5 py-4 hover:bg-stone-50/50 transition-colors ${!s.active ? 'bg-stone-50/60' : ''}`}
                       >
                         <div className="flex flex-col shrink-0">
                           <button
                             onClick={() => move(group, i, -1)} disabled={i === 0 || busyId !== null}
                             aria-label="Monter" title="Monter"
-                            className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
+                            className="p-0.5 text-stone-600 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
                           >
                             <ArrowUp size={12} />
                           </button>
                           <button
                             onClick={() => move(group, i, 1)} disabled={i === group.items.length - 1 || busyId !== null}
                             aria-label="Descendre" title="Descendre"
-                            className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
+                            className="p-0.5 text-stone-600 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
                           >
                             <ArrowDown size={12} />
                           </button>
@@ -249,28 +239,28 @@ export default function PrestationsClient() {
                           <p className="text-sm font-medium text-stone-900 flex items-center gap-2 flex-wrap">
                             <span className="truncate">{s.nom}</span>
                             {s.type === 'forfait' && (
-                              <span className="text-[12px] font-semibold text-sage bg-sage/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                <Layers size={9} /> Forfait
+                              <span className="text-[12px] font-medium text-stone-700 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                <Layers size={11} /> Forfait
                               </span>
                             )}
-                            {!s.active && <span className="text-[12px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">Masquée</span>}
+                            {!s.active && <span className="text-[12px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-full">Masquée</span>}
                           </p>
                           {s.type === 'forfait' ? (
-                            <p className="truncate text-[12.5px] text-stone-500">
+                            <p className="truncate text-[12.5px] text-stone-600">
                               {items.length === 0
                                 ? 'Composition à définir'
                                 : items.map(it => `${Number(it.quantite) > 1 ? `${Number(it.quantite)}× ` : ''}${it.service?.nom ?? '—'}`).join(' + ')}
                               {economie > 0 && (
-                                <span className="text-sage font-medium"> · −{formatCHF(economie)}</span>
+                                <span className="text-stone-700 font-medium"> · économie {formatCHF(economie)}</span>
                               )}
                             </p>
                           ) : (
-                            s.description && <p className="truncate text-[12.5px] text-stone-500">{s.description}</p>
+                            s.description && <p className="truncate text-[12.5px] text-stone-600">{s.description}</p>
                           )}
                         </div>
 
                         {tvaActive && (
-                          <span className="text-[12.5px] text-stone-500 tabular-nums shrink-0 hidden sm:block">
+                          <span className="text-[12.5px] text-stone-600 tabular-nums shrink-0 hidden sm:block">
                             TVA {Number(s.taux_tva_defaut)} %
                           </span>
                         )}
@@ -278,30 +268,28 @@ export default function PrestationsClient() {
 
                         <div className="flex items-center gap-1 shrink-0">
                           {busyId === s.id ? (
-                            <Loader2 size={14} className="animate-spin text-stone-400 mx-2" />
+                            <Loader2 size={14} className="animate-spin text-stone-500 mx-2" />
                           ) : (
                             <>
                               <button
                                 onClick={() => toggleActive(s)}
-                                aria-label={s.active ? `Masquer ${s.nom}` : `Afficher ${s.nom}`}
-                                title={s.active ? 'Masquer de la caisse' : 'Afficher dans la caisse'}
-                                className={`text-[12px] font-semibold px-2 py-1 rounded transition-all cursor-pointer ${
-                                  s.active ? 'text-sage hover:bg-sage/10' : 'text-stone-500 hover:bg-stone-100'
-                                }`}
+                                aria-label={s.active ? `Masquer ${s.nom} de la caisse` : `Afficher ${s.nom} dans la caisse`}
+                                title={s.active ? 'Ne plus proposer à la caisse' : 'Proposer de nouveau à la caisse'}
+                                className="text-[13px] font-medium px-2 py-1 rounded-lg text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
                               >
-                                {s.active ? 'Active' : 'Off'}
+                                {s.active ? 'Masquer' : 'Afficher'}
                               </button>
                               <button
                                 onClick={() => setEditing({ service: s, type: s.type })}
                                 aria-label={`Modifier ${s.nom}`} title="Modifier"
-                                className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
+                                className="p-1.5 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
                               >
                                 <Pencil size={14} />
                               </button>
                               <button
                                 onClick={() => handleDelete(s)}
                                 aria-label={`Supprimer ${s.nom}`} title="Supprimer"
-                                className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                                className="p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -374,6 +362,12 @@ function ServiceDialog({
   );
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState<string | null>(null);
+  // Fiche déjà créée lors d'un essai précédent (la composition du forfait a
+  // échoué) : on la met à jour au lieu d'en créer une seconde.
+  const [savedId, setSavedId]         = useState<string | null>(service?.id ?? null);
+  // Fermer après une création partielle : la fiche existe déjà en base, la
+  // liste doit la montrer (sinon elle réapparaît seulement au rechargement).
+  const close = () => (savedId && !service ? onSaved() : onClose());
 
   // Valeur du forfait vendu prestation par prestation, pour afficher l'économie
   // pendant la saisie — c'est l'argument de vente, autant qu'il soit sous les yeux.
@@ -397,8 +391,9 @@ function ServiceDialog({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nom.trim() || !Number.isFinite(prixNum) || prixNum < 0) {
-      setError('Renseigne un nom et un prix valide.');
+    if (!nom.trim()) { setError('Indiquez un nom.'); return; }
+    if (prix.trim() === '' || !Number.isFinite(prixNum) || prixNum < 0) {
+      setError('Prix non reconnu : saisissez un nombre, par exemple 120 ou 120.50.');
       return;
     }
     if (isForfait && parts.length === 0) {
@@ -417,13 +412,14 @@ function ServiceDialog({
       type,
     };
     try {
-      const saved = service
-        ? await updateService(service.id, payload)
+      const saved = savedId
+        ? await updateService(savedId, payload)
         : await createService(payload);
+      setSavedId(saved.id);
       if (isForfait) await setForfaitItems(saved.id, parts);
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Enregistrement impossible.');
+      setError(`L'enregistrement n'a pas abouti${err instanceof Error ? ` (${err.message})` : ''}. Vos saisies sont conservées : réessayez.`);
       setSaving(false);
     }
   };
@@ -433,17 +429,17 @@ function ServiceDialog({
     : (isForfait ? 'Nouveau forfait' : 'Nouvelle prestation');
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto">
       <div
         role="dialog" aria-modal="true" aria-label={titre}
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4 my-8"
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 my-8"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-            {isForfait && <Layers size={14} className="text-sage" />} {titre}
+            {isForfait && <Layers size={14} className="text-accent" />} {titre}
           </h3>
-          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
+          <button onClick={close} aria-label="Fermer" className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -454,7 +450,7 @@ function ServiceDialog({
             <input
               id="svc-nom" type="text" value={nom} onChange={e => setNom(e.target.value)} required autoFocus
               placeholder={isForfait ? 'Forfait jambes + maillot + aisselles' : 'Soin du visage éclat — 60 min'}
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
             />
           </div>
 
@@ -472,8 +468,8 @@ function ServiceDialog({
           {isForfait && (
             <div className="rounded-xl border border-stone-200 p-3.5 space-y-3 bg-stone-50/40">
               <div>
-                <p className="text-[11px] font-medium text-stone-500 mb-1">Composition *</p>
-                <p className="text-[12px] text-stone-500 leading-relaxed mb-2">
+                <p className="text-[13px] font-medium text-stone-700 mb-1">Composition *</p>
+                <p className="text-[12px] text-stone-600 leading-relaxed mb-2">
                   Les prestations couvertes par le forfait. Elles servent à afficher l&apos;économie —
                   la facture, elle, portera une seule ligne au prix du forfait.
                 </p>
@@ -483,7 +479,6 @@ function ServiceDialog({
                 <ul className="space-y-1.5">
                   {partsDetail.map((it, i) => (
                     <li key={`${it.service_id}-${i}`} className="flex items-center gap-2 bg-white border border-stone-200 rounded-lg px-2.5 py-1.5">
-                      <GripVertical size={12} className="text-stone-200 shrink-0" />
                       <span className="flex-1 min-w-0 text-xs text-stone-700 truncate">{it.service?.nom ?? 'Prestation supprimée'}</span>
                       <label className="sr-only" htmlFor={`part-qte-${i}`}>Quantité</label>
                       <input
@@ -493,14 +488,14 @@ function ServiceDialog({
                           (j === i ? { ...p, quantite: Math.max(1, Number(e.target.value) || 1) } : p)))}
                         className="w-14 px-2 py-1 border border-stone-200 rounded text-xs text-stone-700 text-center tabular-nums focus:border-stone-900 outline-none"
                       />
-                      <span className="text-[12.5px] text-stone-500 tabular-nums shrink-0 w-20 text-right">
+                      <span className="text-[12.5px] text-stone-600 tabular-nums shrink-0 w-20 text-right">
                         {formatCHF(Number(it.service?.prix_chf ?? 0) * Number(it.quantite))}
                       </span>
                       <button
                         type="button"
                         onClick={() => setParts(prev => prev.filter((_, j) => j !== i))}
                         aria-label={`Retirer ${it.service?.nom ?? 'la prestation'}`}
-                        className="shrink-0 p-1 text-stone-500 hover:text-red-700 rounded cursor-pointer"
+                        className="shrink-0 p-1 text-stone-600 hover:text-red-700 rounded cursor-pointer"
                       >
                         <X size={12} />
                       </button>
@@ -513,7 +508,7 @@ function ServiceDialog({
                 <label htmlFor="svc-part-add" className="sr-only">Ajouter une prestation au forfait</label>
                 <select
                   id="svc-part-add" value="" onChange={e => addPart(e.target.value)}
-                  className="w-full px-3 py-2 border border-dashed border-stone-300 rounded-lg text-xs text-stone-600 bg-white focus:border-stone-900 outline-none cursor-pointer"
+                  className="w-full px-3 py-2 border border-dashed border-stone-300 rounded-lg text-xs text-stone-700 bg-white focus:border-stone-900 outline-none cursor-pointer"
                 >
                   <option value="">+ Ajouter une prestation…</option>
                   {prestations
@@ -525,17 +520,17 @@ function ServiceDialog({
               {parts.length > 0 && (
                 <dl className="text-xs space-y-1 pt-1 border-t border-stone-200">
                   <div className="flex justify-between">
-                    <dt className="text-stone-500">Valeur cumulée</dt>
-                    <dd className="text-stone-600 tabular-nums">{formatCHF(valeurCumulee)}</dd>
+                    <dt className="text-stone-600">Valeur cumulée</dt>
+                    <dd className="text-stone-700 tabular-nums">{formatCHF(valeurCumulee)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-stone-500">Économie pour la cliente</dt>
-                    <dd className={`tabular-nums font-medium ${economie >= 0 ? 'text-sage' : 'text-amber-600'}`}>
+                    <dt className="text-stone-600">Économie pour la cliente</dt>
+                    <dd className={`tabular-nums font-medium ${economie >= 0 ? 'text-stone-900' : 'text-amber-700'}`}>
                       {economie >= 0 ? `− ${formatCHF(economie)}` : `+ ${formatCHF(-economie)}`}
                     </dd>
                   </div>
                   {economie < 0 && (
-                    <p className="text-[12px] text-amber-600 leading-relaxed pt-0.5">
+                    <p className="text-[12px] text-amber-700 leading-relaxed pt-0.5">
                       Le forfait coûte plus cher que ses prestations prises séparément.
                     </p>
                   )}
@@ -546,7 +541,7 @@ function ServiceDialog({
 
           <div>
             <label htmlFor="svc-desc" className="block text-[12.5px] font-medium text-stone-700 mb-1">
-              Description <span className="text-stone-500">(facultatif)</span>
+              Description <span className="text-stone-600">(facultatif)</span>
             </label>
             <textarea
               id="svc-desc" rows={2} value={description} onChange={e => setDescription(e.target.value)}
@@ -562,7 +557,7 @@ function ServiceDialog({
               <input
                 id="svc-prix" type="text" inputMode="decimal" value={prix} onChange={e => setPrix(e.target.value)} required
                 placeholder="120.00"
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
               />
             </div>
             <div>
@@ -570,13 +565,13 @@ function ServiceDialog({
               <select
                 id="svc-tva" value={taux} onChange={e => setTaux(Number(e.target.value))}
                 disabled={!tvaActive}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors disabled:bg-stone-50 disabled:text-stone-500 cursor-pointer"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors disabled:bg-stone-50 disabled:text-stone-600 cursor-pointer"
               >
                 {TAUX_TVA_CH.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
               {!tvaActive && (
-                <p className="text-[12px] text-stone-500 mt-1">
-                  Active la TVA dans <Link href="/admin/settings" className="text-sage hover:underline">Paramètres → Caisse</Link>.
+                <p className="text-[12px] text-stone-600 mt-1">
+                  TVA désactivée : elle s&apos;active dans <Link href="/admin/settings" className="text-accent hover:underline">Paramètres → Caisse</Link>.
                 </p>
               )}
             </div>
@@ -585,25 +580,25 @@ function ServiceDialog({
           <label className="flex items-center gap-3 pt-1 cursor-pointer">
             <button
               type="button" role="switch" aria-checked={active} onClick={() => setActive(!active)}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${active ? 'bg-sage' : 'bg-stone-200'}`}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${active ? 'bg-accent' : 'bg-stone-200'}`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${active ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
-            <span className="text-sm text-stone-600">Visible sur l&apos;écran d&apos;encaissement</span>
+            <span className="text-sm text-stone-700">Visible sur l&apos;écran d&apos;encaissement</span>
           </label>
 
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
           <div className="flex gap-2 pt-1">
             <button
-              type="button" onClick={onClose}
-              className="flex-1 py-2.5 rounded-lg border border-stone-200 text-stone-600 text-sm hover:border-stone-300 transition-all cursor-pointer"
+              type="button" onClick={close}
+              className="flex-1 py-2.5 rounded-lg bg-stone-100 text-stone-900 font-semibold text-sm hover:bg-stone-200 transition-colors cursor-pointer"
             >
               Annuler
             </button>
             <button
               type="submit" disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 bg-stone-900 text-white py-2.5 rounded-lg text-sm hover:bg-stone-700 transition-colors disabled:opacity-40 cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-fg py-2.5 rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-40 cursor-pointer"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               {saving ? 'Enregistrement…' : 'Enregistrer'}
@@ -642,7 +637,7 @@ function CategoriesDialog({ categories, services, onClose, onChanged }: {
       await fn();
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opération impossible.');
+      setError(`L'opération n'a pas abouti${err instanceof Error ? ` (${err.message})` : ''}. Réessayez.`);
     } finally {
       setBusy(false);
     }
@@ -693,20 +688,20 @@ function CategoriesDialog({ categories, services, onClose, onChanged }: {
       <div
         role="dialog" aria-modal="true" aria-label="Catégories de prestations"
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4 my-8"
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4 my-8"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-            <FolderCog size={14} className="text-sage" /> Catégories
+            <FolderCog size={14} className="text-accent" /> Catégories
           </h3>
-          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
+          <button onClick={onClose} aria-label="Fermer" className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
           </button>
         </div>
 
-        <p className="text-[12.5px] text-stone-500 leading-relaxed">
+        <p className="text-[12.5px] text-stone-600 leading-relaxed">
           Elles rangent le catalogue et deviennent les onglets de l&apos;écran d&apos;encaissement.
-          Elles ne figurent sur aucune facture.
+          Elles ne figurent sur aucune facture. Pour renommer, modifiez le nom puis cliquez ailleurs.
         </p>
 
         {rows.length > 0 && (
@@ -717,14 +712,14 @@ function CategoriesDialog({ categories, services, onClose, onChanged }: {
                   <button
                     onClick={() => move(i, -1)} disabled={i === 0 || busy}
                     aria-label={`Monter ${c.nom}`}
-                    className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 cursor-pointer"
+                    className="p-0.5 text-stone-600 hover:text-stone-900 disabled:opacity-20 cursor-pointer"
                   >
                     <ArrowUp size={11} />
                   </button>
                   <button
                     onClick={() => move(i, 1)} disabled={i === rows.length - 1 || busy}
                     aria-label={`Descendre ${c.nom}`}
-                    className="p-0.5 text-stone-500 hover:text-stone-900 disabled:opacity-20 cursor-pointer"
+                    className="p-0.5 text-stone-600 hover:text-stone-900 disabled:opacity-20 cursor-pointer"
                   >
                     <ArrowDown size={11} />
                   </button>
@@ -737,13 +732,16 @@ function CategoriesDialog({ categories, services, onClose, onChanged }: {
                   disabled={busy}
                   className="flex-1 min-w-0 px-2.5 py-1.5 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
                 />
-                <span className="text-[12px] text-stone-500 tabular-nums w-6 text-right shrink-0">
+                <span
+                  className="text-[13px] text-stone-600 tabular-nums w-6 text-right shrink-0"
+                  title="Nombre de prestations rangées dans cette catégorie"
+                >
                   {counts.get(c.id) ?? 0}
                 </span>
                 <button
                   onClick={() => remove(c)} disabled={busy}
                   aria-label={`Supprimer ${c.nom}`}
-                  className="shrink-0 p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer disabled:opacity-40"
+                  className="shrink-0 p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer disabled:opacity-40"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -757,11 +755,11 @@ function CategoriesDialog({ categories, services, onClose, onChanged }: {
           <input
             id="cat-new" type="text" value={nouveau} onChange={e => setNouveau(e.target.value)}
             placeholder="Épilation, Maquillage…" disabled={busy}
-            className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+            className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
           />
           <button
             type="submit" disabled={busy || !nouveau.trim()}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-stone-200 text-stone-600 hover:border-stone-400 hover:text-stone-900 text-sm transition-all disabled:opacity-40 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-stone-100 text-stone-900 font-semibold hover:bg-stone-200 text-sm transition-colors disabled:opacity-40 cursor-pointer"
           >
             <Plus size={14} /> Ajouter
           </button>

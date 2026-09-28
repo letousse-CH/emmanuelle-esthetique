@@ -151,13 +151,17 @@ const GROUPS_BY_SECTION: Record<string, string[]> = {
 export default function DesignSystemPanel() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  // Lecture ratée = champs remis aux valeurs de départ. Enregistrer écraserait
+  // alors tout le style du site : on l'interdit tant que la page n'est pas rechargée.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [section, setSection] = useState('palette');
 
   useEffect(() => {
     void (async () => {
-      const { data } = await supabase.from('settings').select('key, value').in('key', DESIGN_TOKEN_KEYS);
+      const { data, error } = await supabase.from('settings').select('key, value').in('key', DESIGN_TOKEN_KEYS);
+      if (error) setLoadFailed(true);
       const map: Record<string, string> = { ...DESIGN_TOKEN_DEFAULTS };
       for (const row of data ?? []) {
         if (row.key in map) map[row.key] = row.value ?? '';
@@ -176,6 +180,7 @@ export default function DesignSystemPanel() {
   const setMany = (patch: Record<string, string>) => setValues((v) => ({ ...v, ...patch }));
 
   async function save() {
+    if (loadFailed || saving) return;
     setSaving(true);
     setMessage(null);
     const rows = DESIGN_TOKEN_KEYS.map((key) => ({ key, value: (values[key] ?? '').trim() }));
@@ -188,7 +193,7 @@ export default function DesignSystemPanel() {
     }
     // Le cache local sert à éviter un saut de style au chargement suivant :
     // il doit disparaître, sinon l'ancien réglage réapparaîtrait brièvement.
-    localStorage.removeItem('site_design_tokens');
+    try { localStorage.removeItem('site_design_tokens'); } catch { /* stockage bloqué : sans conséquence */ }
     setMessage({ type: 'success', text: 'Style enregistré. Rechargez une page publique pour le voir.' });
   }
 
@@ -197,7 +202,16 @@ export default function DesignSystemPanel() {
     setValues({ ...DESIGN_TOKEN_DEFAULTS });
   }
 
-  if (loading) return <p className="text-sm text-stone-600">Chargement…</p>;
+  if (loading) return <p className="text-sm text-stone-700">Chargement…</p>;
+
+  if (loadFailed) {
+    return (
+      <Callout tone="danger" title="Style non chargé">
+        Les réglages de style n&apos;ont pas pu être lus. Rechargez la page : enregistrer maintenant
+        remplacerait le style actuel du site par les valeurs de départ.
+      </Callout>
+    );
+  }
 
   return (
     <>
@@ -207,7 +221,7 @@ export default function DesignSystemPanel() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
         <div className="min-w-0 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-[13px] text-stone-600">
+            <p className="text-[13px] text-stone-700">
               {filledCount} réglage{filledCount > 1 ? 's' : ''} actif{filledCount > 1 ? 's' : ''}. Un champ vide n’impose rien au site.
             </p>
             <div className="flex items-center gap-2">
@@ -248,7 +262,7 @@ export default function DesignSystemPanel() {
         <div className="xl:sticky xl:top-20">
           <p className="mb-2 text-[13px] font-medium text-stone-800">Aperçu en direct</p>
           <StylePreview values={values} />
-          <p className="mt-2 text-[12.5px] leading-relaxed text-stone-600">
+          <p className="mt-2 text-[12.5px] leading-relaxed text-stone-700">
             Rendu approché des réglages en cours. Le site reste inchangé tant que vous n’avez pas enregistré.
           </p>
         </div>
@@ -341,13 +355,13 @@ function PaletteSection({
                   onClick={() => setSource(item.id)}
                   className={`rounded-lg border p-3 text-left transition-colors cursor-pointer
                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
-                      active ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 bg-white text-stone-800 hover:border-stone-400 hover:bg-stone-50'
+                      active ? 'border-accent bg-accent-soft text-stone-900' : 'border-stone-300 bg-white text-stone-800 hover:border-stone-400 hover:bg-stone-50'
                     }`}
                 >
-                  <span className="flex items-center gap-2 text-[13.5px] font-medium">
+                  <span className="flex items-center gap-2 text-[14px] font-semibold">
                     <item.icon size={15} /> {item.label}
                   </span>
-                  <span className={`mt-1 block text-[12px] leading-snug ${active ? 'text-stone-300' : 'text-stone-600'}`}>
+                  <span className="mt-1 block text-[13px] leading-snug text-stone-700">
                     {item.hint}
                   </span>
                 </button>
@@ -384,7 +398,7 @@ function PaletteSection({
                           <span className="text-[13.5px] font-medium text-stone-900">{preset.name}</span>
                           {active && <Check size={14} className="text-stone-900" />}
                         </span>
-                        <span className="mt-0.5 block text-[12px] leading-snug text-stone-600">{preset.note}</span>
+                        <span className="mt-0.5 block text-[12px] leading-snug text-stone-700">{preset.note}</span>
                       </span>
                     </button>
                   </li>
@@ -431,7 +445,7 @@ function PaletteSection({
                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:ring-offset-2 ${
                             base.toLowerCase() === hex.toLowerCase()
                               ? 'border-stone-900 ring-2 ring-stone-900 ring-offset-1'
-                              : 'border-stone-300 hover:scale-105'
+                              : 'border-stone-300 hover:border-stone-500'
                           }`}
                         style={{ backgroundColor: hex }}
                       />
@@ -469,7 +483,7 @@ function PaletteSection({
                         aria-pressed={dark === option.v}
                         onClick={() => setDark(option.v)}
                         className={`h-10 rounded-lg border px-3 text-[13px] font-medium transition-colors cursor-pointer ${
-                          dark === option.v ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 text-stone-700 hover:border-stone-400'
+                          dark === option.v ? 'border-accent bg-accent-soft text-stone-900' : 'border-stone-300 text-stone-700 hover:border-stone-400'
                         }`}
                       >
                         {option.label}
@@ -503,7 +517,7 @@ function PaletteSection({
                         </span>
                         <span className="block px-2.5 py-2">
                           <span className="text-[13px] font-medium text-stone-900">{option.label}</span>
-                          <span className="mt-0.5 block text-[12px] leading-snug text-stone-600">{option.description}</span>
+                          <span className="mt-0.5 block text-[12px] leading-snug text-stone-700">{option.description}</span>
                         </span>
                       </button>
                     );
@@ -519,11 +533,11 @@ function PaletteSection({
                     ))}
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-[12.5px] leading-snug text-stone-600">
+                    <p className="text-[12.5px] leading-snug text-stone-700">
                       Texte et texte secondaire sont ajustés pour rester lisibles sur ce fond
                       {primaryAdjusted && <> ; la couleur d’accent a été {dark ? 'éclaircie' : 'assombrie'} pour la même raison</>}.
                     </p>
-                    <Button variant="primary" size="sm" icon={Check} onClick={() => {
+                    <Button variant="secondary" size="sm" icon={Check} onClick={() => {
                       if (!generated) return;
                       const btns = generateButtonStyles(paletteInput(generated), 'plein');
                       onSetMany({ ...generated, ...btns });
@@ -564,7 +578,7 @@ function PaletteSection({
                     </span>
                     <span className="block border-t border-stone-200 px-3 py-2.5">
                       <span className="text-[13.5px] font-medium text-stone-900">{label}</span>
-                      <span className="mt-0.5 block text-[12px] leading-snug text-stone-600">{role}</span>
+                      <span className="mt-0.5 block text-[12px] leading-snug text-stone-700">{role}</span>
                     </span>
                   </label>
                   <div className="flex items-center gap-2 border-t border-stone-200 px-3 py-2">
@@ -579,7 +593,7 @@ function PaletteSection({
                       <button
                         type="button"
                         onClick={() => onSet(key, '')}
-                        className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer"
+                        className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer"
                         aria-label={`Effacer ${label}`}
                       >
                         <RotateCcw size={13} />
@@ -630,17 +644,18 @@ function FontsSection({
         { n: 3 as const, label: 'Réglage fin' },
       ].map((item, index) => (
         <li key={item.n} className="flex items-center gap-2">
-          {index > 0 && <span className="text-stone-300">›</span>}
+          {index > 0 && <span className="text-stone-400">›</span>}
           <button
             type="button"
             onClick={() => { if (item.n === 1 || mood) setStep(item.n); }}
             disabled={item.n > 1 && !mood}
             className={`flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-default cursor-pointer ${
-              step === item.n ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'
+              step === item.n ? 'bg-accent-soft text-stone-900 font-semibold' : 'text-stone-700 hover:bg-stone-100'
             }`}
+            aria-current={step === item.n ? 'step' : undefined}
           >
-            <span className={`grid size-4 place-items-center rounded-full text-[10px] font-semibold ${
-              step === item.n ? 'bg-white text-stone-900' : 'bg-stone-200 text-stone-700'
+            <span className={`grid size-5 place-items-center rounded-full text-[12px] font-semibold ${
+              step === item.n ? 'bg-accent text-accent-fg' : 'bg-stone-200 text-stone-700'
             }`}>
               {item.n}
             </span>
@@ -682,7 +697,7 @@ function FontsSection({
                       <span className="block text-2xl text-stone-900" style={{ fontFamily: `'${example?.headings}', serif` }}>
                         {item.label}
                       </span>
-                      <span className="mt-1.5 block text-[12.5px] leading-snug text-stone-600">{item.description}</span>
+                      <span className="mt-1.5 block text-[12.5px] leading-snug text-stone-700">{item.description}</span>
                     </button>
                   </li>
                 );
@@ -721,10 +736,10 @@ function FontsSection({
                         Le texte que vos visiteurs lisent vraiment, dans la police du corps.
                       </span>
                       <span className="mt-3 flex items-center justify-between gap-2 border-t border-stone-200 pt-2">
-                        <span className="text-[12px] text-stone-600">{pair.headings} + {pair.body}</span>
+                        <span className="text-[12px] text-stone-700">{pair.headings} + {pair.body}</span>
                         {active && <Check size={14} className="shrink-0 text-stone-900" />}
                       </span>
-                      <span className="mt-1 block text-[12px] leading-snug text-stone-600">{pair.note}</span>
+                      <span className="mt-1 block text-[12px] leading-snug text-stone-700">{pair.note}</span>
                     </button>
                   </li>
                 );
@@ -792,7 +807,7 @@ function FontPicker({
   return (
     <fieldset>
       <legend className="text-[13px] font-medium text-stone-800">{legend}</legend>
-      <p className="mb-2 mt-0.5 text-[12.5px] text-stone-600">{hint}</p>
+      <p className="mb-2 mt-0.5 text-[12.5px] text-stone-700">{hint}</p>
       <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {FONT_CATALOG.map((font) => {
           const active = current === font.name;
@@ -814,7 +829,7 @@ function FontPicker({
                   <span className="text-[12.5px] font-medium text-stone-800">{font.name}</span>
                   {active && <Check size={13} className="shrink-0 text-stone-900" />}
                 </span>
-                <span className="mt-0.5 block text-[12px] leading-snug text-stone-600">{font.note}</span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-stone-700">{font.note}</span>
               </button>
             </li>
           );
@@ -885,7 +900,7 @@ function ButtonStyleProposals({
                   <div className="flex flex-1 flex-col gap-2 p-4">
                     <div>
                       <p className="text-[13.5px] font-medium text-stone-900">{style.label}</p>
-                      <p className="mt-0.5 text-[12px] leading-snug text-stone-600">{style.description}</p>
+                      <p className="mt-0.5 text-[12px] leading-snug text-stone-700">{style.description}</p>
                     </div>
                     <div className="mt-auto pt-1">
                       {isActive ? (
@@ -902,7 +917,7 @@ function ButtonStyleProposals({
             );
           })}
         </ul>
-        <p className="mt-4 text-[12.5px] leading-relaxed text-stone-600">
+        <p className="mt-4 text-[12.5px] leading-relaxed text-stone-700">
           Une fois appliqué, chaque couleur reste modifiable dans les blocs ci-dessous — et le
           survol se teste directement dans l’aperçu, à droite.
         </p>

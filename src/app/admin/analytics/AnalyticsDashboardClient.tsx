@@ -1,31 +1,36 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Eye, MousePointerClick, Users, TrendingUp, RefreshCw, Layers, ArrowUpRight } from 'lucide-react';
+import { Eye, MousePointerClick, Users, TrendingUp, RefreshCw, BarChart3 } from 'lucide-react';
 import type { AnalyticsSummary } from '../../../services/analytics';
+import { Button, Callout, Card, CardHeader, EmptyState, PageHeader, Spinner } from '../../../components/admin/ui';
 
 export default function AnalyticsDashboardClient() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const loadSummary = async () => {
     setLoading(true);
+    setError(null);
     try {
       const { supabase } = await import('../../../services/supabase');
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        setLoading(false);
+        setError('Votre session a expiré. Reconnectez-vous puis rouvrez cette page.');
         return;
       }
       const res = await fetch('/api/admin/analytics-summary', {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      const data = await res.json();
-      if (data.success) {
-        setSummary(data.summary);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `le serveur a répondu ${res.status}`);
       }
-    } catch (e) {
+      setSummary(data.summary);
+    } catch (e: any) {
       console.warn('Erreur chargement analytics:', e);
+      setError(`Les statistiques n'ont pas pu être chargées (${e?.message || 'erreur inconnue'}). Réessayez dans un instant.`);
     } finally {
       setLoading(false);
     }
@@ -35,143 +40,108 @@ export default function AnalyticsDashboardClient() {
     loadSummary();
   }, []);
 
+  const fmt = (n: number) => n.toLocaleString('fr-FR');
+
+  const metrics = [
+    {
+      label: 'Pages consultées',
+      value: summary ? fmt(summary.total_page_views) : '—',
+      hint: 'Chaque ouverture d\u2019une page compte une fois, même par la même personne.',
+      icon: Eye,
+    },
+    {
+      label: 'Clics sur vos boutons',
+      value: summary ? fmt(summary.total_cta_clicks) : '—',
+      hint: 'Clics sur les boutons d\u2019action de vos pages (réservation, contact…).',
+      icon: MousePointerClick,
+    },
+    {
+      label: 'Demandes reçues',
+      value: summary ? fmt(summary.total_form_submits) : '—',
+      hint: 'Formulaires de contact envoyés depuis le site.',
+      icon: Users,
+    },
+    {
+      label: 'Taux de demande',
+      value: summary ? `${summary.global_conversion_rate.toLocaleString('fr-FR')} %` : '—',
+      hint: 'Demandes reçues rapportées aux pages consultées.',
+      icon: TrendingUp,
+    },
+  ];
+
   return (
-    <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-zinc-200/90 rounded-2xl p-6 shadow-2xs">
-        <div>
-          <span className="px-3 py-1 rounded-full bg-purple-100/80 text-purple-900 border border-purple-200 text-[10.5px] font-extrabold uppercase tracking-wider">Statistiques & Performance</span>
-          <div className="flex items-center gap-2.5 mt-2">
-            <div className="p-2 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white shadow-[0_4px_12px_rgba(168,85,247,0.3)]">
-              <TrendingUp size={22} />
-            </div>
-            <h1 className="text-2xl font-extrabold text-zinc-900 tracking-tight">
-              Tableau de Bord & Conversions
-            </h1>
-          </div>
-          <p className="text-zinc-600 text-xs sm:text-sm font-medium mt-1">
-            Suivi en temps réel de vos visiteurs, clics sur vos boutons d'action et nouveaux prospects générés.
-          </p>
-        </div>
+    <div className="space-y-8">
+      <PageHeader
+        title="Statistiques"
+        description="Ce que font les visiteurs sur votre site : pages consultées, clics sur vos boutons et demandes de contact. Les chiffres portent sur les 1 000 derniers événements enregistrés."
+        actions={
+          <Button variant="secondary" icon={RefreshCw} loading={loading} onClick={loadSummary}>
+            Actualiser
+          </Button>
+        }
+      />
 
-        <button
-          onClick={loadSummary}
-          disabled={loading}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-extrabold rounded-full shadow-[0_4px_14px_rgba(99,102,241,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 shrink-0"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span>Rafraîchir</span>
-        </button>
-      </div>
+      {error && <Callout tone="danger" title="Chargement impossible">{error}</Callout>}
 
-      {/* 4 Cards de Métriques Clés */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Card 1 : Vues Totales */}
-        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">Vues de Pages</span>
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-              <Eye size={18} />
+        {metrics.map((m) => (
+          <Card key={m.label} className="p-5 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[14px] font-semibold text-stone-700">{m.label}</span>
+              <m.icon size={18} className="text-stone-500 shrink-0" aria-hidden="true" />
             </div>
-          </div>
-          <div className="text-3xl font-black text-stone-900">
-            {summary ? summary.total_page_views.toLocaleString('fr-FR') : '—'}
-          </div>
-          <p className="text-[11px] text-stone-600 font-medium">Visiteurs uniques & consultations</p>
-        </div>
-
-        {/* Card 2 : Clics CTA */}
-        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">Clics Boutons</span>
-            <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
-              <MousePointerClick size={18} />
+            <div className="text-3xl font-semibold text-stone-950 tabular-nums">
+              {loading && !summary ? <span className="text-stone-500">…</span> : m.value}
             </div>
-          </div>
-          <div className="text-3xl font-black text-stone-900">
-            {summary ? summary.total_cta_clicks.toLocaleString('fr-FR') : '—'}
-          </div>
-          <p className="text-[11px] text-stone-600 font-medium">Interactions sur les appels à l'action</p>
-        </div>
-
-        {/* Card 3 : Prospects / Formulaires */}
-        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">Prospects Générés</span>
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-              <Users size={18} />
-            </div>
-          </div>
-          <div className="text-3xl font-black text-stone-900">
-            {summary ? summary.total_form_submits.toLocaleString('fr-FR') : '—'}
-          </div>
-          <p className="text-[11px] text-stone-600 font-medium">Demandes de contact reçues</p>
-        </div>
-
-        {/* Card 4 : Taux de Conversion Globale */}
-        <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-5 shadow-lg space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-100 uppercase tracking-wider">Taux de Conversion</span>
-            <div className="p-2 bg-white/20 text-white rounded-xl">
-              <TrendingUp size={18} />
-            </div>
-          </div>
-          <div className="text-3xl font-black">
-            {summary ? `${summary.global_conversion_rate} %` : '—'}
-          </div>
-          <p className="text-[11px] text-emerald-100 font-medium">Part des visiteurs devenus prospects</p>
-        </div>
+            <p className="text-[13px] leading-snug text-stone-600">{m.hint}</p>
+          </Card>
+        ))}
       </div>
 
-      {/* Détail par Landing Page */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm space-y-5">
-        <div className="flex items-center justify-between border-b border-stone-100 pb-4">
-          <h3 className="font-bold text-base text-stone-900 flex items-center gap-2">
-            <Layers size={18} className="text-emerald-600" />
-            Performance des Landing Pages
-          </h3>
-          <span className="text-xs text-stone-600 font-medium">Classé par trafic</span>
-        </div>
-
-        {summary && summary.top_pages.length > 0 ? (
+      <Card>
+        <CardHeader title="Détail par page" description="Classé de la page la plus consultée à la moins consultée." />
+        {loading && !summary ? (
+          <div className="px-6"><Spinner label="Chargement des statistiques…" /></div>
+        ) : summary && summary.top_pages.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-stone-600">
-              <thead className="bg-stone-50 text-stone-700 font-bold uppercase tracking-wider border-b border-stone-200">
+            <table className="w-full text-left text-[14px] text-stone-700">
+              <thead className="bg-stone-50 border-b border-stone-200 text-[13px] font-semibold text-stone-700">
                 <tr>
-                  <th className="py-3 px-4">Page / Slug</th>
-                  <th className="py-3 px-4">Vues</th>
-                  <th className="py-3 px-4">Clics CTA</th>
-                  <th className="py-3 px-4">Prospects</th>
-                  <th className="py-3 px-4 text-right">Taux de conversion</th>
+                  <th scope="col" className="py-3 px-6">Page</th>
+                  <th scope="col" className="py-3 px-4 text-right">Consultations</th>
+                  <th scope="col" className="py-3 px-4 text-right">Clics</th>
+                  <th scope="col" className="py-3 px-4 text-right">Demandes</th>
+                  <th scope="col" className="py-3 px-6 text-right">Taux de demande</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100 font-medium">
-                {summary.top_pages.map((p, idx) => (
-                  <tr key={idx} className="hover:bg-stone-50/80 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-stone-900 flex items-center gap-1.5">
-                      <span>{p.title}</span>
-                      <span className="text-[11px] text-stone-500 font-mono">({p.slug})</span>
+              <tbody className="divide-y divide-stone-200">
+                {summary.top_pages.map((p) => (
+                  <tr key={p.slug} className="hover:bg-stone-50 transition-colors">
+                    <td className="py-3.5 px-6">
+                      <div className="font-semibold text-stone-900">{p.title}</div>
+                      <div className="text-[13px] text-stone-600">/{p.slug === 'home' ? '' : p.slug.replace(/^\//, '')}</div>
                     </td>
-                    <td className="py-3.5 px-4">{p.views}</td>
-                    <td className="py-3.5 px-4">{p.cta_clicks}</td>
-                    <td className="py-3.5 px-4 text-emerald-600 font-bold">{p.submits}</td>
-                    <td className="py-3.5 px-4 text-right font-black text-stone-900">
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg">
-                        {p.conversion_rate} % <ArrowUpRight size={11} />
-                      </span>
+                    <td className="py-3.5 px-4 text-right tabular-nums">{fmt(p.views)}</td>
+                    <td className="py-3.5 px-4 text-right tabular-nums">{fmt(p.cta_clicks)}</td>
+                    <td className="py-3.5 px-4 text-right tabular-nums font-semibold text-stone-900">{fmt(p.submits)}</td>
+                    <td className="py-3.5 px-6 text-right tabular-nums font-semibold text-stone-900">
+                      {p.conversion_rate.toLocaleString('fr-FR')} %
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="py-8 text-center text-xs text-stone-600 space-y-1">
-            <p className="font-semibold text-stone-600">Aucune donnée de page enregistrée pour l'instant.</p>
-            <p>Visitez vos pages publiées pour voir les statistiques s'afficher en direct.</p>
+        ) : !error ? (
+          <div className="p-6">
+            <EmptyState
+              icon={BarChart3}
+              title="Aucune visite enregistrée pour l'instant"
+              description="Les chiffres apparaîtront ici dès que des personnes consulteront vos pages publiées."
+            />
           </div>
-        )}
-      </div>
+        ) : null}
+      </Card>
     </div>
   );
 }

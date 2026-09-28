@@ -1,8 +1,8 @@
 import AutopilotClient from './AutopilotClient';
 
 export const metadata = {
-  title: 'Pilote Automatique Éditorial | Administration Studio',
-  description: 'Génération et publication de vos lots éditoriaux hebdomadaires en 1-clic.',
+  title: 'Pilote automatique | Administration',
+  description: 'Rédaction d’articles de blog à partir des sujets du Hub Mots-clés.',
 };
 
 export default function AutopilotPage() {

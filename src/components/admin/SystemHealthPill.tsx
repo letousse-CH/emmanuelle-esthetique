@@ -2,16 +2,21 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
-import { ShieldCheck, AlertTriangle, Sparkles, Activity } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import SystemHealthModal, { HealthData } from './SystemHealthModal';
 
 export default function SystemHealthPill() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     fetchHealth();
+    // Même diagnostic rafraîchi quand une clé Claude vient d'être enregistrée.
+    const onKeyChange = () => { void fetchHealth(true); };
+    window.addEventListener('admin:ai-key-changed', onKeyChange);
+    return () => window.removeEventListener('admin:ai-key-changed', onKeyChange);
   }, []);
 
   const fetchHealth = async (refresh = false) => {
@@ -20,7 +25,7 @@ export default function SystemHealthPill() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || '';
       if (!token) {
-        setLoading(false);
+        setFetchError('Session expirée : reconnectez-vous pour vérifier les services.');
         return;
       }
       const url = refresh ? '/api/admin/ai-status?refresh=true' : '/api/admin/ai-status';
@@ -30,30 +35,34 @@ export default function SystemHealthPill() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setHealth(json);
+      setFetchError(null);
     } catch (err) {
-      // Silencieusement ignoré si non authentifié ou en mode dev sans base
+      // Le diagnostic ne bloque rien : on garde le dernier état connu et on le signale.
+      setFetchError("L'état des services n'a pas pu être vérifié. Réessayez dans un instant.");
     } finally {
       setLoading(false);
     }
   };
 
-  const isOk = health?.ok ?? true;
+  /*
+    Tant que le diagnostic n'a pas répondu, on n'affirme rien : la pastille
+    annonçait « prêts » même quand la vérification avait échoué.
+  */
+  const state: 'ok' | 'warning' | 'unknown' = !health ? 'unknown' : health.ok ? 'ok' : 'warning';
+  const label = state === 'ok' ? 'Services prêts' : state === 'warning' ? 'Réglage à compléter' : 'État des services';
+  const dot = state === 'ok' ? 'bg-emerald-500' : state === 'warning' ? 'bg-amber-500' : 'bg-stone-400';
 
   return (
     <>
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className={`hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${
-          isOk
-            ? 'bg-emerald-50 text-emerald-900 border-emerald-200/90 shadow-2xs hover:bg-emerald-100'
-            : 'bg-amber-50 text-amber-900 border-amber-200/90 shadow-2xs hover:bg-amber-100'
-        }`}
-        title="Cliquez pour inspecter l'état des services et des clés API"
+        className="hidden sm:inline-flex items-center gap-2 px-3 h-8 rounded-full border border-stone-200 bg-white text-[13px] font-medium text-stone-800 transition-colors cursor-pointer hover:bg-stone-100"
+        title="Voir l'état des services du site"
       >
-        <span className={`size-2 rounded-full ${isOk ? 'bg-emerald-500 shadow-2xs shadow-emerald-500/50 animate-pulse' : 'bg-amber-500 shadow-2xs shadow-amber-500/50 animate-bounce'}`} />
-        <span>{isOk ? 'Services & IA prêts' : 'Check API requis'}</span>
-        <Activity size={13} className={isOk ? 'text-emerald-600' : 'text-amber-600'} />
+        <span className={`size-2 rounded-full ${dot}`} aria-hidden="true" />
+        <span>{label}</span>
+        <Activity size={13} className="text-stone-600" />
       </button>
 
       <SystemHealthModal
@@ -61,6 +70,7 @@ export default function SystemHealthPill() {
         onClose={() => setModalOpen(false)}
         healthData={health}
         loading={loading}
+        fetchError={fetchError}
         onRefresh={() => fetchHealth(true)}
       />
     </>

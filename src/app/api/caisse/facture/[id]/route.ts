@@ -5,6 +5,7 @@ import { getBusinessInfoServer } from '../../../../../config/site';
 import { getSettingsServer } from '../../../../../services/settingsServer';
 import type { TransactionWithItems } from '../../../../../types/caisse';
 import { getSupabaseAdmin } from '../../../../../utils/supabaseAdmin';
+import { isAdminEmail } from '../../../../../utils/apiAuth';
 
 // `@react-pdf/renderer` s'appuie sur des API Node : la route ne peut pas tourner
 // sur le runtime Edge de Netlify.
@@ -22,8 +23,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!token) {
     return NextResponse.json({ error: 'Non autorisé. Token manquant.' }, { status: 401 });
   }
-  const { error: authError } = await supabase.auth.getUser(token);
-  if (authError) {
+  const { data: authData, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !authData?.user || !isAdminEmail(authData.user.email)) {
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
   }
 

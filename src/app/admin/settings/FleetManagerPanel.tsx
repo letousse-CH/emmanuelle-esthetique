@@ -7,7 +7,7 @@ import {
   FileText, ChevronDown, ChevronUp, GitBranch
 } from 'lucide-react';
 import { supabase } from '../../../services/supabase';
-import { Badge, Button, Card, CardBody, Input } from '../../../components/admin/ui';
+import { Button, Callout, Card, CardBody, FormMessage, Input } from '../../../components/admin/ui';
 
 export interface FleetSite {
   id: string;
@@ -31,8 +31,13 @@ const DEFAULT_SITES: FleetSite[] = [
 
 export default function FleetManagerPanel() {
   const [sites, setSites] = useState<FleetSite[]>([]);
+  // Copie toujours à jour de la liste : la mise à jour d'un site dure plusieurs
+  // minutes, et relire `sites` à la fin rendait l'état d'avant le lancement.
+  const sitesRef = React.useRef<FleetSite[]>([]);
+  useEffect(() => { sitesRef.current = sites; }, [sites]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Formulaire d'ajout / édition
   const [showDialog, setShowDialog] = useState(false);
@@ -52,13 +57,21 @@ export default function FleetManagerPanel() {
     loadSites();
   }, []);
 
+  // Lecture ratée : la liste par défaut s'afficherait et le moindre
+  // enregistrement écraserait la vraie liste. On bloque donc l'enregistrement.
+  const loadFailedRef = React.useRef(false);
+
   const loadSites = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('settings')
       .select('value')
       .eq('key', 'site_fleet_config')
       .maybeSingle();
+    if (error) {
+      loadFailedRef.current = true;
+      setSaveMessage({ type: 'error', text: "La liste des sites n'a pas pu être lue. Rechargez la page avant toute modification." });
+    }
 
     if (data?.value) {
       try {
@@ -77,15 +90,23 @@ export default function FleetManagerPanel() {
   };
 
   const saveSitesToSupabase = async (newSites: FleetSite[]) => {
+    if (loadFailedRef.current) {
+      setSaveMessage({ type: 'error', text: "La liste des sites n'a pas pu être lue au chargement : rechargez la page, sinon la liste enregistrée serait remplacée." });
+      return;
+    }
     setSaving(true);
+    setSaveMessage(null);
     setSites(newSites);
+    sitesRef.current = newSites;
     try {
-      await supabase.from('settings').upsert({
+      const { error } = await supabase.from('settings').upsert({
         key: 'site_fleet_config',
         value: JSON.stringify(newSites)
       }, { onConflict: 'key' });
-    } catch (e) {
+      if (error) throw error;
+    } catch (e: any) {
       console.error('Erreur sauvegarde flotte:', e);
+      setSaveMessage({ type: 'error', text: "La liste des sites n'a pas été enregistrée : " + (e?.message || 'erreur inconnue') + '. Réessayez.' });
     } finally {
       setSaving(false);
     }
@@ -134,17 +155,23 @@ export default function FleetManagerPanel() {
   };
 
   const handleDeleteSite = (id: string) => {
-    if (!window.confirm('Supprimer ce site client de la liste ?')) return;
+    const site = sites.find((s) => s.id === id);
+    if (!window.confirm(`Retirer « ${site?.name ?? 'ce site'} » de la liste ? Le site lui-même n'est pas touché.`)) return;
     const updated = sites.filter(s => s.id !== id);
     saveSitesToSupabase(updated);
   };
 
   // ── MISE À JOUR 100% AUTOMATISÉE EN 1 CLIC ─────────────────────────────────
-  const triggerFullAutomatedUpdate = async (site: FleetSite) => {
+  const triggerFullAutomatedUpdate = async (site: FleetSite, confirmed = false) => {
+    if (!confirmed && !window.confirm(`Mettre à jour « ${site.name} » ? Le site sera reconstruit et sa base de données complétée. L'opération prend quelques minutes.`)) return;
     setActionBusyId(site.id);
     const logs: string[] = [];
+    // Dernier message affiché, repris dans l'enregistrement final : sans lui,
+    // la liste relue gardait le message « en cours » après la réussite.
+    let lastMessage = '';
 
     const updateSiteState = (status: FleetSite['status'], msg: string, newLogs?: string[]) => {
+      lastMessage = msg;
       setSites(prev => prev.map(s => s.id === site.id ? {
         ...s,
         status,
@@ -159,7 +186,7 @@ export default function FleetManagerPanel() {
       const token = session?.access_token || '';
 
       // 1. Déclenchement du build Netlify
-      updateSiteState('updating', '🔨 Déploiement du code en cours…');
+      updateSiteState('updating', 'Mise en ligne du code en cours…');
       logs.push('🚀 Lancement de la mise à jour 1-clic…');
 
       if (site.buildWebhookUrl) {
@@ -176,7 +203,7 @@ export default function FleetManagerPanel() {
       }
 
       // 2. Attente et Polling de la synchronisation Supabase
-      updateSiteState('updating', '⏳ Attente du déploiement Netlify & synchronisation Supabase…');
+      updateSiteState('updating', 'Attente de la mise en ligne, puis mise à jour de la base…');
 
       let synced = false;
       let attempts = 0;
@@ -189,7 +216,7 @@ export default function FleetManagerPanel() {
 
         if (attempts > 1) {
           logs.push(`⏳ Compilation Netlify en cours (${elapsedSec}s écoulées — tentative ${attempts}/${maxAttempts})…`);
-          updateSiteState('updating', `⏳ Compilation Netlify en cours (${elapsedSec}s / ~120s)…`);
+          updateSiteState('updating', `Mise en ligne en cours (${elapsedSec} s, environ 2 min au total)…`);
           await new Promise(r => setTimeout(r, 6000));
         } else {
           await new Promise(r => setTimeout(r, 4000));
@@ -206,35 +233,37 @@ export default function FleetManagerPanel() {
           synced = true;
           logs.push(...syncData.logs);
           logs.push('✅ Mise à jour 100% terminée ! Le code Netlify et la base Supabase sont à jour.');
-          updateSiteState('connected', '✅ Site 100% à jour (Code + Supabase)');
+          updateSiteState('connected', 'Site à jour (code et base de données)');
         } else if (attempts === maxAttempts) {
           if (syncData?.logs) logs.push(...syncData.logs);
           logs.push('ℹ️ La compilation Netlify prend un peu plus de temps. N’oubliez pas d’exécuter `git push` si votre site est connecté à GitHub.');
-          updateSiteState('connected', '✅ Mise à jour transmise (Compilation en cours)');
+          updateSiteState('updating', 'Mise à jour envoyée ; la mise en ligne prend plus de temps que prévu. Revenez vérifier dans quelques minutes.');
         }
       }
 
       // Sauvegarde du résultat final dans Supabase settings
-      const finalSites = sites.map(s => s.id === site.id ? {
+      const finalSites = sitesRef.current.map(s => s.id === site.id ? {
         ...s,
-        status: synced ? ('connected' as const) : ('connected' as const),
+        status: synced ? ('connected' as const) : ('pending' as const),
+        ...(lastMessage ? { statusMessage: lastMessage } : {}),
         lastSyncAt: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         lastLogs: logs
       } : s);
-      saveSitesToSupabase(finalSites);
+      await saveSitesToSupabase(finalSites);
 
     } catch (err: any) {
       logs.push(`❌ Erreur : ${err?.message || 'Erreur inconnue'}`);
-      updateSiteState('error', 'Erreur de mise à jour');
+      updateSiteState('error', `La mise à jour a échoué : ${err?.message || 'erreur inconnue'}. Consultez le journal, puis réessayez.`);
     } finally {
       setActionBusyId(null);
     }
   };
 
   const updateAllSites = async () => {
+    if (!window.confirm(`Mettre à jour les ${sites.length} site(s) l'un après l'autre ? Chacun sera reconstruit ; comptez quelques minutes par site.`)) return;
     setGlobalBusy(true);
     for (const site of sites) {
-      await triggerFullAutomatedUpdate(site);
+      await triggerFullAutomatedUpdate(site, true);
     }
     setGlobalBusy(false);
   };
@@ -243,21 +272,22 @@ export default function FleetManagerPanel() {
     <div className="space-y-6">
       {/* Modale d'Ajout / Édition */}
       {showDialog && (
-        <div className="fixed inset-0 z-[9999] bg-stone-900/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-stone-200">
-            <div className="flex items-center justify-between pb-2 border-b border-stone-100">
-              <h3 className="text-base font-bold text-stone-900">
-                {editingSiteId ? 'Éditer le site client' : 'Ajouter un site client'}
+        <div className="fixed inset-0 z-[9999] bg-stone-900/70 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setShowDialog(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="fleet-dialog-title" onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-stone-200">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-200">
+              <h3 id="fleet-dialog-title" className="text-base font-semibold text-stone-900">
+                {editingSiteId ? 'Modifier le site' : 'Ajouter un site'}
               </h3>
-              <button onClick={() => setShowDialog(false)} className="text-stone-400 hover:text-stone-700 cursor-pointer">
+              <button type="button" onClick={() => setShowDialog(false)} aria-label="Fermer" className="text-stone-600 hover:text-stone-900 cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <div className="space-y-3 text-[13px]">
               <div>
-                <label className="block font-semibold text-stone-800 mb-1">Nom du site</label>
+                <label htmlFor="fleet-name" className="block font-medium text-stone-800 mb-1">Nom du site</label>
                 <Input
+                  id="fleet-name"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="Ex: Au-delà des chaînes"
@@ -265,8 +295,9 @@ export default function FleetManagerPanel() {
               </div>
 
               <div>
-                <label className="block font-semibold text-stone-800 mb-1">URL complète du site</label>
+                <label htmlFor="fleet-url" className="block font-medium text-stone-800 mb-1">Adresse complète du site</label>
                 <Input
+                  id="fleet-url"
                   value={formUrl}
                   onChange={(e) => setFormUrl(e.target.value)}
                   placeholder="https://audeladeschaines.com"
@@ -274,19 +305,20 @@ export default function FleetManagerPanel() {
               </div>
 
               <div>
-                <label className="block font-semibold text-stone-800 mb-1">Webhook de build Netlify (optionnel)</label>
+                <label htmlFor="fleet-webhook" className="block font-medium text-stone-800 mb-1">Lien de reconstruction Netlify (build hook, facultatif)</label>
                 <Input
+                  id="fleet-webhook"
                   value={formWebhook}
                   onChange={(e) => setFormWebhook(e.target.value)}
                   placeholder="https://api.netlify.com/build_hooks/..."
                 />
-                <p className="text-[11px] text-stone-500 mt-1">
-                  Permet à l'admin de déclencher automatiquement le build Netlify en 1 clic.
+                <p className="text-[13px] text-stone-600 mt-1">
+                  Sans ce lien, seule la base de données est mise à jour ; le code reste celui déjà en ligne.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
               <Button variant="secondary" size="sm" onClick={() => setShowDialog(false)}>
                 Annuler
               </Button>
@@ -303,14 +335,11 @@ export default function FleetManagerPanel() {
         <CardBody className="p-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Badge tone="success">Automatisation 1-Clic Active</Badge>
-                <span className="text-xs text-stone-500">{sites.length} site{sites.length > 1 ? 's' : ''} sous gestion</span>
-              </div>
-              <h2 className="text-lg font-bold text-stone-900">Mises à Jour Multi-Sites 100% Automatisées</h2>
-              <p className="text-xs text-stone-600">
-                Appuyez sur un seul bouton pour déployer le code et synchroniser la base Supabase de vos sites clients.
+              <h2 className="text-lg font-semibold text-stone-900">Autres sites</h2>
+              <p className="text-[14px] text-stone-700">
+                {sites.length} site{sites.length > 1 ? 's' : ''} suivi{sites.length > 1 ? 's' : ''}. La mise à jour reconstruit le site puis complète sa base de données.
               </p>
+              <FormMessage message={saveMessage} />
             </div>
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -330,7 +359,7 @@ export default function FleetManagerPanel() {
                 loading={globalBusy}
                 onClick={updateAllSites}
               >
-                {globalBusy ? 'Mise à jour générale…' : '⚡ TOUT METTRE À JOUR EN 1-CLIC'}
+                {globalBusy ? 'Mise à jour en cours…' : 'Tout mettre à jour'}
               </Button>
             </div>
           </div>
@@ -338,21 +367,17 @@ export default function FleetManagerPanel() {
       </Card>
 
       {/* Notice Déploiement Git & Netlify */}
-      <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-950 space-y-1.5 shadow-xs">
-        <p className="font-bold flex items-center gap-2 text-amber-950">
-          <GitBranch size={15} className="text-amber-700" />
-          Déploiement GitHub & Netlify pour vos sites clients
-        </p>
-        <p className="text-amber-900 leading-relaxed">
-          Si votre site client est connecté à un dépôt GitHub (ex: <em>Emmanuelle Esthétique</em>), pensez à effectuer votre envoi Git (<code className="bg-amber-200/70 text-amber-950 font-mono font-bold px-1.5 py-0.5 rounded">git push</code>). Netlify lancera immédiatement la compilation et la synchronisation Supabase passera au vert automatiquement !
-        </p>
-      </div>
+      <Callout tone="info" title="Sites reliés à GitHub">
+        Pour un site relié à un dépôt GitHub, le nouveau code n&apos;est mis en ligne qu&apos;après
+        l&apos;envoi des modifications (<code className="font-mono">git push</code>). Netlify reconstruit
+        alors le site ; la mise à jour de la base se fait ensuite ici.
+      </Callout>
 
       {/* Liste des Sites */}
       <div className="space-y-4">
         {loading ? (
           <Card>
-            <CardBody className="py-8 text-center text-xs text-stone-500">
+            <CardBody className="py-8 text-center text-sm text-stone-700">
               <Loader2 size={20} className="animate-spin text-stone-700 mx-auto mb-2" />
               Chargement de vos sites clients…
             </CardBody>
@@ -360,13 +385,13 @@ export default function FleetManagerPanel() {
         ) : sites.length === 0 ? (
           <Card>
             <CardBody className="py-10 text-center space-y-3">
-              <Globe size={32} className="mx-auto text-stone-300" />
+              <Globe size={32} className="mx-auto text-stone-400" />
               <p className="text-sm font-semibold text-stone-800">Aucun site enregistré</p>
-              <p className="text-xs text-stone-500 max-w-sm mx-auto">
-                Ajoutez les URL de vos sites clients pour débloquer la mise à jour 1-clic.
+              <p className="text-[13px] text-stone-600 max-w-sm mx-auto">
+                Ajoutez l&apos;adresse d&apos;un autre site installé avec cet outil pour pouvoir le mettre à jour d&apos;ici.
               </p>
-              <Button variant="primary" size="sm" icon={Plus} onClick={handleOpenAdd}>
-                Ajouter mon premier site
+              <Button variant="secondary" size="sm" icon={Plus} onClick={handleOpenAdd}>
+                Ajouter un site
               </Button>
             </CardBody>
           </Card>
@@ -379,51 +404,57 @@ export default function FleetManagerPanel() {
               return (
                 <Card key={site.id} className="overflow-hidden">
                   <CardBody className="p-5 space-y-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-stone-100">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-stone-200">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-stone-900 text-white flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
+                        <div className="w-10 h-10 rounded-xl bg-stone-100 text-stone-700 flex items-center justify-center shrink-0">
                           <Globe size={20} />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-bold text-stone-900">{site.name}</h3>
+                            <h3 className="text-sm font-semibold text-stone-900">{site.name}</h3>
                             <a
                               href={site.url}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-stone-400 hover:text-stone-800 transition-colors"
+                              className="text-stone-600 hover:text-stone-900 transition-colors"
                               title="Ouvrir le site"
+                              aria-label={`Ouvrir ${site.name} dans un nouvel onglet`}
                             >
                               <ExternalLink size={13} />
                             </a>
                           </div>
-                          <p className="text-xs text-stone-500 font-mono">{site.url}</p>
+                          <p className="text-xs text-stone-600 font-mono">{site.url}</p>
                         </div>
                       </div>
 
-                      {/* LE BOUTON UNIQUE 1-CLIC */}
                       <div className="flex items-center gap-2 self-end md:self-center">
                         <Button
-                          variant="primary"
+                          variant="secondary"
                           size="sm"
                           icon={Zap}
                           loading={isBusy}
+                          disabled={globalBusy || (actionBusyId !== null && !isBusy)}
                           onClick={() => triggerFullAutomatedUpdate(site)}
                         >
-                          {isBusy ? 'Mise à jour en cours…' : '🚀 Mettre à jour ce site (1-Clic)'}
+                          {isBusy ? 'Mise à jour en cours…' : 'Mettre à jour ce site'}
                         </Button>
 
                         <button
+                          type="button"
                           onClick={() => handleOpenEdit(site)}
-                          className="p-2 text-stone-400 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
-                          title="Éditer"
+                          className="p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+                          title="Modifier"
+                          aria-label={`Modifier ${site.name}`}
                         >
                           <Edit3 size={15} />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDeleteSite(site.id)}
-                          className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                          title="Supprimer"
+                          disabled={isBusy}
+                          className="p-2 text-stone-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-45"
+                          title="Retirer de la liste"
+                          aria-label={`Retirer ${site.name} de la liste`}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -431,37 +462,38 @@ export default function FleetManagerPanel() {
                     </div>
 
                     {/* Statut & Synthèse */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[13px]">
                       <div className="flex items-center gap-2">
                         <span className={`w-2.5 h-2.5 rounded-full ${
-                          site.status === 'connected' ? 'bg-emerald-500' : site.status === 'updating' ? 'bg-amber-400 animate-pulse' : 'bg-stone-300'
+                          site.status === 'connected' ? 'bg-emerald-500' : site.status === 'updating' ? 'bg-amber-500' : site.status === 'error' ? 'bg-red-500' : 'bg-stone-300'
                         }`} />
                         <span className="font-semibold text-stone-900">
-                          {site.statusMessage || (site.status === 'connected' ? '✅ Site 100% à jour (Code + Supabase)' : 'Prêt pour mise à jour')}
+                          {site.statusMessage || (site.status === 'connected' ? 'Site à jour' : 'Pas encore mis à jour')}
                         </span>
                         {site.lastSyncAt && (
-                          <span className="text-stone-400">· Dernière synchro à {site.lastSyncAt}</span>
+                          <span className="text-stone-600">· Dernière mise à jour à {site.lastSyncAt}</span>
                         )}
                       </div>
                     </div>
 
                     {/* Bloc Logs Accordéon Replié par Défaut */}
                     {site.lastLogs && site.lastLogs.length > 0 && (
-                      <div className="pt-2 border-t border-stone-100">
+                      <div className="pt-2 border-t border-stone-200">
                         <button
                           type="button"
                           onClick={() => setExpandedLogsSiteId(isExpanded ? null : site.id)}
-                          className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-stone-600 hover:text-stone-900 transition-colors cursor-pointer bg-stone-100 hover:bg-stone-200 px-3 py-1.5 rounded-lg"
+                          aria-expanded={isExpanded}
+                          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-stone-700 hover:text-stone-900 transition-colors cursor-pointer bg-stone-100 hover:bg-stone-200 px-3 py-1.5 rounded-lg"
                         >
                           <FileText size={13} />
                           {isExpanded
-                            ? 'Masquer le journal de mise à jour (Logs)'
-                            : `Voir le journal de mise à jour (${site.lastLogs.length} lignes)`}
+                            ? 'Masquer le journal'
+                            : `Voir le journal (${site.lastLogs.length} lignes)`}
                           {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                         </button>
 
                         {isExpanded && (
-                          <div className="mt-3 bg-stone-900 text-stone-200 p-4 rounded-xl border border-stone-800 text-xs space-y-1.5 font-mono max-h-72 overflow-y-auto selection:bg-amber-400 selection:text-stone-900 shadow-inner">
+                          <div className="mt-3 bg-stone-900 text-stone-200 p-4 rounded-xl border border-stone-800 text-xs space-y-1.5 font-mono max-h-72 overflow-y-auto ">
                             {site.lastLogs.map((log, idx) => (
                               <p key={idx} className="leading-relaxed">{log}</p>
                             ))}

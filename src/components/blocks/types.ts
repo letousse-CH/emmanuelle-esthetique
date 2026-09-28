@@ -17,6 +17,7 @@ export type SectionLayout =
   | 'full-width';
 
 export type VerticalPadding = 'none' | 'small' | 'medium' | 'large';
+export type InnerPadding = 'none' | 'medium' | 'large';
 export type SectionWidth = 'narrow' | 'contained' | 'wide' | 'full';
 export type SectionAnimation = 'none' | 'fade' | 'rise';
 
@@ -114,6 +115,8 @@ export interface ContentSection {
   id: string;
   layout: SectionLayout;
   paddingY: VerticalPadding;
+  /** Marge intérieure autour de la grille : aucune, +40px (medium) ou +80px (large). */
+  innerPad?: InnerPadding;
   width?: SectionWidth;
   background?: SectionBackground;
   textTone?: TextTone;

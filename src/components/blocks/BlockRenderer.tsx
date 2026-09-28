@@ -498,6 +498,7 @@ function SectionView({ section, editor, first }: { section: ContentSection; edit
     `pb-l-${section.layout}`,
     `pb-align-${section.alignItems || 'top'}`,
     section.flush ? 'pb-flush' : '',
+    section.innerPad && section.innerPad !== 'none' ? `pb-inner-${section.innerPad}` : '',
     section.reverseOnMobile ? 'pb-reverse-mobile' : '',
   ].filter(Boolean).join(' ');
   const edAttrs = editor ? { 'data-editor-kind': 'section', 'data-editor-section-id': section.id } : {};

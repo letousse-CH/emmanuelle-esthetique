@@ -12,8 +12,8 @@ export default function ModuleDisabledBanner({ moduleLabel }: { moduleLabel: str
         public. Vous pouvez continuer à le préparer ici.
       </span>
       <Link
-        href="/admin/settings"
-        className="shrink-0 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[12.5px] font-medium text-amber-900 transition-colors hover:bg-amber-100"
+        href="/admin/settings?tab=modules"
+        className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 h-8 inline-flex items-center text-[13px] font-semibold text-amber-900 transition-colors hover:bg-amber-100"
       >
         Réactiver
       </Link>

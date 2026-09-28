@@ -14,7 +14,7 @@ export default function Page() {
   const [tab, setTab] = useState('agents');
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="space-y-6">
       {!moduleFlags.agents && <ModuleDisabledBanner moduleLabel="Agent IA" />}
 
       <PageHeader

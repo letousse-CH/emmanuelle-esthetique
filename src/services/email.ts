@@ -1,18 +1,22 @@
 import { Resend } from 'resend';
 import { SITE_CONFIG } from '../config/site';
+import { getResendApiKey } from './secrets';
 
-let resendInstance: Resend | null = null;
+// Instance mémorisée avec la clé qui l'a créée : si la clé change dans
+// l'admin, une nouvelle instance est construite au prochain envoi.
+let resendInstance: { key: string; client: Resend } | null = null;
 
-function getResendInstance(): Resend {
-  if (resendInstance) return resendInstance;
-
-  const apiKey = process.env.RESEND_API_KEY;
+async function getResendInstance(): Promise<Resend> {
+  // Clé saisie dans Admin > Paramètres > Clés API, sinon RESEND_API_KEY.
+  const apiKey = await getResendApiKey();
   if (!apiKey) {
-    throw new Error('RESEND_API_KEY non configurée dans les variables d\'environnement.');
+    throw new Error("Clé Resend absente : renseignez-la dans Admin > Paramètres > Clés API (ou RESEND_API_KEY).");
   }
 
-  resendInstance = new Resend(apiKey);
-  return resendInstance;
+  if (resendInstance?.key === apiKey) return resendInstance.client;
+  const client = new Resend(apiKey);
+  resendInstance = { key: apiKey, client };
+  return client;
 }
 
 /**
@@ -47,7 +51,7 @@ export async function sendEmail(options: SendEmailOptions) {
   const from = options.from || SITE_CONFIG.emailSender.full;
   
   try {
-    const resend = getResendInstance();
+    const resend = await getResendInstance();
     const result = await resend.emails.send({
       from,
       to: options.to,

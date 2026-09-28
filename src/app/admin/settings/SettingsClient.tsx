@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AiKeyPanel from './AiKeyPanel';
 import ApiKeysPanel from './ApiKeysPanel';
 import DesignSystemPanel from './DesignSystemPanel';
@@ -12,7 +13,7 @@ import { settingsCache } from '../../../hooks/useSettings';
 import { SETTINGS_DEFAULTS } from '../../../constants/settings';
 import { AI_EFFORT_LEVELS, AI_MODELS, AiEffort, AiModelSpec, DEFAULT_AI_EFFORT, DEFAULT_AI_MODEL } from '../../../constants/aiModels';
 import { MODULE_SETTING_KEYS } from '../../../config/modules';
-import { PageHeader, SideNav, type TabItem } from '../../../components/admin/ui';
+import { Button, Callout, FormMessage, PageHeader, SideNav, ToggleRow, type TabItem } from '../../../components/admin/ui';
 
 /**
  * Les rubriques de réglages, dans l'ordre où on s'en sert : ce qui identifie
@@ -24,19 +25,21 @@ const SETTINGS_SECTIONS: TabItem[] = [
   { id: 'business', label: 'Entreprise', icon: Building2,
     description: "Nom, adresse, téléphone, e-mail et code promo de bienvenue." },
   { id: 'general', label: 'Identité visuelle', icon: Image,
-    description: 'Logos (principal & footer), visuel de pied de page et favicon.' },
+    description: "Logos, image du pied de page, icône de l'onglet, réseaux sociaux et présentation sous les articles." },
   { id: 'style', label: 'Design & style', icon: Palette,
-    description: 'Couleurs, polices, visuel du Hero, bouton du menu et rythme.' },
+    description: "Couleurs, polices, espacements et bouton d'action du menu." },
   { id: 'editorial', label: 'Éditorial & marque', icon: BookOpen,
     description: "Ce que l'IA doit savoir de votre activité et de votre ton." },
   { id: 'modules', label: 'Modules', icon: Puzzle,
     description: 'Activez ou masquez les grandes fonctions du site.' },
-  { id: 'keys', label: 'Clés API & Services', icon: KeyRound,
-    description: 'Anthropic Claude, Resend E-mails, Cloudflare R2, Bing IndexNow.' },
+  { id: 'keys', label: 'Clés des services', icon: KeyRound,
+    description: "Clés des services externes : rédaction par l'IA, envoi d'e-mails, stockage des images, indexation Bing." },
+  { id: 'ai', label: 'IA & budget', icon: Sparkles,
+    description: "Modèle utilisé pour les textes générés et budget mensuel à surveiller." },
   { id: 'caisse', label: 'Caisse & TVA', icon: CreditCard,
     description: 'Taux de TVA, IBAN, mentions de facture et bons cadeaux.' },
   { id: 'fleet', label: 'Flotte Multi-Sites', icon: Server,
-    description: 'Gérer et mettre à jour vos autres sites clients (ex: audeladeschaines.com) en 1-clic.' },
+    description: 'Mettre à jour les autres sites installés avec ce même outil.' },
   { id: 'security', label: 'Sécurité', icon: Lock,
     description: 'Mot de passe du compte administrateur.' },
 ];
@@ -60,6 +63,7 @@ export default function Settings() {
   const [migrateLog, setMigrateLog] = useState<{ success?: boolean; message?: string; error?: string; logs?: string[] } | null>(null);
 
   const handleAutoMigrate = async () => {
+    if (!confirm("Vérifier la base de données et ajouter les colonnes manquantes ? Vos contenus ne sont pas modifiés.")) return;
     setMigrating(true);
     setMigrateLog(null);
     try {
@@ -69,11 +73,15 @@ export default function Settings() {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur lors de la migration');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(res.status === 401
+          ? 'Votre session a expiré. Reconnectez-vous, puis relancez la vérification.'
+          : data.error || `La vérification a échoué (erreur ${res.status}). Réessayez dans un instant.`);
+      }
       setMigrateLog(data);
     } catch (err: any) {
-      setMigrateLog({ error: err?.message || 'Erreur lors de la synchronisation Supabase.' });
+      setMigrateLog({ error: err?.message || "La vérification n'a pas pu être lancée. Vérifiez votre connexion puis réessayez." });
     } finally {
       setMigrating(false);
     }
@@ -89,6 +97,7 @@ export default function Settings() {
   const [showPicker, setShowPicker]     = useState(false);
   const [mediaAssets, setMediaAssets]   = useState<MediaAsset[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaError, setMediaError]     = useState<string | null>(null);
 
   // ── Logo section ──────────────────────────────────────────
   const [logoImage, setLogoImage]             = useState('');
@@ -106,8 +115,10 @@ export default function Settings() {
   const [socialSpotify, setSocialSpotify]                     = useState('');
   const [socialWebhookUrl, setSocialWebhookUrl]               = useState('');
   const [socialLinkedinToken, setSocialLinkedinToken]         = useState('');
-  const [socialLinkedinClientId, setSocialLinkedinClientId]   = useState('770flq5kanpk35');
-  const [socialLinkedinClientSecret, setSocialLinkedinClientSecret] = useState('WPL_AP1.DWjJmw1gavYrqZ');
+  // Pas de valeur par défaut ici : un secret écrit en dur partait dans le code
+  // envoyé au navigateur. Ces clés ne sont plus réécrites depuis cet écran.
+  const [socialLinkedinClientId, setSocialLinkedinClientId]   = useState('');
+  const [socialLinkedinClientSecret, setSocialLinkedinClientSecret] = useState('');
   const [socialLinkedinPageId, setSocialLinkedinPageId]       = useState('');
   const [socialMetaToken, setSocialMetaToken]                 = useState('');
   const [socialInstagramAccountId, setSocialInstagramAccountId] = useState('');
@@ -215,6 +226,26 @@ export default function Settings() {
 
   const [activeTab, setActiveTab]                     = useState<'general' | 'business' | 'editorial' | 'modules' | 'caisse' | 'ai' | 'style' | 'fleet' | 'security' | 'keys'>('general');
 
+  /*
+    Si une lecture échoue (connexion coupée, session expirée), les champs restent
+    vides. Enregistrer à ce moment-là écraserait les vraies valeurs par du vide :
+    on bloque donc l'enregistrement et on le dit.
+  */
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadErrorRef = React.useRef<string | null>(null);
+  const flagLoadError = (error: { message?: string } | null | undefined) => {
+    if (!error) return;
+    const text = "Certains réglages n'ont pas pu être chargés. Rechargez la page avant d'enregistrer, sinon les valeurs actuelles seraient remplacées par des champs vides.";
+    loadErrorRef.current = text;
+    setLoadError(text);
+    console.error('[settings] Lecture impossible :', error.message);
+  };
+  const blockedByLoadError = (setMessage: (m: { type: 'success' | 'error'; text: string } | null) => void) => {
+    if (!loadErrorRef.current) return false;
+    setMessage({ type: 'error', text: loadErrorRef.current });
+    return true;
+  };
+
   // Preview button hovers
 
   const renderPresets = (setter: (val: string) => void) => (
@@ -241,7 +272,8 @@ export default function Settings() {
     </div>
   );
 
-  const [isMasterStudio, setIsMasterStudio] = useState(false);
+  // null tant que l'hôte n'est pas connu (rendu serveur, premier passage).
+  const [isMasterStudio, setIsMasterStudio] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -255,18 +287,27 @@ export default function Settings() {
   }, []);
 
   const visibleSections = SETTINGS_SECTIONS.filter((section) => {
-    if (section.id === 'fleet') return isMasterStudio;
+    if (section.id === 'fleet') return isMasterStudio === true;
     return true;
   });
 
+  // Suit le paramètre ?tab= y compris quand on arrive par un lien alors que la
+  // page est déjà ouverte (bouton « Régler » du diagnostic, bandeau de module).
+  const searchParams = useSearchParams();
+  const tabParam = searchParams?.get('tab') ?? null;
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get('tab');
-      if (tabParam && ['general', 'business', 'editorial', 'modules', 'caisse', 'ai', 'style', 'fleet', 'security', 'keys'].includes(tabParam)) {
-        setActiveTab(tabParam as any);
-      }
+    if (tabParam && ['general', 'business', 'editorial', 'modules', 'caisse', 'ai', 'style', 'fleet', 'security', 'keys'].includes(tabParam)) {
+      setActiveTab(tabParam as typeof activeTab);
     }
+  }, [tabParam]);
+
+  // ?tab=fleet hors de l'hôte maître : la rubrique n'existe pas ici, on
+  // retombe sur la première au lieu d'afficher une page vide.
+  useEffect(() => {
+    if (isMasterStudio === false && activeTab === 'fleet') setActiveTab('general');
+  }, [isMasterStudio, activeTab]);
+
+  useEffect(() => {
     loadHero();
     loadPromo();
     loadSocials();
@@ -289,10 +330,11 @@ export default function Settings() {
 
   const loadEditorial = async () => {
     setEditorialFetching(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('settings')
       .select('key, value')
       .in('key', EDITORIAL_KEYS);
+    flagLoadError(error);
     if (data && data.length > 0) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       setSiteActivityContext(map.site_activity_context ?? SETTINGS_DEFAULTS.site_activity_context ?? '');
@@ -313,6 +355,7 @@ export default function Settings() {
   const handleSaveEditorial = async (e: React.FormEvent) => {
     e.preventDefault();
     setEditorialMessage(null);
+    if (blockedByLoadError(setEditorialMessage)) return;
     setEditorialLoading(true);
     const { error } = await supabase
       .from('settings')
@@ -326,7 +369,7 @@ export default function Settings() {
     if (error) {
       setEditorialMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
     } else {
-      setEditorialMessage({ type: 'success', text: 'Paramètres d\'activité et ligne éditoriale enregistrés ! Ils alimenteront les prochaines suggestions du blog et rédactions IA.' });
+      setEditorialMessage({ type: 'success', text: 'Ligne éditoriale enregistrée. Elle servira aux prochains textes rédigés par l\'IA.' });
       settingsCache.set('site_activity_context', siteActivityContext.trim());
       settingsCache.set('site_target_persona', siteTargetPersona.trim());
       settingsCache.set('site_tone_of_voice', siteToneOfVoice.trim());
@@ -345,10 +388,11 @@ export default function Settings() {
 
   const loadBusiness = async () => {
     setBizFetching(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('settings')
       .select('key, value')
       .in('key', BUSINESS_KEYS);
+    flagLoadError(error);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.business_name)             setBizName(map.business_name);
@@ -371,6 +415,7 @@ export default function Settings() {
   const handleSaveBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
     setBizMessage(null);
+    if (blockedByLoadError(setBizMessage)) return;
     setBizLoading(true);
     const { error } = await supabase
       .from('settings')
@@ -392,7 +437,7 @@ export default function Settings() {
     if (error) {
       setBizMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
     } else {
-      setBizMessage({ type: 'success', text: 'Coordonnées mises à jour !' });
+      setBizMessage({ type: 'success', text: 'Coordonnées enregistrées.' });
       settingsCache.set('business_name', bizName.trim());
       settingsCache.set('business_owner', bizOwner.trim());
       settingsCache.set('business_email', bizEmail.trim());
@@ -429,7 +474,8 @@ export default function Settings() {
 
   const loadAi = async () => {
     setAiFetching(true);
-    const { data } = await supabase.from('settings').select('key, value').in('key', AI_KEYS);
+    const { data, error } = await supabase.from('settings').select('key, value').in('key', AI_KEYS);
+    flagLoadError(error);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.ai_model)                setAiModel(map.ai_model);
@@ -456,6 +502,7 @@ export default function Settings() {
   const handleSaveAi = async (e: React.FormEvent) => {
     e.preventDefault();
     setAiMessage(null);
+    if (blockedByLoadError(setAiMessage)) return;
     setAiLoading(true);
 
     const budget = Math.max(0, Number.parseFloat(aiBudget.replace(',', '.')) || 0);
@@ -498,10 +545,11 @@ export default function Settings() {
 
   const loadModules = async () => {
     setModulesFetching(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('settings')
       .select('key, value')
       .in('key', Object.values(MODULE_SETTING_KEYS));
+    flagLoadError(error);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.module_blog_enabled !== undefined)          setModuleBlogEnabled(map.module_blog_enabled !== 'false');
@@ -529,7 +577,8 @@ export default function Settings() {
 
   const loadCaisse = async () => {
     setCaisseFetching(true);
-    const { data } = await supabase.from('settings').select('key, value').in('key', CAISSE_KEYS);
+    const { data, error } = await supabase.from('settings').select('key, value').in('key', CAISSE_KEYS);
+    flagLoadError(error);
     const map = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value]));
     setCaisseTvaAssujetti((map.caisse_tva_assujetti ?? SETTINGS_DEFAULTS.caisse_tva_assujetti) === 'true');
     setCaisseTvaTaux(map.caisse_tva_taux_defaut ?? SETTINGS_DEFAULTS.caisse_tva_taux_defaut);
@@ -544,6 +593,7 @@ export default function Settings() {
   const handleSaveCaisse = async (e: React.FormEvent) => {
     e.preventDefault();
     setCaisseMessage(null);
+    if (blockedByLoadError(setCaisseMessage)) return;
     setCaisseLoading(true);
     const rows = [
       { key: 'caisse_tva_assujetti',    value: String(caisseTvaAssujetti) },
@@ -571,6 +621,7 @@ export default function Settings() {
   const handleSaveModules = async (e: React.FormEvent) => {
     e.preventDefault();
     setModulesMessage(null);
+    if (blockedByLoadError(setModulesMessage)) return;
     setModulesLoading(true);
     const { error } = await supabase
       .from('settings')
@@ -588,7 +639,7 @@ export default function Settings() {
     if (error) {
       setModulesMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
     } else {
-      setModulesMessage({ type: 'success', text: 'Modules mis à jour ! Rechargez le site pour voir les changements.' });
+      setModulesMessage({ type: 'success', text: 'Modules enregistrés. Rechargez le site public pour voir le changement.' });
       settingsCache.set('module_blog_enabled', String(moduleBlogEnabled));
       settingsCache.set('module_ai_generation_enabled', String(moduleAiEnabled));
       settingsCache.set('module_events_enabled', String(moduleEventsEnabled));
@@ -604,11 +655,12 @@ export default function Settings() {
 
   const loadHeaderRegisterLink = async () => {
     setHeaderRegisterFetching(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('settings')
       .select('key, value')
       .eq('key', 'header_register_link')
       .maybeSingle();
+    flagLoadError(error);
     if (data?.value) {
       setHeaderRegisterLink(data.value);
     }
@@ -618,6 +670,7 @@ export default function Settings() {
   const handleSaveHeaderRegisterLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setHeaderRegisterMessage(null);
+    if (blockedByLoadError(setHeaderRegisterMessage)) return;
     setHeaderRegisterLoading(true);
     const { error } = await supabase
       .from('settings')
@@ -626,7 +679,7 @@ export default function Settings() {
       setHeaderRegisterMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
     } else {
       settingsCache.set('header_register_link', headerRegisterLink.trim());
-      setHeaderRegisterMessage({ type: 'success', text: 'Lien mis à jour avec succès !' });
+      setHeaderRegisterMessage({ type: 'success', text: 'Lien enregistré.' });
       window.dispatchEvent(new CustomEvent('sde:settingsChanged'));
     }
     setHeaderRegisterLoading(false);
@@ -635,10 +688,11 @@ export default function Settings() {
   // ── Loaders ───────────────────────────────────────────────
   const loadHero = async () => {
     setHeroFetching(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('settings')
       .select('key, value')
       .in('key', ['hero_image', 'hero_text_color', 'global_logo', 'footer_logo', 'footer_image', 'favicon_url', 'section_hero_opacity']);
+    flagLoadError(error);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.hero_image)           setHeroImage(map.hero_image);
@@ -654,7 +708,7 @@ export default function Settings() {
 
   const loadSocials = async () => {
     setSocialFetching(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('settings')
       .select('key, value')
       .in('key', [
@@ -663,6 +717,7 @@ export default function Settings() {
         'social_meta_token', 'social_instagram_account_id', 'social_facebook_page_id',
         'ai_lead_responder_enabled'
       ]);
+    flagLoadError(error);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.social_instagram) setSocialInstagram(map.social_instagram);
@@ -711,39 +766,40 @@ export default function Settings() {
   const handleSaveSocials = async (e: React.FormEvent) => {
     e.preventDefault();
     setSocialMessage(null);
+    if (blockedByLoadError(setSocialMessage)) return;
     setSocialLoading(true);
+    /*
+      On n'enregistre que ce que ce formulaire affiche. Il réécrivait aussi les
+      jetons LinkedIn/Meta et le webhook, absents de l'écran : une connexion
+      LinkedIn faite dans un autre onglet était alors écrasée par l'ancienne
+      valeur gardée en mémoire ici.
+    */
+    const rows = [
+      { key: 'social_instagram',          value: socialInstagram.trim() },
+      { key: 'social_linkedin',           value: socialLinkedin.trim() },
+      { key: 'social_youtube',            value: socialYoutube.trim() },
+      { key: 'social_spotify',            value: socialSpotify.trim() },
+      { key: 'ai_lead_responder_enabled', value: aiLeadResponderEnabled ? 'true' : 'false' },
+    ];
     const { error } = await supabase
       .from('settings')
-      .upsert([
-        { key: 'social_instagram',              value: socialInstagram.trim() },
-        { key: 'social_linkedin',               value: socialLinkedin.trim() },
-        { key: 'social_youtube',                value: socialYoutube.trim() },
-        { key: 'social_spotify',                value: socialSpotify.trim() },
-        { key: 'social_webhook_url',            value: socialWebhookUrl.trim() },
-        { key: 'social_linkedin_token',          value: socialLinkedinToken.trim() },
-        { key: 'social_linkedin_client_id',      value: socialLinkedinClientId.trim() },
-        { key: 'social_linkedin_client_secret',  value: socialLinkedinClientSecret.trim() },
-        { key: 'social_linkedin_page_id',        value: socialLinkedinPageId.trim() },
-        { key: 'social_meta_token',              value: socialMetaToken.trim() },
-        { key: 'social_instagram_account_id',   value: socialInstagramAccountId.trim() },
-        { key: 'social_facebook_page_id',       value: socialFacebookPageId.trim() },
-        { key: 'ai_lead_responder_enabled',     value: aiLeadResponderEnabled ? 'true' : 'false' },
-      ], { onConflict: 'key' });
+      .upsert(rows, { onConflict: 'key' });
     if (error) {
-      setSocialMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
+      setSocialMessage({ type: 'error', text: "Les réseaux sociaux n'ont pas été enregistrés : " + error.message });
     } else {
-      setSocialMessage({ type: 'success', text: 'Paramètres réseaux & clés d\'accès enregistrés !' });
-      settingsCache.set('social_webhook_url', socialWebhookUrl.trim());
-      settingsCache.set('ai_lead_responder_enabled', aiLeadResponderEnabled ? 'true' : 'false');
+      setSocialMessage({ type: 'success', text: 'Réseaux sociaux enregistrés.' });
+      rows.forEach((r) => settingsCache.set(r.key, r.value));
+      window.dispatchEvent(new CustomEvent('sde:settingsChanged'));
     }
     setSocialLoading(false);
   };
 
   const loadAuthor = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('settings')
       .select('key, value')
       .in('key', ['author_bio', 'author_link']);
+    flagLoadError(error);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       if (map.author_bio)  setAuthorBio(map.author_bio);
@@ -754,6 +810,7 @@ export default function Settings() {
   const handleSaveAuthor = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthorMessage(null);
+    if (blockedByLoadError(setAuthorMessage)) return;
     setAuthorLoading(true);
     const { error } = await supabase
       .from('settings')
@@ -762,19 +819,22 @@ export default function Settings() {
         { key: 'author_link', value: authorLink.trim() },
       ], { onConflict: 'key' });
     if (error) {
-      setAuthorMessage({ type: 'error', text: 'Erreur : ' + error.message });
+      setAuthorMessage({ type: 'error', text: "La présentation n'a pas été enregistrée : " + error.message });
     } else {
-      setAuthorMessage({ type: 'success', text: 'Auteur mis à jour !' });
+      settingsCache.set('author_bio', authorBio.trim());
+      settingsCache.set('author_link', authorLink.trim());
+      setAuthorMessage({ type: 'success', text: 'Présentation enregistrée.' });
     }
     setAuthorLoading(false);
   };
 
   const loadPromo = async () => {
     setPromoFetching(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('settings')
       .select('key, value')
       .in('key', ['promo_code', 'promo_amount']);
+    flagLoadError(error);
     if (data) {
       const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
       setPromoCode(map.promo_code   || 'BIENVENUE');
@@ -789,10 +849,12 @@ export default function Settings() {
     setShowPicker(true);
     if (mediaAssets.length === 0) {
       setMediaLoading(true);
-      const { data } = await supabase
+      setMediaError(null);
+      const { data, error } = await supabase
         .from('media_assets')
         .select('id, url, alt_text')
         .order('created_at', { ascending: false });
+      if (error) setMediaError("La médiathèque n'a pas pu être chargée. Fermez cette fenêtre et réessayez, ou collez l'adresse de l'image dans le champ.");
       setMediaAssets(data || []);
       setMediaLoading(false);
     }
@@ -843,40 +905,31 @@ export default function Settings() {
   const handleSaveLogo = async (e: React.FormEvent) => {
     e.preventDefault();
     setLogoMessage(null);
+    if (blockedByLoadError(setLogoMessage)) return;
     if (!logoImage.trim()) {
       setLogoMessage({ type: 'error', text: 'Veuillez saisir ou choisir une image pour le logo principal.' });
       return;
     }
     setLogoLoading(true);
+    /*
+      Les trois images facultatives sont toujours écrites, même vides : sinon
+      vider un champ ne retirait jamais l'image du site. Un champ vide est
+      prévu partout (le pied de page reprend alors le logo principal).
+    */
     const updates = [
-      { key: 'global_logo', value: logoImage.trim() }
+      { key: 'global_logo',  value: logoImage.trim() },
+      { key: 'footer_logo',  value: footerLogoImage.trim() },
+      { key: 'footer_image', value: footerImage.trim() },
+      { key: 'favicon_url',  value: faviconImage.trim() },
     ];
-    if (footerLogoImage.trim()) {
-      updates.push({ key: 'footer_logo', value: footerLogoImage.trim() });
-    }
-    if (footerImage.trim()) {
-      updates.push({ key: 'footer_image', value: footerImage.trim() });
-    }
-    if (faviconImage.trim()) {
-      updates.push({ key: 'favicon_url', value: faviconImage.trim() });
-    }
     const { error } = await supabase
       .from('settings')
       .upsert(updates, { onConflict: 'key' });
     if (error) {
-      setLogoMessage({ type: 'error', text: 'Erreur lors de la sauvegarde : ' + error.message });
+      setLogoMessage({ type: 'error', text: "Les images n'ont pas été enregistrées : " + error.message });
     } else {
-      settingsCache.set('global_logo', logoImage.trim());
-      if (footerLogoImage.trim()) {
-        settingsCache.set('footer_logo', footerLogoImage.trim());
-      }
-      if (footerImage.trim()) {
-        settingsCache.set('footer_image', footerImage.trim());
-      }
-      if (faviconImage.trim()) {
-        settingsCache.set('favicon_url', faviconImage.trim());
-      }
-      setLogoMessage({ type: 'success', text: 'Logos mis à jour avec succès !' });
+      updates.forEach((u) => settingsCache.set(u.key, u.value));
+      setLogoMessage({ type: 'success', text: 'Identité visuelle enregistrée.' });
       window.dispatchEvent(new CustomEvent('sde:settingsChanged'));
     }
     setLogoLoading(false);
@@ -886,22 +939,32 @@ export default function Settings() {
   const handleSavePromo = async (e: React.FormEvent) => {
     e.preventDefault();
     setPromoMessage(null);
+    if (blockedByLoadError(setPromoMessage)) return;
     if (!promoCode.trim() || !promoAmount.trim()) {
       setPromoMessage({ type: 'error', text: 'Veuillez remplir tous les champs.' });
       return;
     }
     setPromoLoading(true);
-    const updates = [
-      supabase.from('settings').update({ value: promoCode.trim().toUpperCase() }).eq('key', 'promo_code'),
-      supabase.from('settings').update({ value: promoAmount.trim() }).eq('key', 'promo_amount'),
-    ];
-    const results = await Promise.all(updates);
-    const hasError = results.some(r => r.error);
-    if (hasError) {
-      setPromoMessage({ type: 'error', text: 'Erreur lors de la sauvegarde.' });
+    /*
+      `update` ne crée pas la ligne si elle n'existe pas encore : sur une base
+      neuve, le code promo n'était donc jamais enregistré, sans aucune erreur
+      affichée. `upsert` crée ou remplace.
+    */
+    const code = promoCode.trim().toUpperCase();
+    const amount = promoAmount.trim();
+    const { error } = await supabase
+      .from('settings')
+      .upsert([
+        { key: 'promo_code',   value: code },
+        { key: 'promo_amount', value: amount },
+      ], { onConflict: 'key' });
+    if (error) {
+      setPromoMessage({ type: 'error', text: "Le code promo n'a pas été enregistré : " + error.message });
     } else {
-      setPromoCode(promoCode.trim().toUpperCase());
-      setPromoMessage({ type: 'success', text: 'Paramètres du code promo sauvegardés !' });
+      setPromoCode(code);
+      settingsCache.set('promo_code', code);
+      settingsCache.set('promo_amount', amount);
+      setPromoMessage({ type: 'success', text: 'Code promo enregistré.' });
     }
     setPromoLoading(false);
   };
@@ -910,20 +973,22 @@ export default function Settings() {
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwdMessage(null);
-    if (password !== confirmPassword) {
-      setPwdMessage({ type: 'error', text: 'Les mots de passe ne correspondent pas.' });
+    if (password.length < 8) {
+      setPwdMessage({ type: 'error', text: 'Le mot de passe doit contenir au moins 8 caractères.' });
       return;
     }
-    if (password.length < 6) {
-      setPwdMessage({ type: 'error', text: 'Le mot de passe doit faire au moins 6 caractères.' });
+    if (password !== confirmPassword) {
+      setPwdMessage({ type: 'error', text: 'Les deux mots de passe ne sont pas identiques. Saisissez-les à nouveau.' });
       return;
     }
     setPwdLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
-      setPwdMessage({ type: 'error', text: 'Erreur lors de la mise à jour : ' + error.message });
+      setPwdMessage({ type: 'error', text: /same password|different from the old/i.test(error.message)
+        ? "Choisissez un mot de passe différent de l'ancien."
+        : "Le mot de passe n'a pas été modifié : " + error.message });
     } else {
-      setPwdMessage({ type: 'success', text: 'Mot de passe mis à jour avec succès !' });
+      setPwdMessage({ type: 'success', text: 'Mot de passe modifié.' });
       setPassword('');
       setConfirmPassword('');
     }
@@ -955,16 +1020,18 @@ export default function Settings() {
             className="bg-white w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl rounded-xl overflow-hidden outline-none"
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-              <h3 id="media-picker-title" className="font-bold text-stone-900 text-sm">Choisir une image</h3>
+              <h3 id="media-picker-title" className="font-semibold text-stone-900 text-[15px]">Choisir une image</h3>
               <button onClick={() => setShowPicker(false)} aria-label="Fermer la médiathèque" className="p-2 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer">
                 <X size={18} />
               </button>
             </div>
             <div className="overflow-y-auto p-6">
               {mediaLoading ? (
-                <p className="text-center text-stone-600 py-12">Chargement des médias…</p>
+                <p className="text-center text-stone-700 py-12">Chargement des médias…</p>
+              ) : mediaError ? (
+                <p className="text-center text-red-700 py-12">{mediaError}</p>
               ) : mediaAssets.length === 0 ? (
-                <p className="text-center text-stone-600 py-12">Aucune image dans la médiathèque.</p>
+                <p className="text-center text-stone-700 py-12">Aucune image dans la médiathèque. Ajoutez-en depuis Site &gt; Médiathèque, ou collez l&apos;adresse d&apos;une image dans le champ.</p>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {mediaAssets.map(asset => {
@@ -989,10 +1056,10 @@ export default function Settings() {
                         }}
                         className={`relative group aspect-video rounded-xl overflow-hidden border-2 transition-all duration-200 ${isSelected ? 'border-stone-900 shadow-lg' : 'border-stone-200 hover:border-stone-400/50'}`}
                       >
-                        <img src={asset.url} alt={asset.alt_text} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                        <img src={asset.url} alt={asset.alt_text} className="w-full h-full object-cover" />
                         {isSelected && (
                           <div className="absolute inset-0 bg-stone-900/20 flex items-center justify-center">
-                            <div className="bg-stone-900 text-white rounded-full p-1.5">
+                            <div className="bg-accent text-accent-fg rounded-full p-1.5">
                               <Check size={14} />
                             </div>
                           </div>
@@ -1021,67 +1088,42 @@ export default function Settings() {
           <SideNav
             label="Rubriques des paramètres"
             active={activeTab}
-            onChange={(id) => setActiveTab(id as typeof activeTab)}
+            onChange={(id) => {
+              setActiveTab(id as typeof activeTab);
+              // L'adresse suit la rubrique : sans cela, un lien « Régler » vers
+              // la rubrique déjà inscrite dans l'adresse ne changeait plus rien.
+              try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('tab', id);
+                window.history.replaceState(window.history.state, '', url.pathname + url.search);
+              } catch { /* sans conséquence : seul l'onglet affiché compte */ }
+            }}
             items={visibleSections}
           />
         </div>
 
         <div className="min-w-0 space-y-8">
+        {loadError && (
+          <Callout tone="danger" title="Chargement incomplet">{loadError}</Callout>
+        )}
         {/* ── Onglet Général (Hero + Code promo) ────────────────── */}
         {activeTab === 'general' && (
           <div className="space-y-10 animate-fadein">
             {/* Logo Section */}
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
-                <Image size={16} /> Identité visuelle — Logo du site
+                <Image size={16} /> Logos et images du site
               </h2>
 
               {heroFetching ? (
-                <p className="text-stone-600 text-sm">Chargement…</p>
+                <p className="text-stone-700 text-sm">Chargement…</p>
               ) : (
                 <form onSubmit={handleSaveLogo} className="space-y-8">
-                  {logoMessage && (
-                    <div className={`p-4 text-sm ${logoMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                      {logoMessage.text}
-                    </div>
-                  )}
 
-                  {/* Logo Image */}
-                  {/* Favicon */}
-                  <div className="space-y-3 pb-6 border-b border-stone-200">
-                    <label htmlFor="settings-favicon" className="block text-[13px] font-medium text-stone-800">
-                      Favicon (icône onglet navigateur — format carré .png ou .svg recommandé)
-                    </label>
-
-                    {faviconImage && (
-                      <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-stone-200 bg-stone-50 p-2 shadow-sm">
-                        <img src={faviconImage} alt="Aperçu favicon" className="w-full h-full object-contain" />
-                      </div>
-                    )}
-
-                    <div className="flex gap-3">
-                      <input
-                        id="settings-favicon"
-                        type="url"
-                        value={faviconImage}
-                        onChange={(e) => setFaviconImage(e.target.value)}
-                        placeholder="https://… ou choisir depuis la médiathèque →"
-                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
-                      />
-                      <button
-                        type="button"
-                        onClick={(e) => openPicker('favicon', e.currentTarget)}
-                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-[13px] font-medium text-stone-800 transition-colors hover:bg-stone-50 hover:border-stone-400 whitespace-nowrap cursor-pointer"
-                      >
-                        <Image size={14} /> Médiathèque
-                      </button>
-                    </div>
-                    <p className="text-[12.5px] text-stone-500">Pris en compte au prochain déploiement (rendu côté serveur).</p>
-                  </div>
-
+                  {/* Logo principal */}
                   <div className="space-y-3">
                     <label htmlFor="settings-logo" className="block text-[13px] font-medium text-stone-800">
-                      Logo principal (En-tête et Favicon - Format carré recommandé)
+                      Logo principal (en-tête du site, format carré recommandé)
                     </label>
 
                     {/* Aperçu */}
@@ -1098,12 +1140,12 @@ export default function Settings() {
                         value={logoImage}
                         onChange={(e) => setLogoImage(e.target.value)}
                         placeholder="https://… ou choisir depuis la médiathèque →"
-                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                       />
                       <button
                         type="button"
                         onClick={(e) => openPicker('logo', e.currentTarget)}
-                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-[13px] font-medium text-stone-800 transition-colors hover:bg-stone-50 hover:border-stone-400 whitespace-nowrap cursor-pointer"
+                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
@@ -1113,7 +1155,7 @@ export default function Settings() {
                   {/* Logo du Footer Image */}
                   <div className="space-y-3 pt-6 border-t border-stone-200">
                     <label htmlFor="settings-footer-logo" className="block text-[13px] font-medium text-stone-800">
-                      Logo du pied de page (Footer - Format paysage/allongé recommandé)
+                      Logo du pied de page (format allongé recommandé ; vide = logo principal)
                     </label>
 
                     {/* Aperçu */}
@@ -1130,12 +1172,12 @@ export default function Settings() {
                         value={footerLogoImage}
                         onChange={(e) => setFooterLogoImage(e.target.value)}
                         placeholder="https://… ou choisir depuis la médiathèque →"
-                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                       />
                       <button
                         type="button"
                         onClick={(e) => openPicker('footerLogo', e.currentTarget)}
-                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-[13px] font-medium text-stone-800 transition-colors hover:bg-stone-50 hover:border-stone-400 whitespace-nowrap cursor-pointer"
+                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
@@ -1145,7 +1187,7 @@ export default function Settings() {
                   {/* Image footer (colonne gauche) */}
                   <div className="space-y-3 pt-6 border-t border-stone-200">
                     <label htmlFor="settings-footer-image" className="block text-[13px] font-medium text-stone-800">
-                      Image du footer — colonne gauche
+                      Image du pied de page (colonne de gauche, facultative)
                     </label>
 
                     {footerImage && (
@@ -1161,30 +1203,55 @@ export default function Settings() {
                         value={footerImage}
                         onChange={(e) => setFooterImage(e.target.value)}
                         placeholder="https://… ou choisir depuis la médiathèque →"
-                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                       />
                       <button
                         type="button"
                         onClick={(e) => openPicker('footerImage', e.currentTarget)}
-                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3.5 text-[13px] font-medium text-stone-800 transition-colors hover:bg-stone-50 hover:border-stone-400 whitespace-nowrap cursor-pointer"
+                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex justify-end border-t border-stone-200 pt-6">
-                    <button
-                      type="submit"
-                      disabled={logoLoading || !logoImage.trim()}
-                      className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      {logoLoading ? (
-                        <>Enregistrement…</>
-                      ) : (
-                        <><Save size={14} /> Enregistrer l'identité visuelle</>
-                      )}
-                    </button>
+                  {/* Favicon */}
+                  <div className="space-y-3 pt-6 border-t border-stone-200">
+                    <label htmlFor="settings-favicon" className="block text-[13px] font-medium text-stone-800">
+                      Icône de l'onglet du navigateur (favicon, format carré .png ou .svg)
+                    </label>
+
+                    {faviconImage && (
+                      <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-stone-200 bg-stone-50 p-2 shadow-sm">
+                        <img src={faviconImage} alt="Aperçu favicon" className="w-full h-full object-contain" />
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <input
+                        id="settings-favicon"
+                        type="url"
+                        value={faviconImage}
+                        onChange={(e) => setFaviconImage(e.target.value)}
+                        placeholder="https://… ou choisir depuis la médiathèque →"
+                        className="flex-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => openPicker('favicon', e.currentTarget)}
+                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                      >
+                        <Image size={14} /> Médiathèque
+                      </button>
+                    </div>
+                    <p className="text-[13px] text-stone-600">Visible après la prochaine mise en ligne du site.</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <Button type="submit" variant="primary" icon={Save} loading={logoLoading} disabled={!logoImage.trim()}>
+                      Enregistrer l'identité visuelle
+                    </Button>
+                    <FormMessage message={logoMessage} />
                   </div>
                 </form>
               )}
@@ -1192,25 +1259,20 @@ export default function Settings() {
 
 
             {/* Réseaux sociaux */}
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Share2 size={16} /> Réseaux sociaux
               </h2>
               {socialFetching ? (
-                <p className="text-stone-600 text-sm">Chargement…</p>
+                <p className="text-stone-700 text-sm">Chargement…</p>
               ) : (
                 <form onSubmit={handleSaveSocials} className="space-y-6">
-                  {socialMessage && (
-                    <div className={`p-4 rounded-xl text-sm ${socialMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                      {socialMessage.text}
-                    </div>
-                  )}
 
                   {/* Profils Publics Réseaux */}
                   <div className="space-y-4">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b border-stone-100 pb-1">
-                      Liens Publics des Profils
-                    </h3>
+                    <p className="text-[14px] text-stone-700">
+                      Adresses de vos profils publics, affichées en pied de page. Laissez vide un réseau que vous n'utilisez pas.
+                    </p>
                     {[
                       { label: 'Instagram', value: socialInstagram, setter: setSocialInstagram, placeholder: 'https://www.instagram.com/votre-compte/' },
                       { label: 'LinkedIn',  value: socialLinkedin,  setter: setSocialLinkedin,  placeholder: 'https://www.linkedin.com/in/votre-profil/' },
@@ -1225,70 +1287,47 @@ export default function Settings() {
                           value={value}
                           onChange={(e) => setter(e.target.value)}
                           placeholder={placeholder}
-                          className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
+                          className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
                         />
                       </div>
                     ))}
                   </div>
 
-                  {/* Auto-Publication Native Directe (Sans tiers ni Zapier/Make) */}
-                  {/* Auto-Répondeur IA Lead */}
-                  <div className="space-y-3 pt-2 border-t border-stone-100">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b border-stone-100 pb-1">
-                      Auto-Répondeur IA Lead (Formulaires de Contact)
-                    </h3>
-                    <label className="flex items-center gap-3 p-3 bg-stone-50 border border-stone-200 rounded-xl cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={aiLeadResponderEnabled}
-                        onChange={(e) => setAiLeadResponderEnabled(e.target.checked)}
-                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                      />
-                      <div>
-                        <span className="text-xs font-bold text-stone-900 block">
-                          Activer l'Auto-Répondeur IA sur tous les formulaires
-                        </span>
-                        <span className="text-[11.5px] text-stone-500 block">
-                          Répond instantanément aux prospects par e-mail en adoptant votre ton de voix éditorial.
-                        </span>
-                      </div>
-                    </label>
+                  {/* Réponse automatique aux messages reçus par les formulaires */}
+                  <div className="border-t border-stone-200">
+                    <ToggleRow
+                      title="Réponse automatique aux messages"
+                      description="Quand quelqu'un vous écrit par un formulaire du site, une réponse rédigée par l'IA dans votre ton lui est envoyée par e-mail. Désactivez-la pour répondre vous-même."
+                      checked={aiLeadResponderEnabled}
+                      onChange={setAiLeadResponderEnabled}
+                    />
                   </div>
 
-                  <div className="pt-3 border-t border-stone-100">
-                    <button
-                      type="submit"
-                      disabled={socialLoading}
-                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      <Save size={15} />
-                      {socialLoading ? 'Sauvegarde…' : 'Sauvegarder les réseaux sociaux'}
-                    </button>
+                  <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-stone-200">
+                    <Button type="submit" variant="primary" icon={Save} loading={socialLoading}>
+                      Enregistrer les réseaux sociaux
+                    </Button>
+                    <FormMessage message={socialMessage} />
                   </div>
                 </form>
               )}
             </div>
 
             {/* Auteur (bio + lien) */}
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
-                <Share2 size={16} /> Auteur — Bio & lien (affiché en bas des articles)
+                <Share2 size={16} /> Présentation affichée sous chaque article
               </h2>
               <form onSubmit={handleSaveAuthor} className="space-y-5">
-                {authorMessage && (
-                  <div className={`p-4 text-sm ${authorMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                    {authorMessage.text}
-                  </div>
-                )}
                 <div className="space-y-1.5">
-                  <label htmlFor="settings-author-bio" className="block text-[13px] font-medium text-stone-800">Description / Bio</label>
+                  <label htmlFor="settings-author-bio" className="block text-[13px] font-medium text-stone-800">Présentation</label>
                   <textarea
                     id="settings-author-bio"
                     rows={4}
                     value={authorBio}
                     onChange={(e) => setAuthorBio(e.target.value)}
                     placeholder="Courte présentation de l'auteur affichée sous chaque article…"
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-none"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-none"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1299,19 +1338,15 @@ export default function Settings() {
                     value={authorLink}
                     onChange={(e) => setAuthorLink(e.target.value)}
                     placeholder="/about"
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
                   />
-                  <p className="text-[12.5px] text-stone-500">URL relative (ex : /about) ou absolue.</p>
+                  <p className="text-[12.5px] text-stone-600">URL relative (ex : /about) ou absolue.</p>
                 </div>
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={authorLoading}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    <Save size={15} />
-                    {authorLoading ? 'Sauvegarde…' : 'Sauvegarder l’auteur'}
-                  </button>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button type="submit" variant="primary" icon={Save} loading={authorLoading}>
+                    Enregistrer la présentation
+                  </Button>
+                  <FormMessage message={authorMessage} />
                 </div>
               </form>
             </div>
@@ -1336,43 +1371,34 @@ export default function Settings() {
             <DesignSystemPanel />
 
             {/* Bouton S'inscrire / Action du Header */}
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7">
+            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
-                <Sliders size={16} /> Bouton d'action du Menu (Header)
+                <Sliders size={16} /> Bouton d'action du menu
               </h2>
 
               {headerRegisterFetching ? (
-                <p className="text-stone-600 text-sm">Chargement…</p>
+                <p className="text-stone-700 text-sm">Chargement…</p>
               ) : (
                 <form onSubmit={handleSaveHeaderRegisterLink} className="space-y-6">
-                  {headerRegisterMessage && (
-                    <div className={`p-4 text-sm ${headerRegisterMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                      {headerRegisterMessage.text}
-                    </div>
-                  )}
                   <div className="space-y-2">
                     <label htmlFor="header-register-link" className="block text-[13px] font-medium text-stone-800">
-                      Lien du bouton d'action (Menu principal)
+                      Lien du bouton d'action (menu principal)
                     </label>
                     <input
                       id="header-register-link"
                       type="text"
                       value={headerRegisterLink}
                       onChange={(e) => setHeaderRegisterLink(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
                       placeholder="/contact"
                     />
-                    <p className="text-[12.5px] text-stone-500">Exemple : /contact, /programme-complet, ou un lien externe complet https://...</p>
+                    <p className="text-[12.5px] text-stone-600">Exemple : /contact, /programme-complet, ou un lien externe complet https://...</p>
                   </div>
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={headerRegisterLoading}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                    >
-                      <Save size={16} />
-                      {headerRegisterLoading ? 'Sauvegarde…' : 'Sauvegarder le lien'}
-                    </button>
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <Button type="submit" variant="primary" icon={Save} loading={headerRegisterLoading}>
+                      Enregistrer le lien
+                    </Button>
+                    <FormMessage message={headerRegisterMessage} />
                   </div>
                 </form>
               )}
@@ -1382,71 +1408,67 @@ export default function Settings() {
 
 
         {activeTab === 'business' && (
-          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+          <div className="space-y-8 animate-fadein">
+          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
             <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
               <Building2 size={16} /> Coordonnées d'entreprise
             </h2>
 
             {bizFetching ? (
-              <p className="text-sm text-stone-600">Chargement…</p>
+              <p className="text-sm text-stone-700">Chargement…</p>
             ) : (
               <form onSubmit={handleSaveBusiness} className="space-y-6">
-                {bizMessage && (
-                  <div className={`p-4 text-sm ${bizMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                    {bizMessage.text}
-                  </div>
-                )}
 
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label htmlFor="biz-name" className="block text-[13px] font-medium text-stone-800">Nom de l'entreprise / du site</label>
                     <input id="biz-name" value={bizName} onChange={(e) => setBizName(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="biz-owner" className="block text-[13px] font-medium text-stone-800">Nom du propriétaire / praticien</label>
                     <input id="biz-owner" value={bizOwner} onChange={(e) => setBizOwner(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="biz-email" className="block text-[13px] font-medium text-stone-800">E-mail de contact</label>
                     <input id="biz-email" type="email" value={bizEmail} onChange={(e) => setBizEmail(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="biz-phone" className="block text-[13px] font-medium text-stone-800">Téléphone</label>
                     <input id="biz-phone" value={bizPhone} onChange={(e) => setBizPhone(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2 sm:col-span-2">
                     <label htmlFor="biz-street" className="block text-[13px] font-medium text-stone-800">Rue et numéro</label>
                     <input id="biz-street" value={bizAddressStreet} onChange={(e) => setBizAddressStreet(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="biz-postal" className="block text-[13px] font-medium text-stone-800">Code postal</label>
                     <input id="biz-postal" value={bizAddressPostal} onChange={(e) => setBizAddressPostal(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="biz-city" className="block text-[13px] font-medium text-stone-800">Ville</label>
                     <input id="biz-city" value={bizAddressCity} onChange={(e) => setBizAddressCity(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="biz-region" className="block text-[13px] font-medium text-stone-800">Région / Canton</label>
                     <input id="biz-region" value={bizAddressRegion} onChange={(e) => setBizAddressRegion(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="biz-country" className="block text-[13px] font-medium text-stone-800">Pays (code ISO, ex : CH)</label>
                     <input id="biz-country" value={bizAddressCountry} onChange={(e) => setBizAddressCountry(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="biz-price-range" className="block text-[13px] font-medium text-stone-800">Gamme de prix (SEO, ex : CHF 450–CHF 1295)</label>
                     <input id="biz-price-range" value={bizPriceRange} onChange={(e) => setBizPriceRange(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900" />
                   </div>
                 </div>
 
@@ -1459,7 +1481,7 @@ export default function Settings() {
                 <div className="space-y-4 border-t border-stone-200 pt-6">
                   <div>
                     <h3 className="text-[15px] font-semibold text-stone-900">Page de contact</h3>
-                    <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
+                    <p className="mt-1 text-[13px] leading-relaxed text-stone-700">
                       Ces textes s&apos;affichent sur <span className="font-mono text-[12.5px]">/contact</span>,
                       au-dessus de vos coordonnées. Laissez-les vides pour n&apos;afficher que le formulaire.
                     </p>
@@ -1474,7 +1496,7 @@ export default function Settings() {
                       value={contactIntro}
                       onChange={(e) => setContactIntro(e.target.value)}
                       placeholder="Ce que le visiteur doit savoir avant d'écrire : délai de réponse, ce que vous attendez de lui…"
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm leading-relaxed text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm leading-relaxed text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1486,9 +1508,9 @@ export default function Settings() {
                       rows={3}
                       value={contactSubjects}
                       onChange={(e) => setContactSubjects(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm leading-relaxed text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm leading-relaxed text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                     />
-                    <p className="text-[12.5px] leading-relaxed text-stone-500">
+                    <p className="text-[12.5px] leading-relaxed text-stone-600">
                       Un motif par ligne. Le premier est proposé par défaut.
                     </p>
                   </div>
@@ -1501,39 +1523,32 @@ export default function Settings() {
                       value={contactAddressNote}
                       onChange={(e) => setContactAddressNote(e.target.value)}
                       placeholder="Ex. : parking devant, 2e étage, accès par la cour…"
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                     />
                   </div>
                 </div>
 
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={bizLoading}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 px-6 text-xs font-extrabold text-white shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                  >
-                    <Save size={16} />
-                    {bizLoading ? 'Enregistrement…' : 'Enregistrer les coordonnées'}
-                  </button>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button type="submit" variant="primary" icon={Save} loading={bizLoading}>
+                    Enregistrer les coordonnées
+                  </Button>
+                  <FormMessage message={bizMessage} />
                 </div>
               </form>
             )}
 
+          </div>
+
             {/* Code Promo de Bienvenue */}
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 mt-8">
+            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
-                <Tag size={16} /> Email de bienvenue — Code promo
+                <Tag size={16} /> Code promo de l'e-mail de bienvenue
               </h2>
 
               {promoFetching ? (
-                <p className="text-stone-600 text-sm">Chargement…</p>
+                <p className="text-stone-700 text-sm">Chargement…</p>
               ) : (
                 <form onSubmit={handleSavePromo} className="space-y-6">
-                  {promoMessage && (
-                    <div className={`p-4 text-sm ${promoMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                      {promoMessage.text}
-                    </div>
-                  )}
                   <div className="space-y-2">
                     <label htmlFor="promo-code" className="block text-[13px] font-medium text-stone-800">
                       Code promo
@@ -1543,10 +1558,10 @@ export default function Settings() {
                       type="text"
                       value={promoCode}
                       onChange={(e) => setPromoCode(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 font-mono text-lg tracking-widest uppercase"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 font-mono text-lg tracking-widest uppercase"
                       placeholder="BIENVENUE"
                     />
-                    <p className="text-[12.5px] text-stone-500">Le code sera automatiquement mis en majuscules.</p>
+                    <p className="text-[12.5px] text-stone-600">Le code sera automatiquement mis en majuscules.</p>
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="promo-amount" className="block text-[13px] font-medium text-stone-800">
@@ -1557,25 +1572,21 @@ export default function Settings() {
                       type="text"
                       value={promoAmount}
                       onChange={(e) => setPromoAmount(e.target.value)}
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                       placeholder="20 CHF"
                     />
-                    <p className="text-[12.5px] text-stone-500">Exemples : 20 CHF, 15 €, 10%</p>
+                    <p className="text-[12.5px] text-stone-600">Exemples : 20 CHF, 15 €, 10%</p>
                   </div>
-                  <div className="border-2 border-dashed border-stone-300 bg-stone-50 rounded-lg p-5 text-center space-y-1">
-                    <p className="text-[12.5px] font-medium text-stone-700">Aperçu dans l'email</p>
-                    <p className="font-mono text-2xl font-bold text-stone-900 tracking-widest">{promoCode || 'BIENVENUE'}</p>
-                    <p className="text-sm text-stone-500">Réduction de <strong>{promoAmount || '20 CHF'}</strong> sur la première prestation</p>
+                  <div className="border border-stone-200 bg-stone-50 rounded-lg p-5 text-center space-y-1">
+                    <p className="text-[13px] font-medium text-stone-700">Aperçu dans l'e-mail</p>
+                    <p className="font-mono text-2xl font-semibold text-stone-900 tracking-widest">{promoCode || 'BIENVENUE'}</p>
+                    <p className="text-sm text-stone-600">Réduction de <strong>{promoAmount || '20 CHF'}</strong> sur la première prestation</p>
                   </div>
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={promoLoading}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                    >
-                      <Save size={16} />
-                      {promoLoading ? 'Sauvegarde…' : 'Sauvegarder le code promo'}
-                    </button>
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <Button type="submit" variant="primary" icon={Save} loading={promoLoading}>
+                      Enregistrer le code promo
+                    </Button>
+                    <FormMessage message={promoMessage} />
                   </div>
                 </form>
               )}
@@ -1585,41 +1596,31 @@ export default function Settings() {
 
         {/* ── Onglet Éditorial & Marque ───────────────────────────── */}
         {activeTab === 'editorial' && (
-          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein space-y-6">
+          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-3 mb-2">
               <div>
                 <h2 className="text-[15px] font-semibold text-stone-900 flex items-center gap-2">
-                  <BookOpen size={16} /> Ligne Éditoriale, Ton &amp; Branding
+                  <BookOpen size={16} /> Ligne éditoriale et ton
                 </h2>
-                <p className="text-stone-500 text-sm mt-1">
-                  Décrivez l'activité, le positionnement, le persona cible, le ton de voix et les piliers thématiques. Réutilisés par l'IA pour générer vos articles et posts.
+                <p className="text-stone-700 text-sm mt-1">
+                  Ce que l'IA doit savoir de votre activité, de votre clientèle et de votre façon de parler pour rédiger articles et publications. Vous pouvez aussi répondre à cinq questions à l'oral : les champs seront pré-remplis.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsEditorialVoiceModalOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-semibold shadow-md transition-all shrink-0 cursor-pointer"
-              >
-                <Mic size={16} />
-                Lancer l'interview vocale (Claude)
-              </button>
+              <Button type="button" variant="secondary" icon={Mic} className="shrink-0" onClick={() => setIsEditorialVoiceModalOpen(true)}>
+                Répondre à voix haute
+              </Button>
             </div>
 
             {editorialFetching ? (
-              <p className="text-sm text-stone-600">Chargement des paramètres éditoriaux…</p>
+              <p className="text-sm text-stone-700">Chargement des paramètres éditoriaux…</p>
             ) : (
               <form onSubmit={handleSaveEditorial} className="space-y-6">
-                {editorialMessage && (
-                  <div className={`p-4 text-sm ${editorialMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                    {editorialMessage.text}
-                  </div>
-                )}
 
                 {/* Champ 1 : Activité et Contexte */}
                 <div className="space-y-2">
                   <label htmlFor="editorial-activity" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
-                    <span>1. Activité &amp; Contexte général du site</span>
-                    <span className="text-[12px] text-stone-500 font-normal">Description du métier, de la spécialisation et de l'offre</span>
+                    <span>1. Activité et offre</span>
+                    <span className="text-[12px] text-stone-600 font-normal">Description du métier, de la spécialisation et de l'offre</span>
                   </label>
                   <textarea
                     id="editorial-activity"
@@ -1627,15 +1628,15 @@ export default function Settings() {
                     value={siteActivityContext}
                     onChange={(e) => setSiteActivityContext(e.target.value)}
                     placeholder="Présentation globale du site et de son secteur..."
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
                 {/* Champ 2 : Public Cible et Persona */}
                 <div className="space-y-2">
                   <label htmlFor="editorial-target" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
-                    <span>2. Public Cible &amp; Persona</span>
-                    <span className="text-[12px] text-stone-500 font-normal">Profil des lecteurs/clients, douleurs et attentes</span>
+                    <span>2. Clientèle visée</span>
+                    <span className="text-[12px] text-stone-600 font-normal">Profil des lecteurs/clients, douleurs et attentes</span>
                   </label>
                   <textarea
                     id="editorial-target"
@@ -1643,15 +1644,15 @@ export default function Settings() {
                     value={siteTargetPersona}
                     onChange={(e) => setSiteTargetPersona(e.target.value)}
                     placeholder="Profil démographique, psychologique et problématiques du public visé..."
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
                 {/* Champ 3 : Ton de voix */}
                 <div className="space-y-2">
                   <label htmlFor="editorial-tone" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
-                    <span>3. Ton de voix &amp; Style d'écriture</span>
-                    <span className="text-[12px] text-stone-500 font-normal">Registre de langue, tutoiement/vouvoiement, posture</span>
+                    <span>3. Ton et style d'écriture</span>
+                    <span className="text-[12px] text-stone-600 font-normal">Registre de langue, tutoiement/vouvoiement, posture</span>
                   </label>
                   <textarea
                     id="editorial-tone"
@@ -1659,15 +1660,15 @@ export default function Settings() {
                     value={siteToneOfVoice}
                     onChange={(e) => setSiteToneOfVoice(e.target.value)}
                     placeholder="Direct, conversationnel, tutoiement, parole de cabinet..."
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
                 {/* Champ 4 : Ton de marque & Vocabulaire */}
                 <div className="space-y-2">
                   <label htmlFor="editorial-brand" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
-                    <span>4. Ton de marque, Promesse &amp; Vocabulaire</span>
-                    <span className="text-[12px] text-stone-500 font-normal">Mots clés de marque, termes privilégiés et mots interdits</span>
+                    <span>4. Promesse et vocabulaire</span>
+                    <span className="text-[12px] text-stone-600 font-normal">Mots clés de marque, termes privilégiés et mots interdits</span>
                   </label>
                   <textarea
                     id="editorial-brand"
@@ -1675,15 +1676,15 @@ export default function Settings() {
                     value={siteBrandTone}
                     onChange={(e) => setSiteBrandTone(e.target.value)}
                     placeholder="Promesse phare, expressions fortes de la marque, mots interdits..."
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
                 {/* Champ 5 : Piliers & Thématiques du Blog */}
                 <div className="space-y-2">
                   <label htmlFor="editorial-topics" className="block text-[13px] font-medium text-stone-800 flex items-center justify-between">
-                    <span>5. Piliers &amp; Thématiques majeures du Blog</span>
-                    <span className="text-[12px] text-stone-500 font-normal">Grandes thématiques pour les idées et articles de blog</span>
+                    <span>5. Grands thèmes du blog</span>
+                    <span className="text-[12px] text-stone-600 font-normal">Grandes thématiques pour les idées et articles de blog</span>
                   </label>
                   <textarea
                     id="editorial-topics"
@@ -1691,19 +1692,15 @@ export default function Settings() {
                     value={siteBlogTopics}
                     onChange={(e) => setSiteBlogTopics(e.target.value)}
                     placeholder="1. Thématique A...\n2. Thématique B..."
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm resize-y font-sans leading-relaxed"
                   />
                 </div>
 
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={editorialLoading}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 px-6 text-xs font-extrabold text-white shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                  >
-                    <Save size={16} />
-                    {editorialLoading ? 'Enregistrement…' : 'Enregistrer la ligne éditoriale'}
-                  </button>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button type="submit" variant="primary" icon={Save} loading={editorialLoading}>
+                    Enregistrer la ligne éditoriale
+                  </Button>
+                  <FormMessage message={editorialMessage} />
                 </div>
               </form>
             )}
@@ -1712,63 +1709,41 @@ export default function Settings() {
 
         {/* ── Onglet Modules ───────────────────────────────────────── */}
         {activeTab === 'modules' && (
-          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein">
             <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-2 mb-2 flex items-center gap-2">
               <Puzzle size={16} /> Modules du site
             </h2>
-            <p className="text-stone-500 text-sm mb-6">
-              Active ou désactive les fonctionnalités du site. Un module désactivé disparaît du site public
+            <p className="text-stone-600 text-sm mb-6">
+              Activez ou désactivez les grandes fonctions du site. Un module désactivé disparaît du site public
               (pages, menu, plan du site) mais reste modifiable dans l'admin.
             </p>
 
             {modulesFetching ? (
-              <p className="text-sm text-stone-600">Chargement…</p>
+              <p className="text-sm text-stone-700">Chargement…</p>
             ) : (
-              <form onSubmit={handleSaveModules} className="space-y-6">
-                {modulesMessage && (
-                  <div className={`p-4 text-sm ${modulesMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                    {modulesMessage.text}
-                  </div>
-                )}
+              <form onSubmit={handleSaveModules} className="space-y-2">
 
                 {[
-                  { label: 'Blog / Articles', desc: 'Pages /blog, admin Articles et publication programmée.', value: moduleBlogEnabled, setter: setModuleBlogEnabled },
-                  { label: "Génération & Assistant IA (Builder, Pages, Articles & Réseaux)", desc: "Contrôle toute la couche IA du Studio : assistant de section du builder de pages, générateur de structure de site, rédaction assistée d'articles et création de posts réseaux.", value: moduleAiEnabled, setter: setModuleAiEnabled },
-                  { label: 'Événements / Ateliers', desc: 'Pages /ateliers, admin Événements et inscriptions/paiement.', value: moduleEventsEnabled, setter: setModuleEventsEnabled },
+                  { label: 'Articles', desc: 'Pages /blog, admin Articles et publication programmée.', value: moduleBlogEnabled, setter: setModuleBlogEnabled },
+                  { label: "Rédaction par l'IA", desc: "Toutes les aides à la rédaction : sections du constructeur de pages, structure de site, articles et publications pour les réseaux.", value: moduleAiEnabled, setter: setModuleAiEnabled },
+                  { label: 'Événements', desc: 'Pages /ateliers, admin Événements et inscriptions/paiement.', value: moduleEventsEnabled, setter: setModuleEventsEnabled },
                   { label: 'Newsletter', desc: "Admin Newsletter (envoi d'e-mails), formulaires d'inscription et bannière sur le site.", value: moduleNewsletterEnabled, setter: setModuleNewsletterEnabled },
-                  { label: 'Réseaux Sociaux', desc: "Génération de contenu Instagram/LinkedIn/Facebook (articles, flux RSS, suggestions), calendrier et automatisation.", value: moduleSocialEnabled, setter: setModuleSocialEnabled },
+                  { label: 'Réseaux sociaux', desc: "Génération de contenu Instagram/LinkedIn/Facebook (articles, flux RSS, suggestions), calendrier et automatisation.", value: moduleSocialEnabled, setter: setModuleSocialEnabled },
                   { label: 'Caisse & facturation', desc: "Encaissement, fichier clientes, quittances PDF, journal des recettes et export pour la fiducie. Module interne : rien n'apparaît sur le site public.", value: moduleCaisseEnabled, setter: setModuleCaisseEnabled },
-                  { label: 'Mots-clés & SEO', desc: 'Espace SEO : recherche de mots-clés, suggestions de sujets et clusters sémantiques.', value: moduleKeywordsEnabled, setter: setModuleKeywordsEnabled },
-                  { label: 'Agent IA', desc: "Widget de conversation sur le site public et suivi des échanges dans l'admin.", value: moduleAgentsEnabled, setter: setModuleAgentsEnabled },
+                  { label: 'SEO et mots-clés', desc: 'Espace SEO : recherche de mots-clés, suggestions de sujets et clusters sémantiques.', value: moduleKeywordsEnabled, setter: setModuleKeywordsEnabled },
+                  { label: 'Agent IA', desc: "Fenêtre de discussion sur le site public et suivi des échanges dans l'admin.", value: moduleAgentsEnabled, setter: setModuleAgentsEnabled },
                   { label: 'Automatisations', desc: 'Déclencheurs planifiés et événements applicatifs (webhook, e-mail, génération de contenu).', value: moduleAutomationsEnabled, setter: setModuleAutomationsEnabled },
                 ].map((mod) => (
-                  <div key={mod.label} className="flex items-start gap-4 py-3 border-b border-stone-50 last:border-0">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={mod.value}
-                      aria-label={`${mod.value ? 'Désactiver' : 'Activer'} le module ${mod.label}`}
-                      onClick={() => mod.setter(!mod.value)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-0.5 cursor-pointer ${mod.value ? 'bg-purple-600' : 'bg-stone-200'}`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${mod.value ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                    <span>
-                      <span className="block text-sm font-semibold text-stone-900">{mod.label}</span>
-                      <span className="block text-[12.5px] text-stone-500 mt-0.5">{mod.desc}</span>
-                    </span>
+                  <div key={mod.label} className="border-b border-stone-200 last:border-0">
+                    <ToggleRow title={mod.label} description={mod.desc} checked={mod.value} onChange={mod.setter} />
                   </div>
                 ))}
 
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={modulesLoading}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    <Save size={15} />
-                    {modulesLoading ? 'Enregistrement…' : 'Enregistrer les modules'}
-                  </button>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button type="submit" variant="primary" icon={Save} loading={modulesLoading}>
+                    Enregistrer les modules
+                  </Button>
+                  <FormMessage message={modulesMessage} />
                 </div>
               </form>
             )}
@@ -1777,45 +1752,32 @@ export default function Settings() {
 
         {/* ── Onglet Caisse & facturation ─────────────────────────── */}
         {activeTab === 'caisse' && (
-          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein">
             <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-2 mb-2 flex items-center gap-2">
               <CreditCard size={16} /> Caisse &amp; facturation
             </h2>
-            <p className="text-stone-500 text-sm mb-6">
+            <p className="text-stone-600 text-sm mb-6">
               TVA, coordonnées bancaires et mentions imprimées sur les quittances.
               Les coordonnées de l&apos;institut affichées en tête de facture viennent de l&apos;onglet <strong>Entreprise</strong>.
             </p>
 
             {caisseFetching ? (
-              <p className="text-sm text-stone-600">Chargement…</p>
+              <p className="text-sm text-stone-700">Chargement…</p>
             ) : (
               <form onSubmit={handleSaveCaisse} className="space-y-6">
-                {caisseMessage && (
-                  <div className={`p-4 text-sm ${caisseMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                    {caisseMessage.text}
-                  </div>
-                )}
 
-                <div className="flex items-start gap-4 py-3 border-b border-stone-50">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={caisseTvaAssujetti}
-                    aria-label={`${caisseTvaAssujetti ? 'Désactiver' : 'Activer'} l'assujettissement à la TVA`}
-                    onClick={() => setCaisseTvaAssujetti(!caisseTvaAssujetti)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-0.5 cursor-pointer ${caisseTvaAssujetti ? 'bg-stone-900' : 'bg-stone-200'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${caisseTvaAssujetti ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                  <span>
-                    <span className="block text-sm font-medium text-stone-800">Activité assujettie à la TVA</span>
-                    <span className="block text-[12.5px] text-stone-500 leading-relaxed">
+                <div className="border-b border-stone-200">
+                  <ToggleRow
+                    title="Activité assujettie à la TVA"
+                    checked={caisseTvaAssujetti}
+                    onChange={setCaisseTvaAssujetti}
+                    description={<>
                       À laisser désactivé tant que le chiffre d&apos;affaires annuel reste sous CHF 100&apos;000 (LTVA art. 10) :
                       les factures portent alors la mention « TVA non applicable » et un taux de 0 %.
                       Activer ce réglage fait apparaître le choix du taux à la caisse.
-                      Les factures déjà émises gardent leur propre taux — elles ne sont jamais recalculées.
-                    </span>
-                  </span>
+                      Les factures déjà émises gardent leur propre taux : elles ne sont jamais recalculées.
+                    </>}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1828,14 +1790,14 @@ export default function Settings() {
                       value={caisseTvaTaux}
                       onChange={e => setCaisseTvaTaux(e.target.value)}
                       disabled={!caisseTvaAssujetti}
-                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all disabled:bg-stone-50 disabled:text-stone-500 cursor-pointer"
+                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all disabled:bg-stone-50 disabled:text-stone-600 cursor-pointer"
                     >
                       <option value="0">0 % — non assujettie</option>
                       <option value="8.1">8.1 % — taux normal</option>
                       <option value="3.8">3.8 % — hébergement</option>
                       <option value="2.6">2.6 % — taux réduit</option>
                     </select>
-                    <p className="text-[12.5px] text-stone-500 mt-1.5">
+                    <p className="text-[12.5px] text-stone-600 mt-1.5">
                       Appliqué aux nouvelles prestations du catalogue. Chaque prestation peut avoir le sien.
                     </p>
                   </div>
@@ -1850,9 +1812,9 @@ export default function Settings() {
                       value={caisseTvaNumero}
                       onChange={e => setCaisseTvaNumero(e.target.value)}
                       placeholder="CHE-123.456.789 TVA"
-                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all"
+                      className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-600 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all"
                     />
-                    <p className="text-[12.5px] text-stone-500 mt-1.5">
+                    <p className="text-[12.5px] text-stone-600 mt-1.5">
                       Obligatoire sur les factures dès l&apos;assujettissement (OTVA art. 26).
                     </p>
                   </div>
@@ -1868,9 +1830,9 @@ export default function Settings() {
                     value={caisseIban}
                     onChange={e => setCaisseIban(e.target.value)}
                     placeholder="CH00 0000 0000 0000 0000 0"
-                    className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all"
+                    className="w-full px-4 py-3 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-600 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none transition-all"
                   />
-                  <p className="text-[12.5px] text-stone-500 mt-1.5">
+                  <p className="text-[12.5px] text-stone-600 mt-1.5">
                     Imprimé sur la quittance uniquement quand le paiement est un virement.
                   </p>
                 </div>
@@ -1911,12 +1873,12 @@ export default function Settings() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/60 px-5 py-4 text-xs text-stone-500 leading-relaxed">
+                  <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/60 px-5 py-4 text-[13px] text-stone-700 leading-relaxed">
                     Le droit suisse ne fixe <strong>aucune durée minimale</strong>. Un bon cadeau est une
                     créance ordinaire : à défaut d&apos;accord contraire, il se prescrit par 10 ans
                     (CO art. 127). Une validité courte reste possible si elle est annoncée à l&apos;achat,
-                    mais les organisations de consommateurs la contestent régulièrement — d&apos;où le
-                    réglage à 5 ans par défaut, usuel dans la branche. En cas de doute, demande à ta
+                    mais les organisations de consommateurs la contestent régulièrement, d&apos;où le
+                    réglage à 5 ans par défaut, usuel dans la branche. En cas de doute, demandez à votre
                     fiduciaire.
                     <br /><br />
                     L&apos;échéance est <strong>figée sur chaque bon à son émission</strong> : modifier ce
@@ -1937,24 +1899,20 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-stone-200 bg-stone-50/60 px-5 py-4 text-xs text-stone-500 leading-relaxed">
+                <div className="rounded-xl border border-stone-200 bg-stone-50/60 px-5 py-4 text-[13px] text-stone-700 leading-relaxed">
                   <strong className="block text-stone-700 mb-1 font-semibold">Numérotation et conservation</strong>
                   Les factures sont numérotées <code className="px-1 bg-white rounded border border-stone-200">FAC-{new Date().getFullYear()}-0001</code>,
                   en continu et par année civile. Une écriture encaissée ne peut être ni supprimée ni recalculée :
                   une erreur se corrige par une annulation depuis le journal, qui laisse la trace exigée par
-                  le Code des obligations (art. 957a). Pense à exporter le livre de caisse pour ta fiducie
+                  le Code des obligations (art. 957a). Pensez à exporter le livre de caisse pour votre fiduciaire
                   et à conserver les fichiers 10 ans (art. 958f).
                 </div>
 
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={caisseLoading}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                  >
-                    <Save size={16} />
-                    {caisseLoading ? 'Enregistrement…' : 'Enregistrer les réglages'}
-                  </button>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button type="submit" variant="primary" icon={Save} loading={caisseLoading}>
+                    Enregistrer les réglages de caisse
+                  </Button>
+                  <FormMessage message={caisseMessage} />
                 </div>
               </form>
             )}
@@ -1968,24 +1926,19 @@ export default function Settings() {
 
         {/* ── Onglet IA & Budget ──────────────────────────────────── */}
         {activeTab === 'ai' && (
-          <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein">
             <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-2 mb-2 flex items-center gap-2">
               <Sparkles size={16} /> Modèle IA &amp; budget
             </h2>
-            <p className="text-stone-500 text-sm mb-6">
-              Choisis le modèle Claude utilisé par toutes les générations (articles, pages, SEO, réseaux sociaux)
-              et surveille la dépense du mois. Les tarifs sont ceux d'Anthropic, en dollars par million de tokens.
+            <p className="text-stone-700 text-sm mb-6">
+              Choisissez le modèle utilisé pour tous les textes rédigés par l'IA (articles, pages, SEO, réseaux sociaux)
+              et surveillez la dépense du mois. Les tarifs sont ceux d'Anthropic, en dollars.
             </p>
 
             {aiFetching ? (
-              <p className="text-sm text-stone-600">Chargement…</p>
+              <p className="text-sm text-stone-700">Chargement…</p>
             ) : (
               <form onSubmit={handleSaveAi} className="space-y-8">
-                {aiMessage && (
-                  <div className={`p-4 text-sm ${aiMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                    {aiMessage.text}
-                  </div>
-                )}
 
                 {/* ── Choix du modèle ────────────────────────────────── */}
                 <fieldset className="space-y-3">
@@ -2005,30 +1958,30 @@ export default function Settings() {
                           value={m.id}
                           checked={selected}
                           onChange={() => setAiModel(m.id)}
-                          className="mt-1 accent-sage cursor-pointer"
+                          className="mt-1 accent-accent cursor-pointer"
                         />
                         <span className="flex-1">
                           <span className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-bold text-stone-800">{m.label}</span>
-                            {m.badge === 'qualite'    && <span className="text-[12px] bg-stone-900 text-white px-2 py-0.5 rounded-full">Qualité max</span>}
-                            {m.badge === 'equilibre'  && <span className="text-[12px] bg-stone-900 text-white px-2 py-0.5 rounded-full">Meilleur rapport</span>}
-                            {m.badge === 'economique' && <span className="text-[12px] bg-amber-500 text-white px-2 py-0.5 rounded-full">Le moins cher</span>}
+                            <span className="text-sm font-semibold text-stone-800">{m.label}</span>
+                            {m.badge === 'qualite'    && <span className="text-[12.5px] font-medium bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full">Meilleure qualité</span>}
+                            {m.badge === 'equilibre'  && <span className="text-[12.5px] font-medium bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full">Meilleur rapport qualité-prix</span>}
+                            {m.badge === 'economique' && <span className="text-[12.5px] font-medium bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full">Le moins cher</span>}
                             {m.available === false && (
-                              <span className="text-[12px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                                Plus servi par Anthropic
+                              <span className="text-[12.5px] font-medium bg-red-50 text-red-700 px-2 py-0.5 rounded-full">
+                                Plus proposé par Anthropic
                               </span>
                             )}
                           </span>
-                          <span className="block text-xs text-stone-500 mt-1">{m.description}</span>
-                          <span className="block text-[12.5px] text-stone-500 mt-1 font-mono">
-                            ${m.inputPricePerMTok} / M tokens entrée · ${m.outputPricePerMTok} / M sortie
-                            {' — '}≈ ${perArticle.toFixed(2)} par article généré
+                          <span className="block text-[13px] text-stone-700 mt-1">{m.description}</span>
+                          <span className="block text-[13px] text-stone-600 mt-1">
+                            Environ ${perArticle.toFixed(2)} par article rédigé
+                            <span> (tarif : ${m.inputPricePerMTok} en entrée, ${m.outputPricePerMTok} en sortie, par million de tokens)</span>
                           </span>
                         </span>
                       </label>
                     );
                   })}
-                  <p className="text-[12.5px] text-stone-500">
+                  <p className="text-[12.5px] text-stone-600">
                     Les balises méta restent générées avec Haiku 4.5 quel que soit ce choix : la tâche est trop
                     courte pour justifier un modèle coûteux.
                   </p>
@@ -2046,17 +1999,18 @@ export default function Settings() {
                         type="button"
                         onClick={() => setAiEffort(level.value)}
                         title={level.hint}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${aiEffort === level.value ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300'}`}
+                        aria-pressed={aiEffort === level.value}
+                        className={`px-4 py-2 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${aiEffort === level.value ? 'bg-accent-soft text-stone-900 border-accent' : 'bg-white text-stone-700 border-stone-200 hover:border-stone-300'}`}
                       >
                         {level.label}
                       </button>
                     ))}
                   </div>
-                  <p className="text-[12.5px] text-stone-500">
+                  <p className="text-[12.5px] text-stone-600">
                     {AI_EFFORT_LEVELS.find((l) => l.value === aiEffort)?.hint}
                   </p>
                   {aiCatalog.find((m) => m.id === aiModel)?.supportsEffort === false && (
-                    <p className="text-xs text-amber-600">
+                    <p className="text-[13px] text-amber-800">
                       Ce modèle ne gère pas les niveaux de réflexion : le réglage est ignoré tant qu'il est sélectionné.
                     </p>
                   )}
@@ -2069,7 +2023,7 @@ export default function Settings() {
                   </legend>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label htmlFor="ai-budget" className="block text-xs text-stone-500 font-medium">
+                      <label htmlFor="ai-budget" className="block text-[13px] text-stone-800 font-medium">
                         Budget par mois (USD) — 0 pour désactiver l'alerte
                       </label>
                       <input
@@ -2083,7 +2037,7 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label htmlFor="ai-alert" className="block text-xs text-stone-500 font-medium">
+                      <label htmlFor="ai-alert" className="block text-[13px] text-stone-800 font-medium">
                         Alerter à partir de (% du budget)
                       </label>
                       <input
@@ -2098,22 +2052,18 @@ export default function Settings() {
                       />
                     </div>
                   </div>
-                  <p className="text-[12.5px] text-stone-500">
+                  <p className="text-[12.5px] text-stone-600">
                     Anthropic ne publie pas le solde du compte via son API : la dépense est reconstituée à partir des
                     tokens facturés à chaque génération, puis comparée à ce budget. Une bannière apparaît en haut de
                     l'admin dès le seuil atteint. Le rechargement des crédits reste à faire sur console.anthropic.com.
                   </p>
                 </fieldset>
 
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={aiLoading}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                  >
-                    <Save size={16} />
-                    {aiLoading ? 'Enregistrement…' : 'Enregistrer les réglages IA'}
-                  </button>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button type="submit" variant="primary" icon={Save} loading={aiLoading}>
+                    Enregistrer les réglages IA
+                  </Button>
+                  <FormMessage message={aiMessage} />
                 </div>
               </form>
             )}
@@ -2128,17 +2078,17 @@ export default function Settings() {
                   <button
                     type="button"
                     onClick={loadAiUsage}
-                    className="flex items-center gap-1 text-[12px] text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
+                    className="flex items-center gap-1 text-[13px] text-stone-700 hover:text-stone-900 transition-colors cursor-pointer"
                   >
-                    <RefreshCw size={12} /> Actualiser
+                    <RefreshCw size={13} /> Actualiser
                   </button>
                 </div>
 
                 {aiUsage.usage?.unavailable ? (
-                  <div className="text-xs text-amber-600 flex items-start gap-2">
+                  <div className="text-[13px] text-amber-800 flex items-start gap-2">
                     <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                     <p>
-                      Journal de consommation indisponible : applique la migration{' '}
+                      Journal de consommation indisponible : appliquez la migration{' '}
                       <code className="font-mono bg-amber-50 px-1 py-0.5 rounded">
                         supabase/migrations/20260729_ai_usage.sql
                       </code>{' '}
@@ -2148,15 +2098,15 @@ export default function Settings() {
                 ) : (
                   <>
                     <div className="flex items-baseline gap-3">
-                      <span className="text-3xl font-bold text-stone-900">
+                      <span className="text-3xl font-semibold text-stone-900">
                         ${Number(aiUsage.usage.totalUsd).toFixed(2)}
                       </span>
                       {aiUsage.config.budgetUsd > 0 && (
-                        <span className="text-sm text-stone-600">
+                        <span className="text-sm text-stone-700">
                           sur ${Number(aiUsage.config.budgetUsd).toFixed(2)} — reste ${Number(aiUsage.remainingUsd ?? 0).toFixed(2)}
                         </span>
                       )}
-                      <span className="text-[12.5px] text-stone-500">({aiUsage.usage.calls} appels)</span>
+                      <span className="text-[12.5px] text-stone-600">({aiUsage.usage.calls} appels)</span>
                     </div>
 
                     {aiUsage.config.budgetUsd > 0 && (
@@ -2174,13 +2124,13 @@ export default function Settings() {
                         { title: 'Par usage', rows: aiUsage.usage.byFeature },
                       ].map((block) => (
                         <div key={block.title}>
-                          <p className="text-[12px] text-stone-500 font-bold mb-2">{block.title}</p>
+                          <p className="text-[12px] text-stone-600 font-semibold mb-2">{block.title}</p>
                           {block.rows.length === 0 ? (
-                            <p className="text-[12.5px] text-stone-500 italic">Aucune génération ce mois-ci.</p>
+                            <p className="text-[12.5px] text-stone-600 italic">Aucune génération ce mois-ci.</p>
                           ) : (
                             <ul className="space-y-1">
                               {block.rows.map((row: any) => (
-                                <li key={row.key} className="flex justify-between text-xs text-stone-600 border-b border-stone-50 py-1">
+                                <li key={row.key} className="flex justify-between text-[13px] text-stone-700 border-b border-stone-200 py-1">
                                   <span className="truncate pr-2">{row.key}</span>
                                   <span className="font-mono shrink-0">${Number(row.costUsd).toFixed(2)}</span>
                                 </li>
@@ -2191,7 +2141,7 @@ export default function Settings() {
                       ))}
                     </div>
 
-                    <p className="text-[12.5px] text-stone-500 mt-4">
+                    <p className="text-[12.5px] text-stone-600 mt-4">
                       Estimation calculée sur les tarifs publics d'Anthropic ; la facture réelle peut différer
                       légèrement (remises, tarifs de lancement).
                     </p>
@@ -2203,23 +2153,18 @@ export default function Settings() {
         )}
 
         {/* ── Onglet Flotte Multi-Sites ────────────────────────────── */}
-        {activeTab === 'fleet' && <FleetManagerPanel />}
+        {activeTab === 'fleet' && isMasterStudio && <FleetManagerPanel />}
 
         {/* ── Onglet Sécurité (Mot de passe) ──────────────────────── */}
 
         {activeTab === 'security' && (
           <div className="space-y-6">
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein">
+            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
-                <Lock size={16} /> Sécurité
+                <Lock size={16} /> Mot de passe
               </h2>
 
               <form onSubmit={handleUpdatePassword} className="space-y-6">
-                {pwdMessage && (
-                  <div className={`p-4 text-sm ${pwdMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                    {pwdMessage.text}
-                  </div>
-                )}
                 <div className="space-y-2">
                   <label htmlFor="new-password" className="block text-[13px] font-medium text-stone-800">
                     Nouveau mot de passe
@@ -2229,9 +2174,11 @@ export default function Settings() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                    autoComplete="new-password"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                     placeholder="••••••••"
                   />
+                  <p className="text-[13px] text-stone-600">8 caractères au minimum.</p>
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="confirm-password" className="block text-[13px] font-medium text-stone-800">
@@ -2242,51 +2189,42 @@ export default function Settings() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
                     placeholder="••••••••"
                   />
                 </div>
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    disabled={pwdLoading || !password}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50 w-full sm:w-auto cursor-pointer"
-                  >
-                    <Save size={16} />
-                    {pwdLoading ? 'Mise à jour…' : 'Mettre à jour le mot de passe'}
-                  </button>
+                <div className="flex flex-wrap items-center gap-3 pt-4">
+                  <Button type="submit" variant="primary" icon={Save} loading={pwdLoading} disabled={pwdLoading || !password}>
+                    Mettre à jour le mot de passe
+                  </Button>
+                  <FormMessage message={pwdMessage} />
                 </div>
               </form>
             </div>
 
-            <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] p-6 md:p-7 animate-fadein space-y-4">
+            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein space-y-4">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 flex items-center gap-2">
-                <ShieldCheck size={16} className="text-emerald-600" /> Synchronisation Système & Base Supabase
+                <ShieldCheck size={16} /> Vérification de la base de données
               </h2>
-              <p className="text-xs text-stone-600 leading-relaxed">
-                Exécutez la vérification automatique pour vous assurer que les tables Supabase possèdent toutes les colonnes requises par les nouvelles fonctionnalités (Hub SIO/GEO, entonnoir, prompts IA).
+              <p className="text-[14px] text-stone-700 leading-relaxed">
+                À utiliser après une mise à jour du site, ou si une page de l'admin signale une donnée manquante :
+                la vérification complète la structure de la base (sans toucher à vos contenus).
               </p>
 
               {migrateLog && (
-                <div className={`p-4 text-xs rounded-lg space-y-2 border ${migrateLog.error ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
+                <div className={`p-4 text-[13px] rounded-lg space-y-2 border ${migrateLog.error ? 'bg-red-50 text-red-800 border-red-200' : 'bg-emerald-50 text-emerald-900 border-emerald-200'}`}>
                   <p className="font-semibold">{migrateLog.error ? migrateLog.error : migrateLog.message}</p>
                   {migrateLog.logs && migrateLog.logs.length > 0 && (
-                    <ul className="list-disc pl-4 space-y-1 font-mono text-[11px]">
+                    <ul className="list-disc pl-4 space-y-1 font-mono text-[12.5px]">
                       {migrateLog.logs.map((l, i) => <li key={i}>{l}</li>)}
                     </ul>
                   )}
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={handleAutoMigrate}
-                disabled={migrating}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 text-xs font-semibold text-white transition-colors hover:bg-stone-800 disabled:opacity-50 cursor-pointer shadow-xs"
-              >
-                <RefreshCw size={14} className={migrating ? 'animate-spin' : ''} />
-                {migrating ? 'Synchronisation en cours…' : 'Vérifier & Synchroniser la Base Supabase'}
-              </button>
+              <Button type="button" variant="secondary" icon={RefreshCw} loading={migrating} onClick={handleAutoMigrate}>
+                {migrating ? 'Vérification en cours…' : 'Vérifier la base de données'}
+              </Button>
             </div>
           </div>
         )}
@@ -2311,7 +2249,7 @@ export default function Settings() {
           if (data.site_blog_topics) setSiteBlogTopics(data.site_blog_topics);
           setEditorialMessage({
             type: 'success',
-            text: 'Ligne éditoriale pré-remplie par l’interview vocale Claude ! N’oubliez pas de cliquer sur "Enregistrer la ligne éditoriale".',
+            text: 'Champs pré-remplis à partir de vos réponses. Relisez-les, puis cliquez sur « Enregistrer la ligne éditoriale ».',
           });
         }}
       />

@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Pencil, Trash2, Eye, EyeOff, ExternalLink, Loader2, Database, Globe, LayoutTemplate, Home, Sparkles, Wand2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, EyeOff, ExternalLink, Loader2, Database, Globe, LayoutTemplate, Home, Sparkles, FileText } from 'lucide-react';
+import { PageHeader, Button, LinkButton, EmptyState, Callout } from '../../../components/admin/ui';
 import { supabase } from '../../../services/supabase';
 import { fetchAllPages, deletePage } from '../../../services/dynamicPages';
 import type { DynamicPage } from '../../../services/dynamicPages';
@@ -37,6 +38,7 @@ export default function PageList() {
   const [seeding, setSeeding] = useState(false);
   const [homeSlug, setHomeSlug] = useState('');
   const [savingHome, setSavingHome] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
   /*
     Slug effectivement servi à la racine : le réglage s'il existe, sinon le
@@ -49,12 +51,17 @@ export default function PageList() {
 
   const setAsHome = async (page: DynamicPage) => {
     setSavingHome(page.id);
+    setNotice(null);
     const { error } = await supabase
       .from('settings')
       .upsert([{ key: HOME_SLUG_KEY, value: page.slug }], { onConflict: 'key' });
     setSavingHome(null);
-    if (error) { alert("Impossible d'enregistrer la page d'accueil : " + error.message); return; }
+    if (error) {
+      setNotice({ tone: 'danger', text: `La page d'accueil n'a pas pu être changée (${error.message}). Vérifiez votre connexion puis réessayez.` });
+      return;
+    }
     setHomeSlug(page.slug);
+    setNotice({ tone: 'success', text: `« ${page.title} » est maintenant la page d'accueil du site.` });
   };
 
 
@@ -85,7 +92,7 @@ export default function PageList() {
       .single();
 
     if (error || !data) {
-      alert(`Création impossible : ${error?.message ?? 'erreur inconnue'}`);
+      setNotice({ tone: 'danger', text: `La page n'a pas pu être créée (${error?.message ?? 'erreur inconnue'}). Réessayez dans un instant.` });
       return;
     }
     router.push(`/admin/pages/edit/${data.id}`);
@@ -106,129 +113,153 @@ export default function PageList() {
   useEffect(() => { load(); }, []);
 
   const handleDelete = async (page: DynamicPage) => {
-    if (!confirm(`Supprimer "${page.title}" ?`)) return;
-    await deletePage(page.id);
-    setPages(prev => prev.filter(p => p.id !== page.id));
+    const isHome = page.slug === effectiveHomeSlug;
+    const warning = isHome
+      ? `« ${page.title} » est la page d'accueil du site. Si vous la supprimez, l'adresse principale du site n'affichera plus rien tant que vous n'aurez pas choisi une autre page d'accueil.\n\nSupprimer définitivement cette page ?`
+      : `Supprimer définitivement la page « ${page.title} » ? Elle disparaîtra du site et ne pourra pas être récupérée.`;
+    if (!confirm(warning)) return;
+    setNotice(null);
+    try {
+      await deletePage(page.id);
+      setPages(prev => prev.filter(p => p.id !== page.id));
+      setNotice({ tone: 'success', text: `La page « ${page.title} » a été supprimée.` });
+    } catch (err) {
+      console.error(err);
+      setNotice({ tone: 'danger', text: `La page « ${page.title} » n'a pas pu être supprimée. Vérifiez votre connexion puis réessayez.` });
+    }
   };
 
+  /*
+    Recrée les pages d'exemple (accueil « home », « a-propos », « contact »).
+    Attention : si une page porte déjà l'une de ces adresses, son contenu est
+    remplacé. La confirmation le dit en toutes lettres.
+  */
   const handleSeed = async () => {
-    if (!confirm("Voulez-vous importer ou réinitialiser les pages par défaut ?")) return;
+    const ok = confirm(
+      "Les pages d'exemple (Accueil /home, À propos /a-propos, Contact /contact) vont être créées.\n\n" +
+      "Si l'une de ces pages existe déjà, son contenu actuel sera remplacé par le contenu d'exemple et vos modifications seront perdues.\n\nContinuer ?"
+    );
+    if (!ok) return;
     setSeeding(true);
-    try { await seedDefaultPages(); alert("Importation réussie !"); await load(); }
-    catch (err) { console.error(err); alert("Erreur lors de l'importation."); }
-    finally { setSeeding(false); }
+    setNotice(null);
+    try {
+      await seedDefaultPages();
+      await load();
+      setNotice({ tone: 'success', text: "Les pages d'exemple ont été créées." });
+    } catch (err) {
+      console.error(err);
+      setNotice({ tone: 'danger', text: "Les pages d'exemple n'ont pas pu être créées. Réessayez dans un instant." });
+    } finally { setSeeding(false); }
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-zinc-200/90 shadow-2xs">
-        <div>
-          <span className="px-3 py-1 rounded-full bg-purple-100/80 text-purple-900 border border-purple-200 text-[10.5px] font-extrabold uppercase tracking-wider">Site & Contenus</span>
-          <h1 className="text-2xl font-extrabold text-zinc-900 mt-2">Pages dynamiques</h1>
-          <p className="mt-1 text-xs text-zinc-600 font-medium">Créez et gérez vos pages CMS facilement.</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={handleSeed} disabled={seeding}
-            className="flex items-center gap-2 border border-purple-200 bg-white text-zinc-700 hover:bg-purple-50 hover:text-purple-900 px-4 py-2.5 rounded-full text-xs font-extrabold transition-all disabled:opacity-50 cursor-pointer shadow-2xs">
-            {seeding ? <Loader2 size={14} className="animate-spin text-purple-600" /> : <Database size={14} className="text-purple-600" />}
-            Pages par défaut
-          </button>
-          <button
-            type="button"
-            onClick={() => setImportOpen(true)}
-            className="flex items-center gap-2 border border-purple-200 bg-white text-zinc-700 hover:bg-purple-50 hover:text-purple-900 px-4 py-2.5 rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-2xs"
-          >
-            <Globe size={14} className="text-purple-600" /> Importer un site
-          </button>
-          <button
-            type="button"
-            onClick={() => setTemplateOpen(true)}
-            className="flex items-center gap-2 border border-purple-200 bg-white text-zinc-700 hover:bg-purple-50 hover:text-purple-900 px-4 py-2.5 rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-2xs"
-          >
-            <LayoutTemplate size={14} className="text-purple-600" /> Partir d'une structure
-          </button>
-          {moduleFlags.ai_generation && (
-            <button
-              type="button"
-              onClick={() => setAutoGenerateOpen(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white px-5 py-2.5 rounded-full text-xs font-extrabold shadow-[0_4px_14px_rgba(249,115,22,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-            >
-              <Sparkles size={15} className="text-white animate-pulse" /> Créer le site automatiquement
+    <div className="space-y-6">
+      <PageHeader
+        title="Pages du site"
+        description="Créez les pages de votre site, choisissez celle qui sert d'accueil et publiez-les quand elles sont prêtes."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" icon={LayoutTemplate} onClick={() => setTemplateOpen(true)}>
+              Partir d'un modèle
+            </Button>
+            <Button type="button" variant="secondary" icon={Globe} onClick={() => setImportOpen(true)}>
+              Importer un site
+            </Button>
+            {moduleFlags.ai_generation && (
+              <Button type="button" variant="secondary" icon={Sparkles} onClick={() => setAutoGenerateOpen(true)}>
+                Créer le site automatiquement
+              </Button>
+            )}
+            <Button type="button" variant="ghost" icon={seeding ? undefined : Database} loading={seeding} onClick={handleSeed}>
+              Pages d'exemple
+            </Button>
+            <LinkButton href="/admin/pages/new" variant="primary" icon={Plus}>
+              Nouvelle page
+            </LinkButton>
+          </div>
+        }
+      />
+
+      {notice && (
+        <Callout tone={notice.tone}>
+          <span className="flex flex-wrap items-center justify-between gap-3">
+            <span>{notice.text}</span>
+            <button type="button" onClick={() => setNotice(null)} className="text-[13px] font-semibold underline underline-offset-2 cursor-pointer">
+              Fermer
             </button>
-          )}
-          <Link href="/admin/pages/new" className="flex items-center gap-2 bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 text-white px-5 py-2.5 rounded-full text-xs font-extrabold shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all">
-            <Plus size={15} /> Nouvelle page
-          </Link>
-        </div>
-      </div>
+          </span>
+        </Callout>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="w-6 h-6 rounded-full border-2 border-stone-200 border-t-sage animate-spin" />
+          <div className="w-6 h-6 rounded-full border-2 border-stone-200 border-t-accent animate-spin" />
         </div>
       ) : pages.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] text-center py-24">
-          <p className="text-stone-500 text-lg font-light mb-2">Aucune page</p>
-          <p className="text-stone-500 text-sm">Créez votre première page dynamique.</p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="Aucune page pour l'instant"
+          description="Créez votre première page, ou partez d'un modèle pour avoir une mise en page déjà prête."
+          action={<LinkButton href="/admin/pages/new" variant="primary" icon={Plus}>Nouvelle page</LinkButton>}
+        />
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
           {/* Tableau — écrans sm et plus */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-stone-100 bg-stone-50/50">
-                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-left">Titre</th>
-                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-left">Slug</th>
-                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-left">Sections</th>
-                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-left">Statut</th>
-                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-600 text-left">Modifié</th>
-                  <th className="px-6 py-3.5" />
+                <tr className="border-b border-stone-200 bg-stone-50/50">
+                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-700 text-left">Titre</th>
+                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-700 text-left">Adresse</th>
+                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-700 text-left">Sections</th>
+                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-700 text-left">Statut</th>
+                  <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-700 text-left">Modifiée le</th>
+                  <th className="px-6 py-3.5"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {pages.map(page => (
-                  <tr key={page.id} className="border-b border-stone-50 hover:bg-stone-50/50 transition-colors group">
+                  <tr key={page.id} className="border-b border-stone-100 last:border-b-0 hover:bg-stone-50/50 transition-colors group">
                     <td className="px-6 py-4 font-medium text-stone-900">{page.title}</td>
-                    <td className="px-6 py-4 font-mono text-[12.5px] text-stone-500">
+                    <td className="px-6 py-4 font-mono text-[13px] text-stone-600">
                       <span className="inline-flex items-center gap-1.5">
                         {getPagePath(page.slug)}
                         {page.slug === effectiveHomeSlug && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sage/10 text-sage text-[11px] font-sans font-medium">
-                            <Home size={10} /> Accueil
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-soft text-accent text-[12px] font-sans font-medium">
+                            <Home size={12} /> Accueil
                           </span>
                         )}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-stone-600">{page.sections.length}</td>
+                    <td className="px-6 py-4 text-sm text-stone-700">{page.sections.length}</td>
                     <td className="px-6 py-4">
                       <PageStatusBadge published={page.published} />
                     </td>
-                    <td className="px-6 py-4 text-[12.5px] text-stone-500 whitespace-nowrap">
+                    <td className="px-6 py-4 text-[13px] text-stone-600 whitespace-nowrap">
                       {new Date(page.updated_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-1 justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 justify-end">
                         {page.published && (
                           <a href={getPagePath(page.slug)} target="_blank" rel="noopener noreferrer"
-                            className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors" title="Voir" aria-label={`Voir la page « ${page.title} »`}>
-                            <ExternalLink size={13} />
+                            className="p-2 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors" title="Voir" aria-label={`Voir la page « ${page.title} »`}>
+                            <ExternalLink size={15} />
                           </a>
                         )}
                         {page.slug !== effectiveHomeSlug && (
                           <button onClick={() => setAsHome(page)} disabled={savingHome === page.id}
-                            className="p-1.5 text-stone-500 hover:text-sage rounded-md hover:bg-sage/10 transition-colors cursor-pointer disabled:opacity-50"
+                            className="p-2 text-stone-600 hover:text-accent rounded-md hover:bg-accent/10 transition-colors cursor-pointer disabled:opacity-50"
                             title="Définir comme page d'accueil" aria-label={`Faire de « ${page.title} » la page d'accueil`}>
-                            {savingHome === page.id ? <Loader2 size={13} className="animate-spin" /> : <Home size={13} />}
+                            {savingHome === page.id ? <Loader2 size={15} className="animate-spin" /> : <Home size={15} />}
                           </button>
                         )}
                         <Link href={`/admin/pages/edit/${page.id}`}
-                          className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors" title="Modifier" aria-label={`Modifier « ${page.title} »`}>
-                          <Pencil size={13} />
+                          className="p-2 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors" title="Modifier" aria-label={`Modifier « ${page.title} »`}>
+                          <Pencil size={15} />
                         </Link>
                         <button onClick={() => handleDelete(page)}
-                          className="p-1.5 text-stone-500 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer" title="Supprimer" aria-label={`Supprimer « ${page.title} »`}>
-                          <Trash2 size={13} />
+                          className="p-2 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer" title="Supprimer" aria-label={`Supprimer « ${page.title} »`}>
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </td>
@@ -239,46 +270,45 @@ export default function PageList() {
           </div>
 
           {/* Cartes — mobile */}
-          <div className="sm:hidden divide-y divide-stone-100">
+          <div className="sm:hidden divide-y divide-stone-200">
             {pages.map(page => (
               <div key={page.id} className="p-4 space-y-3">
                 <div>
                   <p className="font-medium text-stone-900 leading-snug">{page.title}</p>
-                  <p className="text-[12.5px] text-stone-500 mt-0.5 font-mono">{getPagePath(page.slug)}</p>
+                  <p className="text-[13px] text-stone-600 mt-0.5 font-mono">{getPagePath(page.slug)}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <PageStatusBadge published={page.published} />
                   {page.slug === effectiveHomeSlug && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-sage/10 text-sage text-[11px] font-medium">
-                      <Home size={10} /> Accueil
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent-soft text-accent text-[12px] font-medium">
+                      <Home size={12} /> Accueil
                     </span>
                   )}
-                  <span className="text-[12.5px] text-stone-500">{page.sections.length} section{page.sections.length !== 1 ? 's' : ''}</span>
-                  <span className="text-[12.5px] text-stone-500 ml-auto whitespace-nowrap">
+                  <span className="text-[13px] text-stone-600">{page.sections.length} section{page.sections.length !== 1 ? 's' : ''}</span>
+                  <span className="text-[13px] text-stone-600 ml-auto whitespace-nowrap">
                     {new Date(page.updated_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </span>
                 </div>
-                {/* Le nombre de colonnes suit le nombre de boutons réellement rendus. */}
                 <div className="grid gap-2 pt-1 grid-cols-2">
                   {page.published && (
                     <a href={getPagePath(page.slug)} target="_blank" rel="noopener noreferrer" aria-label={`Voir la page « ${page.title} »`}
-                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-stone-200 text-stone-600 text-xs font-medium active:bg-stone-100 transition-colors">
+                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-stone-100 text-stone-900 text-[13px] font-semibold active:bg-stone-200 transition-colors">
                       <ExternalLink size={14} /> Voir
                     </a>
                   )}
                   {page.slug !== effectiveHomeSlug && (
                     <button onClick={() => setAsHome(page)} disabled={savingHome === page.id}
                       aria-label={`Faire de « ${page.title} » la page d'accueil`}
-                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-stone-200 text-stone-600 text-xs font-medium active:bg-stone-100 transition-colors disabled:opacity-50">
-                      {savingHome === page.id ? <Loader2 size={14} className="animate-spin" /> : <Home size={14} />} Accueil
+                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-stone-100 text-stone-900 text-[13px] font-semibold active:bg-stone-200 transition-colors disabled:opacity-50">
+                      {savingHome === page.id ? <Loader2 size={14} className="animate-spin" /> : <Home size={14} />} Mettre en accueil
                     </button>
                   )}
                   <Link href={`/admin/pages/edit/${page.id}`} aria-label={`Modifier « ${page.title} »`}
-                    className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-sage/30 bg-sage/5 text-sage text-xs font-medium active:bg-sage/10 transition-colors">
+                    className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-stone-100 text-stone-900 text-[13px] font-semibold active:bg-stone-200 transition-colors">
                     <Pencil size={14} /> Modifier
                   </Link>
                   <button onClick={() => handleDelete(page)} aria-label={`Supprimer « ${page.title} »`}
-                    className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-red-100 text-red-500 text-xs font-medium active:bg-red-50 transition-colors cursor-pointer">
+                    className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-red-200 text-red-700 text-[13px] font-semibold active:bg-red-50 transition-colors cursor-pointer">
                     <Trash2 size={14} /> Supprimer
                   </button>
                 </div>
@@ -322,8 +352,8 @@ export default function PageList() {
 
 function PageStatusBadge({ published }: { published: boolean }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold ${published ? 'bg-green-50 text-green-700' : 'bg-stone-100 text-stone-500'}`}>
-      {published ? <Eye size={10} /> : <EyeOff size={10} />}
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold ${published ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-600'}`}>
+      {published ? <Eye size={12} /> : <EyeOff size={12} />}
       {published ? 'Publié' : 'Brouillon'}
     </span>
   );

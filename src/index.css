@@ -417,3 +417,21 @@ main section [class*="border-b"] {
   background: rgba(120, 120, 120, 0.5);
 }
 
+
+/* ── Back-office : une seule couleur d'action ──────────────────────────────
+   `--admin-accent` reçoit la couleur principale du site (« Design & Style »),
+   posée sur <html> par le layout admin (voir useAdminAccent). Les teintes
+   dérivées sont recalculées sur le même élément, donc suivent la couleur lue.
+   `--admin-accent-fg` bascule en encre foncée si la couleur est claire. */
+@theme inline {
+  --color-accent: var(--admin-accent);
+  --color-accent-hover: var(--admin-accent-hover);
+  --color-accent-soft: var(--admin-accent-soft);
+  --color-accent-fg: var(--admin-accent-fg);
+}
+:root {
+  --admin-accent: #12283A;
+  --admin-accent-fg: #FFFFFF;
+  --admin-accent-hover: color-mix(in srgb, var(--admin-accent) 85%, #000);
+  --admin-accent-soft: color-mix(in srgb, var(--admin-accent) 7%, #fff);
+}
