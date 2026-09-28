@@ -46,6 +46,36 @@
   .animate-fadein { animation: none; }
 }
 
+/* ── Mentions légales / politique de cookies ──────────────────────────────
+   Ces deux pages mêlent des blocs du page builder (titres dimensionnés pour
+   des accroches marketing) et du texte réglementaire dense : sans retouche,
+   les H2 y sont aussi gros qu'un titre de section d'accueil et collés à leurs
+   paragraphes. `.legal-page` n'entoure que /mentions-legales et
+   /politique-cookies (voir ces deux `page.tsx`) — le reste du site garde la
+   police et la taille choisies dans Design & Style. `!important` est
+   nécessaire : GlobalStyles applique lui-même ses valeurs en `!important`,
+   et le sélecteur `[data-site-theme] h2` a la même spécificité que celui-ci. */
+.legal-page h2 {
+  font-size: 1.35rem !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  letter-spacing: normal !important;
+  margin-bottom: 0.75rem !important;
+}
+.legal-page h2:not(:first-child) { margin-top: 2.75rem !important; }
+.legal-page h3 {
+  font-size: 1.1rem !important;
+  font-weight: 600 !important;
+  margin-bottom: 0.5rem !important;
+}
+.legal-page h3:not(:first-child) { margin-top: 2rem !important; }
+.legal-page p {
+  line-height: 1.85 !important;
+  margin-bottom: 1.1rem;
+}
+.legal-page p:last-child { margin-bottom: 0; }
+.legal-page ul, .legal-page ol { margin-bottom: 1.1rem; }
+
 /* ── Quill WYSIWYG : même rendu que la page article ── */
 .ql-editor {
   font-family: var(--font-sans);
