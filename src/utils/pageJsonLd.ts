@@ -173,3 +173,42 @@ export function buildBreadcrumbJsonLd(opts: {
     })),
   };
 }
+
+/**
+ * `Service` d'une catégorie de la carte (page pilier d'un silo) : ce que la
+ * page propose, où, et à quels prix. Aide Google (SEO local) et les moteurs IA à
+ * rattacher « épilation au sucre » ou « soin du visage » à Palézieux-Gare et à
+ * un tarif, sans deviner à partir du texte.
+ */
+export function buildServiceJsonLd(opts: {
+  category: { label: string; tagline: string; path: string; groups: Array<{ items: Array<{ name: string; price: number; variants?: Array<{ duration: string; price: number }>; description?: string }> }> };
+  siteUrl: string;
+  areaServed: string[];
+}): object {
+  const { category, siteUrl, areaServed } = opts;
+  const url = `${siteUrl}${category.path}`;
+  const offers = category.groups.flatMap((g) =>
+    g.items.flatMap((i) => {
+      const prices = i.variants?.length ? i.variants.map((v) => ({ name: `${i.name} (${v.duration})`, price: v.price })) : [{ name: i.name, price: i.price }];
+      return prices.map((p) => ({
+        '@type': 'Offer',
+        name: p.name,
+        priceCurrency: 'CHF',
+        price: String(p.price),
+        ...(i.description ? { description: i.description } : {}),
+        availability: 'https://schema.org/InStock',
+      }));
+    }),
+  );
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Service',
+    '@id': `${url}#service`,
+    name: category.label,
+    description: category.tagline,
+    url,
+    provider: { '@id': `${siteUrl}/#organization` },
+    areaServed: areaServed.map((name) => ({ '@type': 'City', name })),
+    hasOfferCatalog: { '@type': 'OfferCatalog', name: category.label, itemListElement: offers },
+  };
+}

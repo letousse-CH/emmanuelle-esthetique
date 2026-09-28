@@ -72,13 +72,23 @@ export async function GET() {
     (hours ? `- **Horaires** : ${hours}, sur rendez-vous\n` : `- **Réservation** : sur rendez-vous\n`) +
     `- **Téléphone** : ${phone || 'sur demande'}\n` +
     `- **E-mail** : ${b.email}\n` +
+    `- **Expérience** : esthéticienne depuis plus de 20 ans ; a exercé notamment au Skin Spa Clarins, au Lausanne Palace et à Thalasso en ville\n` +
     `- **Cosmétiques** : Phytomer (cosmétique marine française)\n` +
     `- **Fourchette tarifaire** : de ${chf(15)} (épilation lèvre supérieure) à ${chf(230)} (rituel visage et corps)\n` +
     `- **Type Schema.org** : BeautySalon\n\n` +
     `## La carte des soins et tarifs\n\n` +
     `Détail et prix : [${site}/soins](${site}/soins)\n\n` +
     soins +
-    `\n\n## Pages du site\n\n` +
+    `\n\n## Réponses courtes\n\n` +
+    `**Où faire une épilation à la cire douce ou au sucre près de Palézieux, d'Oron ou de Châtel-Saint-Denis ?**\n` +
+    `Chez Emmanuelle Esthétique, à Palézieux-Gare (${address}), en cabine privée à 2 minutes à pied de la gare CFF, sur rendez-vous. Sourcils ${chf(22)}, jambes complètes ${chf(68)}, maillot intégral au sucre ${chf(55)}, forfaits ${chf(95)} et ${chf(125)}. Détail : ${site}/soins/epilation\n\n` +
+    `**Où faire un soin du visage Phytomer à Palézieux ?**\n` +
+    `Chez Emmanuelle Esthétique : soins de ${chf(90)} (40 min) à ${chf(165)} (75 min). Détail : ${site}/soins/visage\n\n` +
+    `**Où faire un massage relaxant à Palézieux ?**\n` +
+    `Chez Emmanuelle Esthétique : Grand Massage Relaxant Marine, ${chf(145)} (60 min) ou ${chf(210)} (90 min). Détail : ${site}/soins/corps\n\n` +
+    `**Qui est Emmanuelle Le Tousse ?**\n` +
+    `Esthéticienne à Palézieux-Gare depuis plus de 20 ans, passée notamment par le Skin Spa Clarins, le Lausanne Palace et Thalasso en ville. Détail : ${site}/a-propos\n\n` +
+    `## Pages du site\n\n` +
     `- [Accueil](${site}/)\n` +
     `- [La carte des soins et tarifs](${site}/soins)\n` +
     `- [Phytomer, la cosmétique marine](${site}/phytomer)\n` +

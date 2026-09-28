@@ -74,6 +74,7 @@ const button = (text: string, url: string, variant: 'primary' | 'secondary' | 'l
 const hero = (o: { eyebrow?: string; title: string; text?: string; ctaText?: string; ctaUrl?: string; secondaryText?: string; secondaryUrl?: string; align?: 'left' | 'center'; size?: 'medium' | 'large' }): B =>
   ({ id: uid(), type: 'hero', align: 'left', size: 'large', ...o }) as B;
 const quote = (q: string, o: Record<string, unknown> = {}): B => ({ id: uid(), type: 'quote', quote: q, align: 'center', ...o }) as B;
+const checklist = (title: string, items: string[]): B => ({ id: uid(), type: 'checklist', title, items }) as B;
 const divider = (): B => ({ id: uid(), type: 'divider', style: 'short' }) as B;
 const spacer = (height: 'small' | 'medium' | 'large' = 'small'): B => ({ id: uid(), type: 'spacer', height }) as B;
 const cards = (o: { eyebrow?: string; title?: string; intro?: string; cols: 2 | 3 | 4; style?: 'plain' | 'tinted' | 'outlined'; items: Array<Omit<CardItem, 'id'>> }): B =>
@@ -362,7 +363,7 @@ pages.push({
       [image(IMG.phytomer, { ratio: '4/5' })],
       [
         heading('Un cocon marin, à deux pas de la gare', 2, { eyebrow: 'Votre cabine à Palézieux-Gare' }),
-        prose('<p>Ici, on prend le temps. Vous êtes accueillie dans une cabine privée, calme et lumineuse, où la mer n’est jamais loin : les textures, les parfums et les gestes des soins Phytomer viennent de la cosmétique marine bretonne.</p><p>Vous êtes seule dans la cabine, personne ne vous presse. Chaque rendez-vous commence et se termine par un temps d’échange, pour adapter le soin à ce dont votre peau et votre corps ont besoin ce jour-là.</p>'),
+        prose('<p>Ici, on prend le temps. Vous êtes accueillie dans une cabine privée, calme et lumineuse, où la mer n’est jamais loin : les textures, les parfums et les gestes des soins Phytomer viennent de la cosmétique marine bretonne.</p><p>Vous êtes seule dans la cabine, personne ne vous presse. Chaque rendez-vous commence et se termine par un temps d’échange, pour adapter le soin à ce dont votre peau et votre corps ont besoin ce jour-là.</p><p>Esthéticienne depuis plus de 20 ans, Emmanuelle a exercé notamment au Skin Spa Clarins, au Lausanne Palace et à Thalasso en ville.</p>'),
         button('Faire connaissance avec Emmanuelle', '/a-propos', 'link'),
       ],
     ], { alignItems: 'center', reverseOnMobile: false, paddingY: 'large' }),
@@ -784,6 +785,10 @@ pages.push({
       secondaryText: 'Voir tous les tarifs',
       secondaryUrl: '/soins',
     }, IMG.epilation),
+    section('1-col', [[
+      heading('Épilation à Palézieux : l’essentiel', 2, { eyebrow: 'En bref' }),
+      prose(`<p>Emmanuelle Esthétique propose l’épilation à la cire douce et à la pâte de sucre naturelle à Palézieux-Gare (Vaud), en cabine privée et sur rendez-vous. Sourcils ${chf(22)}, lèvre supérieure ${chf(15)}, visage complet ${chf(45)}, aisselles ${chf(22)}, jambes complètes ${chf(68)}, maillot classique ${chf(28)}, maillot échancré ou intégral au sucre ${chf(55)}. Deux forfaits tout compris : Douceur ${chf(95)} et Intégral ${chf(125)}.</p><p>La cabine se trouve à deux minutes à pied de la gare CFF de Palézieux, avec une place de parking gratuite : elle accueille les clientes d’Oron, de Puidoux, de Chexbres, de Châtel-Saint-Denis, de Lavaux, de Vevey et de la Broye.</p>`),
+    ]], { width: 'narrow', paddingY: 'large' }),
     section('1-col', [[cards({
       eyebrow: 'Deux méthodes',
       title: 'Cire douce ou pâte de sucre ?',
@@ -830,17 +835,30 @@ pages.push({
         button('Voir les rituels du corps', '/soins/corps', 'link'),
       ],
     ], { background: 'warm', paddingY: 'large', alignItems: 'top' }),
+    section('2-col-40-60', [
+      [
+        heading('Une épilation près de chez vous', 2, { eyebrow: 'Palézieux et environs' }),
+        button('Prendre rendez-vous', '/contact', 'link'),
+      ],
+      [
+        prose('<p>Si vous cherchez une épilation à la cire douce ou au sucre du côté d’Oron, de Puidoux, de Chexbres, de Châtel-Saint-Denis ou de Lavaux, la cabine de Palézieux-Gare est faite pour vous : un lieu calme, sans attente, à deux minutes à pied de la gare CFF de Palézieux.</p><p>Vous venez de Vevey, de la Riviera, de Bulle ou de la Broye ? La gare de Palézieux est desservie en train et une place de parking gratuite vous attend devant la cabine. Les horaires : du lundi au samedi, de 9 h à 18 h, sur rendez-vous.</p>'),
+      ],
+    ], { paddingY: 'large', alignItems: 'top' }),
     section('1-col', [[faq({
       eyebrow: 'Questions fréquentes',
-      title: 'Sur l’épilation',
+      title: 'Sur l’épilation à Palézieux',
       items: [
+        { question: 'Où faire une épilation à la cire douce ou au sucre près d’Oron, de Puidoux ou de Châtel-Saint-Denis ?', answer: `Chez Emmanuelle Esthétique, à Palézieux-Gare (${ADDRESS}), en cabine privée, à deux minutes à pied de la gare CFF de Palézieux. Les épilations se font sur rendez-vous, du lundi au samedi, de 9 h à 18 h.` },
         { question: 'Quelle différence entre la cire douce et la pâte de sucre ?', answer: 'La cire douce est choisie pour sa qualité et sa tolérance sur les peaux sensibles ; la pâte de sucre est 100 % naturelle et réalisée selon la méthode orientale, qui extrait le poil avec douceur et réduit visiblement les repousses sous la peau.' },
-        { question: 'Le maillot intégral se fait-il à la cire ou au sucre ?', answer: `Le maillot échancré ou intégral se réalise au sucre (${chf(55)}). Le maillot classique est à ${chf(28)}.` },
         { question: 'Combien coûte une épilation des jambes à Palézieux ?', answer: `Les jambes complètes sont à ${chf(68)} et les demi-jambes à ${chf(42)}. Le Forfait Intégral (jambes complètes, aisselles et maillot au choix) est à ${chf(125)}.` },
-        { question: 'Que comprennent les forfaits ?', answer: `Le Forfait Douceur (${chf(95)}) comprend demi-jambes, aisselles et maillot au choix. Le Forfait Intégral (${chf(125)}) comprend jambes complètes, aisselles et maillot au choix, quel que soit le type de maillot.` },
+        { question: 'Combien coûte une épilation du maillot ?', answer: `Le maillot classique est à ${chf(28)}. Le maillot échancré ou intégral se réalise au sucre et coûte ${chf(55)}.` },
+        { question: 'Combien coûte une épilation des sourcils ou du visage ?', answer: `Les sourcils sont à ${chf(22)}, la lèvre supérieure à ${chf(15)} et le visage complet (sourcils, lèvre, menton, joues) à ${chf(45)}.` },
+        { question: 'Que comprennent les forfaits d’épilation ?', answer: `Le Forfait Douceur (${chf(95)}) comprend demi-jambes, aisselles et maillot au choix. Le Forfait Intégral (${chf(125)}) comprend jambes complètes, aisselles et maillot au choix, quel que soit le type de maillot.` },
+        { question: 'La cire douce convient-elle aux peaux sensibles ?', answer: 'Emmanuelle utilise des cires douces de haute qualité, adaptées aux peaux sensibles, suivies d’une émulsion apaisante marine. Signalez toute sensibilité avant l’épilation pour choisir la méthode qui vous convient.' },
+        { question: 'Faut-il prendre rendez-vous pour une épilation ?', answer: 'Oui, uniquement sur rendez-vous, du lundi au samedi, de 9 h à 18 h. Réservez avec le formulaire de contact, par e-mail ou par téléphone : la réponse arrive sous 24 h.' },
       ],
     })]], { paddingY: 'large' }),
-    closingCallout('Réservez votre épilation'),
+        closingCallout('Réservez votre épilation'),
   ],
 });
 
@@ -914,14 +932,14 @@ pages.push({
   slug: 'a-propos',
   title: 'À propos',
   seoTitle: 'À propos d’Emmanuelle, esthéticienne à Palézieux',
-  seoDescription: 'Emmanuelle, esthéticienne depuis plus de 20 ans, vous accueille dans sa cabine privée à Palézieux-Gare : soins Phytomer, écoute et douceur, sans jugement.',
+  seoDescription: 'Emmanuelle, esthéticienne depuis plus de 20 ans (Skin Spa Clarins, Lausanne Palace, Thalasso en ville), vous accueille en cabine privée à Palézieux-Gare.',
   ogImage: IMG.cabineSalon.url,
-  keywords: 'esthéticienne Palézieux, Emmanuelle Le Tousse, institut de beauté Palézieux-Gare, cabine privée',
+  keywords: 'esthéticienne Palézieux, Emmanuelle Le Tousse, ancienne Skin Spa Clarins, Lausanne Palace, Thalasso en ville, institut de beauté Palézieux-Gare, cabine privée',
   content: [
     heroSplit({
       eyebrow: 'Qui suis-je',
       title: 'Emmanuelle, esthéticienne à Palézieux-Gare',
-      text: 'Esthéticienne depuis plus de 20 ans, je vous accueille dans ma cabine privée à Palézieux-Gare — un cocon pensé pour celles qui veulent enfin prendre le temps.',
+      text: 'Esthéticienne depuis plus de 20 ans, passée par le Skin Spa Clarins, le Lausanne Palace et Thalasso en ville, je vous accueille dans ma cabine privée à Palézieux-Gare — un cocon pensé pour celles qui veulent enfin prendre le temps.',
       ctaText: 'Prendre rendez-vous',
       ctaUrl: '/contact',
       secondaryText: 'Découvrir les soins',
@@ -931,6 +949,15 @@ pages.push({
       heading('Prendre soin, c’est d’abord prendre le temps', 2, { eyebrow: 'Mon parcours' }),
       prose('<p>J’ai commencé l’esthétique il y a plus de 20 ans, formée aux techniques manuelles européennes et aux cosmétiques marins Phytomer. Passionnée depuis toujours par les rapports humains, j’aime ce métier parce qu’il me permet de passer mes journées à prendre soin de femmes qui ont envie de prendre soin d’elles.</p><p>Je les aide à lâcher prise par des soins esthétiques doux, pour qu’elles puissent enfin se retrouver et respirer.</p>'),
     ]], { width: 'narrow', paddingY: 'large' }),
+    section('2-col-40-60', [
+      [
+        heading('Une expérience de spa et de palace', 2, { eyebrow: 'Mon expérience' }),
+        checklist('Parmi les lieux où j’ai exercé', ['Skin Spa Clarins', 'Lausanne Palace', 'Thalasso en ville']),
+      ],
+      [
+        prose('<p>Au fil de ma carrière, j’ai exercé notamment au Skin Spa Clarins, au Lausanne Palace et à Thalasso en ville : des lieux réputés pour l’exigence de leurs soins et de leur accueil.</p><p>Ces années m’ont appris le geste précis, le sens du détail et l’art de recevoir. C’est ce que je retrouve aujourd’hui dans chaque rendez-vous, avec le calme d’une cabine privée en plus.</p>'),
+      ],
+    ], { background: 'surface', paddingY: 'large', alignItems: 'center' }),
     section('1-col', [[cards({
       eyebrow: 'Ma façon de travailler',
       title: 'Trois choses qui ne changent jamais',
@@ -955,6 +982,16 @@ pages.push({
       gallery({ variant: 'grid', cols: 3, images: [IMG.cabineFauteuil, IMG.cabineFleurs, IMG.cabineLarge] }),
     ]], { background: 'surface', paddingY: 'large' }),
     section('1-col', [[quote('Prendre soin, c’est d’abord prendre le temps.', { author: 'Emmanuelle' })]], { width: 'narrow', paddingY: 'large' }),
+    section('1-col', [[faq({
+      eyebrow: 'Questions fréquentes',
+      title: 'À propos d’Emmanuelle',
+      items: [
+        { question: 'Qui est Emmanuelle Le Tousse ?', answer: 'Emmanuelle Le Tousse est esthéticienne à Palézieux-Gare (Vaud) depuis plus de 20 ans. Elle reçoit en cabine privée et propose des soins du visage et du corps Phytomer, des soins des mains et des pieds, la beauté du regard et l’épilation.' },
+        { question: 'Où Emmanuelle a-t-elle travaillé avant d’ouvrir sa cabine ?', answer: 'Notamment au Skin Spa Clarins, au Lausanne Palace et à Thalasso en ville.' },
+        { question: 'Quelles marques et quelles méthodes utilise-t-elle ?', answer: 'Les soins du visage et du corps s’appuient sur la cosmétique marine Phytomer et sur des techniques manuelles européennes. L’épilation se fait à la cire douce et à la pâte de sucre naturelle.' },
+        { question: 'Où se trouve la cabine ?', answer: `À Palézieux-Gare (${ADDRESS}), à deux minutes à pied de la gare CFF de Palézieux.` },
+      ],
+    })]], { background: 'surface', paddingY: 'large' }),
     closingCallout('Envie de faire connaissance ?', 'Écrivez-moi le soin qui vous intéresse et nous trouvons un créneau ensemble.'),
   ],
 });

@@ -9,7 +9,9 @@ import PageChrome from '../../../components/PageChrome';
 import { getPageMeta, buildMetadata } from '../../../services/pageMeta';
 import { SITE_CONFIG } from '../../../config/site';
 import { LEGACY_REDIRECTS } from '../../../config/legacyRedirects';
-import { buildBreadcrumbJsonLd } from '../../../utils/pageJsonLd';
+import { buildBreadcrumbJsonLd, buildServiceJsonLd } from '../../../utils/pageJsonLd';
+import { CARTE } from '../../../constants/carteSoins';
+import { getSettingsServer } from '../../../services/settingsServer';
 
 /**
  * Pages dynamiques servies à la racine, sur un ou plusieurs niveaux :
@@ -86,8 +88,27 @@ export default async function Page({ params }: PageProps) {
     parents,
   });
 
+  // Page pilier d'une catégorie de la carte : données `Service` avec prix et zone desservie.
+  const category = CARTE.find((c) => c.path === `/${path}`);
+  const serviceLd = category
+    ? buildServiceJsonLd({
+        category,
+        siteUrl: SITE_CONFIG.url,
+        areaServed: ((await getSettingsServer(['business_area_served'])).business_area_served || 'Palézieux')
+          .split(',')
+          .map((a) => a.trim())
+          .filter(Boolean),
+      })
+    : null;
+
   return (
     <>
+      {serviceLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(serviceLd) }}
+        />
+      )}
       {breadcrumbLd && (
         <script
           type="application/ld+json"
