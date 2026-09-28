@@ -121,16 +121,144 @@ function priceItems(items: CarteItem[], withDescription = false): Array<Omit<Pri
   }));
 }
 
+/**
+ * Texte de présentation de chaque soin : deux paragraphes, le déroulé (repris
+ * de la carte) et une ligne « idéal si ». Les protocoles du visage et du corps
+ * suivent ceux de Phytomer (Peau Nette Express, Hydra Originel, Expert
+ * Jeunesse, Voile de Satin, Bulle des Mers, massage Signature Spa). Rien n'est
+ * promis qui ne figure pas dans la carte : on décrit le geste et ce qu'on ressent.
+ */
+const SOIN_TEXT: Record<string, { paras: string[]; bullets?: string[]; ideal?: string }> = {
+  'peau-nette-eclat-express': {
+    paras: [
+      'Le rendez-vous le plus court de la carte, pensé pour les jours où le temps manque mais où la peau a besoin d’un vrai nettoyage. Un nettoyage profond sous serviettes chaudes prépare la peau, un gommage marin enzymatique la débarrasse de ce qui la ternit, puis un masque chauffant détoxifiant travaille en profondeur avant l’hydratation.',
+      'Vous repartez avec un teint plus net et plus lumineux, en 40 minutes seulement : un format qui s’intègre facilement à une journée chargée.',
+    ],
+    bullets: ['Nettoyage profond désincrustant sous serviettes chaudes', 'Gommage marin enzymatique', 'Masque chauffant détoxifiant', 'Hydratation personnalisée'],
+    ideal: 'Idéal si votre peau est terne ou fatiguée et que vous souhaitez un coup d’éclat immédiat.',
+  },
+  'hydra-originel': {
+    paras: [
+      'C’est le soin d’hydratation de la carte : un véritable bain de confort pour les peaux qui tiraillent, manquent de souplesse ou de lumière. Il s’appuie sur des algues bio tissées, aux textures très sensorielles, appliquées après un gommage velours qui prépare la peau à recevoir tous leurs bienfaits.',
+      'Le modelage du visage et du décolleté en est le cœur : lent, enveloppant, il dénoue les traits et invite à lâcher prise. Le soin s’achève par un masque crémeux à l’algue Nori. La peau est repulpée, sa barrière cutanée restaurée, le visage détendu.',
+    ],
+    bullets: ['Gommage velours', 'Modelage délassant du visage et du décolleté', 'Masque crémeux à l’algue Nori'],
+    ideal: 'Idéal si votre peau est déshydratée, tendue ou en manque de confort.',
+  },
+  'expert-jeunesse': {
+    paras: [
+      'Le protocole anti-âge le plus complet de la carte. Il s’adresse à celles qui souhaitent agir sur les rides installées et sur la fermeté du visage, avec des gestes précis plutôt que des promesses spectaculaires.',
+      'Le modelage remodelant, inspiré des techniques de digito-pression, travaille le visage en profondeur pour redessiner l’ovale. Il est suivi de la pose d’un masque plastifiant tenseur, aux actifs marins purs, qui lisse visiblement les rides et tonifie les traits. Les résultats varient selon chaque peau.',
+    ],
+    bullets: ['Modelage remodelant ciblé, inspiré des techniques de digito-pression', 'Masque plastifiant tenseur aux actifs marins purs'],
+    ideal: 'Idéal si vous souhaitez lisser les rides installées et retrouver de la fermeté.',
+  },
+  'voile-de-satin': {
+    paras: [
+      'Un gommage complet du corps aux cristaux de sels marins, qui exfolient en douceur tout en reminéralisant la peau. Les cristaux sont travaillés en gestes enveloppants, des épaules aux pieds, pour éliminer les cellules mortes et raviver le grain de peau.',
+      'Un lait satinant onctueux est ensuite appliqué et massé : la peau est douce, veloutée, comme neuve. Un soin simple et très sensoriel pour se sentir bien dans sa peau.',
+    ],
+    bullets: ['Exfoliation complète aux cristaux de sels marins reminéralisants', 'Application onctueuse et massée de lait satinant'],
+    ideal: 'Idéal si votre peau est sèche, terne, ou que vous voulez retrouver une peau neuve.',
+  },
+  'bulles-des-mers': {
+    paras: [
+      'Un soin dédié au dos, là où s’accumulent les tensions. Il commence par un gommage purifiant, puis une boue marine auto-chauffante est posée sous occlusion thermique : elle chauffe, minéralise et décontracte pendant que la peau se purifie.',
+      'Un modelage délassant des trapèzes, de la nuque et du dos, à l’huile végétale précieuse, prolonge l’effet et relâche les épaules. Une vraie pause pour celles qui portent tout sur leur dos.',
+    ],
+    bullets: ['Gommage purifiant du dos', 'Boue marine auto-chauffante décontracturante, sous occlusion thermique', 'Modelage des trapèzes, de la nuque et du dos à l’huile végétale précieuse'],
+    ideal: 'Idéal si vous avez le dos et la nuque tendus, ou besoin d’une pause détox.',
+  },
+  'grand-massage-relaxant': {
+    paras: [
+      'La signature spa de la cabine : un massage complet du corps, entièrement sur-mesure. Avant de commencer, on prend le temps de parler de vos besoins du jour — un dos chargé, des jambes lourdes, une fatigue plus diffuse — pour composer le massage qui vous convient.',
+      'Effleurages profonds, drainages doux et pressions dénouantes s’enchaînent à l’huile marine satinante au parfum printanier. 60 minutes suffisent pour relâcher les tensions ; 90 minutes laissent davantage de temps à chaque geste.',
+    ],
+    ideal: 'Idéal si vous cherchez une vraie déconnexion et une détente profonde.',
+  },
+  'echappee-belle': {
+    paras: [
+      'Le rituel complet, pour un rendez-vous qui prend soin de vous des pieds à la tête. Vous commencez par le gommage complet du corps Voile de Satin ou par un massage ciblé du dos, selon ce dont vous avez envie.',
+      'Vous enchaînez ensuite avec le Soin Hydra Originel complet : bain d’hydratation aux algues, modelage du visage et du décolleté, masque à l’algue Nori. Une parenthèse de 1h45 pour tout relâcher.',
+    ],
+    ideal: 'Idéal pour s’offrir une vraie pause, ou pour offrir un moment d’exception en bon cadeau.',
+  },
+  'prestige-mains': {
+    paras: [
+      'Une manucure « Spa » complète : le limage est fait sur-mesure selon la forme de vos ongles, et les cuticules sont travaillées avec précision. La mise en beauté de l’ongle fait partie du soin, elle n’est pas un supplément.',
+      'Le gommage aux sels fins marins affine le grain de peau, un masque régénérant tiède nourrit, puis un modelage décontractant de l’avant-bras et de la main relâche les tensions.',
+    ],
+    bullets: ['Limage sur-mesure', 'Travail précis des cuticules', 'Gommage aux sels fins marins', 'Masque régénérant tiède', 'Modelage décontractant de l’avant-bras et de la main'],
+    ideal: 'Idéal si vos mains travaillent beaucoup ou si vous voulez simplement prendre soin d’elles.',
+  },
+  'prestige-pieds': {
+    paras: [
+      'Un soin des pieds « Spa » complet, du premier geste à la dernière minute de détente. Les callosités sont éliminées, l’ongle est mis en forme et les cuticules soignées : les pieds retrouvent douceur et confort.',
+      'Un gommage exfoliant en profondeur, un masque adoucissant sous serviettes chaudes puis un modelage défatigant de la voûte plantaire et des mollets terminent le soin. On en ressort les jambes plus légères.',
+    ],
+    bullets: ['Élimination des callosités', 'Mise en forme de l’ongle et soin des cuticules', 'Gommage exfoliant en profondeur', 'Masque adoucissant sous serviettes chaudes', 'Modelage défatigant de la voûte plantaire et des mollets'],
+    ideal: 'Idéal si vous êtes beaucoup debout ou que vos pieds méritent une vraie pause.',
+  },
+  'teinture-cils': {
+    paras: [
+      'La teinture fonce et intensifie la couleur de vos cils naturels, souvent clairs ou peu visibles. Le regard gagne en profondeur, sans avoir à mettre du mascara chaque matin.',
+      'C’est un geste rapide et confortable, pour un regard naturel mais affirmé.',
+    ],
+    ideal: 'Idéal si vos cils sont clairs et que vous souhaitez un regard plus expressif.',
+  },
+  'teinture-sourcils': {
+    paras: [
+      'La teinture donne au sourcil une couleur plus soutenue et structure visuellement le regard. Elle met en valeur la forme naturelle de vos sourcils, sans les alourdir.',
+      'Elle se complète, si vous le souhaitez, d’une épilation à la cire douce pour une ligne nette.',
+    ],
+    ideal: 'Idéal si vos sourcils sont clairs, clairsemés ou manquent de définition.',
+  },
+  'duo-regard': {
+    paras: [
+      'La teinture des cils et celle des sourcils réunies en une seule prestation, pour un regard plus dessiné dans son ensemble.',
+      'Vous gagnez du temps et l’harmonie entre cils et sourcils : un regard net et naturel, sans maquillage.',
+    ],
+    ideal: 'Idéal si vous voulez un regard mis en valeur en une seule fois.',
+  },
+  'rehaussement-cils': {
+    paras: [
+      'Le réhaussement recourbe vos cils naturels de la racine à la pointe. Ils paraissent plus longs et plus ouverts, et le regard s’éclaire, sans extension.',
+      'Le résultat est naturel, adapté à la longueur et à la courbe de vos propres cils.',
+    ],
+    ideal: 'Idéal si vous voulez ouvrir le regard tout en gardant vos cils naturels.',
+  },
+  'forfait-douceur': {
+    paras: [
+      'Pour les jours où l’on veut être nette, simplement et rapidement : demi-jambes, aisselles et maillot au choix — classique, échancré ou intégral — en une seule séance.',
+      'Tout est compris dans un prix unique, sans supplément selon le maillot que vous choisissez.',
+    ],
+    bullets: ['Demi-jambes', 'Aisselles', 'Maillot au choix'],
+    ideal: 'Idéal pour une formule essentielle, rapide et nette.',
+  },
+  'forfait-integral': {
+    paras: [
+      'Le rituel complet du corps, sans compromis : jambes complètes, aisselles et maillot au choix — classique, échancré ou intégral —, épilés avec soin, à la cire douce ou au sucre.',
+      'Une seule séance, un prix unique tout compris, et la peau lisse et douce des pieds à l’aine.',
+    ],
+    bullets: ['Jambes complètes', 'Aisselles', 'Maillot au choix'],
+    ideal: 'Idéal si vous voulez une épilation complète en une seule fois.',
+  },
+};
+
 function offerFrom(id: string, o: { bullets?: string[]; description?: string; badge?: string; ctaText?: string; ctaUrl?: string; highlight?: boolean } = {}): Omit<OfferItem, 'id'> {
   const i = getItem(id);
   // Soin à deux durées : la seconde est rappelée dans la description.
   const alt = i.variants && i.variants.length > 1 ? ` Aussi en ${i.variants[1].duration} : ${chf(i.variants[1].price)}.` : '';
+  const t = SOIN_TEXT[id];
+  const long = t ? [...t.paras, ...(t.ideal ? [`§${t.ideal}`] : [])].join('\n\n') + (alt ? `\n\n§${alt.trim()}` : '') : undefined;
   return {
     name: i.name,
     price: chf(i.price),
     priceNote: priceNote(i),
-    description: `${o.description ?? i.description ?? ''}${alt}`.trim() || undefined,
-    bullets: o.bullets,
+    description: long ?? (`${o.description ?? i.description ?? ''}${alt}`.trim() || undefined),
+    // Version courte, pour les cartes de l'accueil.
+    ...({ short: o.description ?? t?.paras[0] } as object),
+    bullets: t ? t.bullets : o.bullets,
     badge: o.badge,
     highlight: o.highlight,
     ctaText: o.ctaText ?? 'Réserver ce soin',
@@ -161,12 +289,14 @@ function expandOffers(content: ContentStructure, mode: 'rows' | 'cards'): Conten
     const head = offerBlocks[0];
     const all = offerBlocks.flatMap((b) => b.offers);
     const meta = (o: OfferItem) => [o.priceNote?.replace(/^·\s*/, ''), o.price].filter(Boolean).join(' · ');
+    // Sur l'accueil, la durée seulement : le prix vit dans la carte.
+    const duration = (o: OfferItem) => o.priceNote?.replace(/^·\s*/, '');
     if (mode === 'cards') {
       out.push({
         ...sec,
         columns: [{ id: uid(), blocks: [cards({
           eyebrow: head.eyebrow, title: head.title, intro: head.intro, cols: 3, style: 'tinted',
-          items: all.map((o) => ({ title: o.name, text: `${o.description ?? ''} ${meta(o)}.`.trim(), linkText: o.ctaText, linkUrl: o.ctaUrl })),
+          items: all.map((o) => ({ title: o.name, text: `${(o as OfferItem & { short?: string }).short ?? ''}${duration(o) ? ` ${duration(o)[0].toUpperCase()}${duration(o).slice(1)}.` : ''}`.trim(), linkText: o.ctaText, linkUrl: o.ctaUrl })),
         })] }],
       });
       continue;
@@ -177,10 +307,13 @@ function expandOffers(content: ContentStructure, mode: 'rows' | 'cards'): Conten
     ]], { width: 'narrow', paddingY: 'small', background: 'transparent' }));
     all.forEach((o, i) => {
       const bullets = o.bullets?.length ? `<ul>${o.bullets.map((b) => `<li>${b}</li>`).join('')}</ul>` : '';
+      const paras = (o.description ?? '').split('\n\n').filter(Boolean);
+      const body = paras.filter((x) => !x.startsWith('§')).map((x) => `<p>${x}</p>`).join('');
+      const after = paras.filter((x) => x.startsWith('§')).map((x) => `<p><em>${x.slice(1)}</em></p>`).join('');
       out.push(section('2-col-40-60', [
         [heading(o.name, 3, { eyebrow: meta(o) })],
         [
-          prose(`${o.description ? `<p>${o.description}</p>` : ''}${bullets}`),
+          prose(`${body}${bullets}${after}`),
           button('Réserver ce soin', '/contact', 'link'),
         ],
       ], { paddingY: 'medium', alignItems: 'top', background: i % 2 ? 'surface' : 'transparent' }));
@@ -240,11 +373,11 @@ pages.push({
       cols: 3,
       style: 'plain',
       items: [
-        { image: IMG.soinVisage.url, title: 'Soins du visage Phytomer', text: `Trois protocoles marins de 40 à 75 minutes : coup d’éclat express, hydratation profonde ou correction rides et fermeté. Dès ${fromPrice('visage')}.`, linkText: 'Voir les soins du visage', linkUrl: '/soins/visage' },
-        { image: IMG.massage.url, title: 'Massages & rituels du corps', text: `Gommage aux sels marins, détox du dos, grand massage relaxant de 60 ou 90 minutes, rituel visage et corps. Dès ${fromPrice('corps')}.`, linkText: 'Voir les rituels du corps', linkUrl: '/soins/corps' },
-        { image: IMG.cabineSoin.url, title: 'Mains & pieds « Spa »', text: `Deux rituels complets qui allient soin des ongles, gommage, masque et modelage. Dès ${fromPrice('mains-pieds')}.`, linkText: 'Voir les soins mains et pieds', linkUrl: '/soins/mains-et-pieds' },
-        { image: IMG.regard.url, title: 'Beauté du regard', text: `Teinture des cils et des sourcils, duo regard, réhaussement de cils. Dès ${fromPrice('regard')}.`, linkText: 'Voir la beauté du regard', linkUrl: '/soins/regard' },
-        { image: IMG.epilation.url, title: 'Épilation cire douce & sucre', text: `Cire douce pour les peaux sensibles ou pâte de sucre 100 % naturelle, avec deux forfaits tout compris. Dès ${fromPrice('epilation')}.`, linkText: 'Voir les épilations', linkUrl: '/soins/epilation' },
+        { image: IMG.soinVisage.url, title: 'Soins du visage Phytomer', text: `Trois protocoles marins de 40 à 75 minutes : coup d’éclat express, hydratation profonde ou correction rides et fermeté.`, linkText: 'Voir les soins du visage', linkUrl: '/soins/visage' },
+        { image: IMG.massage.url, title: 'Massages & rituels du corps', text: `Gommage aux sels marins, détox du dos, grand massage relaxant de 60 ou 90 minutes, rituel visage et corps.`, linkText: 'Voir les rituels du corps', linkUrl: '/soins/corps' },
+        { image: IMG.cabineSoin.url, title: 'Mains & pieds « Spa »', text: `Deux rituels complets qui allient soin des ongles, gommage, masque et modelage.`, linkText: 'Voir les soins mains et pieds', linkUrl: '/soins/mains-et-pieds' },
+        { image: IMG.regard.url, title: 'Beauté du regard', text: `Teinture des cils et des sourcils, duo regard, réhaussement de cils.`, linkText: 'Voir la beauté du regard', linkUrl: '/soins/regard' },
+        { image: IMG.epilation.url, title: 'Épilation cire douce & sucre', text: `Cire douce pour les peaux sensibles ou pâte de sucre 100 % naturelle, avec deux forfaits tout compris.`, linkText: 'Voir les épilations', linkUrl: '/soins/epilation' },
         { image: IMG.cadeau.url, title: 'Bon cadeau', text: 'Offrez une parenthèse de douceur : un montant libre ou un soin de la carte, pour un anniversaire, une fête ou sans occasion particulière.', linkText: 'Offrir un bon cadeau', linkUrl: '/bon-cadeau' },
       ],
     })]], { paddingY: 'large' }),
@@ -359,7 +492,7 @@ pages.push({
     }, IMG.soinVisage),
     section('1-col', [[
       heading('Des protocoles marins, des gestes experts', 2, { eyebrow: 'Le soin' }),
-      prose('<p>Chaque soin du visage de la carte associe des textures marines délicates — gommage enzymatique, algues tissées bio, masques chauffants ou plastifiants — à des manœuvres manuelles précises. L’objectif : une peau visiblement plus nette, plus hydratée ou plus tonique, et un vrai moment de lâcher-prise.</p><p>Avant chaque soin, un temps d’échange permet d’adapter le protocole à votre peau du jour.</p>'),
+      prose('<p>Les soins du visage d’Emmanuelle s’appuient sur les protocoles professionnels de Phytomer, maison de cosmétique marine née à Saint-Malo. Chacun associe des textures issues de la mer — algues bio, gommage enzymatique, masques chauffants ou plastifiants — à des manœuvres manuelles précises : ici, le geste compte autant que la formule.</p><p>Avant le soin, un temps d’échange permet de regarder ensemble ce dont votre peau a besoin ce jour-là. Ensuite, vous n’avez plus rien à faire : la lumière est douce, les serviettes sont chaudes et le temps est à vous.</p>'),
     ]], { width: 'narrow', paddingY: 'large' }),
     section('1-col', [[offers({
       eyebrow: 'Les trois soins',
@@ -380,6 +513,15 @@ pages.push({
         }),
       ],
     })]], { background: 'surface', paddingY: 'large' }),
+    section('1-col', [[steps({
+      eyebrow: 'Le déroulé',
+      title: 'Un soin du visage, du début à la fin',
+      items: [
+        { title: 'On prend le temps d’échanger', text: 'Un moment pour parler de votre peau, de vos envies et de ce que vous ressentez ce jour-là. Le protocole se règle à partir de là.' },
+        { title: 'Le soin', text: 'Nettoyage, gommage, modelage et masque s’enchaînent selon le protocole choisi, dans le calme de la cabine et sans que vous ayez rien à faire.' },
+        { title: 'On se retrouve après', text: 'Un dernier échange pour parler de ce que votre peau a apprécié et de la façon de prolonger l’effet du soin chez vous.' },
+      ],
+    })]], { background: 'warm', paddingY: 'large' }),
     section('1-col', [[cards({
       eyebrow: 'Vous hésitez ?',
       title: 'Quel soin du visage choisir ?',
@@ -417,6 +559,7 @@ pages.push({
         { question: 'Quelle est la durée d’un soin du visage ?', answer: 'Selon la formule : 40 minutes pour le soin Peau Nette & Coup d’Éclat Express, 60 minutes pour Hydra Originel et 75 minutes pour Expert Jeunesse.' },
         { question: 'Quelle différence entre les trois soins du visage ?', answer: 'Peau Nette & Coup d’Éclat Express est un soin rapide de nettoyage, gommage et masque détoxifiant. Hydra Originel est un soin d’hydratation profonde aux algues. Expert Jeunesse est un protocole anti-âge qui associe un modelage remodelant et un masque tenseur.' },
         { question: 'Puis-je ajouter un soin du dos ou de la nuque pendant mon soin du visage ?', answer: `Oui : l’option Boue Marine Auto-Chauffante Dos (${chf(30)}) et l’option Massage Relaxant du Cuir Chevelu & Nuque de 15 minutes (${chf(25)}) se glissent pendant votre soin du visage.` },
+        { question: 'Puis-je faire un soin du visage si j’ai la peau sensible ?', answer: 'Chaque soin est adapté à votre peau du jour lors de l’échange qui précède : signalez toute sensibilité, allergie ou traitement en cours avant de commencer, pour que le protocole soit ajusté.' },
         { question: 'Où ont lieu les soins du visage ?', answer: `Dans une cabine privée à Palézieux-Gare (${ADDRESS}), à deux minutes à pied de la gare CFF, sur rendez-vous.` },
       ],
     })]], { background: 'surface', paddingY: 'large' }),
@@ -464,6 +607,15 @@ pages.push({
         }),
       ],
     ], { background: 'surface', paddingY: 'large' }),
+    section('1-col', [[steps({
+      eyebrow: 'Le déroulé',
+      title: 'Un rituel du corps, du début à la fin',
+      items: [
+        { title: 'On fait le point', text: 'Un temps pour parler de ce dont votre corps a besoin aujourd’hui : dos chargé, jambes lourdes, envie de douceur ou de détente profonde.' },
+        { title: 'Le rituel', text: 'Gommage, boue marine ou massage : les gestes s’enchaînent avec des textures marines, dans le calme de la cabine.' },
+        { title: 'Vous prenez votre temps', text: 'Le rituel se termine sans précipitation : on vous laisse le temps de revenir doucement, avant de reprendre le fil de la journée.' },
+      ],
+    })]], { background: 'warm', paddingY: 'large' }),
     section('1-col', [[cards({
       eyebrow: 'Vous hésitez ?',
       title: 'Quel rituel du corps choisir ?',
@@ -494,6 +646,7 @@ pages.push({
       items: [
         { question: 'Quelle différence entre un massage de 60 et de 90 minutes ?', answer: `C’est le même Grand Massage Relaxant Marine, sur-mesure : ${chf(145)} pour 60 minutes, ${chf(210)} pour 90 minutes. Les 90 minutes laissent plus de temps aux effleurages profonds, aux drainages doux et aux pressions dénouantes.` },
         { question: 'Quelles huiles sont utilisées ?', answer: 'Le Grand Massage Relaxant Marine utilise une huile marine satinante au parfum printanier. Le soin Bulles des Mers utilise une huile végétale précieuse pour le modelage du dos.' },
+        { question: 'Que fait la boue marine auto-chauffante ?', answer: 'Posée sur le dos, elle chauffe d’elle-même : cette chaleur décontracte les muscles pendant que ses actifs marins reminéralisent la peau. Elle est utilisée dans le soin Bulles des Mers, et en option pendant un soin du visage.' },
         { question: 'Ces massages sont-ils thérapeutiques ?', answer: 'Non : ce sont des soins de bien-être et de détente, à visée esthétique. Ils ne remplacent pas un traitement médical ou de physiothérapie.' },
         { question: 'Puis-je combiner un soin du corps et un soin du visage ?', answer: `Oui, avec le Rituel Échappée Belle (1h45, ${chf(230)}) : gommage complet du corps Voile de Satin ou massage ciblé du dos, suivi du Soin Hydra Originel complet.` },
       ],
@@ -522,7 +675,7 @@ pages.push({
     }, IMG.cabineSoin, '4/3'),
     section('1-col', [[
       heading('Un rituel plutôt qu’un simple soin des ongles', 2, { eyebrow: 'Le soin' }),
-      prose('<p>Ici, la beauté de l’ongle fait partie d’un soin complet : limage ou mise en forme, travail des cuticules, gommage aux sels marins, masque et modelage relaxant. Vous repartez avec des mains ou des pieds soignés, doux et détendus.</p>'),
+      prose('<p>Ici, la beauté de l’ongle fait partie d’un soin complet : limage ou mise en forme, travail des cuticules, gommage aux sels marins, masque et modelage relaxant. Ce n’est pas une pause de dix minutes chez la manucure : c’est un vrai rituel « Spa », d’une heure ou plus.</p><p>Vous repartez avec des mains ou des pieds soignés, doux et détendus — et le sentiment d’avoir pris un moment pour vous.</p>'),
     ]], { width: 'narrow', paddingY: 'large' }),
     section('1-col', [[offers({
       eyebrow: 'Les deux rituels',
@@ -575,24 +728,18 @@ pages.push({
       secondaryText: 'Voir tous les tarifs',
       secondaryUrl: '/soins',
     }, IMG.regard),
-    section('2-col-40-60', [
-      [
-        heading('Les prestations', 2, { eyebrow: 'La carte du regard' }),
-        prose('<p>Une mise en valeur naturelle, sans excès : la teinture intensifie la couleur des cils et des sourcils, le réhaussement recourbe les cils naturels pour ouvrir le regard.</p>'),
+    section('1-col', [[
+      heading('Un regard mis en valeur, sans excès', 2, { eyebrow: 'Les prestations' }),
+      prose('<p>Ici, on cherche un résultat naturel : la teinture intensifie la couleur des cils et des sourcils, le réhaussement recourbe vos cils naturels pour ouvrir le regard. Chaque prestation se fait dans le calme de la cabine, sans précipitation.</p>'),
+    ]], { width: 'narrow', paddingY: 'large' }),
+    section('1-col', [[offers({
+      offers: [
+        offerFrom('teinture-cils'),
+        offerFrom('teinture-sourcils'),
+        offerFrom('duo-regard'),
+        offerFrom('rehaussement-cils'),
       ],
-      [pricelist({ items: priceItems(getCategory('regard').groups[0].items) })],
-    ], { paddingY: 'large', alignItems: 'top' }),
-    section('1-col', [[cards({
-      eyebrow: 'En détail',
-      title: 'Quelle prestation choisir ?',
-      cols: 3,
-      style: 'tinted',
-      items: [
-        { title: 'Teinture des cils ou des sourcils', text: `Teinture des cils (${chf(30)}) ou des sourcils (${chf(22)}) pour intensifier la couleur et structurer le regard.` },
-        { title: 'Duo Regard', text: `La teinture des cils et des sourcils réunies en une seule prestation, à ${chf(45)}.` },
-        { title: 'Réhaussement de cils', text: `Un réhaussement de cils à ${chf(100)}, pour recourber vos cils naturels et ouvrir le regard.` },
-      ],
-    })]], { background: 'warm', paddingY: 'large' }),
+    })]], { paddingY: 'small' }),
     section('2-col-equal', [
       [
         heading('Et les sourcils à la cire ?', 2, { eyebrow: 'Épilation' }),
@@ -653,6 +800,15 @@ pages.push({
       items: priceItems(epil.groups[0].items),
       footnote: 'Le maillot échancré ou intégral se réalise au sucre.',
     })]], { background: 'surface', paddingY: 'large', width: 'narrow' }),
+    section('1-col', [[steps({
+      eyebrow: 'Le déroulé',
+      title: 'Une épilation, pas à pas',
+      items: [
+        { title: 'On choisit la méthode', text: 'Cire douce ou pâte de sucre : on décide ensemble, selon la zone et la sensibilité de votre peau.' },
+        { title: 'L’épilation', text: 'Réalisée avec soin, dans des conditions hygiéniques et confortables, à la cire douce de haute qualité ou à la pâte de sucre naturelle.' },
+        { title: 'L’émulsion apaisante', text: 'Chaque épilation est suivie d’une application d’émulsion apaisante marine, pour que la peau retrouve son confort.' },
+      ],
+    })]], { background: 'warm', paddingY: 'large' }),
     section('1-col', [[offers({
       eyebrow: epil.groups[1].title,
       title: 'Les forfaits, simples et tout compris',
@@ -710,7 +866,7 @@ pages.push({
       [image(IMG.phytomer, { ratio: '4/5' })],
       [
         heading('Une maison familiale, née au bord de la mer', 2, { eyebrow: 'L’histoire' }),
-        prose('<p>Phytomer est une maison familiale bretonne, spécialisée dans les cosmétiques marins. Ses laboratoires travaillent des algues et des plantes marines cultivées ou récoltées au bord de la baie du Mont-Saint-Michel, selon des méthodes éco-responsables.</p><p>C’est la marque qu’Emmanuelle a choisie pour les soins du visage et du corps de sa cabine, pour la douceur de ses textures et l’exigence de ses formulations.</p>'),
+        prose('<p>Phytomer est née à Saint-Malo au début des années 1970, quand son fondateur, Jean Gédouin, a eu l’idée de transformer la richesse de la mer en soins pour la peau. Son premier produit, OLIGOMER®, un concentré minéral à base d’eau de mer et d’algues, est toujours l’actif signature de la marque. La maison est restée familiale et en est aujourd’hui à sa troisième génération.</p><p>Ses laboratoires travaillent des algues et des plantes marines cultivées ou récoltées au bord de la baie du Mont-Saint-Michel, selon des méthodes éco-responsables. C’est la marque qu’Emmanuelle a choisie pour les soins du visage et du corps de sa cabine, pour la douceur de ses textures, l’exigence de ses formulations et la précision de ses protocoles.</p>'),
       ],
     ], { alignItems: 'center', paddingY: 'large' }),
     section('1-col', [[cards({
