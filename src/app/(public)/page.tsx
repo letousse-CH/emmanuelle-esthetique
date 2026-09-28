@@ -4,6 +4,7 @@ import { getPageMeta, buildMetadata } from '../../services/pageMeta';
 import { fetchHomePage } from '../../services/homePage';
 import BlockPage from '../../components/blocks/BlockPage';
 import { SITE_CONFIG } from '../../config/site';
+import { DRAFT_PREVIEW } from '../../services/draftPreview';
 
 const SLUG = 'home';
 const DEFAULTS = {
@@ -16,7 +17,9 @@ const DEFAULTS = {
 };
 
 export async function generateMetadata() {
-  const meta = await getPageMeta(SLUG, DEFAULTS);
+  // Aperçu des brouillons : les réglages SEO du brouillon portent son slug préfixé.
+  const { page } = DRAFT_PREVIEW ? await fetchHomePage() : { page: null };
+  const meta = await getPageMeta(page ? page.slug : SLUG, DEFAULTS);
   return buildMetadata(SLUG, meta, `${SITE_CONFIG.url}/`);
 }
 

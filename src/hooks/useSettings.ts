@@ -11,6 +11,10 @@ export type { SettingKey };
 
 // Module-level cache: évite les requêtes dupliquées entre composants
 export const settingsCache = new Map<string, string>();
+
+// Aperçu local des brouillons (voir services/draftPreview.ts) : le menu du
+// brouillon remplace celui de la production, sans rien écrire dans ce dernier.
+const DRAFT_PREVIEW = process.env.NEXT_PUBLIC_DRAFT_PREVIEW === '1';
 let fetchPromise: Promise<void> | null = null;
 
 export function fetchAllSettings(): Promise<void> {
@@ -29,6 +33,10 @@ export function fetchAllSettings(): Promise<void> {
       for (const r of data as { key: string; value: string | null }[]) {
         const val = (r.value ?? '').trim();
         settingsCache.set(r.key, IMAGE_KEYS.has(r.key) && val ? proxyUrl(val) : val);
+      }
+      if (DRAFT_PREVIEW) {
+        const draftMenu = settingsCache.get('navigation_menu_draft');
+        if (draftMenu) settingsCache.set('navigation_menu', draftMenu);
       }
     }
   }).catch((err) => {

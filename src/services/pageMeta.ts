@@ -24,7 +24,8 @@ export function getSeoPrefix(slug: string): string {
   if (!slug) return '';
   if (slug === 'home') return 'seo_home';
   if (LEGACY_SLUGS.includes(slug)) return `seo_${slug}`;
-  return `seo_pages_${slug}`;
+  // Slug imbriqué (« soins/visage ») : la clé de réglage n'a pas de « / ».
+  return `seo_pages_${slug.replace(/\//g, '_')}`;
 }
 
 export async function getPageMeta(slug: string, defaults: Partial<PageMeta>): Promise<PageMeta> {

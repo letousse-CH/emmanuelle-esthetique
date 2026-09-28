@@ -141,8 +141,10 @@ export function buildBreadcrumbJsonLd(opts: {
   slug: string;
   pageTitle: string;
   siteUrl: string;
+  /** Niveaux intermédiaires d'un slug imbriqué (« soins » pour « soins/visage »). */
+  parents?: Array<{ name: string; slug: string }>;
 }): object | null {
-  const { slug, pageTitle, siteUrl } = opts;
+  const { slug, pageTitle, siteUrl, parents } = opts;
   // Home : pas de breadcrumb utile.
   if (slug === 'home' || slug === '') return null;
   // Slug inconnu : on renvoie Accueil > Titre uniquement.
@@ -150,7 +152,9 @@ export function buildBreadcrumbJsonLd(opts: {
   const items: Array<{ name: string; url: string }> = [
     { name: 'Accueil', url: `${siteUrl}/` },
   ];
-  if (category) {
+  if (parents?.length) {
+    for (const p of parents) items.push({ name: p.name, url: `${siteUrl}/${p.slug}` });
+  } else if (category) {
     items.push({
       name: category.name,
       url: `${siteUrl}/${category.slug}`,

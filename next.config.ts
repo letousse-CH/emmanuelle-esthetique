@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Second serveur de dev (`npm run dev:brouillons`) : dossier de build distinct
+  // pour cohabiter avec `npm run dev`. Non défini en production.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   images: {
     // `**.supabase.co` couvre le Storage de n'importe quel projet Supabase :
     // ne pas y recoder en dur l'hôte d'un projet précis.

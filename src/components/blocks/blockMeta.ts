@@ -232,6 +232,31 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { id: uid(), name: 'Soin visage', price: 'CHF 130', priceNote: '· 60 minutes', description: '', bullets: ['Diagnostic de peau', 'Massage manuel'], ctaText: 'Réserver ce soin', ctaUrl: '/contact' },
     ], footnote: 'Paiement en cabine : TWINT, espèces, cartes.' }),
   },
+  pricelist: {
+    type: 'pricelist', label: 'Carte des tarifs', description: 'Une ligne par soin : nom, durée, prix. Idéal pour la carte complète.', category: 'offre',
+    keywords: 'tarifs prix carte liste soins epilation tableau',
+    fields: [
+      eyebrow, title, intro,
+      { key: 'level', label: 'Niveau du titre', kind: 'select', style: true, help: 'Sous-titre (H3) quand la liste est rangée sous un titre de section.', options: [{ value: 2, label: 'Titre de section (H2)' }, { value: 3, label: 'Sous-titre (H3)' }] },
+      {
+        key: 'items', label: 'Soins', kind: 'list', itemLabel: 'Soin',
+        itemFields: [
+          { key: 'name', label: 'Nom', kind: 'text' },
+          { key: 'duration', label: 'Durée', kind: 'text', placeholder: '60 min' },
+          { key: 'price', label: 'Prix', kind: 'text', placeholder: 'CHF 90' },
+          { key: 'description', label: 'Description', kind: 'textarea' },
+        ],
+        newItem: () => ({ id: uid(), name: 'Nouveau soin', price: 'CHF' }),
+      },
+      { key: 'footnote', label: 'Note sous la liste', kind: 'textarea' },
+      { key: 'linkText', label: 'Texte du lien', kind: 'text' },
+      { key: 'linkUrl', label: 'Lien', kind: 'url' },
+    ],
+    create: () => ({ id: uid(), type: 'pricelist', title: 'Tarifs', items: [
+      { id: uid(), name: 'Premier soin', duration: '60 min', price: 'CHF 100' },
+      { id: uid(), name: 'Deuxième soin', price: 'CHF 50' },
+    ] }),
+  },
   faq: {
     type: 'faq', label: 'Questions fréquentes', description: 'Questions dépliables (données structurées Google incluses).', category: 'preuve',
     keywords: 'faq questions reponses accordeon',
@@ -321,6 +346,12 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { key: 'hours', label: 'Horaires', kind: 'text' },
     ],
     create: () => ({ id: uid(), type: 'contact', title: 'Coordonnées' }),
+  },
+  contact_form: {
+    type: 'contact_form', label: 'Formulaire de contact', description: 'Le formulaire d\'envoi de message (réponse par e-mail).', category: 'action',
+    keywords: 'formulaire contact message ecrire rendez-vous',
+    fields: [],
+    create: () => ({ id: uid(), type: 'contact_form' }),
   },
   spacer: {
     type: 'spacer', label: 'Espace', description: 'Un espace vertical.', category: 'structure', keywords: 'espace marge vide',

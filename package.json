@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --webpack -p 5173",
+    "dev:brouillons": "DRAFT_PREVIEW=1 NEXT_PUBLIC_DRAFT_PREVIEW=1 NEXT_DIST_DIR=.next-drafts next dev --webpack -p 5180",
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",

@@ -59,7 +59,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       // Les pages dynamiques sont servies à la racine (/{slug}) via la route
       // attrape-tout [slug]. On exclut uniquement les slugs déjà couverts par
       // les routes statiques ci-dessus pour éviter un double listing.
-      const staticCoveredSlugs = ['home', 'mentions-legales'];
+      const staticCoveredSlugs = ['home', 'contact', 'mentions-legales'];
       dynamicPageRoutes = dynamicPages
         .filter(p => !staticCoveredSlugs.includes(p.slug))
         .map(p => ({

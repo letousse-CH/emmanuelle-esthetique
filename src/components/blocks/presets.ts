@@ -93,6 +93,11 @@ export const SECTION_PRESETS: SectionPreset[] = [
     build: () => withProps(createSection('1-col', [createBlock('offers')]), { width: 'contained' }),
   },
   {
+    id: 'pricelist', label: 'Carte des tarifs', hint: 'Une ligne par soin : nom, durée, prix', category: 'offre',
+    keywords: 'tarifs prix carte liste soins epilation',
+    build: () => withProps(createSection('1-col', [createBlock('pricelist')]), { width: 'narrow' }),
+  },
+  {
     id: 'faq', label: 'Questions fréquentes', hint: 'Accordéon, compris par Google', category: 'confiance',
     keywords: 'faq questions reponses',
     build: () => withProps(createSection('1-col', [createBlock('faq')]), {}),
@@ -126,6 +131,11 @@ export const SECTION_PRESETS: SectionPreset[] = [
     id: 'contact', label: 'Coordonnées', hint: 'Adresse, téléphone, horaires', category: 'action',
     keywords: 'contact adresse telephone',
     build: () => withProps(createSection('1-col', [createBlock('contact')]), { width: 'contained' }),
+  },
+  {
+    id: 'contact-form', label: 'Formulaire de contact', hint: 'Message envoyé par e-mail', category: 'action',
+    keywords: 'formulaire contact message ecrire',
+    build: () => withProps(createSection('1-col', [createBlock('contact_form')]), { width: 'narrow' }),
   },
   {
     id: 'marquee', label: 'Bandeau défilant', hint: 'Une ligne de mots qui défile', category: 'contenu',

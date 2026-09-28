@@ -192,6 +192,18 @@
 .pb-offer .pb-btn { margin-top: auto; align-self: flex-start; }
 .pb-foot { font-size: .85rem; color: var(--pb-fg-muted); margin-top: 1.25rem; }
 
+.pb-prices { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
+.pb-price-row { padding: 1rem 0; border-bottom: 1px solid var(--pb-line); }
+.pb-price-row:first-child { border-top: 1px solid var(--pb-line); }
+.pb-price-main { display: flex; align-items: baseline; gap: .6rem; }
+.pb-price-name { font-family: var(--font-serif); font-size: 1.15rem; font-weight: 600; color: var(--pb-fg); line-height: 1.35; }
+.pb-price-dur { font-size: .82rem; color: var(--pb-fg-muted); white-space: nowrap; }
+.pb-price-dots { flex: 1; min-width: 1rem; border-bottom: 1px dotted var(--pb-line); transform: translateY(-.3em); }
+.pb-price-val { font-family: var(--font-serif); font-size: 1.15rem; font-weight: 700; color: var(--pb-primary); white-space: nowrap; }
+.pb-tone-light .pb-price-val { color: var(--pb-fg); }
+.pb-price-desc { margin-top: .4rem; max-width: 46rem; color: var(--pb-fg-muted); font-size: .95rem; line-height: 1.7; font-weight: 300; }
+@media (max-width: 560px) { .pb-price-main { flex-wrap: wrap; } .pb-price-name { flex-basis: 100%; } .pb-price-dots { display: none; } .pb-price-dur { margin-right: auto; } }
+
 .pb-check { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
 .pb-check li { display: flex; gap: .7rem; align-items: flex-start; line-height: 1.55; }
 .pb-check li::before { content: ""; flex: none; width: 1.1rem; height: 1.1rem; margin-top: .2rem; border-radius: 999px; background: color-mix(in srgb, var(--pb-accent) 30%, transparent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%2312283A' stroke-width='2.4'%3E%3Cpath d='M5 10.5l3.2 3L15 7'/%3E%3C/svg%3E") center / 70% no-repeat; }
@@ -289,8 +301,18 @@
 [data-site-theme] .pb-tone-light :is(h1, h2, h3, h4, .pb-h, .pb-quote, .pb-stat-v, .pb-card-title, summary):not(.pb-offer *) { color: var(--pb-fg) !important; }
 [data-site-theme] .pb-tone-light :is(p, li, dd, dt, .pb-lead, .pb-prose, .pb-card-text, .pb-faq-a, figcaption, cite):not(.pb-offer *) { color: var(--pb-fg-muted) !important; }
 [data-site-theme] .pb-tone-light .pb-eyebrow { color: var(--pb-fg) !important; }
+[data-site-theme] .pb-tone-light .pb-price-val { color: var(--pb-fg) !important; }
 [data-site-theme] .pb-page .pb-offer-price { font-size: clamp(2rem, 4vw, 2.75rem); line-height: 1; }
 [data-site-theme] .pb-page .pb-offer-price small { font-size: .95rem; }
 [data-site-theme] .pb-page .pb-stat-v { font-size: clamp(2rem, 4vw, 3rem); line-height: 1; }
 [data-site-theme] .pb-page .pb-lead { font-size: clamp(1.05rem, 1.6vw, 1.2rem); }
 [data-site-theme] .pb-page .pb-quote { font-size: clamp(1.4rem, 2.6vw, 2rem); line-height: 1.35; }
+
+/* Boutons sur fond sombre ou lagon : « Design & Style » impose des boutons
+   marine (invisibles sur un fond marine). On retourne les couleurs, avec une
+   spécificité supérieure, dans les sections à texte clair. */
+[data-site-theme] .pb-tone-light .pb-btn[data-btn="primary"] { background-color: #fff !important; color: var(--pb-primary) !important; border-color: #fff !important; }
+[data-site-theme] .pb-tone-light .pb-btn[data-btn="primary"]:hover { background-color: transparent !important; color: #fff !important; border-color: #fff !important; }
+[data-site-theme] .pb-tone-light .pb-btn[data-btn="secondary"] { background-color: transparent !important; color: #fff !important; border-color: rgba(255, 255, 255, .85) !important; }
+[data-site-theme] .pb-tone-light .pb-btn[data-btn="secondary"]:hover { background-color: #fff !important; color: var(--pb-primary) !important; border-color: #fff !important; }
+[data-site-theme] .pb-tone-light .pb-link { color: #fff !important; }

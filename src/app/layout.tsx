@@ -4,6 +4,7 @@ import UniversalPageEditorGate from '../components/pagebuilder/UniversalPageEdit
 import ScrollAnimations from '../components/ScrollAnimations';
 import { getSettingsServer } from '../services/settingsServer';
 import { getBusinessInfoServer, BusinessInfo, SITE_CONFIG } from '../config/site';
+import { flatCarte } from '../constants/carteSoins';
 
 // ISR : le shell global (favicon, liens sociaux, Schema.org) est mis en cache
 // et revalidé toutes les heures au lieu d'un SSR par requête. Les composants du
@@ -82,98 +83,21 @@ interface LocalExtras {
 }
 
 // Catalogue d'offres — signal riche pour Google Rich Results et un vrai
-// "menu de prestations" que les moteurs IA peuvent citer par soin. La liste
-// vit ici parce qu'elle est stable ; toute nouvelle URL/prix se met à jour
-// au même endroit que le seeder Emmanuelle.
+// "menu de prestations" que les moteurs IA peuvent citer par soin. Il découle
+// de la carte des soins (constants/carteSoins.ts), source unique des prix :
+// chaque soin pointe vers la page pilier de sa catégorie.
 function buildOfferCatalog(siteUrl: string) {
-  const offers: Array<{
-    name: string;
-    url: string;
-    price: string;              // valeur brute (min)
-    category: string;
-  }> = [
-    // Soins du visage
-    {
-      name: 'Soin visage signature Phytomer',
-      url: `${siteUrl}/soin-visage-signature-palezieux`,
-      price: '130',
-      category: 'Soins du visage',
-    },
-    {
-      name: 'Soin visage anti-âge',
-      url: `${siteUrl}/soin-anti-age-palezieux`,
-      price: '170',
-      category: 'Soins du visage',
-    },
-    {
-      name: 'Soin visage peau sensible',
-      url: `${siteUrl}/soin-visage-peau-sensible-palezieux`,
-      price: '150',
-      category: 'Soins du visage',
-    },
-    // Soins du corps
-    {
-      name: 'Massage relaxant aux huiles chaudes',
-      url: `${siteUrl}/massage-relaxant-huiles-chaudes-palezieux`,
-      price: '120',
-      category: 'Soins du corps',
-    },
-    {
-      name: 'Head Spa · massage du cuir chevelu',
-      url: `${siteUrl}/head-spa-palezieux`,
-      price: '70',
-      category: 'Soins du corps',
-    },
-    // Beauté du regard
-    {
-      name: 'Mise en forme des sourcils',
-      url: `${siteUrl}/sourcils-mise-en-forme-palezieux`,
-      price: '35',
-      category: 'Beauté du regard',
-    },
-    {
-      name: 'Teinture cils & sourcils',
-      url: `${siteUrl}/teinture-cils-sourcils-palezieux`,
-      price: '30',
-      category: 'Beauté du regard',
-    },
-    {
-      name: 'Rehaussement de cils',
-      url: `${siteUrl}/rehaussement-cils-palezieux`,
-      price: '85',
-      category: 'Beauté du regard',
-    },
-    {
-      name: 'Cours de maquillage sur-mesure',
-      url: `${siteUrl}/cours-de-maquillage-palezieux`,
-      price: '110',
-      category: 'Beauté du regard',
-    },
-    // Épilation
-    {
-      name: 'Épilation à la cire au sucre',
-      url: `${siteUrl}/epilation-sucre-palezieux`,
-      price: '15',
-      category: 'Épilation',
-    },
-    // Ateliers
-    {
-      name: 'Atelier Gua Sha visage',
-      url: `${siteUrl}/atelier-gua-sha-palezieux`,
-      price: '90',
-      category: "Ateliers d'auto-soin",
-    },
-    {
-      name: 'Atelier Glowing Face',
-      url: `${siteUrl}/atelier-glowing-face-palezieux`,
-      price: '110',
-      category: "Ateliers d'auto-soin",
-    },
-  ];
+  const offers = flatCarte().flatMap((item) => {
+    const url = `${siteUrl}${item.category.path}`;
+    const prices = item.variants?.length
+      ? item.variants.map((v) => ({ name: `${item.name} (${v.duration})`, price: v.price }))
+      : [{ name: item.name, price: item.price }];
+    return prices.map((p) => ({ name: p.name, price: String(p.price), url, category: item.category.label, description: item.description }));
+  });
 
   return {
     '@type': 'OfferCatalog',
-    name: 'Prestations · Emmanuelle Esthétique',
+    name: 'Carte des soins · Emmanuelle Esthétique',
     itemListElement: offers.map((o) => ({
       '@type': 'Offer',
       name: o.name,
@@ -190,6 +114,7 @@ function buildOfferCatalog(siteUrl: string) {
         '@type': 'Service',
         name: o.name,
         url: o.url,
+        ...(o.description ? { description: o.description } : {}),
         provider: { '@id': `${siteUrl}/#organization` },
         areaServed: 'Palézieux-Gare',
       },

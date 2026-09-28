@@ -73,6 +73,13 @@ export interface OfferItem {
 }
 export interface OffersBlock { id: string; type: 'offers'; eyebrow?: string; title?: string; intro?: string; offers: OfferItem[]; footnote?: string }
 
+export interface PriceItem { id: string; name: string; duration?: string; price: string; description?: string }
+/** Liste de tarifs compacte (une ligne par prestation) — la « carte » d'un institut. */
+export interface PriceListBlock {
+  id: string; type: 'pricelist'; eyebrow?: string; title?: string; intro?: string; level?: 2 | 3;
+  items: PriceItem[]; footnote?: string; linkText?: string; linkUrl?: string;
+}
+
 export interface ChecklistBlock { id: string; type: 'checklist'; title?: string; items: string[] }
 export interface CalloutBlock { id: string; type: 'callout'; eyebrow?: string; title: string; text?: string; ctaText?: string; ctaUrl?: string }
 export interface StatItem { id: string; value: string; label: string }
@@ -83,6 +90,8 @@ export interface GalleryImage { id: string; url: string; alt: string; caption?: 
 export interface GalleryBlock { id: string; type: 'gallery'; title?: string; variant: 'grid' | 'carousel' | 'masonry'; cols?: 2 | 3 | 4; images: GalleryImage[] }
 export interface MarqueeBlock { id: string; type: 'marquee'; items: string[]; separator?: string; speed?: 'slow' | 'normal' | 'fast'; italic?: boolean }
 export interface ContactBlock { id: string; type: 'contact'; title?: string; text?: string; address?: string; phone?: string; email?: string; hours?: string }
+/** Formulaire de contact du site (envoi par e-mail via /api/contact). */
+export interface ContactFormBlock { id: string; type: 'contact_form' }
 export interface GoogleReviewsBlock { id: string; type: 'google_reviews'; title?: string; max?: number }
 
 /**
@@ -95,8 +104,8 @@ export interface LegacySectionBlock { id: string; type: 'legacy_section'; sectio
 export type ContentBlock =
   | HeadingBlock | TextBlock | ImageBlock | ButtonBlock | QuoteBlock | VideoBlock
   | SpacerBlock | DividerBlock | HeroBlock | CardsBlock | FaqBlock | StepsBlock
-  | OffersBlock | ChecklistBlock | CalloutBlock | StatsBlock | TestimonialsBlock
-  | GalleryBlock | MarqueeBlock | ContactBlock | GoogleReviewsBlock | LegacySectionBlock;
+  | OffersBlock | PriceListBlock | ChecklistBlock | CalloutBlock | StatsBlock | TestimonialsBlock
+  | GalleryBlock | MarqueeBlock | ContactBlock | ContactFormBlock | GoogleReviewsBlock | LegacySectionBlock;
 
 export type BlockType = ContentBlock['type'];
 

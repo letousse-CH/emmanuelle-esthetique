@@ -9,6 +9,8 @@ import { fetchPageBySlug } from '../../../services/dynamicPages';
 import { getSettingsServer } from '../../../services/settingsServer';
 import { buildMetadata, getPageMeta } from '../../../services/pageMeta';
 import { buildBreadcrumbJsonLd } from '../../../utils/pageJsonLd';
+import BlockPage from '../../../components/blocks/BlockPage';
+import { isBlocksPage } from '../../../components/blocks/pageContent';
 
 /**
  * Page de contact.
@@ -34,7 +36,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const page = await fetchPageBySlug(CONTACT_SLUG, false);
   const businessName = (await getSettingsServer(['business_name'])).business_name || SITE_CONFIG.name;
 
-  const meta = await getPageMeta(CONTACT_SLUG, {
+  const meta = await getPageMeta(page?.slug ?? CONTACT_SLUG, {
     title: `${page?.title ?? 'Contact'} | ${businessName}`,
     description: SITE_CONFIG.seoDefaults.description,
     og_title: `${page?.title ?? 'Contact'} | ${businessName}`,
@@ -66,7 +68,9 @@ export default async function ContactPage() {
         {(!page.show_header || !page.show_footer) && (
           <PageChrome showHeader={page.show_header ?? true} showFooter={page.show_footer ?? true} />
         )}
-        <DynamicPageClient initialPage={page} slug={CONTACT_SLUG} />
+        {/* Page enregistrée avec le page builder v2 : rendu serveur par blocs.
+            Sinon (ancien format Studio), l'ancien rendu reste en place. */}
+        {isBlocksPage(page) ? <BlockPage page={page} /> : <DynamicPageClient initialPage={page} slug={CONTACT_SLUG} />}
       </>
     );
   }

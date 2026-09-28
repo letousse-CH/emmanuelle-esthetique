@@ -10,13 +10,14 @@ import React from 'react';
 import type {
   ContentStructure, ContentSection, ContentColumn, ContentBlock, Align,
   HeadingBlock, TextBlock, ImageBlock, ButtonBlock, QuoteBlock, VideoBlock,
-  HeroBlock, CardsBlock, FaqBlock, StepsBlock, OffersBlock, ChecklistBlock,
+  HeroBlock, CardsBlock, FaqBlock, StepsBlock, OffersBlock, PriceListBlock, ChecklistBlock,
   CalloutBlock, StatsBlock, TestimonialsBlock, GalleryBlock, MarqueeBlock,
   ContactBlock, GoogleReviewsBlock,
 } from './types';
 import { sanitizeHtml } from './sanitize';
 import LegacySection from './LegacySection';
 import GoogleReviews from '../GoogleReviews';
+import ContactForm from '../ContactForm';
 
 export type EditorSelection =
   | { kind: 'section'; sectionId: string }
@@ -256,6 +257,29 @@ function OffersView({ b, ctx }: { b: OffersBlock; ctx: Ctx }) {
   );
 }
 
+function PriceListView({ b, ctx }: { b: PriceListBlock; ctx: Ctx }) {
+  return (
+    <div className="pb-pricelist">
+      <Head eyebrow={b.eyebrow} title={b.title} intro={b.intro} level={b.level === 3 ? 3 : 2} ctx={ctx} />
+      <ul className="pb-prices">
+        {b.items.map((it, i) => (
+          <li key={it.id} className="pb-price-row">
+            <div className="pb-price-main">
+              <span className="pb-price-name" {...f(ctx, `items.${i}.name`)}>{it.name}</span>
+              {it.duration && <span className="pb-price-dur" {...f(ctx, `items.${i}.duration`)}>{it.duration}</span>}
+              <span className="pb-price-dots" aria-hidden />
+              <span className="pb-price-val" {...f(ctx, `items.${i}.price`)}>{it.price}</span>
+            </div>
+            {it.description && <p className="pb-price-desc" {...f(ctx, `items.${i}.description`)}>{it.description}</p>}
+          </li>
+        ))}
+      </ul>
+      {b.footnote && <p className="pb-foot" {...f(ctx, 'footnote')}>{b.footnote}</p>}
+      {b.linkText && <div style={{ marginTop: '1.5rem' }}><Btn text={b.linkText} url={b.linkUrl} variant="link" ctx={ctx} field="linkText" /></div>}
+    </div>
+  );
+}
+
 function ChecklistView({ b, ctx }: { b: ChecklistBlock; ctx: Ctx }) {
   return (
     <div>
@@ -409,6 +433,7 @@ function BlockView({ block, ctx }: { block: ContentBlock; ctx: Ctx }) {
     case 'cards': return <CardsView b={block} ctx={ctx} />;
     case 'steps': return <StepsView b={block} ctx={ctx} />;
     case 'offers': return <OffersView b={block} ctx={ctx} />;
+    case 'pricelist': return <PriceListView b={block} ctx={ctx} />;
     case 'checklist': return <ChecklistView b={block} ctx={ctx} />;
     case 'faq': return <FaqView b={block} ctx={ctx} />;
     case 'callout': return <CalloutView b={block} ctx={ctx} />;
@@ -417,6 +442,7 @@ function BlockView({ block, ctx }: { block: ContentBlock; ctx: Ctx }) {
     case 'gallery': return <GalleryView b={block} ctx={ctx} />;
     case 'marquee': return <MarqueeView b={block} />;
     case 'contact': return <ContactView b={block} ctx={ctx} />;
+    case 'contact_form': return <div className="pb-contact-form"><ContactForm /></div>;
     case 'google_reviews': return <GoogleReviewsView b={block} ctx={ctx} />;
     case 'legacy_section': return <LegacySection section={block.section} />;
     default: return null;

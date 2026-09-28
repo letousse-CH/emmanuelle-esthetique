@@ -1,8 +1,11 @@
 # Emmanuelle Esthétique — Projet Dev
 
-Site web d'Emmanuelle : institut de beauté et bien-être **à domicile** à
-Palézieux (Vaud, Suisse). Soins du visage, Head Spa, massages relaxants, beauté
-du regard, ateliers d'auto-soin (Gua Sha, Glowing Face) et bons cadeaux.
+Site web d'Emmanuelle : institut de beauté et bien-être en **cabine privée** à
+Palézieux-Gare (Vaud, Suisse), autour de la cosmétique marine **Phytomer**.
+Soins du visage, rituels et massages du corps, mains et pieds, beauté du regard,
+épilation cire douce et sucre, bons cadeaux. La carte de référence est
+`src/constants/carteSoins.ts` (septembre 2026) — ni Head Spa ni ateliers ni cours
+de maquillage n'y figurent.
 
 ⚠️ Le `.env` de ce dépôt a été copié depuis le projet d'origine et peut encore
 pointer sur **une autre base Supabase**. Vérifier `NEXT_PUBLIC_SUPABASE_URL`
@@ -346,6 +349,58 @@ openssl rand -hex 32
 
 Ne jamais le faire tourner ensuite : cela invaliderait les liens des e-mails
 déjà partis.
+
+## Architecture du site — refonte en silo (2026-09-28)
+
+Le site tient en **11 pages** rangées en silo, au lieu de 18 pages à plat :
+
+```
+/                      Accueil
+/soins                 La carte des soins & tarifs (hub du silo)
+  /soins/visage          Soins du visage Phytomer
+  /soins/corps           Rituels & massages du corps
+  /soins/mains-et-pieds  Beauté des mains & des pieds
+  /soins/regard          Beauté du regard
+  /soins/epilation       Épilation cire douce & sucre
+/phytomer              La cosmétique marine (page de soutien visage/corps)
+/a-propos  /contact  /bon-cadeau  /mentions-legales
+```
+
+Règles : une page pilier par catégorie de la carte (pas une page par soin —
+chaque soin a son titre, sa durée, son prix et sa FAQ dans sa page pilier) ;
+chaque pilier renvoie au hub `/soins`, à `/phytomer` et à une page voisine
+pertinente, jamais en vrac. Le blog (module Blog) sert aux articles de soutien
+futurs, rattachés à un pilier.
+
+- **URL à plusieurs niveaux** : la route est `(public)/[...slug]`. Le slug stocké
+  dans `dynamic_pages` est le chemin complet (`soins/visage`). La clé SEO d'un
+  slug imbriqué remplace `/` par `_` (`seo_pages_soins_visage_title`).
+- **Une seule source pour la carte** : `src/constants/carteSoins.ts` alimente le
+  script de pages, le catalogue Schema.org (`app/layout.tsx`) et `llms.txt`.
+  Changer un prix : le modifier là **et** dans la page concernée du page builder
+  (les pages gardent leur texte en base).
+- **Blocs ajoutés** : `pricelist` (une ligne par soin : nom, durée, prix) et
+  `contact_form` (formulaire de message). `/contact` passe par `BlockPage` quand
+  la page est en v2.
+- **Anciennes URL** : `src/config/legacyRedirects.ts`. La route `[...slug]`
+  redirige en 301 **uniquement** quand aucune page publiée ne porte le slug
+  demandé — donc rien ne change tant que les anciennes pages sont en ligne.
+- **Brouillons** : les pages de la refonte sont enregistrées `brouillon/<slug>`,
+  non publiées. `npm run dev:brouillons` (port 5180, dossier de build `.next-drafts`)
+  les sert à l'URL définitive avec le menu `navigation_menu_draft` ; ne jamais
+  définir `DRAFT_PREVIEW` sur Netlify. Après un changement de menu en base,
+  **redémarrer** ce serveur (le cache des réglages est en mémoire côté serveur).
+  Ce serveur fait modifier `tsconfig.json` et `next-env.d.ts` : ne pas les
+  commiter.
+- **Reconstruire les brouillons** : `npx tsx scripts/seed-site-v2.ts --write`
+  (écrase les brouillons : à ne plus lancer une fois qu'Emmanuelle les retouche).
+- **Mise en ligne** : `node scripts/publish-site-v2.mjs` (essai par défaut,
+  `--write` pour appliquer, `--rollback <fichier> --write` pour revenir). Lire
+  l'ordre des opérations en tête du script : fusionner le code avant de publier.
+
+⚠️ Le bouton « Pages par défaut » de `/admin/pages` (`seederEmmanuelle.ts`) recrée
+**l'ancienne** arborescence (Head Spa, ateliers, anciens tarifs) : ne pas l'utiliser
+après la mise en ligne.
 
 ## Contenu des pages — page builder v2 (2026-09-26)
 

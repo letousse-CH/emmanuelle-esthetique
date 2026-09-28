@@ -6,6 +6,8 @@ import AgentChatWidget from '../../components/AgentChatWidget';
 import { getSettingsServer } from '../../services/settingsServer';
 import { isModuleEnabledServer } from '../../config/modules';
 import { fetchPublicAgent } from '../../services/agents';
+import { DRAFT_PREVIEW } from '../../services/draftPreview';
+import type { SettingKey } from '../../constants/settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +34,11 @@ export default async function PublicLayout({
     'business_owner',
     'business_address_city',
     'business_address_region',
+    ...(DRAFT_PREVIEW ? (['navigation_menu_draft'] as SettingKey[]) : []),
   ]);
+  if (DRAFT_PREVIEW && settings['navigation_menu_draft' as SettingKey]) {
+    settings.navigation_menu = settings['navigation_menu_draft' as SettingKey];
+  }
 
   // Le widget de conversation n'apparaît que si le module est actif *et* qu'un
   // agent est réellement publié : un bouton qui ouvrirait sur le vide serait
