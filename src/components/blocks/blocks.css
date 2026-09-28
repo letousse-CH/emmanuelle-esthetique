@@ -366,6 +366,8 @@
  * conflit avec les `transform` existants (survols, animation de section).
  */
 :root {
+  /* Zoom des images au début de leur apparition ; elles se posent ensuite à 1.12 (marge de la parallaxe). */
+  --pb-zoom-start: 1.18;
   --pb-ease: cubic-bezier(.16, 1, .3, 1);
   /* Survols : départ et arrivée en douceur, sans le « claquement » de la courbe d'apparition. */
   --pb-ease-soft: cubic-bezier(.25, .6, .3, 1);
@@ -428,8 +430,8 @@
     will-change: translate;
     transition: scale 2s var(--pb-ease) var(--bd, 0s);
   }
-  & .pb-img:not(.is-in) > img, & .pb-img:not(.is-in) .pb-img-frame > img { scale: 1.32; }
-  & .pb-section:not(.is-seen) .pb-bgimg > img { scale: 1.32; }
+  & .pb-img:not(.is-in) > img, & .pb-img:not(.is-in) .pb-img-frame > img { scale: var(--pb-zoom-start, 1.18); }
+  & .pb-section:not(.is-seen) .pb-bgimg > img { scale: var(--pb-zoom-start, 1.18); }
 
   /* Séparateurs : le filet se trace. */
   & .pb-col > .pb-divider { transform-origin: left; transition: scale 1.4s var(--pb-ease) var(--bd, 0s); }
