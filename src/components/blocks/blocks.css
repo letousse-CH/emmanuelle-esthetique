@@ -208,7 +208,10 @@
 }
 .pb-carousel-track::-webkit-scrollbar { display: none; }
 .pb-carousel-track > .pb-card { scroll-snap-align: start; flex: 0 0 min(80%, 22rem); }
-.pb-carousel-draggable { cursor: grab; touch-action: pan-y; }
+/* `pan-x` : le doigt défile la piste horizontalement (natif) ; un balayage vertical
+   remonte à la page (scroll chaining) au lieu d'être capturé ici. `pan-y` aurait
+   fait l'inverse et bloqué le défilement tactile du carrousel — c'était le bug. */
+.pb-carousel-draggable { cursor: grab; touch-action: pan-x; }
 .pb-carousel-draggable:active { cursor: grabbing; }
 .pb-cards-carousel.pb-cols-2 .pb-carousel-track > .pb-card,
 .pb-cards-carousel.pb-cols-3 .pb-carousel-track > .pb-card,

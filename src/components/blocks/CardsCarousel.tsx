@@ -44,6 +44,22 @@ export default function CardsCarousel({ children, editable }: Props) {
     };
   }, []);
 
+  // Colle le bord droit de la piste au bord de l'écran, quelle que soit la largeur de
+  // section choisie (étroite, contenue, large…) : mesuré, pas calculé, pour rester
+  // juste même si la gouttière ou la largeur de conteneur change depuis l'admin.
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const updateBleed = () => {
+      el.style.marginRight = '0px';
+      const gap = Math.max(0, window.innerWidth - el.getBoundingClientRect().right);
+      el.style.marginRight = gap ? `-${gap}px` : '0px';
+    };
+    updateBleed();
+    window.addEventListener('resize', updateBleed);
+    return () => window.removeEventListener('resize', updateBleed);
+  }, []);
+
   function goTo(i: number) {
     const el = trackRef.current;
     if (!el) return;
