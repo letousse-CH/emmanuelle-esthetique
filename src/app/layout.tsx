@@ -58,6 +58,12 @@ export async function generateMetadata() {
     twitter: {
       card: "summary_large_image",
     },
+    // Balise de vérification Google Search Console. Vide tant que
+    // GOOGLE_SITE_VERIFICATION n'est pas renseigné : la balise n'apparaît
+    // simplement pas, sans casser le <head>.
+    verification: process.env.GOOGLE_SITE_VERIFICATION
+      ? { google: process.env.GOOGLE_SITE_VERIFICATION }
+      : undefined,
   };
 }
 

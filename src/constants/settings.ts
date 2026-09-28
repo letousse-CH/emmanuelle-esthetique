@@ -140,11 +140,16 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   // adresse est saisie.
   author_link: '',
 
-  // Liens de bas de page (mentions légales, CGV, confidentialité…). Vide à
-  // l'installation, pour la même raison que `navigation_menu` : trois liens
-  // codés en dur renvoyaient vers des pages que ce site n'a pas forcément.
-  // S'édite depuis /admin/menu.
-  footer_legal_links: '[]',
+  // Liens de bas de page (mentions légales, CGV, confidentialité…). Seules
+  // les mentions légales et la politique de cookies sont ici par défaut : ce
+  // sont des routes fixes du template (`src/app/(public)/mentions-legales`,
+  // `.../politique-cookies`), présentes sur tout site issu du template — à la
+  // différence de `navigation_menu`, resté vide, qui pointerait vers des
+  // pages de contenu que ce site n'a pas forcément. S'édite depuis /admin/menu.
+  footer_legal_links: JSON.stringify([
+    { name: 'Mentions légales', path: '/mentions-legales' },
+    { name: 'Politique de cookies', path: '/politique-cookies' },
+  ]),
 
   navigation_menu: JSON.stringify([
     // Vide à l'installation : les entrées de menu se créent depuis

@@ -3,6 +3,8 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import PageViewTracker from '../../components/PageViewTracker';
 import AgentChatWidget from '../../components/AgentChatWidget';
+import CookieConsent from '../../components/CookieConsent';
+import GoogleAnalytics from '../../components/GoogleAnalytics';
 import { getSettingsServer } from '../../services/settingsServer';
 import { isModuleEnabledServer } from '../../config/modules';
 import { fetchPublicAgent } from '../../services/agents';
@@ -54,6 +56,8 @@ export default async function PublicLayout({
     <div data-site-theme className="contents">
       <GlobalStyles />
       <PageViewTracker />
+      <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
+      <CookieConsent />
       <Navbar
         initialVariant={settings.header_variant}
         initialLogoUrl={settings.global_logo}
