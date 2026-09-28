@@ -50,6 +50,8 @@ const GUIDE_MIN_HEIGHT = 420;
 const GUIDE_TIP = 0.75;
 /** Doit rester égal au `bottom` du filet dans blocks.css : le filet s'arrête sur l'algue. */
 const GUIDE_INSET = 58;
+/** Doit rester égal à `--pb-guide-top` : le début du filet est décalé du haut de la section. */
+const GUIDE_TOP = 56;
 
 interface Group { root: HTMLElement; items: HTMLElement[]; speeds: number[]; amp: number }
 
@@ -174,8 +176,8 @@ export default function MotionLayer() {
         if (!el.isConnected) { guides.delete(el); return; }
         const box = el.getBoundingClientRect();
         if (box.bottom < -50 || box.top > vh + 50) return;
-        const len = Math.max(1, box.height - GUIDE_INSET);
-        const drawn = Math.max(0, Math.min(len, vh * GUIDE_TIP - box.top));
+        const len = Math.max(1, box.height - GUIDE_TOP - GUIDE_INSET);
+        const drawn = Math.max(0, Math.min(len, vh * GUIDE_TIP - box.top - GUIDE_TOP));
         el.style.setProperty('--gp', (drawn / len).toFixed(4));
         el.classList.toggle('pb-guide-done', drawn >= len - 1);
       });

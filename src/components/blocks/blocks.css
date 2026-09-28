@@ -449,20 +449,23 @@
 }
 
 /* Ligne guide : onde verticale en fond de section, tracée par MotionLayer (--gp : 0 → 1).
- * Elle se plante dans une algue en bas de section, qui se déploie quand le tracé arrive.
- * `bottom` du filet = MotionLayer.GUIDE_INSET (58px) : le sommet de l'algue doit le rejoindre
- * (algue : --pb-guide-ab + --pb-guide-a ≈ 58px).
+ * Le tracé démarre à distance du haut de la section (--pb-guide-top), avec une opacité très faible qui
+ * gagne en intensité sur --pb-guide-fade, et se plante dans une algue en bas de section qui se déploie
+ * à l'arrivée. Pas de tracé « en attente » : seule la part déjà dessinée se voit.
+ * Repères communs avec MotionLayer : GUIDE_TOP = --pb-guide-top (56px), GUIDE_INSET = 58px
+ * (= algue --pb-guide-a + --pb-guide-ab, le sommet de l'algue rejoint le bas du filet).
  *
- * Mobile : version réduite, glissée dans la gouttière (≈ 20px) pour ne pas courir sur le texte.
+ * Mobile : version réduite, droite verticale glissée dans la gouttière.
  * Bureau (≥ 768px) : onde large à 15 % du bord droit, dans les marges et entre les colonnes. */
 .pb-section.pb-guide {
-  --pb-guide-x: 14px;      /* axe de l'onde, depuis le bord droit */
+  --pb-guide-x: 14px;      /* axe, depuis le bord droit */
   --pb-guide-w: 20px;      /* largeur du motif */
   --pb-guide-len: 214px;   /* longueur d'onde */
+  --pb-guide-top: 56px;    /* décalage avant le début du tracé */
+  --pb-guide-fade: 220px;  /* distance sur laquelle le début du tracé gagne en intensité */
   --pb-guide-a: 28px;      /* taille de l'algue */
   --pb-guide-ab: 30px;     /* algue : distance au bas de la section */
   --pb-guide-on: color-mix(in srgb, var(--pb-accent) 60%, transparent);
-  --pb-guide-off: color-mix(in srgb, var(--pb-accent) 16%, transparent);
 }
 @media (min-width: 768px) {
   .pb-section.pb-guide {
@@ -473,18 +476,22 @@
     --pb-guide-ab: 20px;
   }
 }
-/* Le filet est une onde : un motif sinusoïdal sert de masque, et le dégradé dessous colore la
-   part déjà tracée (--gp). Motif calé en bas pour que l'onde arrive dans l'axe de l'algue ;
-   la couleur suit --pb-accent. */
+/* Le filet est une onde : un motif sinusoïdal sert de masque, et le dégradé dessous colore la part déjà
+   tracée (--gp), presque transparent à son début. Motif calé en bas pour que l'onde arrive dans l'axe
+   de l'algue ; la couleur suit --pb-accent. */
 .pb-section.pb-guide::before {
   content: ""; position: absolute; z-index: 0; pointer-events: none;
-  top: 0; bottom: 58px; right: calc(var(--pb-guide-x) - var(--pb-guide-w) / 2); width: var(--pb-guide-w);
+  top: var(--pb-guide-top); bottom: 58px; right: calc(var(--pb-guide-x) - var(--pb-guide-w) / 2); width: var(--pb-guide-w);
   background: linear-gradient(to bottom,
-    var(--pb-guide-on) 0, var(--pb-guide-on) calc(var(--gp, 0) * 100%),
-    var(--pb-guide-off) calc(var(--gp, 0) * 100%), var(--pb-guide-off) 100%);
+    color-mix(in srgb, var(--pb-guide-on) 7%, transparent) 0,
+    var(--pb-guide-on) min(var(--pb-guide-fade), calc(var(--gp, 0) * 100%)),
+    var(--pb-guide-on) calc(var(--gp, 0) * 100%),
+    transparent calc(var(--gp, 0) * 100%));
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 300'%3E%3Cpath d='M14 0C27 49 27 101 14 150S1 251 14 300' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3C/svg%3E") 0 100% / var(--pb-guide-w) var(--pb-guide-len) repeat-y;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 300'%3E%3Cpath d='M14 0C27 49 27 101 14 150S1 251 14 300' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3C/svg%3E") 0 100% / var(--pb-guide-w) var(--pb-guide-len) repeat-y;
+  opacity: 0; transition: opacity .9s var(--pb-ease-soft);
 }
+.pb-section.pb-guide.is-seen::before { opacity: 1; }
 .pb-section.pb-guide::after {
   content: ""; position: absolute; z-index: 0; pointer-events: none;
   bottom: var(--pb-guide-ab); right: calc(var(--pb-guide-x) - var(--pb-guide-a) / 2);
@@ -496,5 +503,8 @@
 .pb-section.pb-guide.pb-guide-done::after { opacity: 1; transform: scale(1); }
 /* Mobile : une droite verticale dans la gouttière (une onde y serpenterait sur 20px). */
 @media (max-width: 767px) {
-  .pb-section.pb-guide::before { width: 1.5px; right: calc(var(--pb-guide-x) - .75px); -webkit-mask: none; mask: none; }
+  .pb-section.pb-guide::before {
+    width: 1.5px; right: calc(var(--pb-guide-x) - .75px);
+    -webkit-mask: none; mask: none;
+  }
 }
