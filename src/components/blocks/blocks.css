@@ -367,6 +367,10 @@
 .pb-editing .pb-add-zone:hover .pb-add-btn { opacity: 1; pointer-events: auto; }
 .pb-editing .pb-add-btn-static { position: static; transform: none; opacity: 1; pointer-events: auto; }
 .pb-editing .pb-drop-line { height: 3px; background: #0ea5e9; border-radius: 3px; margin: -2px 0; }
+.pb-editing [data-editor-kind="card-item"] { cursor: grab; }
+.pb-editing [data-editor-kind="card-item"]:hover { box-shadow: 0 0 0 1px rgba(14, 165, 233, .5); }
+.pb-editing .pb-card-drop-before { box-shadow: inset 4px 0 0 0 #0ea5e9; }
+.pb-editing .pb-card-drop-after { box-shadow: inset -4px 0 0 0 #0ea5e9; }
 .pb-editing .pb-anim-fade .pb-col > *, .pb-editing .pb-anim-rise .pb-col > * { animation: none !important; }
 .pb-editing .pb-marquee-track { animation-play-state: paused; }
 

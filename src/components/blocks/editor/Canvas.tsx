@@ -3,14 +3,26 @@
 import { useRef, useState } from 'react';
 import type { ContentStructure, ContentBlock } from '../types';
 import { BlockRenderer, type EditorSelection } from '../BlockRenderer';
-import { moveBlockTo, swapColumns, insertBlock, setBlockField } from './ops';
+import { moveBlockTo, swapColumns, insertBlock, setBlockField, findBlock, moveCardItem } from './ops';
 
 export const NEW_BLOCK_MIME = 'application/x-pb-new-block';
 
 type DragSource =
   | { kind: 'block'; sectionId: string; columnId: string; blockId: string }
   | { kind: 'column'; sectionId: string; columnIdx: number }
+  | { kind: 'card-item'; sectionId: string; columnId: string; blockId: string; itemId: string }
   | { kind: 'new' };
+
+/** Index d'insertion d'une carte dans un bloc Cartes, selon la position du curseur (grille ou carrousel). */
+function cardInsertionIndex(blockEl: HTMLElement, clientX: number, clientY: number): number {
+  const cards = Array.from(blockEl.querySelectorAll<HTMLElement>('[data-editor-kind="card-item"]'));
+  for (let i = 0; i < cards.length; i++) {
+    const r = cards[i].getBoundingClientRect();
+    if (clientY < r.top - 4) return i;
+    if (clientY <= r.bottom + 4 && clientX < r.left + r.width / 2) return i;
+  }
+  return cards.length;
+}
 
 interface Props {
   content: ContentStructure;
@@ -34,12 +46,18 @@ export default function Canvas({ content, selection, onSelect, onChange, createD
   const rootRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragSource | null>(null);
   const [drop, setDrop] = useState<{ sectionId: string; columnId: string; index: number } | null>(null);
+  const [cardDrop, setCardDrop] = useState<{ sectionId: string; columnId: string; blockId: string; index: number } | null>(null);
   const editingRef = useRef<HTMLElement | null>(null);
 
   function selectFrom(target: HTMLElement) {
     const el = target.closest<HTMLElement>('[data-editor-kind]');
     if (!el) return onSelect(null);
     const k = el.dataset.editorKind;
+    if (k === 'card-item') {
+      const blockEl = el.closest<HTMLElement>('[data-editor-kind="block"]');
+      if (!blockEl) return onSelect(null);
+      return onSelect({ kind: 'block', sectionId: blockEl.dataset.editorSectionId || '', columnId: blockEl.dataset.editorColumnId || '', blockId: blockEl.dataset.editorBlockId || '' });
+    }
     const sectionId = el.dataset.editorSectionId || '';
     const columnId = el.dataset.editorColumnId || '';
     const blockId = el.dataset.editorBlockId || '';
@@ -101,6 +119,21 @@ export default function Canvas({ content, selection, onSelect, onChange, createD
   function onDragStart(e: React.DragEvent) {
     const target = e.target as HTMLElement;
     if (target.isContentEditable) return;
+    const cardEl = target.closest<HTMLElement>('[data-editor-kind="card-item"]');
+    if (cardEl) {
+      const blockEl = cardEl.closest<HTMLElement>('[data-editor-kind="block"]');
+      if (!blockEl) return;
+      setDrag({
+        kind: 'card-item',
+        sectionId: blockEl.dataset.editorSectionId || '',
+        columnId: blockEl.dataset.editorColumnId || '',
+        blockId: blockEl.dataset.editorBlockId || '',
+        itemId: cardEl.dataset.editorItemId || '',
+      });
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', cardEl.dataset.editorItemId || '');
+      return;
+    }
     const blockEl = target.closest<HTMLElement>('[data-editor-kind="block"]');
     if (blockEl) {
       setDrag({ kind: 'block', sectionId: blockEl.dataset.editorSectionId || '', columnId: blockEl.dataset.editorColumnId || '', blockId: blockEl.dataset.editorBlockId || '' });
@@ -120,6 +153,22 @@ export default function Canvas({ content, selection, onSelect, onChange, createD
   }
 
   function onDragOver(e: React.DragEvent) {
+    if (drag?.kind === 'card-item') {
+      const blockEl = (e.target as HTMLElement).closest<HTMLElement>('[data-editor-kind="block"]');
+      const blockId = blockEl?.dataset.editorBlockId;
+      const sectionId = blockEl?.dataset.editorSectionId || '';
+      const columnId = blockEl?.dataset.editorColumnId || '';
+      const targetBlock = blockId ? findBlock(content, sectionId, columnId, blockId).block : undefined;
+      if (!blockEl || !blockId || !targetBlock || targetBlock.type !== 'cards') {
+        if (cardDrop) setCardDrop(null);
+        return;
+      }
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const next = { sectionId, columnId, blockId, index: cardInsertionIndex(blockEl, e.clientX, e.clientY) };
+      if (!cardDrop || cardDrop.blockId !== next.blockId || cardDrop.index !== next.index) setCardDrop(next);
+      return;
+    }
     const isNew = e.dataTransfer.types.includes(NEW_BLOCK_MIME);
     if (!drag && !isNew) return;
     const colEl = (e.target as HTMLElement).closest<HTMLElement>('[data-editor-kind="column"]');
@@ -133,8 +182,17 @@ export default function Canvas({ content, selection, onSelect, onChange, createD
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     const target = drop;
+    const cardTarget = cardDrop;
     setDrop(null);
+    setCardDrop(null);
     setDrag(null);
+    if (drag?.kind === 'card-item') {
+      if (cardTarget) {
+        onChange(moveCardItem(content, drag, cardTarget));
+        onSelect({ kind: 'block', sectionId: cardTarget.sectionId, columnId: cardTarget.columnId, blockId: cardTarget.blockId });
+      }
+      return;
+    }
     if (!target) return;
     const payload = e.dataTransfer.getData(NEW_BLOCK_MIME);
     if (payload && createDropped) {
@@ -162,11 +220,11 @@ export default function Canvas({ content, selection, onSelect, onChange, createD
       onDoubleClick={onDoubleClick}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
-      onDragLeave={(e) => { if (!rootRef.current?.contains(e.relatedTarget as Node)) setDrop(null); }}
+      onDragLeave={(e) => { if (!rootRef.current?.contains(e.relatedTarget as Node)) { setDrop(null); setCardDrop(null); } }}
       onDrop={onDrop}
-      onDragEnd={() => { setDrag(null); setDrop(null); }}
+      onDragEnd={() => { setDrag(null); setDrop(null); setCardDrop(null); }}
     >
-      <BlockRenderer content={content} editor={{ selection, dropTarget: drop }} />
+      <BlockRenderer content={content} editor={{ selection, dropTarget: drop, cardDrop: cardDrop ? { blockId: cardDrop.blockId, index: cardDrop.index } : null }} />
     </div>
   );
 }

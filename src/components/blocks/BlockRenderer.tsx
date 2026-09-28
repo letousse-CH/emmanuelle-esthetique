@@ -30,6 +30,8 @@ export interface EditorState {
   selection: EditorSelection;
   /** Position d'insertion en cours de glisser-déposer. */
   dropTarget?: { sectionId: string; columnId: string; index: number } | null;
+  /** Position d'insertion d'une carte glissée, dans le bloc Cartes visé (éventuellement une autre section). */
+  cardDrop?: { blockId: string; index: number } | null;
 }
 
 interface Ctx {
@@ -196,6 +198,8 @@ function CardsView({ b, ctx }: { b: CardsBlock; ctx: Ctx }) {
   const style = b.style || 'tinted';
   const left = b.imagePosition === 'left';
   const carousel = b.layout === 'carousel';
+  const editor = ctx.editor;
+  const cardDrop = editor?.cardDrop && editor.cardDrop.blockId === ctx.blockId ? editor.cardDrop : null;
   const cardNodes = b.items.map((it, i) => {
     const body = (
       <>
@@ -204,8 +208,15 @@ function CardsView({ b, ctx }: { b: CardsBlock; ctx: Ctx }) {
         {it.linkText && <Btn text={it.linkText} url={it.linkUrl} variant="link" ctx={ctx} field={`items.${i}.linkText`} />}
       </>
     );
+    const dropCls = !cardDrop ? '' : cardDrop.index === i ? 'pb-card-drop-before' : (cardDrop.index === b.items.length && i === b.items.length - 1) ? 'pb-card-drop-after' : '';
     return (
-      <article key={it.id} className={`pb-card pb-card-${style}`}>
+      <article
+        key={it.id}
+        className={`pb-card pb-card-${style} ${dropCls}`}
+        draggable={!!editor}
+        data-editor-kind={editor ? 'card-item' : undefined}
+        data-editor-item-id={editor ? it.id : undefined}
+      >
         {it.image && (
           <div className="pb-card-img">
             {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -123,6 +123,32 @@ export function moveBlockTo(
   return insertBlock(removed, to.sectionId, to.columnId, block, target);
 }
 
+/** Déplace une carte d'un bloc Cartes vers un autre (éventuellement dans une autre section) à un index donné. */
+export function moveCardItem(
+  content: ContentStructure,
+  from: { sectionId: string; columnId: string; blockId: string; itemId: string },
+  to: { sectionId: string; columnId: string; blockId: string; index: number },
+): ContentStructure {
+  const { block: fromBlock } = findBlock(content, from.sectionId, from.columnId, from.blockId);
+  if (!fromBlock || fromBlock.type !== 'cards') return content;
+  const fromIdx = fromBlock.items.findIndex((it) => it.id === from.itemId);
+  if (fromIdx < 0) return content;
+  const item = fromBlock.items[fromIdx];
+
+  let targetIndex = to.index;
+  if (from.blockId === to.blockId && fromIdx < targetIndex) targetIndex -= 1;
+
+  let next = updateBlock(content, from.sectionId, from.columnId, from.blockId, (b) =>
+    b.type !== 'cards' ? b : { ...b, items: b.items.filter((it) => it.id !== from.itemId) });
+  next = updateBlock(next, to.sectionId, to.columnId, to.blockId, (b) => {
+    if (b.type !== 'cards') return b;
+    const items = [...b.items];
+    items.splice(Math.max(0, Math.min(targetIndex, items.length)), 0, item);
+    return { ...b, items };
+  });
+  return next;
+}
+
 /** Échange deux colonnes d'une même section. */
 export function swapColumns(content: ContentStructure, sectionId: string, a: number, b: number): ContentStructure {
   return updateSection(content, sectionId, (s) => {
