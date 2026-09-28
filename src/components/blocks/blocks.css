@@ -167,7 +167,10 @@
 @media (min-width: 1024px) { .pb-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .pb-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .pb-card { display: flex; flex-direction: column; gap: .75rem; border-radius: var(--pb-radius); }
 .pb-card-tinted { background: var(--pb-card); padding: 1.75rem; }
-.pb-card-outlined { border: 1px solid var(--pb-line); padding: 1.75rem; }
+.pb-card-outlined { border: 1px solid var(--pb-line); padding: 1.75rem; background: var(--pb-bg); }
+/* Fond opaque par défaut : rien ne doit transparaître derrière le texte (l'onde de fond, par exemple).
+   Sur les fonds sombres, la carte reste transparente — un fond blanc y rendrait le texte clair illisible. */
+.pb-tone-light .pb-card-outlined { background: transparent; }
 .pb-card-img { aspect-ratio: 4 / 3; overflow: hidden; margin: -1.75rem -1.75rem .5rem; }
 .pb-card-plain .pb-card-img { margin: 0 0 .5rem; }
 .pb-card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.4s var(--pb-ease-soft, cubic-bezier(.25, .6, .3, 1)); }
