@@ -53,6 +53,11 @@
 .pb-pad-medium { padding-block: clamp(3rem, 7vw, 6rem); }
 .pb-pad-large { padding-block: clamp(4.5rem, 10vw, 9rem); }
 
+/* Barre de menu fixe : la première section de la page s'y ménage de la place (--nav-h posé par Navbar). */
+.pb-page:not(.pb-editing) > .pb-section:first-child.pb-pad-small { padding-top: max(clamp(2rem, 4vw, 3rem), calc(var(--nav-h, 0px) + 2rem)); }
+.pb-page:not(.pb-editing) > .pb-section:first-child.pb-pad-medium { padding-top: max(clamp(3rem, 7vw, 6rem), calc(var(--nav-h, 0px) + 2rem)); }
+.pb-page:not(.pb-editing) > .pb-section:first-child.pb-pad-large { padding-top: max(clamp(4.5rem, 10vw, 9rem), calc(var(--nav-h, 0px) + 2rem)); }
+
 .pb-minh-half { min-height: min(60svh, 44rem); display: flex; align-items: center; }
 .pb-minh-screen { min-height: min(92svh, 60rem); display: flex; align-items: center; }
 .pb-minh-half > .pb-container, .pb-minh-screen > .pb-container { width: 100%; }
@@ -165,11 +170,22 @@
 .pb-card-outlined { border: 1px solid var(--pb-line); padding: 1.75rem; }
 .pb-card-img { aspect-ratio: 4 / 3; overflow: hidden; margin: -1.75rem -1.75rem .5rem; }
 .pb-card-plain .pb-card-img { margin: 0 0 .5rem; }
-.pb-card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s ease; }
-.pb-card:hover .pb-card-img img { transform: scale(1.03); }
+.pb-card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.4s var(--pb-ease-soft, cubic-bezier(.25, .6, .3, 1)); }
+.pb-card:hover .pb-card-img img { transform: scale(1.045); }
 .pb-card-title { font-family: var(--font-serif); font-size: 1.25rem; font-weight: 600; color: var(--pb-fg); line-height: 1.3; }
 .pb-card-text { color: var(--pb-fg-muted); line-height: 1.7; font-size: .975rem; font-weight: 300; }
 .pb-card .pb-link { margin-top: auto; align-self: flex-start; }
+.pb-card-body { display: flex; flex-direction: column; gap: .75rem; flex: 1; min-width: 0; }
+/* Image à gauche : en pile sur mobile, côte à côte dès 640px (2 colonnes au plus, sinon le texte s'étrangle). */
+@media (min-width: 640px) {
+  .pb-cards-imgleft .pb-card { flex-direction: row; align-items: stretch; gap: 1.5rem; overflow: hidden; }
+  .pb-cards-imgleft .pb-card-img { position: relative; flex: 0 0 38%; aspect-ratio: auto; min-height: 11rem; margin: -1.75rem 0 -1.75rem -1.75rem; }
+  .pb-cards-imgleft .pb-card-plain .pb-card-img { margin: 0; border-radius: var(--pb-radius); }
+  .pb-cards-imgleft .pb-card-img img { position: absolute; inset: 0; }
+  .pb-cards-imgleft .pb-card-body { justify-content: center; }
+}
+@media (min-width: 640px) and (max-width: 1023px) { .pb-cards-imgleft.pb-cols-2, .pb-cards-imgleft.pb-cols-3, .pb-cards-imgleft.pb-cols-4 { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 1024px) { .pb-cards-imgleft.pb-cols-3, .pb-cards-imgleft.pb-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .pb-steps { display: grid; gap: 1.25rem; counter-reset: pbstep; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 768px) { .pb-steps-n2 { grid-template-columns: repeat(2, 1fr); } .pb-steps-n3 { grid-template-columns: repeat(3, 1fr); } .pb-steps-n4 { grid-template-columns: repeat(2, 1fr); } }
@@ -289,6 +305,15 @@
 .pb-editing [data-pb-field]:hover { background: rgba(14, 165, 233, .08); }
 .pb-editing [contenteditable="true"] { outline: 2px solid #0ea5e9; outline-offset: 3px; background: rgba(255,255,255,.6); color: inherit; }
 .pb-editing .pb-empty-col { display: grid; place-items: center; min-height: 6rem; border: 1px dashed rgba(14,165,233,.5); color: #0369a1; font-size: .8rem; border-radius: 6px; background: rgba(14,165,233,.04); }
+.pb-editing .pb-empty-col { gap: .5rem; align-content: center; justify-items: center; }
+/* Bouton « + » : hauteur nulle (le gap de la colonne est annulé) pour ne rien décaler dans l'aperçu. */
+.pb-editing .pb-add-zone { position: relative; height: 0; margin-top: -1.5rem; z-index: 6; }
+.pb-editing .pb-add-zone::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 1.5rem; }
+.pb-editing .pb-add-btn { position: absolute; left: 50%; top: -.9rem; transform: translateX(-50%); width: 1.75rem; height: 1.75rem; display: grid; place-items: center; padding: 0; border: 0; border-radius: 999px; background: #0ea5e9; color: #fff; font: 600 1.1rem/1 sans-serif; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: opacity .12s; }
+.pb-editing .pb-add-btn:hover { background: #0284c7; }
+.pb-editing [data-editor-kind="block"]:hover + .pb-add-zone .pb-add-btn,
+.pb-editing .pb-add-zone:hover .pb-add-btn { opacity: 1; pointer-events: auto; }
+.pb-editing .pb-add-btn-static { position: static; transform: none; opacity: 1; pointer-events: auto; }
 .pb-editing .pb-drop-line { height: 3px; background: #0ea5e9; border-radius: 3px; margin: -2px 0; }
 .pb-editing .pb-anim-fade .pb-col > *, .pb-editing .pb-anim-rise .pb-col > * { animation: none !important; }
 .pb-editing .pb-marquee-track { animation-play-state: paused; }
@@ -316,3 +341,126 @@
 [data-site-theme] .pb-tone-light .pb-btn[data-btn="secondary"] { background-color: transparent !important; color: #fff !important; border-color: rgba(255, 255, 255, .85) !important; }
 [data-site-theme] .pb-tone-light .pb-btn[data-btn="secondary"]:hover { background-color: #fff !important; color: var(--pb-primary) !important; border-color: #fff !important; }
 [data-site-theme] .pb-tone-light .pb-link { color: #fff !important; }
+
+/* ── Mouvement ───────────────────────────────────────────────────────────────
+ * Piloté par MotionLayer (components/MotionLayer.tsx) : il pose `.is-in` sur un
+ * bloc quand il entre dans l'écran, `.is-seen` sur une section, et `--bd` (le
+ * décalage de cascade) sur les blocs qui arrivent ensemble.
+ *
+ * Tout état « caché » est gardé par `.pb-motion` (classe de <html>, absente dans
+ * l'admin, sans JavaScript et avec prefers-reduced-motion) et par
+ * `:not(.pb-editing)` : le contenu n'est jamais masqué quand la couche est
+ * inactive, et l'éditeur n'est jamais touché.
+ *
+ * Les propriétés `translate` et `scale` (et non `transform`) évitent tout
+ * conflit avec les `transform` existants (survols, animation de section).
+ */
+:root {
+  --pb-ease: cubic-bezier(.16, 1, .3, 1);
+  /* Survols : départ et arrivée en douceur, sans le « claquement » de la courbe d'apparition. */
+  --pb-ease-soft: cubic-bezier(.25, .6, .3, 1);
+}
+/* Soulèvement au survol : une propriété animable et non un `top`, pour que la transition
+   ne relance pas la mise en page à chaque image et reste indépendante du décalage (--cy). */
+@property --lift { syntax: '<length>'; inherits: false; initial-value: 0px; }
+
+.pb-motion .pb-page:not(.pb-editing) {
+  /* Blocs : montée douce, en fondu. Une section qui a choisi son animation garde la sienne.
+     Les blocs qui portent un titre (.pb-h : hero, titre, cartes, étapes…) n'ont aucune apparition :
+     leur titre est là dès le départ, seuls les éléments de leur grille bougent. */
+  & .pb-col > * {
+    transition: opacity .9s var(--pb-ease) var(--bd, 0s), translate 1.25s var(--pb-ease) var(--bd, 0s);
+  }
+  & :where(.pb-section:not([class*="pb-anim-"])) .pb-col > :not(.is-in):not(:has(.pb-h)) { opacity: 0; translate: 0 2.25rem; }
+  /* Grilles et images ont leur propre mouvement : le bloc ne fait que fondre. */
+  & :where(.pb-section:not([class*="pb-anim-"])) .pb-col > :not(.is-in):has(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) { translate: none; }
+  & :where(.pb-section:not([class*="pb-anim-"])) .pb-col > .pb-img:not(.is-in) { opacity: 1; translate: none; }
+
+  /* Grilles (cartes, étapes, offres…) : chaque élément entre à son tour. */
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > * {
+    --k: 8;
+    transition:
+      opacity 1s var(--pb-ease) calc(var(--bd, 0s) + .3s + var(--k) * 85ms),
+      translate 1.25s var(--pb-ease) calc(var(--bd, 0s) + .3s + var(--k) * 85ms),
+      --lift 1s var(--pb-ease-soft), box-shadow 1s var(--pb-ease-soft);
+  }
+  & .pb-col > :not(.is-in) :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > * { opacity: 0; translate: 0 2rem; }
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > :nth-child(1) { --k: 0; }
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > :nth-child(2) { --k: 1; }
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > :nth-child(3) { --k: 2; }
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > :nth-child(4) { --k: 3; }
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > :nth-child(5) { --k: 4; }
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > :nth-child(6) { --k: 5; }
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > :nth-child(7) { --k: 6; }
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-stats, .pb-testis, .pb-prices, .pb-gallery) > :nth-child(8) { --k: 7; }
+
+  /* Décalage entre voisins d'une même ligne (cartes, étapes, offres, avis, colonnes de section).
+     --cy est posé par MotionLayer selon le rang de la colonne : l'élément arrive en retard,
+     puis reprend sa place dès que le bloc est entièrement affiché (0 ensuite). */
+  & :is(.pb-cards, .pb-steps, .pb-offers, .pb-testis) > *,
+  & .pb-grid:not(.pb-flush) > .pb-col:not(.pb-col-bg):not(.pb-col-fill) {
+    position: relative;
+    transform: translate3d(0, calc(var(--cy, 0px) + var(--lift, 0px)), 0);
+    will-change: transform;
+  }
+
+  /* Images : un rideau se lève, la photo se pose (zoom arrière) puis suit le défilement (parallaxe). */
+  & .pb-img-frame, & .pb-img-fill { overflow: hidden; clip-path: inset(0); transition: clip-path 1.5s var(--pb-ease) var(--bd, 0s); }
+  & .pb-img-frame { border-radius: var(--pb-radius); }
+  /* La première section n'a pas de rideau : l'image d'en-tête est la plus grande de la page (LCP). */
+  & > .pb-section:not(:first-child) .pb-img:not(.is-in) .pb-img-frame { clip-path: inset(0 0 100% 0); }
+  & > .pb-section:not(:first-child) .pb-img-fill:not(.is-in) { clip-path: inset(0 0 100% 0); }
+  & :is(.pb-img-frame, .pb-img-fill, .pb-bgimg) > img {
+    scale: 1.12;
+    translate: 0 var(--py, 0px);
+    will-change: translate;
+    transition: scale 2s var(--pb-ease) var(--bd, 0s);
+  }
+  & .pb-img:not(.is-in) > img, & .pb-img:not(.is-in) .pb-img-frame > img { scale: 1.32; }
+  & .pb-section:not(.is-seen) .pb-bgimg > img { scale: 1.32; }
+
+  /* Séparateurs : le filet se trace. */
+  & .pb-col > .pb-divider { transform-origin: left; transition: scale 1.4s var(--pb-ease) var(--bd, 0s); }
+  & .pb-col > .pb-divider:not(.is-in) { opacity: 1; translate: none; scale: 0 1; }
+}
+
+/* Survols — uniquement au pointeur, jamais en mode « réduire les animations ». */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .pb-page:not(.pb-editing) .pb-btn { transition: background-color .35s ease, color .35s ease, border-color .35s ease, transform .5s var(--pb-ease), box-shadow .5s var(--pb-ease); }
+  .pb-page:not(.pb-editing) .pb-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 28px -16px rgba(18, 40, 58, .55); }
+  .pb-page:not(.pb-editing) .pb-link > span[aria-hidden] { display: inline-block; transition: transform .5s var(--pb-ease); }
+  .pb-page:not(.pb-editing) .pb-link:hover > span[aria-hidden] { transform: translateX(.35rem); }
+  .pb-page:not(.pb-editing) :is(.pb-card, .pb-offer, .pb-step):hover { --lift: -5px; box-shadow: 0 26px 44px -30px rgba(18, 40, 58, .34); }
+  .pb-page:not(.pb-editing) .pb-img-frame:hover > img { scale: 1.17; }
+}
+
+/* Ligne guide : onde verticale en fond de section, tracée par MotionLayer (--gp : 0 → 1).
+ * Elle se plante dans une algue en bas de section, qui se déploie quand le tracé arrive.
+ * Bureau seulement. `bottom` du filet = MotionLayer.GUIDE_INSET (58px). */
+@media (min-width: 768px) {
+  .pb-section.pb-guide {
+    --pb-guide-x: 15%;
+    --pb-guide-on: color-mix(in srgb, var(--pb-accent) 60%, transparent);
+    --pb-guide-off: color-mix(in srgb, var(--pb-accent) 16%, transparent);
+  }
+  /* Le filet est une onde : un motif sinusoïdal (28 × 300 px) sert de masque, et le
+     dégradé dessous colore la part déjà tracée (--gp). Le motif est calé en bas pour
+     que l'onde arrive dans l'axe de l'algue ; couleur, elle, suit --pb-accent. */
+  .pb-section.pb-guide::before {
+    content: ""; position: absolute; z-index: 0; pointer-events: none;
+    top: 0; bottom: 58px; right: calc(var(--pb-guide-x) - 14px); width: 28px;
+    background: linear-gradient(to bottom,
+      var(--pb-guide-on) 0, var(--pb-guide-on) calc(var(--gp, 0) * 100%),
+      var(--pb-guide-off) calc(var(--gp, 0) * 100%), var(--pb-guide-off) 100%);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 300'%3E%3Cpath d='M14 0C27 49 27 101 14 150S1 251 14 300' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3C/svg%3E") 0 100% / 28px 300px repeat-y;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 300'%3E%3Cpath d='M14 0C27 49 27 101 14 150S1 251 14 300' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3C/svg%3E") 0 100% / 28px 300px repeat-y;
+  }
+  .pb-section.pb-guide::after {
+    content: ""; position: absolute; z-index: 0; pointer-events: none;
+    bottom: 20px; right: calc(var(--pb-guide-x) - 20px); width: 40px; height: 40px;
+    background: url("https://pub-e4b5844034214d1087c574b78e760bce.r2.dev/1790610019195-algue.svg") center / contain no-repeat;
+    opacity: .3; transform: scale(.82); transform-origin: 50% 100%;
+    transition: opacity .9s var(--pb-ease-soft), transform 1.2s var(--pb-ease-soft);
+  }
+  .pb-section.pb-guide.pb-guide-done::after { opacity: 1; transform: scale(1); }
+}

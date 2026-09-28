@@ -5,54 +5,8 @@ import { useEffect } from 'react';
 export default function ScrollAnimations() {
   useEffect(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const isTouchDevice = window.matchMedia('(hover: none)').matches;
 
-    // ── 1. Cursor glow (desktop only) ──────────────────────────────────────
-    if (!isTouchDevice && !reduced) {
-      const glow = document.createElement('div');
-      glow.id = 'sde-cursor-glow';
-      document.body.appendChild(glow);
-
-      let mx = window.innerWidth / 2;
-      let my = window.innerHeight / 2;
-      let cx = mx, cy = my;
-      let raf: number;
-
-      const onMove = (e: MouseEvent) => { mx = e.clientX; my = e.clientY; };
-      document.addEventListener('mousemove', onMove);
-
-      const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-      const tick = () => {
-        cx = lerp(cx, mx, 0.075);
-        cy = lerp(cy, my, 0.075);
-        glow.style.transform = `translate(${cx - 200}px, ${cy - 200}px)`;
-        raf = requestAnimationFrame(tick);
-      };
-      tick();
-
-      // Pulse on hovering interactive elements
-      const onEnter = () => glow.classList.add('sde-cursor-active');
-      const onLeave = () => glow.classList.remove('sde-cursor-active');
-      const hoverCleanups: (() => void)[] = [];
-      document.querySelectorAll('a, button, [role="button"]').forEach(el => {
-        el.addEventListener('mouseenter', onEnter);
-        el.addEventListener('mouseleave', onLeave);
-        hoverCleanups.push(() => {
-          el.removeEventListener('mouseenter', onEnter);
-          el.removeEventListener('mouseleave', onLeave);
-        });
-      });
-
-      // Cleanup stored on element for return
-      (glow as any)._cleanup = () => {
-        document.removeEventListener('mousemove', onMove);
-        cancelAnimationFrame(raf);
-        hoverCleanups.forEach(fn => fn());
-        glow.remove();
-      };
-    }
-
-    // ── 2. Scroll reveal ───────────────────────────────────────────────────
+    // ── 1. Scroll reveal ───────────────────────────────────────────────────
     if (reduced) return;
 
     const seen = new WeakSet<Element>();
@@ -82,7 +36,8 @@ export default function ScrollAnimations() {
 
     const mark = (el: Element, delay = 0, forceType?: string) => {
       if (seen.has(el)) return;
-      if (el.closest('nav, footer, [data-admin], [data-admin-panel]')) return;
+      // Les pages du page builder ont leur propre couche (MotionLayer + blocks.css).
+      if (el.closest('nav, footer, [data-admin], [data-admin-panel], .pb-page')) return;
       if ((el as HTMLElement).className?.toString?.().includes('hero-')) return;
       if (el.hasAttribute('data-no-reveal')) return;
 
@@ -176,8 +131,6 @@ export default function ScrollAnimations() {
       observer.disconnect();
       countObserver.disconnect();
       cardCleanups.forEach((fn) => fn());
-      const glowEl = document.getElementById('sde-cursor-glow');
-      if ((glowEl as any)?._cleanup) (glowEl as any)._cleanup();
     };
   }, []);
 

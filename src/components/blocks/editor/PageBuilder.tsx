@@ -335,6 +335,11 @@ export default function PageBuilder({ pageId, mode, onClose }: Props) {
                   onSelect={setSelection}
                   onChange={(next, key) => commit(next, key)}
                   createDropped={(t) => (t ? createBlock(t as BlockType) : null)}
+                  onAddAt={({ sectionId, columnId, blockId }) => {
+                    // La bibliothèque insère déjà « sous le bloc sélectionné » ou « en bas de la colonne ».
+                    setSelection(blockId ? { kind: 'block', sectionId, columnId, blockId } : { kind: 'column', sectionId, columnId });
+                    setLibraryOpen(true);
+                  }}
                 />
               )}
             </div>

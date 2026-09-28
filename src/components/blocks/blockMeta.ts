@@ -181,6 +181,7 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
         newItem: () => ({ id: uid(), title: 'Nouvelle carte', text: '' }),
       },
       { key: 'cols', label: 'Colonnes', kind: 'select', style: true, options: [{ value: 2, label: '2' }, { value: 3, label: '3' }, { value: 4, label: '4' }] },
+      { key: 'imagePosition', label: 'Position de l\'image', kind: 'select', options: [{ value: 'top', label: 'Au-dessus du texte' }, { value: 'left', label: 'À gauche du texte' }] },
       { key: 'style', label: 'Style des cartes', kind: 'select', style: true, options: [{ value: 'plain', label: 'Sans fond' }, { value: 'tinted', label: 'Fond teinté' }, { value: 'outlined', label: 'Filet' }] },
     ],
     create: () => ({ id: uid(), type: 'cards', title: 'Nos atouts', cols: 3, style: 'tinted', items: [

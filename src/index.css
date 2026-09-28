@@ -209,10 +209,19 @@
   }
 }
 
-/* Smooth scroll global */
+/* Smooth scroll global (repli natif ; MotionLayer/Lenis prend le relais sur le site public) */
 html {
   scroll-behavior: smooth;
 }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+/* Lenis : le défilement est calculé en JS, le navigateur ne doit pas le relisser. */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: clip; }
+.lenis.lenis-scrolling iframe { pointer-events: none; }
 
 /* ── Marquee animation ───────────────────────────────────────────────────── */
 @keyframes sde-marquee {
@@ -230,23 +239,6 @@ html {
 /* ── Interactions & hover avancés ─────────────────────────────────────────
    Couche purement additive — ne touche aucun contenu ni composant existant.
    ──────────────────────────────────────────────────────────────────────── */
-
-/* Cursor glow */
-#sde-cursor-glow {
-  position: fixed;
-  top: 0; left: 0;
-  width: 400px; height: 400px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(138,154,123,0.07) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 9998;
-  will-change: transform;
-  transition: width 0.35s ease, height 0.35s ease, background 0.35s ease;
-}
-#sde-cursor-glow.sde-cursor-active {
-  width: 480px; height: 480px;
-  background: radial-gradient(circle, rgba(138,154,123,0.12) 0%, transparent 70%);
-}
 
 /* Reveal directions */
 [data-reveal="left"] {
@@ -345,7 +337,6 @@ main section [class*="border-b"] {
     opacity: 1 !important;
     transform: none !important;
   }
-  #sde-cursor-glow { display: none; }
   main section .overflow-hidden > img { transition: none !important; }
   main a.rounded-full::after, main button.rounded-full::after { display: none; }
 }

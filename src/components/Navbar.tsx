@@ -5,7 +5,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
@@ -74,6 +74,7 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
   const registerLink = settings.header_register_link || '/contact';
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
   const [heroColor, setHeroColor] = useState<'dark' | 'light'>('dark');
   const pathname = usePathname();
@@ -91,6 +92,29 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
     const isDark = darkHeroPages.includes(pathname || '');
     setHeroColor(isDark ? 'dark' : 'light');
   }, [pathname]);
+
+  /*
+    Hauteur de la barre exposée en `--nav-h` : la barre est fixe, donc hors du
+    flux, et la première section d'une page doit s'y ménager de la place
+    (blocks.css). On garde la hauteur maximale — celle du haut de page, avant le
+    rétrécissement au défilement — pour que le contenu ne saute pas en scrollant.
+  */
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    let max = 0;
+    const apply = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h > max) { max = h; root.style.setProperty('--nav-h', `${h}px`); }
+    };
+    const onResize = () => { max = 0; apply(); };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    window.addEventListener('resize', onResize);
+    return () => { ro.disconnect(); window.removeEventListener('resize', onResize); root.style.removeProperty('--nav-h'); };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -150,6 +174,7 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
 
   return (
     <nav
+      ref={navRef}
       data-main-nav
       className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
         solid ? 'bg-white/95 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-6'

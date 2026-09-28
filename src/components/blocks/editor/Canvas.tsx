@@ -19,6 +19,8 @@ interface Props {
   onChange: (next: ContentStructure, coalesceKey?: string) => void;
   /** Fabrique du bloc déposé depuis la bibliothèque. */
   createDropped?: (payload: string) => ContentBlock | null;
+  /** Clic sur un « + » : `blockId` absent = colonne vide. */
+  onAddAt?: (at: { sectionId: string; columnId: string; blockId?: string }) => void;
 }
 
 /**
@@ -28,7 +30,7 @@ interface Props {
  * - glisser-déposer : déplacer un bloc (y compris vers une autre section),
  *   échanger deux colonnes, ou déposer un bloc venu de la bibliothèque.
  */
-export default function Canvas({ content, selection, onSelect, onChange, createDropped }: Props) {
+export default function Canvas({ content, selection, onSelect, onChange, createDropped, onAddAt }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragSource | null>(null);
   const [drop, setDrop] = useState<{ sectionId: string; columnId: string; index: number } | null>(null);
@@ -49,6 +51,12 @@ export default function Canvas({ content, selection, onSelect, onChange, createD
   function onClick(e: React.MouseEvent) {
     const target = e.target as HTMLElement;
     if (target.isContentEditable) return;
+    const add = target.closest<HTMLElement>('[data-pb-add]');
+    if (add) {
+      e.preventDefault();
+      onAddAt?.({ sectionId: add.dataset.pbAddSection || '', columnId: add.dataset.pbAddColumn || '', blockId: add.dataset.pbAddBlock || undefined });
+      return;
+    }
     // Liens et boutons de la page : on sélectionne, on ne navigue pas.
     if (target.closest('a, button, summary')) e.preventDefault();
     selectFrom(target);

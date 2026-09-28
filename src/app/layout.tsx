@@ -2,6 +2,7 @@ import { Inter, Cormorant_Garamond } from 'next/font/google';
 import '../index.css';
 import UniversalPageEditorGate from '../components/pagebuilder/UniversalPageEditorGate';
 import ScrollAnimations from '../components/ScrollAnimations';
+import MotionLayer from '../components/MotionLayer';
 import { getSettingsServer } from '../services/settingsServer';
 import { getBusinessInfoServer, BusinessInfo, SITE_CONFIG } from '../config/site';
 import { flatCarte } from '../constants/carteSoins';
@@ -306,13 +307,30 @@ export default async function RootLayout({
   );
 
   return (
-    <html lang="fr" className={`${inter.variable} ${cormorant.variable}`}>
+    // suppressHydrationWarning : le script ci-dessous ajoute `pb-motion` à <html>
+    // avant l'hydratation.
+    <html lang="fr" className={`${inter.variable} ${cormorant.variable}`} suppressHydrationWarning>
+      <head>
+        {/*
+          Active la couche de mouvement (blocks.css, section Mouvement) avant le
+          premier rendu, pour que les blocs naissent cachés au lieu d'apparaître
+          puis de disparaître. Jamais dans l'admin ni avec « réduire les
+          animations ». Si MotionLayer n'a pas pris la main au bout de 4 s
+          (script bloqué, erreur), la classe est retirée : le contenu s'affiche.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var d=document.documentElement;if(location.pathname.indexOf('/admin')===0||matchMedia('(prefers-reduced-motion: reduce)').matches)return;d.classList.add('pb-motion');setTimeout(function(){if(!window.__pbMotion)d.classList.remove('pb-motion')},4000)}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="bg-paper text-stone-deep font-sans antialiased min-h-screen selection:bg-sage/20 flex flex-col overflow-x-hidden">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
         <ScrollAnimations />
+        <MotionLayer />
         <UniversalPageEditorGate />
         {children}
       </body>

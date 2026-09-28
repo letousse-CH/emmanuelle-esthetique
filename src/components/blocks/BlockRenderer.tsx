@@ -104,21 +104,24 @@ function ImageView({ b, ctx }: { b: ImageBlock; ctx: Ctx }) {
     return (
       <figure className="pb-img pb-img-fill">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={b.url} alt={b.alt || ''} loading="lazy" decoding="async" />
+        <img src={b.url} alt={b.alt || ''} loading="lazy" decoding="async" data-parallax={ctx.editor ? undefined : '0.06'} />
       </figure>
     );
   }
   const size = b.size && b.size !== 'full' ? `pb-img-${b.size}` : '';
   return (
     <figure className={`pb-img ${size} ${alignCls(b.align)}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={b.url}
-        alt={b.alt || ''}
-        loading="lazy"
-        decoding="async"
-        style={{ aspectRatio: b.ratio && b.ratio !== 'auto' ? b.ratio : undefined, objectFit: b.fit || 'cover' }}
-      />
+      <div className="pb-img-frame">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={b.url}
+          alt={b.alt || ''}
+          loading="lazy"
+          decoding="async"
+          data-parallax={ctx.editor ? undefined : '0.05'}
+          style={{ aspectRatio: b.ratio && b.ratio !== 'auto' ? b.ratio : undefined, objectFit: b.fit || 'cover' }}
+        />
+      </div>
       {b.caption && <figcaption {...f(ctx, 'caption')}>{b.caption}</figcaption>}
     </figure>
   );
@@ -190,23 +193,31 @@ function HeroView({ b, ctx }: { b: HeroBlock; ctx: Ctx }) {
 
 function CardsView({ b, ctx }: { b: CardsBlock; ctx: Ctx }) {
   const style = b.style || 'tinted';
+  const left = b.imagePosition === 'left';
   return (
     <div>
       <Head eyebrow={b.eyebrow} title={b.title} intro={b.intro} ctx={ctx} />
-      <div className={`pb-cards pb-cols-${b.cols || 3}`}>
-        {b.items.map((it, i) => (
-          <article key={it.id} className={`pb-card pb-card-${style}`}>
-            {it.image && (
-              <div className="pb-card-img">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={it.image} alt={it.title || ''} loading="lazy" decoding="async" />
-              </div>
-            )}
-            {it.title && <h3 className="pb-card-title" {...f(ctx, `items.${i}.title`)}>{it.title}</h3>}
-            {it.text && <p className="pb-card-text" {...f(ctx, `items.${i}.text`)}>{it.text}</p>}
-            {it.linkText && <Btn text={it.linkText} url={it.linkUrl} variant="link" ctx={ctx} field={`items.${i}.linkText`} />}
-          </article>
-        ))}
+      <div className={`pb-cards pb-cols-${b.cols || 3} ${left ? 'pb-cards-imgleft' : ''}`}>
+        {b.items.map((it, i) => {
+          const body = (
+            <>
+              {it.title && <h3 className="pb-card-title" {...f(ctx, `items.${i}.title`)}>{it.title}</h3>}
+              {it.text && <p className="pb-card-text" {...f(ctx, `items.${i}.text`)}>{it.text}</p>}
+              {it.linkText && <Btn text={it.linkText} url={it.linkUrl} variant="link" ctx={ctx} field={`items.${i}.linkText`} />}
+            </>
+          );
+          return (
+            <article key={it.id} className={`pb-card pb-card-${style}`}>
+              {it.image && (
+                <div className="pb-card-img">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={it.image} alt={it.title || ''} loading="lazy" decoding="async" />
+                </div>
+              )}
+              {left ? <div className="pb-card-body">{body}</div> : body}
+            </article>
+          );
+        })}
       </div>
     </div>
   );
@@ -496,11 +507,19 @@ function ColumnView({ section, column, index, editor }: { section: ContentSectio
             >
               {view}
             </div>
+            <div className="pb-add-zone">
+              <button type="button" className="pb-add-btn" data-pb-add data-pb-add-section={section.id} data-pb-add-column={column.id} data-pb-add-block={block.id} aria-label="Ajouter un bloc en dessous">+</button>
+            </div>
           </React.Fragment>
         );
       })}
       {editor && drop === column.blocks.length && <div className="pb-drop-line" />}
-      {editor && column.blocks.length === 0 && <div className="pb-empty-col">Colonne vide — ajoutez un bloc</div>}
+      {editor && column.blocks.length === 0 && (
+        <div className="pb-empty-col">
+          <span>Colonne vide</span>
+          <button type="button" className="pb-add-btn pb-add-btn-static" data-pb-add data-pb-add-section={section.id} data-pb-add-column={column.id} aria-label="Ajouter un bloc">+</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -540,6 +559,7 @@ function SectionView({ section, editor, first }: { section: ContentSection; edit
             loading={first ? 'eager' : 'lazy'}
             fetchPriority={first ? 'high' : undefined}
             decoding="async"
+            data-parallax={editor ? undefined : '0.05'}
             style={{ opacity: (section.bgImage.opacity ?? 60) / 100, objectPosition: section.bgImage.position || 'center' }}
           />
         </div>
