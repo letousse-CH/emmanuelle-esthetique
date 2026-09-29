@@ -3,6 +3,7 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import PageViewTracker from '../../components/PageViewTracker';
 import AgentChatWidget from '../../components/AgentChatWidget';
+import MobileCallBar from '../../components/MobileCallBar';
 import CookieConsent from '../../components/CookieConsent';
 import GoogleAnalytics from '../../components/GoogleAnalytics';
 import { getSettingsServer } from '../../services/settingsServer';
@@ -33,6 +34,7 @@ export default async function PublicLayout({
     'social_youtube',
     'social_spotify',
     'business_name',
+    'business_phone',
     'business_owner',
     'business_address_city',
     'business_address_region',
@@ -89,6 +91,7 @@ export default async function PublicLayout({
           business_address_region: settings.business_address_region,
         }}
       />
+      <MobileCallBar phone={settings.business_phone} />
       {agent && (
         <AgentChatWidget
           slug={agent.slug}
