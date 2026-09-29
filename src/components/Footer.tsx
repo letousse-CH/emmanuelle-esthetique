@@ -283,7 +283,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
           </div>
 
           {/* Lieu & contact */}
-          <div>
+          <div className="col-span-2 md:col-span-1">
             {/*
               L'intitulé et la première ligne disaient « Institut » et
               « Institut à domicile » : l'activité du site d'origine, affichée
@@ -321,7 +321,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
           </div>
 
           {/* Logo */}
-          <div className="flex justify-center md:justify-end items-start">
+          <div className="col-span-2 md:col-span-1 flex justify-center md:justify-end items-start">
             {logoUrl && (
               <img
                 src={logoUrl}
