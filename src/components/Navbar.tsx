@@ -182,14 +182,14 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
       data-light={lightMode ? 'true' : undefined}
     >
         <div
-          className={`max-w-7xl mx-auto px-6 items-center ${
+          className={`max-w-7xl mx-auto px-4 md:px-6 items-center ${
             variant === 'centre'
               ? 'flex flex-col gap-3 xl:gap-4'
               : 'flex justify-between'
           }`}
         >
         <Link href="/" className="flex items-center gap-3 group">
-          <div className={`transition-all duration-500 bg-transparent shrink-0 flex items-center ${scrolled ? 'h-[80px] w-[225px]' : 'h-[88px] w-[250px]'}`}>
+          <div className={`transition-all duration-500 bg-transparent shrink-0 flex items-center ${scrolled ? 'h-[92px] w-[260px] max-md:h-[94px] max-md:w-[265px]' : 'h-[102px] w-[290px] max-md:h-[106px] max-md:w-[300px]'}`}>
             {logoUrl && !logoBroken ? (
               <img
                 src={logoUrl}
@@ -197,8 +197,8 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
                 alt={businessName ? `${businessName} — retour à l'accueil` : "Retour à l'accueil"}
                 className="w-full h-full object-contain"
                 referrerPolicy="no-referrer"
-                width={250}
-                height={88}
+                width={290}
+                height={102}
               />
             ) : (
               /* Repli tant qu'aucun logo n'est chargé : le nom saisi dans
