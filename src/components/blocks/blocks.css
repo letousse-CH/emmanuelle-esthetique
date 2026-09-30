@@ -158,6 +158,9 @@
 .pb-btn[data-btn="primary"] { background: var(--pb-primary); color: #fff; }
 .pb-btn[data-btn="secondary"] { background: transparent; color: var(--pb-fg); border-color: currentColor; }
 .pb-tone-light .pb-btn[data-btn="primary"] { background: #fff; color: var(--pb-primary); border-color: #fff; }
+/* La flèche « → » n'existe pas dans le sous-ensemble latin de la police du site : sans cette règle le navigateur
+   télécharge 68 Ko de sous-ensembles Open Sans supplémentaires pour un seul caractère. */
+.pb-link > span[aria-hidden] { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .pb-link { display: inline-flex; align-items: center; gap: .5rem; font-size: .8rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--pb-fg); border-bottom: 1px solid currentColor; padding-bottom: 2px; text-decoration: none; }
 
 /* ── Blocs ───────────────────────────────────────────────────────────────── */
@@ -560,7 +563,7 @@
   content: ""; position: absolute; z-index: 0; pointer-events: none;
   bottom: var(--pb-guide-ab); right: calc(var(--pb-guide-x) - var(--pb-guide-a) / 2);
   width: var(--pb-guide-a); height: var(--pb-guide-a);
-  background: url("https://pub-e4b5844034214d1087c574b78e760bce.r2.dev/1790610019195-algue.svg") center / contain no-repeat;
+  background: url("/images/algue.webp") center / contain no-repeat;
   opacity: .3; transform: scale(.82); transform-origin: 50% 100%;
   transition: opacity .9s var(--pb-ease-soft), transform 1.2s var(--pb-ease-soft);
 }

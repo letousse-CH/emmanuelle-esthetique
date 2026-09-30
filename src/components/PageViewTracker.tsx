@@ -37,10 +37,17 @@ export default function PageViewTracker() {
 
     // Insertion REST anonyme (sans le client Supabase) : c'est la même requête
     // que `supabase.from('page_views').insert(...)`, sans ses ~215 Ko de JS.
-    void liteInsert('page_views', { page: pathname, referrer: document.referrer || null }).then(({ error }) => {
-      // Le tracking ne doit jamais casser l'UX : on se contente d'un log.
-      if (error) console.warn('[page-views] insertion impossible:', error.message);
-    });
+    // Différé : la requête (avec son « preflight » CORS vers un hôte tiers) partait pendant le chargement
+    // et se disputait la bande passante avec l'image d'en-tête.
+    const send = () => {
+      void liteInsert('page_views', { page: pathname, referrer: document.referrer || null }).then(({ error }) => {
+        // Le tracking ne doit jamais casser l'UX : on se contente d'un log.
+        if (error) console.warn('[page-views] insertion impossible:', error.message);
+      });
+    };
+    const idle = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) idle(send, { timeout: 4000 });
+    else setTimeout(send, 2500);
   }, [pathname]);
 
   return null;
