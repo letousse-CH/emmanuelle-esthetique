@@ -1,5 +1,6 @@
 import { fetchPageBySlug } from '../../../services/dynamicPages';
-import DynamicPageClient from '../../../components/pagebuilder/DynamicPageClient';
+import BlockPage from '../../../components/blocks/BlockPage';
+import PageChrome from '../../../components/PageChrome';
 import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
 
 const SLUG = 'mentions-legales';
@@ -89,13 +90,14 @@ export default async function LegalPage() {
     </div>
   );
 
+  // Page enregistrée dans le page builder (v2) : rendu par blocs, comme les autres pages du site.
+  // Sans page en base, le texte de repli ci-dessus reste affiché.
   return (
     <div className="legal-page">
-      <DynamicPageClient
-        initialPage={cmsPage}
-        slug={SLUG}
-        fallback={fallback}
-      />
+      {cmsPage && (!cmsPage.show_header || !cmsPage.show_footer) && (
+        <PageChrome showHeader={cmsPage.show_header ?? true} showFooter={cmsPage.show_footer ?? true} />
+      )}
+      {cmsPage ? <BlockPage page={cmsPage} /> : fallback}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 // rapidement via la revalidation périodique.
 export const revalidate = 600;
 import React from 'react';
+import '../blog.css';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Calendar, Clock, ArrowLeft, ArrowRight } from 'lucide-react';

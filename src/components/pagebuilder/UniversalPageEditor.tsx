@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import '../../app/admin/admin.css';
 import { usePathname } from 'next/navigation';
 import { supabase } from '../../services/supabase';
 import { Pencil, Check, Loader2, Image as ImageIcon, Lock, Globe, Power, Save } from 'lucide-react';

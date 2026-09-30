@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { supabase } from './supabase';
 import { getSupabaseAdmin } from '../utils/supabaseAdmin';
 import { DRAFT_PREVIEW, draftSlug } from './draftPreview';
@@ -27,7 +28,11 @@ export async function fetchAllPages(): Promise<DynamicPage[]> {
   return data as DynamicPage[];
 }
 
-export async function fetchPageBySlug(slug: string, adminMode = false): Promise<DynamicPage | null> {
+/**
+ * `cache` (React) : `generateMetadata`, la page et le fil d'Ariane redemandent
+ * la même page pendant un rendu — une seule requête Supabase par slug.
+ */
+export const fetchPageBySlug = cache(async function fetchPageBySlug(slug: string, adminMode = false): Promise<DynamicPage | null> {
   // Aperçu local des brouillons : la clé anonyme ne lit pas les pages non publiées.
   if (DRAFT_PREVIEW && typeof window === 'undefined') {
     const admin = getSupabaseAdmin();
@@ -38,10 +43,10 @@ export async function fetchPageBySlug(slug: string, adminMode = false): Promise<
   }
   let query = supabase.from('dynamic_pages').select('*').eq('slug', slug);
   if (!adminMode) query = query.eq('published', true);
-  const { data, error } = await query.single();
+  const { data, error } = await query.maybeSingle();
   if (error) return null;
   return data as DynamicPage;
-}
+});
 
 export async function fetchPageById(id: string): Promise<DynamicPage | null> {
   const { data, error } = await supabase

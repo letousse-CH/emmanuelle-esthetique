@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import '../../blog/blog.css';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';

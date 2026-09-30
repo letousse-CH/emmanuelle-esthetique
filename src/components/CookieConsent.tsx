@@ -93,7 +93,9 @@ export default function CookieConsent() {
       className="fixed inset-x-0 bottom-0 z-[100] px-4 pb-4 sm:px-6 sm:pb-6"
     >
       <div className="mx-auto max-w-3xl rounded-2xl border border-stone-200 bg-white shadow-xl shadow-stone-900/10 p-5 sm:p-6">
-        <p className="text-sm text-stone-700 leading-relaxed">
+        {/* <div> et non <p> : la charte impose la taille des <p> du site. Le bandeau apparaît après
+            l'hydratation ; plus grand que le texte d'en-tête, il deviendrait l'élément LCP de la page. */}
+        <div className="text-[13px] sm:text-sm text-stone-700 leading-relaxed">
           Ce site utilise des cookies strictement nécessaires à son fonctionnement.
           Avec votre accord, il peut aussi utiliser Google Analytics pour mesurer
           la fréquentation du site. Vous pouvez accepter, refuser, ou personnaliser
@@ -102,7 +104,7 @@ export default function CookieConsent() {
             politique de cookies
           </Link>
           .
-        </p>
+        </div>
 
         {expanded && (
           <div className="mt-4 border-t border-stone-100 pt-4 space-y-3">

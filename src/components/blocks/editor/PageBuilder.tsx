@@ -1,5 +1,6 @@
 "use client";
 
+import '../../../app/admin/admin.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -109,7 +110,8 @@ export default function PageBuilder({ pageId, mode, onClose }: Props) {
       loadedVersion.current = snap.version;
       loadedMeta.current = snap.metaVersion;
       setSave(latest.current.version === snap.version && latest.current.metaVersion === snap.metaVersion ? 'saved' : 'dirty');
-      fetch('/api/revalidate', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ path: pagePath(snap.meta.slug || page.slug) }) }).catch(() => {});
+      // Attendu : « Fermer » recharge la page, qui doit alors voir la version enregistrée et non l'ancienne en cache.
+      await fetch('/api/revalidate', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ path: pagePath(snap.meta.slug || page.slug) }) }).catch(() => {});
     } catch (e) {
       const msg = e instanceof Error ? e.message : (e as { message?: string })?.message || String(e);
       setSave('error');

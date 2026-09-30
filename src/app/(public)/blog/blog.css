@@ -1,0 +1,20 @@
+/* Typographie des articles et des événements (`prose`). Importée par blog/[slug]/page.tsx et
+   ateliers/[slug]/EventDetailClient.tsx seulement : les autres pages du site n'embarquent pas
+   le plugin typographie.
+
+   Ne génère QUE les classes listées ci-dessous (`@source inline`). Les autres utilitaires de ces
+   pages sont dans index.css : une feuille partielle chargée après lui écraserait ses variantes
+   responsives (voir la règle d'ordre dans index.css). Ajouter ici toute nouvelle classe `prose-…`. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@import "../../../theme.css";
+@plugin "@tailwindcss/typography";
+@source inline("prose prose-stone prose-lg max-w-none");
+@source inline("prose-headings:font-serif prose-headings:font-bold prose-headings:text-stone-900");
+@source inline("prose-h2:text-2xl prose-h2:text-xl prose-h2:mt-12 prose-h2:mt-8 prose-h2:mb-4 prose-h2:mb-3 prose-h3:text-xl prose-h3:mt-8");
+@source inline("prose-p:leading-[1.85] prose-p:leading-relaxed prose-p:text-stone-700 prose-p:text-stone-600 prose-li:text-stone-600 prose-li:leading-relaxed");
+@source inline("prose-blockquote:not-italic prose-blockquote:font-serif prose-blockquote:text-lg prose-blockquote:text-stone-700 prose-blockquote:border-l-4 prose-blockquote:border-sage");
+@source inline("prose-blockquote:bg-sage/5 prose-blockquote:px-6 prose-blockquote:py-4 prose-blockquote:rounded-r-xl prose-blockquote:my-8");
+@source inline("prose-strong:text-stone-900 prose-strong:font-semibold prose-a:text-sage prose-a:no-underline hover:prose-a:underline");
+@source inline("prose-img:rounded-xl prose-img:shadow-md prose-img:max-w-full prose-pre:overflow-x-auto");

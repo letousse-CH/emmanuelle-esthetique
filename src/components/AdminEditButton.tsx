@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Pencil } from 'lucide-react';
 import Link from 'next/link';
-import { supabase } from '../services/supabase';
+import { useAdminSession } from '../hooks/useAdminSession';
 
 interface Props {
   href?: string;
@@ -11,13 +11,7 @@ interface Props {
 }
 
 export default function AdminEditButton({ href = '/admin', label = 'Administration' }: Props) {
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setIsAdmin(!!data.session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setIsAdmin(!!s));
-    return () => subscription.unsubscribe();
-  }, []);
+  const isAdmin = useAdminSession();
 
   if (!isAdmin) return null;
 

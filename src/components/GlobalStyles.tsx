@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 
-import { supabase } from '../services/supabase';
+import { SELF_HOSTED_FONTS } from '../constants/selfHostedFonts';
+import { hasStoredSession, liteSelect } from '../services/supabaseLite';
 import {
   BUTTON_VARIANTS,
   DESIGN_TOKEN_DEFAULTS,
@@ -79,10 +80,16 @@ const TYPE_LEVELS: { prefix: string; selector: string }[] = [
   { prefix: 'small', selector: 'small, figcaption, .text-caption' },
 ];
 
-export default function GlobalStyles() {
-  const [tokens, setTokens] = useState<Record<string, string> | null>(null);
+/**
+ * `initialTokens` : jetons lus côté serveur (site public). Le style est alors dans le HTML
+ * dès le premier octet, et le navigateur n'a plus rien à relire — un appel Supabase de
+ * moins par page. Sans eux (aperçus de l'admin), le composant les charge comme avant.
+ */
+export default function GlobalStyles({ initialTokens }: { initialTokens?: Record<string, string> }) {
+  const [tokens, setTokens] = useState<Record<string, string> | null>(initialTokens ?? null);
 
   useEffect(() => {
+    if (initialTokens) return;
     // Application immédiate depuis le cache, pour éviter un saut de style au
     // premier rendu ; la base fait ensuite autorité.
     const cached = localStorage.getItem('site_design_tokens');
@@ -96,10 +103,20 @@ export default function GlobalStyles() {
 
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from('settings')
-          .select('key, value')
-          .in('key', DESIGN_TOKEN_KEYS);
+        // Ni le site public (jetons fournis par le serveur, `initialTokens`) ni un
+        // visiteur sans session n'ont besoin du client Supabase (~215 Ko de JS) :
+        // simple requête REST anonyme. Session détectée : le vrai client.
+        let data: { key: string; value: string | null }[] | null;
+        let error: { message: string } | null;
+        if (hasStoredSession()) {
+          const { supabase } = await import('../services/supabase');
+          ({ data, error } = await supabase.from('settings').select('key, value').in('key', DESIGN_TOKEN_KEYS));
+        } else {
+          ({ data, error } = await liteSelect<{ key: string; value: string | null }[]>(
+            'settings',
+            `select=key,value&key=in.(${DESIGN_TOKEN_KEYS.join(',')})`,
+          ));
+        }
         if (error) throw error;
 
         const map: Record<string, string> = { ...DESIGN_TOKEN_DEFAULTS };
@@ -116,7 +133,7 @@ export default function GlobalStyles() {
         if (!cached) setTokens({ ...DESIGN_TOKEN_DEFAULTS });
       }
     })();
-  }, []);
+  }, [initialTokens]);
 
   if (!tokens) return null;
 
@@ -161,8 +178,12 @@ export default function GlobalStyles() {
 
   const headingFont = get('style_font_headings');
   const bodyFont = get('style_font_body');
-  root += headingFont ? `  --font-serif: "${headingFont}", ui-sans-serif, system-ui, sans-serif;\n` : '';
-  root += bodyFont ? `  --font-sans: "${bodyFont}", ui-sans-serif, system-ui, sans-serif;\n` : '';
+  // Police auto-hébergée (next/font) : sa variable inclut déjà le repli ajusté.
+  const fontStack = (name: string) => SELF_HOSTED_FONTS[name]
+    ? `${SELF_HOSTED_FONTS[name]}, ui-sans-serif, system-ui, sans-serif`
+    : `"${name}", ui-sans-serif, system-ui, sans-serif`;
+  root += headingFont ? `  --font-serif: ${fontStack(headingFont)};\n` : '';
+  root += bodyFont ? `  --font-sans: ${fontStack(bodyFont)};\n` : '';
   root += '}\n';
 
   // ── Échelle typographique ─────────────────────────────────────────────────
@@ -289,7 +310,7 @@ export default function GlobalStyles() {
   // Les polices ne sont chargées que si elles sont choisies : pas de requête
   // vers Google Fonts sur une installation qui n'a rien réglé.
   const families = [headingFont, bodyFont]
-    .filter(Boolean)
+    .filter((f) => f && !SELF_HOSTED_FONTS[f])
     .map((f) => `family=${f.replace(/ /g, '+')}:wght@300;400;500;600;700;800`);
   const fontsUrl = families.length
     ? `https://fonts.googleapis.com/css2?${[...new Set(families)].join('&')}&display=swap`

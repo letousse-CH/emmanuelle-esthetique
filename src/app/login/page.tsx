@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import '../admin/admin.css';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../services/supabase';
 import { Lock, Mail, ArrowLeft, KeyRound, CheckCircle, Loader2 } from 'lucide-react';

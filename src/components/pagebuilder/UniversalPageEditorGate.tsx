@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { supabase } from '../../services/supabase';
+import { useAdminSession } from '../../hooks/useAdminSession';
 
 /*
   L'éditeur de page en ligne (`UniversalPageEditor`) et ses dépendances
@@ -20,22 +19,9 @@ const UniversalPageEditor = dynamic(() => import('./UniversalPageEditor'), {
 });
 
 export default function UniversalPageEditorGate() {
-  const [hasSession, setHasSession] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (active) setHasSession(!!data?.session);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setHasSession(!!session);
-    });
-    return () => {
-      active = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
+  // Sans clé de session dans localStorage, ni le client Supabase ni l'éditeur
+  // ne sont téléchargés (voir useAdminSession).
+  const hasSession = useAdminSession();
   if (!hasSession) return null;
   return <UniversalPageEditor />;
 }

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Instagram, Linkedin, Youtube, Music2 } from 'lucide-react';
 import { useSettings, settingsCache } from '../hooks/useSettings';
 import type { FooterVariant } from '../constants/chromeVariants';
+import { optimizedImgProps } from '../utils/imageOptim';
 
 // Pas de logo par défaut : l'affichage est conditionné à un logo réellement
 // renseigné dans Paramètres > Design & Style.
@@ -53,16 +54,16 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
   if (initialBgColor !== undefined) {
     settingsCache.set('footer_bg_color', initialBgColor);
   }
-  if (initialLogoUrl && !settingsCache.has('global_logo')) {
+  if (initialLogoUrl && (typeof window === 'undefined' || !settingsCache.has('global_logo'))) {
     settingsCache.set('global_logo', initialLogoUrl);
   }
-  if (initialFooterImage && !settingsCache.has('footer_image')) {
+  if (initialFooterImage && (typeof window === 'undefined' || !settingsCache.has('footer_image'))) {
     settingsCache.set('footer_image', initialFooterImage);
   }
-  if (initialNavigationMenu && !settingsCache.has('navigation_menu')) {
+  if (initialNavigationMenu && (typeof window === 'undefined' || !settingsCache.has('navigation_menu'))) {
     settingsCache.set('navigation_menu', initialNavigationMenu);
   }
-  if (initialLegalLinks && !settingsCache.has('footer_legal_links')) {
+  if (initialLegalLinks && (typeof window === 'undefined' || !settingsCache.has('footer_legal_links'))) {
     settingsCache.set('footer_legal_links', initialLegalLinks);
   }
   if (initialSocials) {
@@ -213,7 +214,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
             */}
             {settings.footer_image && (
               <img
-                src={settings.footer_image}
+                {...optimizedImgProps(settings.footer_image, '(min-width: 768px) 288px, 224px', [384, 640])}
                 alt={[settings.business_name, settings.business_address_city].filter(Boolean).join(' — ')}
                 className="w-56 md:w-72 object-cover rounded-2xl"
                 loading="lazy"
@@ -324,7 +325,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
           <div className="col-span-2 md:col-span-1 flex justify-center md:justify-end items-start">
             {logoUrl && (
               <img
-                src={logoUrl}
+                {...optimizedImgProps(logoUrl, '320px', [384, 640])}
                 alt={settings.business_name}
                 className="h-28 w-auto object-contain opacity-80"
                 loading="lazy"

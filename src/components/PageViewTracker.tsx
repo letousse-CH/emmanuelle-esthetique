@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { supabase } from '../services/supabase';
+import { liteInsert } from '../services/supabaseLite';
 
 // Pages à ne pas tracker
 const EXCLUDED = ['/admin', '/login'];
@@ -35,13 +35,12 @@ export default function PageViewTracker() {
       // quand même, quitte à compter deux fois.
     }
 
-    void supabase
-      .from('page_views')
-      .insert({ page: pathname, referrer: document.referrer || null })
-      .then(({ error }) => {
-        // Le tracking ne doit jamais casser l'UX : on se contente d'un log.
-        if (error) console.warn('[page-views] insertion impossible:', error.message);
-      });
+    // Insertion REST anonyme (sans le client Supabase) : c'est la même requête
+    // que `supabase.from('page_views').insert(...)`, sans ses ~215 Ko de JS.
+    void liteInsert('page_views', { page: pathname, referrer: document.referrer || null }).then(({ error }) => {
+      // Le tracking ne doit jamais casser l'UX : on se contente d'un log.
+      if (error) console.warn('[page-views] insertion impossible:', error.message);
+    });
   }, [pathname]);
 
   return null;

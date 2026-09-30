@@ -47,6 +47,12 @@
     "tsx": "^4.23.15",
     "typescript": "~5.8.2"
   },
+  "browserslist": [
+    "chrome >= 111",
+    "edge >= 111",
+    "firefox >= 111",
+    "safari >= 16.4"
+  ],
   "engines": {
     "node": ">=20.0.0"
   },

@@ -1,0 +1,41 @@
+/* Jetons de thème Tailwind partagés par toutes les feuilles de style du projet
+   (index.css pour le site public ; admin.css, feuille complète du back-office et des
+   éditeurs ; blog.css, seulement les classes `prose`). Chaque feuille est compilée séparément par
+   Tailwind ; sans ces jetons, ses utilitaires (`bg-sage`, `font-serif`, `text-accent`…)
+   ne trouveraient pas leurs variables. */
+
+@theme {
+  --font-sans: var(--font-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-serif), "Cormorant Garamond", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+
+  /* ── Palette marine (inspiration Phytomer / mer d'Iroise) ──
+     Ces valeurs servent de repli neutre en attendant que « Design & Style »
+     n'ait rien enregistré. Une fois la palette éditée dans l'admin, elle prend
+     le pas sur ces couleurs via `GlobalStyles`. */
+  --color-sage: #12283A;           /* Bleu nuit abyssal — accent principal */
+  --color-wood: #12283A;
+  --color-stone-deep: #22252A;     /* Anthracite chaud pour la lecture */
+  --color-paper: #FFFFFF;
+  --color-stone-muted: #F6F8F9;    /* Blanc écume, alterne les sections */
+  --color-border: #E7EBEE;
+  --color-darkblue: #2B4764;
+  --color-copper: #008494;         /* Lagon marin — hover / actif */
+
+  /* ── Largeur maxi de contenu et gouttière commune ──
+     Elles pilotent les utilitaires `mx-container` et `px-gutter` définis plus
+     bas, et servent de source unique pour tout le site. */
+  --container-max: 90rem;          /* 1440 px — plafond éditorial */
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+}
+
+/* ── Back-office : une seule couleur d'action ──────────────────────────────
+   `--admin-accent` reçoit la couleur principale du site (« Design & Style »),
+   posée sur <html> par le layout admin (voir useAdminAccent). Les teintes
+   dérivées sont recalculées sur le même élément, donc suivent la couleur lue.
+   `--admin-accent-fg` bascule en encre foncée si la couleur est claire. */
+@theme inline {
+  --color-accent: var(--admin-accent);
+  --color-accent-hover: var(--admin-accent-hover);
+  --color-accent-soft: var(--admin-accent-soft);
+  --color-accent-fg: var(--admin-accent-fg);
+}

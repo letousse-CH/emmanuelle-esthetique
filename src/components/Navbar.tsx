@@ -13,6 +13,7 @@ import { Menu, X, ChevronDown } from 'lucide-react';
 import { useSettings, settingsCache } from '../hooks/useSettings';
 import { useModuleFlags } from '../hooks/useModuleFlags';
 import type { HeaderVariant } from '../constants/chromeVariants';
+import { optimizedImgProps } from '../utils/imageOptim';
 
 // Pas de logo par défaut : tant qu'aucun fichier n'est déposé dans
 // Paramètres > Design & Style, la navbar affiche le nom du site en toutes
@@ -45,19 +46,21 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
   // Seed le cache avec les réglages lus côté serveur pour que le premier rendu
   // (SSR + hydratation) affiche déjà le vrai menu, sans flash de l'ancien menu
   // par défaut (SETTINGS_DEFAULTS) le temps que le fetch client se termine.
-  if (initialVariant && !settingsCache.has('header_variant')) {
+  // Côté serveur, le cache est global au processus : on le réécrit à chaque rendu, sinon le premier
+  // menu/logo servi resterait figé dans toutes les régénérations ISR suivantes.
+  if (initialVariant && (typeof window === 'undefined' || !settingsCache.has('header_variant'))) {
     settingsCache.set('header_variant', initialVariant);
   }
-  if (initialLogoUrl && !settingsCache.has('global_logo')) {
+  if (initialLogoUrl && (typeof window === 'undefined' || !settingsCache.has('global_logo'))) {
     settingsCache.set('global_logo', initialLogoUrl);
   }
-  if (initialNavigationMenu && !settingsCache.has('navigation_menu')) {
+  if (initialNavigationMenu && (typeof window === 'undefined' || !settingsCache.has('navigation_menu'))) {
     settingsCache.set('navigation_menu', initialNavigationMenu);
   }
-  if (initialRegisterLink && !settingsCache.has('header_register_link')) {
+  if (initialRegisterLink && (typeof window === 'undefined' || !settingsCache.has('header_register_link'))) {
     settingsCache.set('header_register_link', initialRegisterLink);
   }
-  if (initialBusinessName && !settingsCache.has('business_name')) {
+  if (initialBusinessName && (typeof window === 'undefined' || !settingsCache.has('business_name'))) {
     settingsCache.set('business_name', initialBusinessName);
   }
   const settings = useSettings(['global_logo', 'navigation_menu', 'header_register_link', 'business_name', 'header_variant']);
@@ -192,7 +195,7 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
           <div className={`transition-all duration-500 bg-transparent shrink-0 flex items-center ${scrolled ? 'h-[92px] w-[260px] max-md:h-[94px] max-md:w-[265px]' : 'h-[102px] w-[290px] max-md:h-[106px] max-md:w-[300px]'}`}>
             {logoUrl && !logoBroken ? (
               <img
-                src={logoUrl}
+                {...optimizedImgProps(logoUrl, '300px', [384, 640])}
                 onError={() => setLogoBroken(true)}
                 alt={businessName ? `${businessName} — retour à l'accueil` : "Retour à l'accueil"}
                 className="w-full h-full object-contain"

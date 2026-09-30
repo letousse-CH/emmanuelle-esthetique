@@ -53,7 +53,11 @@
 .pb-pad-medium { padding-block: clamp(3rem, 7vw, 6rem); }
 .pb-pad-large { padding-block: clamp(4.5rem, 10vw, 9rem); }
 
-/* Barre de menu fixe : la première section de la page s'y ménage de la place (--nav-h posé par Navbar). */
+/* Barre de menu fixe : la première section de la page s'y ménage de la place (--nav-h posé par Navbar).
+   Valeurs de repli = hauteur réelle de la barre (logo 106px + 2×16px sous 768px, 102px + 2×16px au-delà) :
+   sans elles, --nav-h valait 0 jusqu'à l'hydratation, puis toute la page descendait d'un coup (CLS). */
+:root { --nav-h: 138px; }
+@media (min-width: 768px) { :root { --nav-h: 134px; } }
 .pb-page:not(.pb-editing) > .pb-section:first-child.pb-pad-small { padding-top: max(clamp(2rem, 4vw, 3rem), calc(var(--nav-h, 0px) + 2rem)); }
 .pb-page:not(.pb-editing) > .pb-section:first-child.pb-pad-medium { padding-top: max(clamp(3rem, 7vw, 6rem), calc(var(--nav-h, 0px) + 2rem)); }
 .pb-page:not(.pb-editing) > .pb-section:first-child.pb-pad-large { padding-top: max(clamp(4.5rem, 10vw, 9rem), calc(var(--nav-h, 0px) + 2rem)); }
@@ -159,7 +163,13 @@
 /* ── Blocs ───────────────────────────────────────────────────────────────── */
 .pb-img { margin: 0; display: flex; flex-direction: column; gap: .6rem; }
 .pb-img img { width: 100%; height: 100%; display: block; border-radius: var(--pb-radius); }
+/* Cadre à hauteur libre : `height: 100%` sur un parent sans hauteur annule le rapport width/height de
+   l'image, qui n'occupait alors aucune place avant son chargement (décalage de mise en page). */
+.pb-img-frame > img { height: auto; }
 .pb-img figcaption { font-size: .85rem; color: var(--pb-fg-muted); }
+/* `width: 100%` : avec des marges auto (centré / à droite), la figure se réduisait au contenu, donc à 0 avant le
+   chargement de l'image — la place n'était réservée qu'à l'arrivée de la photo (décalage de mise en page). */
+.pb-img-small, .pb-img-medium, .pb-img-large { width: 100%; }
 .pb-img-small { max-width: 18rem; } .pb-img-medium { max-width: 28rem; } .pb-img-large { max-width: 42rem; }
 .pb-img.pb-center { margin-inline: auto; } .pb-img.pb-right { margin-left: auto; }
 .pb-img-fill { position: relative; flex: 1; min-height: min(70vw, 28rem); height: 100%; }
@@ -201,7 +211,10 @@
 .pb-carousel { position: relative; }
 .pb-carousel-track {
   display: flex; gap: 1.25rem; overflow-x: auto; scroll-snap-type: x proximity;
-  scroll-behavior: smooth; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  /* Pas de `scroll-behavior: smooth` ici : combiné à scroll-snap, il déclenche un défilement animé dès le
+     chargement, et Chrome cesse alors de mesurer le LCP (« NO_LCP » dans PageSpeed). Les boutons
+     flèches demandent déjà `behavior: 'smooth'` dans CardsCarousel. */
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
   /* `overflow-x: auto` force `overflow-y` à `auto` aussi : sans cette marge, le survol
      d'une carte (soulèvement + ombre, voir .pb-card:hover) serait coupé en haut et en bas. */
   padding: 1rem .25rem 2rem; margin: -1rem -.25rem -1.75rem;

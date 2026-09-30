@@ -3,21 +3,14 @@
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Pencil } from 'lucide-react';
-import { supabase } from '../../services/supabase';
+import { useAdminSession } from '../../hooks/useAdminSession';
 
 // Le code de l'éditeur n'est téléchargé qu'au clic, et seulement par une admin connectée.
 const PageBuilder = dynamic(() => import('./editor/PageBuilder'), { ssr: false, loading: () => null });
 
 export default function PageEditGate({ pageId }: { pageId: string }) {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const isAdmin = useAdminSession();
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    supabase.auth.getSession().then(({ data }) => { if (active) setIsAdmin(!!data.session); });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setIsAdmin(!!s));
-    return () => { active = false; subscription.unsubscribe(); };
-  }, []);
 
   useEffect(() => {
     if (isAdmin && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('edit') === '1') setOpen(true);

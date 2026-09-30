@@ -1,3 +1,4 @@
+import { Lora, Open_Sans } from 'next/font/google';
 import GlobalStyles from '../../components/GlobalStyles';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
@@ -6,20 +7,35 @@ import AgentChatWidget from '../../components/AgentChatWidget';
 import MobileCallBar from '../../components/MobileCallBar';
 import CookieConsent from '../../components/CookieConsent';
 import GoogleAnalytics from '../../components/GoogleAnalytics';
-import { getSettingsServer } from '../../services/settingsServer';
+import { getSettingsServer, getDesignTokensServer } from '../../services/settingsServer';
 import { isModuleEnabledServer } from '../../config/modules';
 import { fetchPublicAgent } from '../../services/agents';
 import { DRAFT_PREVIEW } from '../../services/draftPreview';
 import type { SettingKey } from '../../constants/settings';
 
-export const dynamic = 'force-dynamic';
+/*
+  Pas de `force-dynamic` : le layout ne lit ni cookies, ni en-têtes, ni paramètres
+  d'URL. Il était dynamique à cause de `noStore()` dans getSettingsServer (retiré,
+  sauf en DRAFT_PREVIEW). Les pages publiques sont rendues en ISR — durée de
+  revalidation fixée par chaque page (`revalidate = 60`) — et l'éditeur de pages
+  appelle `/api/revalidate` à chaque enregistrement.
+*/
+
+// Polices de la charte en vigueur (Design & Style : titres Lora, texte Open Sans), servies par le
+// site : préchargées, sans aller-retour vers Google, avec un repli aux métriques ajustées
+// (`adjustFontFallback` par défaut) — la police arrive sans faire sauter la mise en page.
+// Une police variable : un seul fichier couvre tous les poids. Déclarées ici et non dans le layout
+// racine : le back-office ne les utilise pas et ne doit pas les précharger. Le lien avec les
+// réglages se fait dans `constants/selfHostedFonts.ts`.
+const lora = Lora({ subsets: ['latin'], variable: '--font-lora', display: 'swap' });
+const openSans = Open_Sans({ subsets: ['latin'], variable: '--font-open-sans', display: 'swap' });
 
 export default async function PublicLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const settings = await getSettingsServer([
+  const [tokens, settings] = await Promise.all([getDesignTokensServer(), getSettingsServer([
     'global_logo',
     'footer_image',
     'navigation_menu',
@@ -39,7 +55,7 @@ export default async function PublicLayout({
     'business_address_city',
     'business_address_region',
     ...(DRAFT_PREVIEW ? (['navigation_menu_draft'] as SettingKey[]) : []),
-  ]);
+  ])]);
   if (DRAFT_PREVIEW && settings['navigation_menu_draft' as SettingKey]) {
     settings.navigation_menu = settings['navigation_menu_draft' as SettingKey];
   }
@@ -55,8 +71,8 @@ export default async function PublicLayout({
       Le back-office ne porte pas cet attribut : la palette d'un client ne peut
       donc pas déborder sur l'interface d'administration et la rendre illisible.
     */
-    <div data-site-theme className="contents">
-      <GlobalStyles />
+    <div data-site-theme className={`contents ${lora.variable} ${openSans.variable}`}>
+      <GlobalStyles initialTokens={tokens} />
       <PageViewTracker />
       <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
       <CookieConsent />

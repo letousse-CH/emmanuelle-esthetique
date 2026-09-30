@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../services/supabase';
+import { hasStoredSession, liteSettingsRows } from '../services/supabaseLite';
 import { proxyUrl } from '../utils/media';
 
 import { SETTINGS_DEFAULTS, IMAGE_KEYS, SettingKey } from '../constants/settings';
@@ -19,11 +19,15 @@ let fetchPromise: Promise<void> | null = null;
 
 export function fetchAllSettings(): Promise<void> {
   if (fetchPromise) return fetchPromise;
-  const promise = Promise.resolve(
-    supabase
-      .from('settings')
-      .select('key, value')
-  ).then(({ data, error }) => {
+  // Visiteur anonyme : route /api/public-settings de notre domaine, sans charger
+  // le client Supabase (~215 Ko de JS) ni contacter supabase.co. Session d'admin détectée : le vrai client, comme avant
+  // (l'admin voit alors les réglages que ses droits lui ouvrent).
+  const request: Promise<{ data: unknown; error: { message: string } | null }> = hasStoredSession()
+    ? import('../services/supabase').then(({ supabase }) =>
+        Promise.resolve(supabase.from('settings').select('key, value')),
+      )
+    : liteSettingsRows();
+  const promise = request.then(({ data, error }) => {
     if (error) {
       console.error('[fetchAllSettings] Error fetching settings:', error.message);
       fetchPromise = null;

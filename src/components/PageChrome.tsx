@@ -7,7 +7,8 @@ interface PageChromeProps {
 // éviter le flash du header/footer qu'un useEffect ne peut pas éviter.
 export default function PageChrome({ showHeader, showFooter }: PageChromeProps) {
   const rules = [
-    !showHeader && 'nav[data-main-nav]{display:none!important}',
+    // --nav-h : sans barre, la première section ne doit pas garder la place de son repli (blocks.css).
+    !showHeader && 'nav[data-main-nav]{display:none!important}:root{--nav-h:0px!important}',
     !showFooter && 'footer{display:none!important}',
   ].filter(Boolean).join('');
 

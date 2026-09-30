@@ -13,11 +13,14 @@ import { flatCarte } from '../constants/carteSoins';
 // côté navigateur — aucun rendu serveur par requête n'est nécessaire.
 export const revalidate = 3600;
 
+// Polices de repli du gabarit, quand aucune charte n'est réglée. La charte du site les
+// remplace : pas de préchargement, elles ne se téléchargent que si un texte les utilise.
 const inter = Inter({
   subsets: ['latin'],
   weight: ['300', '400', '500', '600'],
   variable: '--font-sans',
   display: 'swap',
+  preload: false,
   adjustFontFallback: false,
 });
 
@@ -27,6 +30,7 @@ const cormorant = Cormorant_Garamond({
   style: ['normal', 'italic'],
   variable: '--font-serif',
   display: 'swap',
+  preload: false,
   adjustFontFallback: false,
 });
 

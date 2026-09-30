@@ -21,7 +21,36 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     X-XSS-Protection = "1; mode=block"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(self)"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: http:; connect-src 'self' data: blob: https: http: wss://*.supabase.co; frame-src https://js.stripe.com https://checkout.stripe.com; object-src 'none'; base-uri 'self';"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: http:; connect-src 'self' data: blob: https: http: wss://*.supabase.co; frame-src https://www.youtube.com https://js.stripe.com https://checkout.stripe.com https://www.youtube-nocookie.com https://player.vimeo.com; media-src 'self' blob: https:; object-src 'none'; base-uri 'self';"
+
+# Cache long des fichiers statiques. Ils ne sont pas couverts par le `/*` ci-dessus
+# (qui ne porte que la sécurité) : aucun en-tête n'est écrasé.
+#  - /_next/static/* : JS, CSS et polices (next/font) ; le nom contient un hash
+#    du contenu, donc immuable.
+#  - /_next/image*   : images redimensionnées par l'optimiseur ; l'URL contient
+#    celle de l'image d'origine, dont le nom porte un horodatage (une image
+#    remplacée a une nouvelle URL).
+#  - /icons/*, /images/* : fichiers de public/, sans hash — pour en changer un,
+#    lui donner un nouveau nom.
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/_next/image*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
 
 # Pas de proxy /medias/* : les médias sont servis directement depuis Cloudflare
 # R2 (NEXT_PUBLIC_R2_PUBLIC_URL) ou depuis Supabase Storage du projet courant.

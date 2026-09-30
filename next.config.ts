@@ -1,10 +1,28 @@
 import type { NextConfig } from "next";
 
+// Domaine public du bucket R2 : l'optimiseur d'images (`/_next/image`) refuse
+// tout hôte absent de `remotePatterns`. Le sous-domaine `pub-xxxx.r2.dev` est
+// déjà couvert ; un domaine personnalisé doit être ajouté ici.
+const r2Host = (() => {
+  try {
+    const u = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || process.env.VITE_R2_PUBLIC_URL;
+    return u ? new URL(u).hostname : '';
+  } catch {
+    return '';
+  }
+})();
+
 const nextConfig: NextConfig = {
   // Second serveur de dev (`npm run dev:brouillons`) : dossier de build distinct
   // pour cohabiter avec `npm run dev`. Non défini en production.
   distDir: process.env.NEXT_DIST_DIR || '.next',
   images: {
+    // Les images des pages sont hébergées sur R2, sans en-tête de cache, et
+    // servies en taille d'origine : l'optimiseur les redimensionne, les passe en
+    // WebP et les garde un an (les noms de fichiers portent un horodatage, une
+    // image remplacée a donc une nouvelle URL).
+    formats: ['image/webp'],
+    minimumCacheTTL: 31536000,
     // `**.supabase.co` couvre le Storage de n'importe quel projet Supabase :
     // ne pas y recoder en dur l'hôte d'un projet précis.
     remotePatterns: [
@@ -12,6 +30,7 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '**.r2.dev' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'images.pexels.com' },
+      ...(r2Host ? [{ protocol: 'https' as const, hostname: r2Host }] : []),
     ],
   },
   env: {

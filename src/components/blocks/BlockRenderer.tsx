@@ -19,6 +19,7 @@ import LegacySection from './LegacySection';
 import GoogleReviews from '../GoogleReviews';
 import ContactForm from '../ContactForm';
 import CardsCarousel from './CardsCarousel';
+import { optimizedImgProps } from '../../utils/imageOptim';
 
 export type EditorSelection =
   | { kind: 'section'; sectionId: string }
@@ -34,11 +35,47 @@ export interface EditorState {
   cardDrop?: { blockId: string; index: number } | null;
 }
 
+/**
+ * Images du site public : redimensionnées/converties par l'endpoint `/_next/image`
+ * (voir utils/imageOptim.ts). Absent dans l'éditeur, qui garde les URL d'origine.
+ */
+export interface ImageOptions {
+  /** Dimensions lues côté serveur (utils/imageDims.ts), par URL : elles réservent la place de l'image. */
+  dims: Record<string, { w: number; h: number }>;
+}
+
 interface Ctx {
   editor?: EditorState;
   sectionId: string;
   columnId: string;
   blockId: string;
+  /** Réglages d'image, uniquement sur le site public. */
+  img?: ImageOptions;
+  /** Attribut `sizes` d'une image qui occupe toute la colonne. */
+  colSizes: string;
+  /** Image probablement à l'origine du LCP : chargée tout de suite, en priorité haute. */
+  lcp?: boolean;
+}
+
+/** Largeur d'une colonne selon la mise en page de la section (les colonnes s'empilent sous 768 px). */
+function columnSizes(layout: string, columns: number): string {
+  if (layout === 'full-width' || columns <= 1) return '100vw';
+  const share = layout === '3-col-equal' ? 34 : layout === '2-col-equal' ? 50 : 60;
+  return `(min-width: 768px) ${share}vw, 100vw`;
+}
+
+/**
+ * Attributs d'un `<img>` de contenu : `srcset` redimensionné et chargement
+ * différé, sauf pour l'image LCP (immédiate, priorité haute). Sans réglages
+ * (éditeur), l'URL d'origine et le chargement différé habituel.
+ */
+function imgAttrs(ctx: Ctx, url: string, sizes: string, lcp = false) {
+  if (!ctx.img) return { src: url, loading: 'lazy' as const };
+  return {
+    ...optimizedImgProps(url, sizes),
+    loading: lcp ? ('eager' as const) : ('lazy' as const),
+    fetchPriority: lcp ? ('high' as const) : undefined,
+  };
 }
 
 /** Attribut d'édition directe d'un texte simple (double-clic dans l'éditeur). */
@@ -107,22 +144,27 @@ function ImageView({ b, ctx }: { b: ImageBlock; ctx: Ctx }) {
     return (
       <figure className="pb-img pb-img-fill">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={b.url} alt={b.alt || ''} loading="lazy" decoding="async" data-parallax={ctx.editor ? undefined : '0.06'} />
+        <img {...imgAttrs(ctx, b.url, ctx.colSizes, ctx.lcp)} alt={b.alt || ''} decoding="async" data-parallax={ctx.editor ? undefined : '0.06'} />
       </figure>
     );
   }
   const size = b.size && b.size !== 'full' ? `pb-img-${b.size}` : '';
+  const maxPx = b.size === 'small' ? 288 : b.size === 'medium' ? 448 : b.size === 'large' ? 672 : 0;
+  const hasRatio = !!b.ratio && b.ratio !== 'auto';
+  // Sans ratio imposé, largeur/hauteur d'origine : le navigateur réserve la place avant le chargement.
+  const dims = !hasRatio ? ctx.img?.dims[b.url] : undefined;
   return (
     <figure className={`pb-img ${size} ${alignCls(b.align)}`}>
       <div className="pb-img-frame">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={b.url}
+          {...imgAttrs(ctx, b.url, maxPx ? `min(100vw, ${maxPx}px)` : ctx.colSizes, ctx.lcp)}
+          width={dims?.w}
+          height={dims?.h}
           alt={b.alt || ''}
-          loading="lazy"
           decoding="async"
           data-parallax={ctx.editor ? undefined : '0.05'}
-          style={{ aspectRatio: b.ratio && b.ratio !== 'auto' ? b.ratio : undefined, objectFit: b.fit || 'cover' }}
+          style={{ aspectRatio: hasRatio ? b.ratio : undefined, objectFit: b.fit || 'cover' }}
         />
       </div>
       {b.caption && <figcaption {...f(ctx, 'caption')}>{b.caption}</figcaption>}
@@ -200,6 +242,11 @@ function CardsView({ b, ctx }: { b: CardsBlock; ctx: Ctx }) {
   const carousel = b.layout === 'carousel';
   const editor = ctx.editor;
   const cardDrop = editor?.cardDrop && editor.cardDrop.blockId === ctx.blockId ? editor.cardDrop : null;
+  const cardSizes = carousel
+    ? '(min-width: 640px) 320px, 82vw'
+    : left
+      ? '(min-width: 640px) 20vw, 40vw'
+      : `(min-width: 1024px) ${b.cols === 4 ? 25 : b.cols === 3 ? 34 : 50}vw, (min-width: 640px) 50vw, 100vw`;
   const cardNodes = b.items.map((it, i) => {
     const body = (
       <>
@@ -220,7 +267,7 @@ function CardsView({ b, ctx }: { b: CardsBlock; ctx: Ctx }) {
         {it.image && (
           <div className="pb-card-img">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={it.image} alt={it.title || ''} loading="lazy" decoding="async" draggable={false} />
+            <img {...imgAttrs(ctx, it.image, cardSizes)} alt={it.title || ''} decoding="async" draggable={false} />
           </div>
         )}
         {left ? <div className="pb-card-body">{body}</div> : body}
@@ -385,6 +432,10 @@ function TestimonialsView({ b, ctx }: { b: TestimonialsBlock; ctx: Ctx }) {
 
 function GalleryView({ b, ctx }: { b: GalleryBlock; ctx: Ctx }) {
   if (!b.images.length) return ctx.editor ? <div className="pb-img-empty">Ajoutez des photos dans le panneau</div> : null;
+  const cols = b.cols || 3;
+  const gallerySizes = b.variant === 'carousel'
+    ? '(min-width: 416px) 416px, 80vw'
+    : `(min-width: 900px) ${cols === 4 ? 25 : cols === 3 ? 34 : 50}vw, 50vw`;
   return (
     <div>
       <Head title={b.title} ctx={ctx} />
@@ -392,7 +443,7 @@ function GalleryView({ b, ctx }: { b: GalleryBlock; ctx: Ctx }) {
         {b.images.map((im) => (
           <figure key={im.id}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={im.url} alt={im.alt || ''} loading="lazy" decoding="async" />
+            <img {...imgAttrs(ctx, im.url, gallerySizes)} alt={im.alt || ''} decoding="async" />
             {im.caption && <figcaption>{im.caption}</figcaption>}
           </figure>
         ))}
@@ -486,7 +537,8 @@ function toneClass(bg: string | undefined, tone: string | undefined): string {
   return bg === 'dark' || bg === 'accent' ? 'pb-tone-light' : '';
 }
 
-function ColumnView({ section, column, index, editor }: { section: ContentSection; column: ContentColumn; index: number; editor?: EditorState }) {
+function ColumnView({ section, column, index, editor, images, lcpId }: { section: ContentSection; column: ContentColumn; index: number; editor?: EditorState; images?: ImageOptions; lcpId?: string | null }) {
+  const colSizes = columnSizes(section.layout, section.columns.length);
   const sel = editor?.selection;
   const selected = sel?.kind === 'column' && sel.columnId === column.id;
   const hasBg = column.background && column.background !== 'transparent';
@@ -506,7 +558,7 @@ function ColumnView({ section, column, index, editor }: { section: ContentSectio
   return (
     <div className={cls} {...edAttrs}>
       {column.blocks.map((block, i) => {
-        const ctx: Ctx = { editor, sectionId: section.id, columnId: column.id, blockId: block.id };
+        const ctx: Ctx = { editor, sectionId: section.id, columnId: column.id, blockId: block.id, img: images, colSizes, lcp: block.id === lcpId };
         const view = <BlockView block={block} ctx={ctx} />;
         if (!editor) return <React.Fragment key={block.id}>{view}</React.Fragment>;
         const isSel = sel?.kind === 'block' && sel.blockId === block.id;
@@ -542,7 +594,7 @@ function ColumnView({ section, column, index, editor }: { section: ContentSectio
   );
 }
 
-function SectionView({ section, editor, first }: { section: ContentSection; editor?: EditorState; first: boolean }) {
+function SectionView({ section, editor, first, images, lcpId }: { section: ContentSection; editor?: EditorState; first: boolean; images?: ImageOptions; lcpId?: string | null }) {
   const bg = section.background || 'transparent';
   const sel = editor?.selection;
   const selected = sel?.kind === 'section' && sel.sectionId === section.id;
@@ -572,7 +624,7 @@ function SectionView({ section, editor, first }: { section: ContentSection; edit
         <div className="pb-bgimg" aria-hidden>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={section.bgImage.url}
+            {...(images ? optimizedImgProps(section.bgImage.url, '100vw') : { src: section.bgImage.url })}
             alt=""
             loading={first ? 'eager' : 'lazy'}
             fetchPriority={first ? 'high' : undefined}
@@ -585,7 +637,7 @@ function SectionView({ section, editor, first }: { section: ContentSection; edit
       <div className={`pb-container pb-w-${width}`} data-container data-width={width} data-gutter={width === 'full' ? 'none' : undefined}>
         <div className={grid}>
           {section.columns.map((col, i) => (
-            <ColumnView key={col.id} section={section} column={col} index={i} editor={editor} />
+            <ColumnView key={col.id} section={section} column={col} index={i} editor={editor} images={images} lcpId={lcpId} />
           ))}
         </div>
       </div>
@@ -593,11 +645,25 @@ function SectionView({ section, editor, first }: { section: ContentSection; edit
   );
 }
 
-export function BlockRenderer({ content, editor }: { content: ContentStructure; editor?: EditorState }) {
+/**
+ * Premier bloc image de la première section, quand celle-ci n'a pas d'image de
+ * fond : c'est lui, le plus souvent, l'élément le plus grand du premier écran.
+ */
+function firstSectionImageId(content: ContentStructure): string | null {
+  const first = content[0];
+  if (!first || first.bgImage?.url) return null;
+  for (const col of first.columns) {
+    for (const blk of col.blocks) if (blk.type === 'image' && blk.url) return blk.id;
+  }
+  return null;
+}
+
+export function BlockRenderer({ content, editor, images }: { content: ContentStructure; editor?: EditorState; images?: ImageOptions }) {
+  const lcpId = images ? firstSectionImageId(content) : null;
   return (
     <div className={`pb-page ${editor ? 'pb-editing' : ''}`}>
       {content.map((section, i) => (
-        <SectionView key={section.id} section={section} editor={editor} first={i === 0} />
+        <SectionView key={section.id} section={section} editor={editor} first={i === 0} images={images} lcpId={i === 0 ? lcpId : null} />
       ))}
     </div>
   );
@@ -608,6 +674,15 @@ export function collectFaq(content: ContentStructure): { question: string; answe
   const out: { question: string; answer: string }[] = [];
   for (const s of content) for (const c of s.columns) for (const b of c.blocks) {
     if (b.type === 'faq') for (const it of b.items) if (it.question && it.answer) out.push({ question: it.question, answer: it.answer });
+  }
+  return out;
+}
+
+/** URL des images qui ont besoin de leurs dimensions (bloc image sans ratio imposé, hors « remplir »). */
+export function collectImageUrlsNeedingDims(content: ContentStructure): string[] {
+  const out: string[] = [];
+  for (const s of content) for (const c of s.columns) for (const b of c.blocks) {
+    if (b.type === 'image' && b.url && !b.fill && (!b.ratio || b.ratio === 'auto')) out.push(b.url);
   }
   return out;
 }

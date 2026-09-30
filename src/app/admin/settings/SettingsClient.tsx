@@ -12,7 +12,7 @@ import { Save, Lock, Tag, Image, X, Check, Sun, Moon, Palette, Type, Sliders, Ey
 import { settingsCache } from '../../../hooks/useSettings';
 import { SETTINGS_DEFAULTS } from '../../../constants/settings';
 import { AI_EFFORT_LEVELS, AI_MODELS, AiEffort, AiModelSpec, DEFAULT_AI_EFFORT, DEFAULT_AI_MODEL } from '../../../constants/aiModels';
-import { MODULE_SETTING_KEYS } from '../../../config/modules';
+import { MODULE_SETTING_KEYS } from '../../../config/moduleFlags';
 import { Button, Callout, FormMessage, PageHeader, SideNav, ToggleRow, type TabItem } from '../../../components/admin/ui';
 
 /**

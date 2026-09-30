@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Mail, MapPin, Phone } from 'lucide-react';
 
 import ContactForm from '../../../components/ContactForm';
-import DynamicPageClient from '../../../components/pagebuilder/DynamicPageClient';
+import dynamic from 'next/dynamic';
 import PageChrome from '../../../components/PageChrome';
 import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
 import { fetchPageBySlug } from '../../../services/dynamicPages';
@@ -11,6 +11,9 @@ import { buildMetadata, getPageMeta } from '../../../services/pageMeta';
 import { buildBreadcrumbJsonLd } from '../../../utils/pageJsonLd';
 import BlockPage from '../../../components/blocks/BlockPage';
 import { isBlocksPage } from '../../../components/blocks/pageContent';
+
+// Ancien rendu Studio : chargé (JS et CSS) seulement si la page n'est pas en v2.
+const DynamicPageClient = dynamic(() => import('../../../components/pagebuilder/DynamicPageClient'));
 
 /**
  * Page de contact.
