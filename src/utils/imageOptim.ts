@@ -21,10 +21,10 @@ export const IMAGE_WIDTHS = [384, 640, 828, 1200, 1920] as const;
 
 /**
  * Qualités autorisées : doivent figurer dans `images.qualities` (next.config.ts), sinon l'optimiseur répond 400.
- * 75 partout ; 60 pour l'image d'en-tête (LCP), où le poids compte plus que la finesse.
+ * 75 partout ; 70 pour l'image d'en-tête (LCP), où le poids compte plus que la finesse.
  */
 export const QUALITY = 75;
-export const QUALITY_HERO = 60;
+export const QUALITY_HERO = 70;
 
 // Doit refléter `images.remotePatterns` de next.config.ts : une URL qui n'y
 // figure pas ferait répondre 400 à l'optimiseur.

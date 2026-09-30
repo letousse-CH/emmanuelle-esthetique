@@ -26,8 +26,8 @@ const nextConfig: NextConfig = {
     // WebP et les garde un an (les noms de fichiers portent un horodatage, une
     // image remplacée a donc une nouvelle URL).
     formats: ['image/webp'],
-    // 60 : image d'en-tête (LCP) ; 75 : les autres (voir utils/imageOptim.ts).
-    qualities: [60, 75],
+    // 70 : image d'en-tête (LCP) ; 75 : les autres (voir utils/imageOptim.ts).
+    qualities: [70, 75],
     minimumCacheTTL: 31536000,
     // `**.supabase.co` couvre le Storage de n'importe quel projet Supabase :
     // ne pas y recoder en dur l'hôte d'un projet précis.
