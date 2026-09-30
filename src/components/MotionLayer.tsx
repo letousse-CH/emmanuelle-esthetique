@@ -82,14 +82,19 @@ export default function MotionLayer() {
       .then(({ default: Lenis }) => {
         if (disposed) return;
         const lenis = new Lenis({
-          lerp: 0.085,
-          wheelMultiplier: 0.9,
+          // Inertie courte : un trackpad a déjà la sienne, en empiler une longue donne un défilement « mou ».
+          lerp: 0.12,
+          wheelMultiplier: 1,
           smoothWheel: true,
           anchors: true,
           // Menus et panneaux qui défilent eux-mêmes (navigation mobile, chat) gardent leur défilement natif.
           allowNestedScroll: true,
         });
         lenisRef.current = lenis;
+        // La parallaxe se calcule dans la même image que le défilement : avec l'événement natif
+        // `scroll`, elle arrivait à l'image suivante et tremblait par rapport au contenu.
+        window.removeEventListener('scroll', schedule);
+        lenis.on('scroll', paint);
         let raf = 0;
         const loop = (t: number) => { lenis.raf(t); raf = requestAnimationFrame(loop); };
         raf = requestAnimationFrame(loop);
@@ -156,10 +161,24 @@ export default function MotionLayer() {
       schedule();
     });
 
+    // Une variable n'est réécrite que si sa valeur change : évite d'invalider le style pour rien.
+    const written = new WeakMap<HTMLElement, Record<string, string>>();
+    const setVar = (el: HTMLElement, name: string, value: string) => {
+      let c = written.get(el);
+      if (!c) { c = {}; written.set(el, c); }
+      if (c[name] === value) return;
+      c[name] = value;
+      el.style.setProperty(name, value);
+    };
+    let revealedAtBottom = false;
+
     const paint = () => {
       ticking = false;
       const vh = window.innerHeight;
       const amp = Math.min(140, window.innerWidth * 0.1);
+
+      // ── Lectures (aucune écriture ici : une relecture après une écriture forcerait la mise en page)
+      const cyWrites: Array<[HTMLElement, string]> = [];
       groups.forEach((g, root) => {
         if (!root.isConnected) { groups.delete(root); return; }
         if (relayout) layoutGroup(g);
@@ -168,32 +187,44 @@ export default function MotionLayer() {
         // q : 1 quand le bloc affleure en bas de l'écran, 0 quand il est entièrement
         // affiché (ou, pour un bloc plus haut que 70 % de l'écran, après 70 % de
         // course) — et 0 ensuite, en sortie comme au repos.
-        const q = Math.max(0, Math.min(1, (box.top - (vh - Math.min(box.height, vh * 0.7))) / Math.min(box.height, vh * 0.7)));
-        g.items.forEach((el, i) => el.style.setProperty('--cy', `${(q * amp * g.amp * g.speeds[i]).toFixed(1)}px`));
+        const span = Math.min(box.height, vh * 0.7);
+        const q = Math.max(0, Math.min(1, (box.top - (vh - span)) / span));
+        g.items.forEach((el, i) => cyWrites.push([el, `${(q * amp * g.amp * g.speeds[i]).toFixed(1)}px`]));
       });
       relayout = false;
+
+      const gpWrites: Array<[HTMLElement, string, boolean]> = [];
       guides.forEach((el) => {
         if (!el.isConnected) { guides.delete(el); return; }
         const box = el.getBoundingClientRect();
         if (box.bottom < -50 || box.top > vh + 50) return;
         const len = Math.max(1, box.height - GUIDE_TOP - GUIDE_INSET);
         const drawn = Math.max(0, Math.min(len, vh * GUIDE_TIP - box.top - GUIDE_TOP));
-        el.style.setProperty('--gp', (drawn / len).toFixed(4));
-        el.classList.toggle('pb-guide-done', drawn >= len - 1);
+        gpWrites.push([el, (drawn / len).toFixed(3), drawn >= len - 1]);
       });
-      const reads: Array<[HTMLElement, number]> = [];
+
+      const pyWrites: Array<[HTMLElement, string]> = [];
       parallax.forEach((el) => {
         if (!el.isConnected) { parallax.delete(el); return; }
         const box = (el.parentElement ?? el).getBoundingClientRect();
         if (box.bottom < -50 || box.top > vh + 50) return;
         const p = (box.top + box.height / 2 - vh / 2) / (vh / 2 + box.height / 2); // -1 … 1
-        const amp = parseFloat(el.dataset.parallax || '') || 0.05;
-        reads.push([el, Math.max(-1, Math.min(1, p)) * amp * box.height]);
+        const k = parseFloat(el.dataset.parallax || '') || 0.05;
+        pyWrites.push([el, `${(Math.max(-1, Math.min(1, p)) * k * box.height).toFixed(1)}px`]);
       });
-      reads.forEach(([el, y]) => el.style.setProperty('--py', `${y.toFixed(1)}px`));
+
+      // ── Écritures
+      cyWrites.forEach(([el, v]) => setVar(el, '--cy', v));
+      gpWrites.forEach(([el, v, done]) => {
+        setVar(el, '--gp', v);
+        if (el.classList.contains('pb-guide-done') !== done) el.classList.toggle('pb-guide-done', done);
+      });
+      pyWrites.forEach(([el, v]) => setVar(el, '--py', v));
+
       // Bas de page atteint : un bloc court collé au pied pourrait rester sous la
-      // marge de l'observateur — on révèle ce qui reste.
-      if (window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+      // marge de l'observateur — on révèle ce qui reste (une seule fois).
+      if (!revealedAtBottom && window.scrollY > 0 && vh + window.scrollY >= document.documentElement.scrollHeight - 4) {
+        revealedAtBottom = true;
         document.querySelectorAll(`${BLOCK}:not(.is-in), ${ITEMS}:not(.is-in)`).forEach((el) => el.classList.add('is-in'));
       }
     };
@@ -201,6 +232,7 @@ export default function MotionLayer() {
 
     // ── Balayage : les pages arrivent aussi par navigation, sans rechargement ─
     const scan = () => {
+      revealedAtBottom = false; // nouvelle page ou nouveau contenu : le garde-fou de bas de page se réarme
       document.querySelectorAll(`${BLOCK}, ${SECTION}, ${ITEMS}`).forEach((el) => {
         if (seen.has(el)) return;
         seen.add(el);
