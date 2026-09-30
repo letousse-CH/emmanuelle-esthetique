@@ -235,7 +235,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
               </p>
             )}
             {settings.footer_tagline_text && (
-              <p className="text-[color:color-mix(in_srgb,var(--footer-ink)_40%,transparent)] text-sm leading-relaxed">
+              <p className="text-[color:color-mix(in_srgb,var(--footer-ink)_60%,transparent)] text-sm leading-relaxed">
                 {settings.footer_tagline_text}
               </p>
             )}
@@ -268,7 +268,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
 
           {/* Navigation */}
           <div className="col-span-2 md:col-span-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[color:color-mix(in_srgb,var(--footer-ink)_30%,transparent)] mb-5">Navigation</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[color:color-mix(in_srgb,var(--footer-ink)_60%,transparent)] mb-5">Navigation</p>
             <nav className="grid grid-cols-2 gap-x-8 gap-y-2.5">
               {navLinks.map(({ name, path }) => (
                 <Link
@@ -291,7 +291,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
               en pied de page de tout site issu du template. On n'imprime plus
               que ce qui est réellement renseigné.
             */}
-            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[color:color-mix(in_srgb,var(--footer-ink)_30%,transparent)] mb-5">Coordonnées</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[color:color-mix(in_srgb,var(--footer-ink)_60%,transparent)] mb-5">Coordonnées</p>
             <address className="not-italic text-sm text-[color:color-mix(in_srgb,var(--footer-ink)_50%,transparent)] leading-relaxed space-y-2">
               {(settings.business_address_street || locationLine) && (
                 <p>
@@ -301,7 +301,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
                       <br />
                     </>
                   )}
-                  <span className="text-[color:color-mix(in_srgb,var(--footer-ink)_30%,transparent)]">{locationLine}</span>
+                  <span className="text-[color:color-mix(in_srgb,var(--footer-ink)_60%,transparent)]">{locationLine}</span>
                 </p>
               )}
               {settings.business_phone && (
@@ -339,7 +339,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
 
       {/* Barre basse — présente dans les trois modèles. */}
       <div className={variant === 'simple' ? '' : 'border-t border-[color-mix(in_srgb,var(--footer-ink)_5%,transparent)]'}>
-        <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-[color:color-mix(in_srgb,var(--footer-ink)_25%,transparent)] tracking-wide">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-[color:color-mix(in_srgb,var(--footer-ink)_60%,transparent)] tracking-wide">
           <span>© {new Date().getFullYear()} {[settings.business_name, settings.business_owner].filter(Boolean).join(' · ')}</span>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
             {legalLinks.map((link) => (
@@ -354,7 +354,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={label}
-                className="text-[color:color-mix(in_srgb,var(--footer-ink)_40%,transparent)] transition-colors hover:text-[color:var(--footer-ink)]"
+                className="text-[color:color-mix(in_srgb,var(--footer-ink)_60%,transparent)] transition-colors hover:text-[color:var(--footer-ink)]"
               >
                 <Icon size={15} />
               </a>

@@ -10,7 +10,7 @@ export default function MobileCallBar({ phone }: { phone?: string }) {
     <>
       {/* Réserve la hauteur de la barre pour ne pas masquer le pied de page. */}
       <div aria-hidden className="h-[calc(4.5rem+env(safe-area-inset-bottom))] md:hidden" />
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:hidden">
+      <aside aria-label="Appel rapide" className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:hidden">
         <a
           href={`tel:${tel}`}
           className="flex w-full items-center justify-center gap-2 rounded-full bg-sage px-6 py-3 text-sm font-medium text-white shadow-sm"
@@ -20,7 +20,7 @@ export default function MobileCallBar({ phone }: { phone?: string }) {
           </svg>
           Appeler pour réserver
         </a>
-      </div>
+      </aside>
     </>
   );
 }

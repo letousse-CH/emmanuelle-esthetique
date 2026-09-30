@@ -163,7 +163,8 @@ export default function GlobalStyles({ initialTokens }: { initialTokens?: Record
     root += decl('--brand-text', get('style_color_text'));
     root += `  --color-stone-deep: var(--brand-text);\n`;
   }
-  root += decl('--brand-text-muted', get('style_color_text_muted'));
+  // Assombri de 15 % : le gris atténué de la charte (#6C757D) ne fait que 4.4:1 sur les fonds gris clair ; l'AA en demande 4.5.
+  root += decl('--brand-text-muted', get('style_color_text_muted') ? `color-mix(in srgb, ${get('style_color_text_muted')} 85%, #000)` : '');
   if (get('style_color_border')) {
     root += decl('--brand-border', get('style_color_border'));
     root += `  --color-border: var(--brand-border);\n`;

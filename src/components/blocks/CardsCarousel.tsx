@@ -108,7 +108,7 @@ export default function CardsCarousel({ children, editable }: Props) {
       </div>
       {count > 1 && (
         <div className="pb-carousel-controls">
-          <div className="pb-carousel-dots" role="tablist" aria-label="Navigation du carrousel">
+          <div className="pb-carousel-dots" role="group" aria-label="Navigation du carrousel">
             {Array.from({ length: count }).map((_, i) => (
               <button
                 key={i}

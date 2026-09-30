@@ -19,7 +19,7 @@
   --pb-bg: var(--brand-bg, #ffffff);
   --pb-surface: var(--brand-surface, #F6F8F9);
   --pb-text: var(--brand-text, #22252A);
-  --pb-muted: var(--brand-text-muted, #6C757D);
+  --pb-muted: var(--brand-text-muted, #5F676E);
   --pb-border: var(--brand-border, #E7EBEE);
   --pb-radius: var(--radius-base, 0px);
 }
@@ -45,7 +45,7 @@
 .pb-bg-surface { --pb-section-bg: var(--pb-surface); --pb-card: var(--pb-bg); }
 .pb-bg-warm { --pb-section-bg: var(--pb-warm); --pb-card: var(--pb-bg); }
 .pb-bg-warm-strong { --pb-section-bg: var(--pb-warm-strong); --pb-card: var(--pb-warm); }
-.pb-bg-accent { --pb-section-bg: var(--pb-accent); }
+.pb-bg-accent { /* Assombri : du blanc sur le lagon pur (#60B9C2) ne fait que 2.3:1 ; là, plus de 4.5:1. */ --pb-section-bg: color-mix(in srgb, var(--pb-accent) 35%, #0b3a44); }
 .pb-bg-dark { --pb-section-bg: var(--pb-primary); }
 
 .pb-pad-none { padding-block: 0; }
@@ -239,11 +239,13 @@
   .pb-cards-carousel.pb-cols-4 .pb-carousel-track > .pb-card { flex-basis: min(24%, 17rem); }
 }
 .pb-carousel-controls { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: .5rem; }
-.pb-carousel-dots { display: flex; gap: .45rem; }
-.pb-carousel-dot { width: .45rem; height: .45rem; padding: 0; border: 0; border-radius: 999px; background: var(--pb-line); cursor: pointer; transition: background .2s, width .2s; }
-.pb-carousel-dot[aria-current="true"] { width: 1.15rem; background: var(--pb-primary); }
-.pb-tone-light .pb-carousel-dot { background: rgba(255, 255, 255, .35); }
-.pb-tone-light .pb-carousel-dot[aria-current="true"] { background: #fff; }
+/* Points : la zone cliquable fait 24 × 24 px (cible tactile minimale), le point visible est dessiné par ::before. */
+.pb-carousel-dots { display: flex; }
+.pb-carousel-dot { position: relative; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; background: none; cursor: pointer; }
+.pb-carousel-dot::before { content: ""; position: absolute; top: 50%; left: 50%; translate: -50% -50%; width: .45rem; height: .45rem; border-radius: 999px; background: var(--pb-line); transition: background .2s, width .2s; }
+.pb-carousel-dot[aria-current="true"]::before { width: 1.15rem; background: var(--pb-primary); }
+.pb-tone-light .pb-carousel-dot::before { background: rgba(255, 255, 255, .35); }
+.pb-tone-light .pb-carousel-dot[aria-current="true"]::before { background: #fff; }
 .pb-carousel-nav { display: flex; gap: .6rem; margin-left: auto; }
 .pb-carousel-btn {
   width: 2.75rem; height: 2.75rem; border-radius: 999px; border: 1px solid var(--pb-line);

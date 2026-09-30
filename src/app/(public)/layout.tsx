@@ -83,7 +83,8 @@ export default async function PublicLayout({
         initialRegisterLink={settings.header_register_link}
         initialBusinessName={settings.business_name}
       />
-      <div className="flex-grow">
+      {/* role et non <main> : les feuilles du site ciblent `main section …` (index.css) et changeraient de rendu. */}
+      <div className="flex-grow" role="main">
         {children}
       </div>
       <Footer
