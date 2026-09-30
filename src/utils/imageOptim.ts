@@ -19,8 +19,12 @@
  */
 export const IMAGE_WIDTHS = [384, 640, 828, 1200, 1920] as const;
 
-/** Qualité : la seule autorisée par défaut par Next 16 (`images.qualities`). */
-const QUALITY = 75;
+/**
+ * Qualités autorisées : doivent figurer dans `images.qualities` (next.config.ts), sinon l'optimiseur répond 400.
+ * 75 partout ; 60 pour l'image d'en-tête (LCP), où le poids compte plus que la finesse.
+ */
+export const QUALITY = 75;
+export const QUALITY_HERO = 60;
 
 // Doit refléter `images.remotePatterns` de next.config.ts : une URL qui n'y
 // figure pas ferait répondre 400 à l'optimiseur.
@@ -56,8 +60,8 @@ export function isOptimizable(url: string | undefined | null): url is string {
   return !/\.(svg|gif)$/.test(path);
 }
 
-export function optimizedUrl(url: string, width: number): string {
-  return `/_next/image?url=${encodeURIComponent(url)}&w=${width}&q=${QUALITY}`;
+export function optimizedUrl(url: string, width: number, quality: number = QUALITY): string {
+  return `/_next/image?url=${encodeURIComponent(url)}&w=${width}&q=${quality}`;
 }
 
 export interface OptimizedImgProps {
@@ -71,12 +75,12 @@ export interface OptimizedImgProps {
  * 100vw : passer une valeur réaliste (largeur réelle de l'image dans la page).
  * URL non optimisable → l'URL d'origine, inchangée.
  */
-export function optimizedImgProps(url: string, sizes: string, widths: readonly number[] = IMAGE_WIDTHS): OptimizedImgProps {
+export function optimizedImgProps(url: string, sizes: string, widths: readonly number[] = IMAGE_WIDTHS, quality: number = QUALITY): OptimizedImgProps {
   if (!isOptimizable(url)) return { src: url };
   return {
     // Repli des navigateurs sans srcset, et valeur retenue par les robots.
-    src: optimizedUrl(url, widths[Math.min(2, widths.length - 1)]),
-    srcSet: widths.map((w) => `${optimizedUrl(url, w)} ${w}w`).join(', '),
+    src: optimizedUrl(url, widths[Math.min(2, widths.length - 1)], quality),
+    srcSet: widths.map((w) => `${optimizedUrl(url, w, quality)} ${w}w`).join(', '),
     sizes,
   };
 }

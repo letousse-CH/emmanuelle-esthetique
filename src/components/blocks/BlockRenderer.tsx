@@ -19,7 +19,7 @@ import LegacySection from './LegacySection';
 import GoogleReviews from '../GoogleReviews';
 import ContactForm from '../ContactForm';
 import CardsCarousel from './CardsCarousel';
-import { optimizedImgProps } from '../../utils/imageOptim';
+import { optimizedImgProps, QUALITY, QUALITY_HERO } from '../../utils/imageOptim';
 
 export type EditorSelection =
   | { kind: 'section'; sectionId: string }
@@ -72,7 +72,7 @@ function columnSizes(layout: string, columns: number): string {
 function imgAttrs(ctx: Ctx, url: string, sizes: string, lcp = false) {
   if (!ctx.img) return { src: url, loading: 'lazy' as const };
   return {
-    ...optimizedImgProps(url, sizes),
+    ...optimizedImgProps(url, sizes, undefined, lcp ? QUALITY_HERO : QUALITY),
     loading: lcp ? ('eager' as const) : ('lazy' as const),
     fetchPriority: lcp ? ('high' as const) : undefined,
   };
@@ -624,7 +624,7 @@ function SectionView({ section, editor, first, images, lcpId }: { section: Conte
         <div className="pb-bgimg" aria-hidden>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            {...(images ? optimizedImgProps(section.bgImage.url, '100vw') : { src: section.bgImage.url })}
+            {...(images ? optimizedImgProps(section.bgImage.url, '100vw', undefined, first ? QUALITY_HERO : QUALITY) : { src: section.bgImage.url })}
             alt=""
             loading={first ? 'eager' : 'lazy'}
             fetchPriority={first ? 'high' : undefined}
