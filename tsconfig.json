@@ -45,6 +45,8 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts",
     "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.tsx",
+    ".next-drafts/types/**/*.ts",
+    ".next-drafts/dev/types/**/*.ts"
   ]
 }
