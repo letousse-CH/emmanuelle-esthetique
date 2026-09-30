@@ -16,6 +16,10 @@ const nextConfig: NextConfig = {
   // Second serveur de dev (`npm run dev:brouillons`) : dossier de build distinct
   // pour cohabiter avec `npm run dev`. Non défini en production.
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  // Le serveur d'aperçu brouillons a son propre dossier de build, dont Next veut déclarer les types dans
+  // le tsconfig : sur tsconfig.json, il le réécrivait à chaque lancement (fichier versionné, donc « modifié »
+  // en permanence). Il a maintenant son tsconfig, qui étend l'autre et contient déjà ces entrées.
+  typescript: process.env.NEXT_DIST_DIR ? { tsconfigPath: 'tsconfig.drafts.json' } : undefined,
   images: {
     // Les images des pages sont hébergées sur R2, sans en-tête de cache, et
     // servies en taille d'origine : l'optimiseur les redimensionne, les passe en

@@ -17,3 +17,6 @@ scratch/
 
 # Sauvegardes locales de la base
 backups/
+
+# Généré par Next à chaque dev/build (son contenu dépend du dossier de build : .next ou .next-drafts)
+next-env.d.ts

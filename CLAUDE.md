@@ -390,8 +390,8 @@ futurs, rattachés à un pilier.
   les sert à l'URL définitive avec le menu `navigation_menu_draft` ; ne jamais
   définir `DRAFT_PREVIEW` sur Netlify. Après un changement de menu en base,
   **redémarrer** ce serveur (le cache des réglages est en mémoire côté serveur).
-  Ce serveur fait modifier `tsconfig.json` et `next-env.d.ts` : ne pas les
-  commiter.
+  Il utilise `tsconfig.drafts.json` (qui étend `tsconfig.json` et déclare déjà les types de
+  `.next-drafts`) : `tsconfig.json` n'est plus réécrit. `next-env.d.ts` est généré, donc ignoré par git.
 - **Reconstruire les brouillons** : `npx tsx scripts/seed-site-v2.ts --write`
   (écrase les brouillons : à ne plus lancer une fois qu'Emmanuelle les retouche).
 - **Mise en ligne** : `node scripts/publish-site-v2.mjs` (essai par défaut,
