@@ -30,7 +30,10 @@ export async function GET() {
       description: `Agenda, caisse, clientèle et site — ${name}.`,
       start_url: '/admin',
       scope: '/admin',
+      // Plein écran réel (sans barre d'état ni de navigation) quand le téléphone le permet ;
+      // repli sur `standalone` (sans barre d'adresse) sinon.
       display: 'standalone',
+      display_override: ['fullscreen', 'standalone'],
       orientation: 'portrait',
       lang: 'fr-CH',
       dir: 'ltr',
