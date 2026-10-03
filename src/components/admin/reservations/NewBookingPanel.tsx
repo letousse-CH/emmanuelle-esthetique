@@ -26,12 +26,15 @@ export default function NewBookingPanel({
   catalog,
   initialDate,
   initialTime,
+  initialClientId,
   onClose,
   onCreated,
 }: {
   catalog: Catalog;
   initialDate?: string;
   initialTime?: string | null;
+  /** Cliente pré-sélectionnée (lien `?nouveau=1&client=<id>` depuis sa fiche). */
+  initialClientId?: string;
   onClose: () => void;
   onCreated: (id: string | null) => void;
 }) {
@@ -68,7 +71,19 @@ export default function NewBookingPanel({
   useEffect(() => {
     let active = true;
     listClients(false)
-      .then((c) => active && setClients(c))
+      .then((c) => {
+        if (!active) return;
+        setClients(c);
+        const known = initialClientId ? c.find((x) => x.id === initialClientId) : undefined;
+        if (known) {
+          setMode('existante');
+          setPicked(known);
+          setPrenom(known.prenom ?? '');
+          setNom(known.nom ?? '');
+          setTelephone(known.telephone ?? '');
+          setEmail(known.email ?? '');
+        }
+      })
       .catch(() => active && (setClients([]), setClientsError(true), setMode('nouvelle')));
     return () => {
       active = false;
@@ -162,11 +177,11 @@ export default function NewBookingPanel({
       subtitle="Pris par téléphone ou sur place. Il sera confirmé tout de suite."
       onClose={onClose}
       footer={
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <div className="flex gap-2 sm:justify-end">
           <Button className="h-12 sm:h-11" onClick={onClose}>
             Annuler
           </Button>
-          <Button variant="primary" className="h-12 sm:h-11" loading={busy} onClick={() => submit(false)} icon={Check}>
+          <Button variant="primary" className="h-12 flex-1 sm:h-11 sm:flex-none" loading={busy} onClick={() => submit(false)} icon={Check}>
             Ajouter au planning
           </Button>
         </div>

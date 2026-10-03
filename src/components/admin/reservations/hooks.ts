@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import type { AdminCatalogItem, BookingSettings } from '../../../types/booking';
-import { adminFetch, unwrap } from './lib';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import type { AdminCatalogItem, AgendaData, BookingSettings } from '../../../types/booking';
+import { adminFetch, errorMessage, unwrap } from './lib';
 
 // ── Catalogue (prestations + options d'upsell) ─────────────────────────────
 
@@ -127,4 +127,71 @@ export function useMediaQuery(query: string): boolean {
     return () => mql.removeEventListener('change', update);
   }, [query]);
   return matches;
+}
+
+const LG = '(min-width: 1024px)';
+
+/** `true` à partir de 1024 px (bureau). `null` tant que le navigateur n'a pas répondu (rendu serveur). */
+export function useIsLg(): boolean | null {
+  const [lg, setLg] = useState<boolean | null>(null);
+  useEffect(() => {
+    const mql = window.matchMedia(LG);
+    const update = () => setLg(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
+  return lg;
+}
+
+/**
+ * Comme `useIsLg`, mais lit la largeur dès le premier rendu côté navigateur :
+ * pour les fenêtres (feuilles, tiroirs) qui s'ouvrent après coup et ne doivent
+ * pas apparaître d'abord dans la mauvaise forme. Pendant l'hydratation, la
+ * valeur serveur (bureau) est utilisée, puis React corrige sans avertissement.
+ */
+export function useIsLgSync(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const mql = window.matchMedia(LG);
+      mql.addEventListener('change', cb);
+      return () => mql.removeEventListener('change', cb);
+    },
+    () => window.matchMedia(LG).matches,
+    () => true,
+  );
+}
+
+// ── Agenda d'une plage de dates (bandeau + chronologie du téléphone) ───────
+
+/**
+ * Charge `GET /api/admin/bookings/agenda` pour une plage. Pendant le chargement
+ * d'une autre plage, la précédente reste affichée : le glisser d'un jour à
+ * l'autre ne clignote pas.
+ */
+export function useAgenda(from: string, to: string, refreshKey: number, enabled = true) {
+  const [data, setData] = useState<AgendaData | null>(null);
+  const [loading, setLoading] = useState(enabled);
+  const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    setLoading(true);
+    adminFetch<AgendaData>(`/api/admin/bookings/agenda?from=${from}&to=${to}`)
+      .then((json) => {
+        if (!active) return;
+        setData(json);
+        setError(null);
+      })
+      .catch((e) => active && setError(errorMessage(e)))
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [from, to, refreshKey, tick, enabled]);
+
+  const retry = useCallback(() => setTick((t) => t + 1), []);
+  return { data, loading, error, retry };
 }

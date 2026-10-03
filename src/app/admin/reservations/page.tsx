@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { CalendarDays, CalendarOff, List, Phone, Plus, RefreshCw } from 'lucide-react';
 import type { Booking } from '../../../types/booking';
 import { listClientStats } from '../../../services/caisse';
@@ -14,7 +15,9 @@ import NewBookingPanel from '../../../components/admin/reservations/NewBookingPa
 import Overlay from '../../../components/admin/reservations/Overlay';
 import SyncClientsButton from '../../../components/admin/reservations/SyncClientsButton';
 import TodoView from '../../../components/admin/reservations/TodoView';
-import { useBookingSettings, useCatalog } from '../../../components/admin/reservations/hooks';
+import MobileAgenda, { agendaRange } from '../../../components/admin/reservations/MobileAgenda';
+import type { MobileVue } from '../../../components/admin/reservations/MobileAgenda';
+import { useAgenda, useBookingSettings, useCatalog, useIsLg } from '../../../components/admin/reservations/hooks';
 import { DEFAULT_COUPURE, adminFetch, announceBookingsChanged, errorMessage, todayZurich } from '../../../components/admin/reservations/lib';
 
 type View = 'traiter' | 'agenda' | 'liste';
@@ -28,7 +31,10 @@ const VIEWS: { id: View; label: string; icon: React.ElementType }[] = [
 export default function ReservationsAdminPage() {
   return (
     <FeedbackProvider>
-      <ReservationsScreen />
+      {/* useSearchParams (liens `?id=`, `?nouveau=1`, `?vue=`, `?date=`) exige une frontière Suspense. */}
+      <Suspense fallback={null}>
+        <ReservationsScreen />
+      </Suspense>
     </FeedbackProvider>
   );
 }
@@ -38,7 +44,15 @@ function ReservationsScreen() {
   const settings = useBookingSettings();
   const coupure = settings?.heure_coupure_periode || DEFAULT_COUPURE;
 
+  const isLg = useIsLg();
+  const searchParams = useSearchParams();
   const [view, setView] = useState<View>('traiter');
+  // Téléphone : vue par défaut = la journée d'aujourd'hui.
+  const [mVue, setMVue] = useState<MobileVue>('jour');
+  const [mDate, setMDate] = useState(() => todayZurich());
+  // Bureau : jour affiché par l'agenda à l'ouverture (lien `?date=`).
+  const [agendaDate, setAgendaDate] = useState<string | undefined>(undefined);
+  const [agendaKey, setAgendaKey] = useState(0);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,8 +60,9 @@ function ReservationsScreen() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [openId, setOpenId] = useState<string | null>(null);
-  const [newDraft, setNewDraft] = useState<{ date?: string; time?: string | null } | null>(null);
-  const [blocksOpen, setBlocksOpen] = useState(false);
+  const [newDraft, setNewDraft] = useState<{ date?: string; time?: string | null; clientId?: string } | null>(null);
+  // `date` : « Je ne travaille pas » depuis un jour précis (téléphone : ouvre le formulaire tout de suite).
+  const [blocksOpen, setBlocksOpen] = useState<{ date?: string } | null>(null);
 
   // « Aujourd'hui » à Zurich, recalculé si l'onglet reste ouvert après minuit.
   const [today, setToday] = useState(() => todayZurich());
@@ -85,14 +100,40 @@ function ReservationsScreen() {
       });
   }, [fetchBookings]);
 
-  // Lien direct : /admin/reservations?id=… ouvre ce rendez-vous.
+  // Liens directs (accueil, notifications) : `?id=` ouvre le rendez-vous, `?nouveau=1` (+ `&client=`, `&date=`)
+  // la création, `?vue=a-traiter|jour|semaine|liste` une vue, `?date=YYYY-MM-DD` un jour de l'agenda.
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('id');
-    if (id) {
-      setOpenId(id);
-      window.history.replaceState(null, '', window.location.pathname);
+    const id = searchParams.get('id');
+    const nouveau = searchParams.get('nouveau');
+    const vue = searchParams.get('vue');
+    const d = searchParams.get('date');
+    const client = searchParams.get('client');
+    if (!id && !nouveau && !vue && !d) return;
+    const date = d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
+    if (date) {
+      setMDate(date);
+      setAgendaDate(date);
+      setAgendaKey((k) => k + 1);
+      setMVue('jour');
+      setView('agenda');
     }
-  }, []);
+    if (vue === 'a-traiter' || vue === 'traiter') {
+      setMVue('a-traiter');
+      setView('traiter');
+    } else if (vue === 'liste') {
+      setMVue('liste');
+      setView('liste');
+    } else if (vue === 'semaine') {
+      setMVue('semaine');
+      setView('agenda');
+    } else if (vue === 'jour' || vue === 'agenda') {
+      setMVue('jour');
+      setView('agenda');
+    }
+    if (id) setOpenId(id);
+    else if (nouveau) setNewDraft({ date, clientId: client || undefined });
+    window.history.replaceState(null, '', window.location.pathname);
+  }, [searchParams]);
 
   const visitsByClient = useMemo(() => {
     const m = new Map(stats);
@@ -104,10 +145,14 @@ function ReservationsScreen() {
     return m;
   }, [stats, bookings]);
 
+  const range = useMemo(() => agendaRange(mDate), [mDate]);
+  const agenda = useAgenda(range.from, range.to, refreshKey, isLg === false);
+
   const toCall = bookings.filter((b) => b.statut === 'en_attente').length;
   const notCalled = bookings.filter((b) => b.statut === 'en_attente' && !b.contacte_at).length;
 
-  return (
+
+  const desktopView = (
     <div className="mx-auto max-w-7xl space-y-6 p-2 sm:p-4">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
@@ -124,7 +169,7 @@ function ReservationsScreen() {
           <Button variant="primary" icon={Plus} className="h-12 flex-1 sm:flex-none" onClick={() => setNewDraft({})}>
             Nouveau rendez-vous
           </Button>
-          <Button icon={CalendarOff} className="h-12 flex-1 sm:flex-none" onClick={() => setBlocksOpen(true)}>
+          <Button icon={CalendarOff} className="h-12 flex-1 sm:flex-none" onClick={() => setBlocksOpen({})}>
             Je ne travaille pas
           </Button>
           <Button icon={RefreshCw} loading={loading} className="h-12 px-3.5" onClick={reload} aria-label="Actualiser la page" title="Actualiser">
@@ -184,11 +229,13 @@ function ReservationsScreen() {
         )}
         {view === 'agenda' && (
           <AgendaView
+            key={agendaKey}
             refreshKey={refreshKey}
             today={today}
+            initialDate={agendaDate}
             onOpenBooking={setOpenId}
             onNewAt={(date, time) => setNewDraft({ date, time })}
-            onOpenBlocks={() => setBlocksOpen(true)}
+            onOpenBlocks={() => setBlocksOpen({})}
           />
         )}
         {view === 'liste' && <ListView bookings={bookings} today={today} coupure={coupure} onOpen={setOpenId} />}
@@ -202,6 +249,36 @@ function ReservationsScreen() {
           <SyncClientsButton onDone={reload} />
         </div>
       </details>
+    </div>
+  );
+
+  const mobileView = (
+    <MobileAgenda
+      vue={mVue}
+      onVue={setMVue}
+      date={mDate}
+      onDate={setMDate}
+      today={today}
+      bookings={bookings}
+      bookingsLoading={loading}
+      bookingsError={error}
+      onRetryBookings={fetchBookings}
+      agenda={agenda.data}
+      agendaLoading={agenda.loading}
+      agendaError={agenda.error}
+      onRetryAgenda={agenda.retry}
+      visitsByClient={visitsByClient}
+      coupure={coupure}
+      onOpen={setOpenId}
+      onNew={(date, time) => setNewDraft({ date, time })}
+      onOpenBlocks={(date) => setBlocksOpen({ date })}
+      onReload={reload}
+    />
+  );
+
+  return (
+    <>
+      {isLg === null ? null : isLg ? desktopView : mobileView}
 
       {openId && (
         <BookingPanel
@@ -220,6 +297,7 @@ function ReservationsScreen() {
           catalog={catalog}
           initialDate={newDraft.date}
           initialTime={newDraft.time}
+          initialClientId={newDraft.clientId}
           onClose={() => setNewDraft(null)}
           onCreated={() => {
             setNewDraft(null);
@@ -229,16 +307,18 @@ function ReservationsScreen() {
       )}
 
       {blocksOpen && (
-        <Overlay title="Mes indisponibilités" subtitle="Jours de congé, vacances, plages horaires" onClose={() => setBlocksOpen(false)}>
+        <Overlay title="Mes indisponibilités" subtitle="Jours de congé, vacances, plages horaires" onClose={() => setBlocksOpen(null)}>
           <BlocksSection
+            initialDate={blocksOpen.date}
+            autoOpenForm={blocksOpen.date !== undefined}
             onChanged={reload}
             onOpenBooking={(id) => {
-              setBlocksOpen(false);
+              setBlocksOpen(null);
               setOpenId(id);
             }}
           />
         </Overlay>
       )}
-    </div>
+    </>
   );
 }

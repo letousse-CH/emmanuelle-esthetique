@@ -2,11 +2,13 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CalendarOff, Loader2, Trash2 } from 'lucide-react';
+import { AlertTriangle, CalendarOff, Loader2, Plus, Trash2 } from 'lucide-react';
 import type { Booking, BookingBlock } from '../../../types/booking';
 import { timeToMinutes } from '../../../types/booking';
 import { Button, EmptyState, Field, Input } from '../ui';
+import { BottomSheet } from '../mobile/ui';
 import { useFeedback } from './Feedback';
+import { useIsLgSync } from './hooks';
 import { adminFetch, announceBookingsChanged, cap, errorMessage, formatDateLong, formatDayMonth, fullName, todayZurich } from './lib';
 
 type Mode = 'jour' | 'periode' | 'heures';
@@ -35,18 +37,27 @@ export function describeBlock(b: BookingBlock): string {
 export default function BlocksSection({
   onOpenBooking,
   onChanged,
+  initialDate,
+  autoOpenForm,
 }: {
+  /** Jour proposé par défaut dans le formulaire (« Je ne travaille pas » depuis un jour de l'agenda). */
+  initialDate?: string;
+  /** Téléphone : ouvre tout de suite le formulaire en feuille du bas. */
+  autoOpenForm?: boolean;
   /** Si fourni, « Traiter » ouvre le rendez-vous sur place ; sinon un lien mène à la page Réservations. */
   onOpenBooking?: (id: string) => void;
   onChanged?: () => void;
 }) {
   const fb = useFeedback();
+  const isLg = useIsLgSync();
+  const [formOpen, setFormOpen] = useState(Boolean(autoOpenForm));
   const [blocks, setBlocks] = useState<BookingBlock[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('jour');
   const today = todayZurich();
-  const [date, setDate] = useState(today);
-  const [dateFin, setDateFin] = useState(today);
+  const start = initialDate && initialDate >= today ? initialDate : today;
+  const [date, setDate] = useState(start);
+  const [dateFin, setDateFin] = useState(start);
   const [hDebut, setHDebut] = useState('09:00');
   const [hFin, setHFin] = useState('12:00');
   const [motif, setMotif] = useState('');
@@ -106,6 +117,7 @@ export default function BlocksSection({
       const impactes = res.impactes ?? [];
       if (impactes.length > 0) setImpact({ count: impactes.length, list: impactes });
       setMotif('');
+      setFormOpen(false);
       await load();
       announceBookingsChanged();
       onChanged?.();
@@ -134,75 +146,103 @@ export default function BlocksSection({
     }
   };
 
+  const formFields = (
+    <>
+      <div role="group" aria-label="Type d’indisponibilité" className="grid grid-cols-3 gap-2">
+        {MODES.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            aria-pressed={mode === m.id}
+            onClick={() => {
+              setMode(m.id);
+              setFormError(null);
+            }}
+            className={`min-h-12 rounded-lg border px-2 text-[14px] font-semibold leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:text-[15px] ${
+              mode === m.id ? 'border-accent bg-accent text-accent-fg' : 'border-stone-300 bg-white text-stone-900 hover:bg-accent-soft'
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={mode === 'periode' ? 'Du' : 'Le'} htmlFor="blk-date">
+          <Input
+            id="blk-date"
+            type="date"
+            value={date}
+            min={today}
+            onChange={(e) => {
+              setDate(e.target.value);
+              if (dateFin < e.target.value) setDateFin(e.target.value);
+            }}
+            className="!h-12 text-[16px]"
+          />
+        </Field>
+        {mode === 'periode' && (
+          <Field label="Au (inclus)" htmlFor="blk-fin">
+            <Input id="blk-fin" type="date" value={dateFin} min={date} onChange={(e) => setDateFin(e.target.value)} className="!h-12 text-[16px]" />
+          </Field>
+        )}
+        {mode === 'heures' && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="De" htmlFor="blk-h1">
+              <Input id="blk-h1" type="time" step={900} value={hDebut} onChange={(e) => setHDebut(e.target.value)} className="!h-12 text-[16px]" />
+            </Field>
+            <Field label="À" htmlFor="blk-h2">
+              <Input id="blk-h2" type="time" step={900} value={hFin} onChange={(e) => setHFin(e.target.value)} className="!h-12 text-[16px]" />
+            </Field>
+          </div>
+        )}
+      </div>
+
+      <Field label="Motif (facultatif)" htmlFor={motifId} hint="Visible seulement par vous, dans l’agenda.">
+        <Input id={motifId} value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Vacances, formation, rendez-vous médical…" className="!h-12 text-[16px]" />
+      </Field>
+
+      {formError && (
+        <p role="alert" className="text-[14.5px] font-medium text-red-700">
+          {formError}
+        </p>
+      )}
+    </>
+  );
+
   return (
     <div className="space-y-6">
-      <form onSubmit={add} className="space-y-4 rounded-2xl border border-stone-300 bg-white p-4 sm:p-5">
-        <h3 className="text-[17px] font-semibold text-stone-950">Je ne travaille pas le…</h3>
-
-        <div role="group" aria-label="Type d’indisponibilité" className="grid grid-cols-3 gap-2">
-          {MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              aria-pressed={mode === m.id}
-              onClick={() => {
-                setMode(m.id);
-                setFormError(null);
-              }}
-              className={`min-h-12 rounded-lg border px-2 text-[14px] font-semibold leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:text-[15px] ${
-                mode === m.id ? 'border-accent bg-accent text-accent-fg' : 'border-stone-300 bg-white text-stone-900 hover:bg-accent-soft'
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label={mode === 'periode' ? 'Du' : 'Le'} htmlFor="blk-date">
-            <Input
-              id="blk-date"
-              type="date"
-              value={date}
-              min={today}
-              onChange={(e) => {
-                setDate(e.target.value);
-                if (dateFin < e.target.value) setDateFin(e.target.value);
-              }}
-              className="!h-12 text-[16px]"
-            />
-          </Field>
-          {mode === 'periode' && (
-            <Field label="Au (inclus)" htmlFor="blk-fin">
-              <Input id="blk-fin" type="date" value={dateFin} min={date} onChange={(e) => setDateFin(e.target.value)} className="!h-12 text-[16px]" />
-            </Field>
-          )}
-          {mode === 'heures' && (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="De" htmlFor="blk-h1">
-                <Input id="blk-h1" type="time" step={900} value={hDebut} onChange={(e) => setHDebut(e.target.value)} className="!h-12 text-[16px]" />
-              </Field>
-              <Field label="À" htmlFor="blk-h2">
-                <Input id="blk-h2" type="time" step={900} value={hFin} onChange={(e) => setHFin(e.target.value)} className="!h-12 text-[16px]" />
-              </Field>
-            </div>
-          )}
-        </div>
-
-        <Field label="Motif (facultatif)" htmlFor={motifId} hint="Visible seulement par vous, dans l’agenda.">
-          <Input id={motifId} value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Vacances, formation, rendez-vous médical…" className="!h-12 text-[16px]" />
-        </Field>
-
-        {formError && (
-          <p role="alert" className="text-[14.5px] font-medium text-red-700">
-            {formError}
-          </p>
-        )}
-
-        <Button type="submit" variant="primary" loading={busy} icon={CalendarOff} className="h-12 w-full sm:w-auto">
-          Bloquer ces horaires
-        </Button>
-      </form>
+      {isLg ? (
+        <form onSubmit={add} className="space-y-4 rounded-2xl border border-stone-300 bg-white p-4 sm:p-5">
+          <h3 className="text-[17px] font-semibold text-stone-950">Je ne travaille pas le…</h3>
+          {formFields}
+          <Button type="submit" variant="primary" loading={busy} icon={CalendarOff} className="h-12 w-full sm:w-auto">
+            Bloquer ces horaires
+          </Button>
+        </form>
+      ) : (
+        <>
+          <Button variant="primary" icon={Plus} className="w-full" onClick={() => setFormOpen(true)}>
+            Ajouter une indisponibilité
+          </Button>
+          <BottomSheet
+            open={formOpen}
+            onClose={() => setFormOpen(false)}
+            title="Je ne travaille pas le…"
+            size="full"
+            zIndex={120}
+            footer={
+              <Button type="submit" form="blk-form" variant="primary" loading={busy} icon={CalendarOff} className="w-full">
+                Bloquer ces horaires
+              </Button>
+            }
+          >
+            <form id="blk-form" onSubmit={add} className="space-y-4">
+              {formFields}
+            </form>
+          </BottomSheet>
+        </>
+      )}
 
       {impact && (
         <div ref={impactRef} role="alert" className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-amber-950">

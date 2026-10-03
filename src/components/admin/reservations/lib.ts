@@ -157,6 +157,29 @@ export function formatDateNumeric(iso: string): string {
   return utcDate(iso).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
 }
 
+/** « octobre 2026 » */
+export function formatMonthYear(iso: string): string {
+  return utcDate(iso).toLocaleDateString('fr-CH', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** « lun. » */
+export function formatWeekdayShort(iso: string): string {
+  return utcDate(iso).toLocaleDateString('fr-CH', { weekday: 'short', timeZone: 'UTC' }).replace('.', '');
+}
+
+/** Jour du mois (1–31). */
+export function dayOfMonth(iso: string): number {
+  return parseYmd(iso)[2];
+}
+
+/** Même jour, `n` mois plus tard (ramené au dernier jour du mois si besoin). */
+export function addMonths(iso: string, n: number): string {
+  const [y, m, d] = parseYmd(iso);
+  const last = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
+  const dt = new Date(Date.UTC(y, m - 1 + n, Math.min(d, last)));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
+
 export function formatDayMonth(iso: string): string {
   return utcDate(iso).toLocaleDateString('fr-CH', { day: 'numeric', month: 'long', timeZone: 'UTC' });
 }

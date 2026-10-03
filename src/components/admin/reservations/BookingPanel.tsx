@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CalendarClock, Check, ExternalLink, Loader2, MessageCircle, PhoneCall, Trash2, UserRound } from 'lucide-react';
+import { Banknote, CalendarClock, Check, ExternalLink, Loader2, MessageCircle, PhoneCall, Trash2, UserRound } from 'lucide-react';
 import type {
   Booking,
   BookingConflict,
@@ -13,7 +13,7 @@ import type {
   BookingSettings,
 } from '../../../types/booking';
 import { PERIODE_LABEL, STATUT_LABEL } from '../../../types/booking';
-import { Button, Field, Input, Textarea } from '../ui';
+import { Button, Field, Input, LinkButton, Textarea } from '../ui';
 import { ClientBadge, ContactButtons, StatusPill } from './Bits';
 import { useFeedback } from './Feedback';
 import { ApiError, DEFAULT_COUPURE, cap, adminFetch, announceBookingsChanged, errorMessage, formatDateLong, formatDateNumeric, formatInstant, fullName, relativeAgo, requestedDate, requestedPeriode, waHref } from './lib';
@@ -379,6 +379,11 @@ export default function BookingPanel({
       {!dirty && statut !== 'en_attente' && (
         <ActionButton onClick={requestClose}>Fermer</ActionButton>
       )}
+      {!dirty && (statut === 'confirme' || statut === 'termine') && (
+        <LinkButton href={`/admin/caisse?rdv=${b.id}`} variant="primary" icon={Banknote} className="h-12 text-[15px] sm:order-3">
+          Encaisser
+        </LinkButton>
+      )}
     </div>
     </div>
   );
@@ -396,11 +401,12 @@ export default function BookingPanel({
       footer={footer}
     >
       <div className="space-y-7">
-        {/* Contact rapide */}
-        <div className="space-y-3">
+        {/* Contact rapide : collé en haut de la feuille sur téléphone, toujours à portée du pouce. */}
+        <div className="sticky top-0 z-10 -mx-5 -mt-2 border-b border-stone-100 bg-white/95 px-5 pb-3 pt-2 backdrop-blur lg:static lg:mx-0 lg:mt-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           <ContactButtons booking={{ ...b, telephone: draft.telephone, prenom: draft.prenom }} whatsappMessage={waFirst} />
-          {statut === 'en_attente' && (
-            <div className="flex flex-wrap items-center gap-3">
+        </div>
+        {statut === 'en_attente' && (
+            <div className="-mt-4 flex flex-wrap items-center gap-3">
               {b.contacte_at ? (
                 <p className="flex items-center gap-1.5 text-[14px] font-medium text-emerald-800">
                   <PhoneCall size={15} aria-hidden="true" /> Appelée {relativeAgo(b.contacte_at)}
@@ -414,8 +420,7 @@ export default function BookingPanel({
                 </>
               )}
             </div>
-          )}
-        </div>
+        )}
 
         {/* Demande d'origine */}
         <div className="rounded-xl border border-stone-300 bg-stone-50 px-4 py-3 text-[15px] text-stone-800">
@@ -475,12 +480,11 @@ export default function BookingPanel({
                   <p className="text-stone-600">Pas de note sur la fiche.</p>
                 )}
                 <Link
-                  href="/admin/caisse/clients"
+                  href={`/admin/caisse/clients?client=${detail.client.id}`}
                   className="inline-flex min-h-11 items-center gap-1.5 text-[14.5px] font-semibold text-accent underline underline-offset-2 hover:no-underline"
                 >
-                  Ouvrir les fiches clientes <ExternalLink size={14} aria-hidden="true" />
+                  Voir la fiche <ExternalLink size={14} aria-hidden="true" />
                 </Link>
-                <p className="text-[13px] text-stone-600">Cherchez « {fullName(detail.client)} » dans la liste.</p>
               </div>
             ) : (
               <p className="mt-2 text-[14px] text-stone-700">

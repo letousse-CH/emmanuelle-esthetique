@@ -25,7 +25,7 @@ import {
 
 const PX_PER_MIN = 1;
 
-interface DayModel {
+export interface DayModel {
   date: string;
   plages: PlageHoraire[];
   blocks: BookingBlock[];
@@ -33,7 +33,7 @@ interface DayModel {
   soft: Record<BookingPeriode, Booking[]>;
 }
 
-function buildDay(date: string, data: AgendaData, coupure: string): DayModel {
+export function buildDay(date: string, data: AgendaData, coupure: string): DayModel {
   const cfg = data.settings?.jours_ouverture?.[String(weekdayIndex(date))];
   const plages = cfg && cfg.ouvert ? [...(cfg.plages ?? [])].sort((a, b) => a.debut.localeCompare(b.debut)) : [];
   const blocks = (data.blocks ?? []).filter((b) => b.date_debut <= date && (b.date_fin || b.date_debut) >= date);
@@ -54,12 +54,12 @@ function hoursLabel(d: DayModel): string {
   return d.plages.map((p) => `${p.debut}–${p.fin}`).join(' · ');
 }
 
-function bookingEnd(b: Booking): number {
+export function bookingEnd(b: Booking): number {
   return timeToMinutes(b.heure_rdv) + Math.max(15, b.service_duree_minutes || 60);
 }
 
 /** Répartit les rendez-vous qui se chevauchent côte à côte. */
-function layoutLanes(items: Booking[]): Map<string, { lane: number; lanes: number }> {
+export function layoutLanes(items: Booking[]): Map<string, { lane: number; lanes: number }> {
   const out = new Map<string, { lane: number; lanes: number }>();
   let cluster: { id: string; lane: number }[] = [];
   let laneEnds: number[] = [];
@@ -89,36 +89,39 @@ function layoutLanes(items: Booking[]): Map<string, { lane: number; lanes: numbe
   return out;
 }
 
-const HATCH: React.CSSProperties = {
+export const HATCH: React.CSSProperties = {
   backgroundImage:
     'repeating-linear-gradient(45deg, rgba(87,83,78,0.28) 0, rgba(87,83,78,0.28) 5px, rgba(87,83,78,0.08) 5px, rgba(87,83,78,0.08) 11px)',
 };
 
-function bookingClass(b: Booking): string {
+export function bookingClass(b: Booking): string {
   if (b.statut === 'termine') return 'bg-stone-300 text-stone-900 border-stone-400';
   if (b.statut === 'en_attente') return 'bg-amber-100 text-amber-950 border-amber-500';
   return 'bg-accent text-accent-fg border-transparent';
 }
 
-function shortName(b: Booking) {
+export function shortName(b: Booking) {
   return `${b.prenom} ${(b.nom || '').charAt(0)}.`.trim();
 }
 
 export default function AgendaView({
   refreshKey,
   today,
+  initialDate,
   onOpenBooking,
   onNewAt,
   onOpenBlocks,
 }: {
   refreshKey: number;
   today: string;
+  /** Jour affiché à l'ouverture (lien `?date=`) ; sinon aujourd'hui. */
+  initialDate?: string;
   onOpenBooking: (id: string) => void;
   onNewAt: (date: string, heure: string | null) => void;
   onOpenBlocks: () => void;
 }) {
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const [anchor, setAnchor] = useState(today);
+  const [anchor, setAnchor] = useState(initialDate || today);
   const [mode, setMode] = useState<'semaine' | 'jour'>('semaine');
   const [data, setData] = useState<AgendaData | null>(null);
   const [loading, setLoading] = useState(true);

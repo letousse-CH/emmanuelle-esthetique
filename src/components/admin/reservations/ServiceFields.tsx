@@ -141,14 +141,13 @@ export function UpsellBlock({
                 key={c.id}
                 type="button"
                 onClick={() => addCatalog(c)}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-left text-[14px] font-medium text-stone-900 hover:border-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                title={c.duree_minutes ? `${c.duree_minutes} min` : undefined}
+                className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-stone-300 bg-white py-1.5 pl-3 pr-4 text-left text-[14px] font-medium text-stone-900 transition-colors hover:border-accent hover:bg-accent-soft active:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
-                <Plus size={15} className="shrink-0" aria-hidden="true" />
-                <span>
-                  {c.nom}
-                  <span className="block text-[12.5px] font-normal text-stone-700">
-                    + {formatCHF(c.prix_chf)}{c.duree_minutes ? ` · ${c.duree_minutes} min` : ''}
-                  </span>
+                <Plus size={16} className="shrink-0 text-accent" aria-hidden="true" />
+                <span>{c.nom}</span>
+                <span className="text-[13px] font-normal text-stone-700">
+                  +{formatCHF(c.prix_chf)}{c.duree_minutes ? ` · ${c.duree_minutes} min` : ''}
                 </span>
               </button>
             ))}

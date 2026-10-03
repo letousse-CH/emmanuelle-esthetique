@@ -3,9 +3,14 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { BottomSheet } from '../mobile/ui';
+import { useIsLgSync } from './hooks';
 
 /**
- * Tiroir latéral (plein écran sur téléphone) ou modale centrée.
+ * Tiroir latéral (ordinateur) ou modale centrée. Sous 1024 px (téléphone), la
+ * fenêtre devient une feuille du bas du kit mobile (`BottomSheet`) : plein écran
+ * pour un tiroir, à hauteur du contenu pour une modale — elle recouvre la barre
+ * d'onglets, sans conflit. Mêmes props dans les deux cas.
  *
  * Accessibilité : `role="dialog"` + `aria-modal`, focus déplacé dans la fenêtre
  * puis rendu à l'élément d'origine, Tab qui ne sort pas de la fenêtre, Échap
@@ -17,16 +22,27 @@ const stack: symbol[] = [];
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export default function Overlay({
-  title,
-  subtitle,
-  onClose,
-  variant = 'drawer',
-  footer,
-  children,
-  zIndex = 100,
-  labelledById,
-}: {
+export default function Overlay(props: OverlayProps) {
+  const lg = useIsLgSync();
+  if (!lg) {
+    return (
+      <BottomSheet
+        open
+        onClose={props.onClose}
+        title={props.title}
+        description={props.subtitle}
+        footer={props.footer}
+        size={(props.variant ?? 'drawer') === 'drawer' ? 'full' : 'auto'}
+        zIndex={props.zIndex ?? 100}
+      >
+        {props.children}
+      </BottomSheet>
+    );
+  }
+  return <DesktopOverlay {...props} />;
+}
+
+interface OverlayProps {
   title: string;
   subtitle?: React.ReactNode;
   onClose: () => void;
@@ -35,7 +51,18 @@ export default function Overlay({
   children: React.ReactNode;
   zIndex?: number;
   labelledById?: string;
-}) {
+}
+
+function DesktopOverlay({
+  title,
+  subtitle,
+  onClose,
+  variant = 'drawer',
+  footer,
+  children,
+  zIndex = 100,
+  labelledById,
+}: OverlayProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;

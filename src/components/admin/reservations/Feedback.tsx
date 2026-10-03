@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Check, Info, XCircle } from 'lucide-react';
 import Overlay from './Overlay';
+import { useIsLgSync } from './hooks';
 import { Button } from '../ui';
 
 /**
@@ -16,6 +17,8 @@ interface ToastItem {
   id: number;
   kind: ToastKind;
   text: string;
+  /** Posé pendant qu'une feuille est ouverte (elle recouvre la barre d'onglets). */
+  inSheet: boolean;
 }
 
 export interface AskOptions {
@@ -50,10 +53,13 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [dialog, setDialog] = useState<{ opts: AskOptions; resolve: (r: AskResult) => void } | null>(null);
   const nextId = useRef(1);
+  const isLg = useIsLgSync();
 
   const push = useCallback((kind: ToastKind, text: string) => {
     const id = nextId.current++;
-    setToasts((t) => [...t.slice(-3), { id, kind, text }]);
+    // Les feuilles du kit verrouillent le défilement de la page : c'est le signe qu'une feuille est ouverte.
+    const inSheet = document.body.style.overflow === 'hidden';
+    setToasts((t) => [...t.slice(-3), { id, kind, text, inSheet }]);
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === 'error' ? 9000 : 5000);
   }, []);
 
@@ -73,8 +79,16 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     <Ctx.Provider value={api}>
       {children}
 
+      {/* Sur téléphone : au-dessus de la barre d'onglets (--admin-tabbar-h), et au-dessus du pied d'une feuille ouverte. */}
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[200] flex flex-col items-center gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[200] flex flex-col items-center gap-2 px-4"
+        style={{
+          paddingBottom: isLg
+            ? 'max(1rem, env(safe-area-inset-bottom))'
+            : toasts.some((t) => t.inSheet)
+              ? 'calc(env(safe-area-inset-bottom) + 6rem)'
+              : 'calc(var(--admin-tabbar-h, 0px) + env(safe-area-inset-bottom) + 1rem)',
+        }}
         aria-live="polite"
         aria-atomic="false"
       >

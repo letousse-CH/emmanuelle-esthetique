@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AlertTriangle, ChevronDown } from 'lucide-react';
 import type { BookingConflict, BookingEvent } from '../../../types/booking';
 import { Button } from '../ui';
@@ -26,8 +26,13 @@ export function ConflictsBox({
   onDismiss: () => void;
   forceLabel?: string;
 }) {
+  // L'avertissement apparaît dans le corps de la feuille, parfois loin du bouton pressé : on l'amène à l'écran.
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, []);
   return (
-    <div role="alert" className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-amber-950">
+    <div ref={ref} role="alert" className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-amber-950">
       <p className="flex items-center gap-2 text-[16px] font-semibold">
         <AlertTriangle size={18} aria-hidden="true" /> Cet horaire pose problème
       </p>
