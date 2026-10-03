@@ -43,6 +43,9 @@ interface DashboardBooking {
   options?: { id: string; nom: string; prix_chf: number }[];
   date_rdv: string;
   heure_rdv: string;
+  /** false = simple demande (matin / après-midi) : `heure_rdv` n'est qu'indicative. */
+  horaire_fixe?: boolean;
+  periode?: 'matin' | 'apres_midi' | null;
   statut: 'en_attente' | 'confirme' | 'refuse' | 'annule' | 'termine';
   notes_cliente?: string | null;
 }
@@ -86,7 +89,8 @@ export default function Dashboard() {
 
   const flags = useModuleFlags();
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  // Jour civil en Europe/Zurich (toISOString() serait en UTC : faux entre 00h et 02h).
+  const todayStr = useMemo(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Zurich' }).format(new Date()), []);
 
   useEffect(() => {
     load();
@@ -102,7 +106,7 @@ export default function Dashboard() {
         return;
       }
 
-      const res = await fetch('/api/bookings', {
+      const res = await fetch('/api/admin/bookings?limit=1000', {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
@@ -135,13 +139,14 @@ export default function Dashboard() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || '';
 
-      const res = await fetch(`/api/bookings/${id}`, {
+      const res = await fetch(`/api/admin/bookings/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ statut: newStatut }),
+        // Jamais d'e-mail depuis ce raccourci : la cliente est prévenue depuis le panneau de traitement.
+        body: JSON.stringify({ statut: newStatut, notify_client: false }),
       });
 
       if (!res.ok) throw new Error('Erreur mise à jour');
@@ -299,7 +304,12 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   {todayBookings.map((b) => {
                     const cleanPhone = b.telephone.replace(/[^\d]/g, '');
-                    const waMsg = encodeURIComponent(`Bonjour ${b.prenom}, c'est Emmanuelle au sujet de votre rendez-vous aujourd'hui à ${b.heure_rdv}.`);
+                    const timeLabel = b.horaire_fixe === false ? (b.periode === 'apres_midi' ? 'Après-midi' : 'Matin') : b.heure_rdv;
+                    const waMsg = encodeURIComponent(
+                      b.horaire_fixe === false
+                        ? `Bonjour ${b.prenom}, c'est Emmanuelle au sujet de votre demande de rendez-vous aujourd'hui (${timeLabel.toLowerCase()}).`
+                        : `Bonjour ${b.prenom}, c'est Emmanuelle au sujet de votre rendez-vous aujourd'hui à ${b.heure_rdv}.`,
+                    );
                     return (
                       <div
                         key={b.id}
@@ -308,7 +318,7 @@ export default function Dashboard() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs font-bold bg-accent text-accent-fg px-2 py-0.5 rounded">
-                              {b.heure_rdv}
+                              {timeLabel}
                             </span>
                             <span className="text-sm font-semibold text-stone-900">
                               {b.prenom} {b.nom}
@@ -394,7 +404,12 @@ export default function Dashboard() {
                       day: 'numeric',
                       month: 'short',
                     });
-                    const waMsg = encodeURIComponent(`Bonjour ${b.prenom}, c'est Emmanuelle d'Emmanuelle Esthétique au sujet de votre demande de rdv pour le ${b.date_rdv} à ${b.heure_rdv}.`);
+                    const periodLabel = b.horaire_fixe === false ? (b.periode === 'apres_midi' ? 'l’après-midi' : 'le matin') : null;
+                    const waMsg = encodeURIComponent(
+                      periodLabel
+                        ? `Bonjour ${b.prenom}, c'est Emmanuelle d'Emmanuelle Esthétique au sujet de votre demande de rdv pour le ${formattedDateShort}, ${periodLabel}.`
+                        : `Bonjour ${b.prenom}, c'est Emmanuelle d'Emmanuelle Esthétique au sujet de votre demande de rdv pour le ${formattedDateShort} à ${b.heure_rdv}.`,
+                    );
 
                     return (
                       <div
@@ -404,7 +419,7 @@ export default function Dashboard() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-stone-900 capitalize">
-                              {formattedDateShort} à {b.heure_rdv}
+                              {formattedDateShort} {periodLabel ? `· ${periodLabel === 'le matin' ? 'matin' : 'après-midi'}` : `à ${b.heure_rdv}`}
                             </span>
                             <span className="text-sm font-semibold text-stone-900">
                               {b.prenom} {b.nom}
@@ -432,14 +447,13 @@ export default function Dashboard() {
                           >
                             <MessageCircle size={14} />
                           </a>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateBookingStatus(b.id, 'confirme')}
+                          <Link
+                            href={`/admin/reservations?id=${b.id}`}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors"
-                            title="Confirmer la réservation"
+                            title="Appeler la cliente, fixer l'horaire et confirmer"
                           >
-                            <Check size={14} /> Confirmer
-                          </button>
+                            <Check size={14} /> Traiter
+                          </Link>
                           <button
                             type="button"
                             onClick={() => {

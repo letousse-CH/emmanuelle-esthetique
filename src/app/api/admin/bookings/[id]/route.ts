@@ -1,65 +1,53 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getBookingById, updateBookingStatus, type BookingStatus } from '../../../../../services/booking';
-import { validateSupabaseToken } from '../../../../../utils/apiAuth';
+import { deleteBooking, getBookingDetail, updateBooking } from '../../../../../services/booking';
+import { BAD_JSON, errorResponse, readJson, requireAdmin } from '../../../bookings/_shared';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-async function checkAdmin(req: NextRequest): Promise<boolean> {
-  const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  return validateSupabaseToken(token);
+type Ctx = { params: Promise<{ id: string }> };
+
+/** GET /api/admin/bookings/[id] → BookingDetail (rendez-vous, fiche cliente, historique, journal). */
+export async function GET(req: NextRequest, { params }: Ctx) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
+  const { id } = await params;
+  try {
+    return NextResponse.json(await getBookingDetail(id), { headers: { 'Cache-Control': 'no-store' } });
+  } catch (err) {
+    return errorResponse(err, '/api/admin/bookings/[id] GET');
+  }
 }
 
 /**
- * GET /api/admin/bookings/[id]
- * Détails complets d'une réservation.
+ * PATCH /api/admin/bookings/[id] ← BookingPatch → { success, booking, warnings }
+ * 409 { error, conflicts } si le créneau n'est pas libre (sauf `force: true`).
  */
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await checkAdmin(req))) {
-    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-  }
-
+export async function PATCH(req: NextRequest, { params }: Ctx) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
   const { id } = await params;
-  const booking = await getBookingById(id);
 
-  if (!booking) {
-    return NextResponse.json({ error: 'Réservation introuvable' }, { status: 404 });
+  const body = await readJson(req);
+  if (body === null || typeof body !== 'object') return BAD_JSON();
+
+  try {
+    const { booking, warnings } = await updateBooking(id, body as Parameters<typeof updateBooking>[1]);
+    return NextResponse.json({ success: true, booking, warnings });
+  } catch (err) {
+    return errorResponse(err, '/api/admin/bookings/[id] PATCH');
   }
-
-  return NextResponse.json({ booking });
 }
 
-/**
- * PATCH /api/admin/bookings/[id]
- * Mise à jour du statut ou des notes de l'administratrice.
- */
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await checkAdmin(req))) {
-    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-  }
-
+/** DELETE /api/admin/bookings/[id] — seulement en_attente / refuse / annule, sinon 409. */
+export async function DELETE(req: NextRequest, { params }: Ctx) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
   const { id } = await params;
-  let body: any;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Corps JSON invalide' }, { status: 400 });
-  }
-
-  const { statut, notes_admin } = body || {};
-
-  if (statut && !['en_attente', 'confirme', 'refuse', 'annule', 'termine'].includes(statut)) {
-    return NextResponse.json({ error: 'Statut de réservation invalide' }, { status: 400 });
-  }
-
-  try {
-    const result = await updateBookingStatus(id, statut as BookingStatus, notes_admin);
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
-    }
-
-    return NextResponse.json({ success: true, booking: result.booking });
-  } catch (err: any) {
-    console.error('[/api/admin/bookings/[id] PATCH] Erreur:', err);
-    return NextResponse.json({ error: 'Erreur lors de la mise à jour' }, { status: 500 });
+    await deleteBooking(id);
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return errorResponse(err, '/api/admin/bookings/[id] DELETE');
   }
 }

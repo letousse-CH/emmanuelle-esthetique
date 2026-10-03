@@ -1,18 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   Sparkles,
   Clock,
-  Calendar,
   CheckCircle2,
   ChevronRight,
-  ChevronLeft,
   ShieldCheck,
   Phone,
-  MessageCircle,
   AlertCircle,
   CalendarCheck,
   Check,
@@ -20,11 +17,42 @@ import {
   Droplets,
   Flower2,
   Scissors,
-  Star,
   Sun,
   Sunset,
 } from 'lucide-react';
+import {
+  PERIODE_LABEL,
+  type AvailableDaySlots,
+  type BookingPeriode,
+  type PublicBookingErrorCode,
+  type PublicBookingRequest,
+  type PublicBookingView,
+  type PublicCalendar,
+  type TimeSlot,
+} from '../../../types/booking';
+import {
+  PRESTATIONS_CATALOG,
+  PRIVILEGE_OPTIONS,
+  type MonthlyOfferData,
+  type PrestationItem,
+  type PrivilegeOption,
+} from './catalog';
+import { addDays, formatDateLong, formatHeure, isValidDateStr, periodeLabel, todayZurich } from './dates';
+import { chf } from './format';
+import { validateContact, type ContactErrors } from './validation';
+import DayCalendar from './DayCalendar';
+import ConfirmationStep from './ConfirmationStep';
 
+// Exports conservés : l'ancienne page admin des réservations les importe encore
+// (période de transition). `TimeSlot` est désormais celui des types partagés.
+export { PRESTATIONS_CATALOG, PRIVILEGE_OPTIONS };
+export type { PrestationItem, PrivilegeOption, MonthlyOfferData, TimeSlot };
+
+/**
+ * @deprecated Heure LOCALE DU NAVIGATEUR : ne pas l'utiliser pour décider d'une
+ * ouverture ou d'un « aujourd'hui ». Le formulaire passe par `todayZurich()`.
+ * Conservé uniquement pour les importeurs historiques.
+ */
 export function toLocalDateStr(d: Date): string {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -32,267 +60,70 @@ export function toLocalDateStr(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-// ── Types ───────────────────────────────────────────────────────────────────
+type CategoryId = 'visage' | 'corps' | 'epilation' | 'services';
 
-export interface PrestationItem {
-  id: string;
-  category: 'visage' | 'corps' | 'epilation' | 'services';
-  name: string;
-  durationMinutes: number;
-  durationLabel: string;
-  priceChf: number;
-  description: string;
-  variants?: { durationMinutes: number; durationLabel: string; priceChf: number }[];
-  tag?: string;
-}
-
-export interface PrivilegeOption {
-  id: string;
-  nom: string;
-  duree_minutes: number;
-  prix_chf: number;
-  description: string;
-}
-
-export interface MonthlyOfferData {
-  id: string;
-  titre: string;
-  description: string | null;
-  prix_chf: number;
-  image_url: string | null;
-  active: boolean;
-}
-
-export interface TimeSlot {
-  heure: string;
-  fin: string;
-  disponible: boolean;
-  motif?: string;
-}
-
-// ── Catalogue des Prestations Filtrées (Conforme Carte Soins & Règles Métier) ─
-
-export const PRESTATIONS_CATALOG: PrestationItem[] = [
-  // 1. Soins du visage Phytomer (tous >= 90 CHF)
-  {
-    id: 'peau-nette-eclat-express',
-    category: 'visage',
-    name: 'Soin Peau Nette & Coup d’Éclat Express',
-    durationMinutes: 40,
-    durationLabel: '40 min',
-    priceChf: 90,
-    description:
-      'Nettoyage profond désincrustant sous serviettes chaudes, gommage marin enzymatique, masque chauffant détoxifiant et hydratation personnalisée.',
-    tag: 'Éclat express',
-  },
-  {
-    id: 'hydra-originel',
-    category: 'visage',
-    name: 'Soin Hydra Originel — Désaltérant & Repulpant',
-    durationMinutes: 60,
-    durationLabel: '60 min',
-    priceChf: 140,
-    description:
-      'Véritable bain d’hydratation aux algues tissées bio. Comprend un gommage velours, un modelage délassant du visage et du décolleté, et un masque crémeux à l’algue Nori.',
-    tag: 'Soin signature',
-  },
-  {
-    id: 'expert-jeunesse',
-    category: 'visage',
-    name: 'Soin Expert Jeunesse — Correction Rides & Fermeté',
-    durationMinutes: 75,
-    durationLabel: '75 min',
-    priceChf: 165,
-    description:
-      'Protocole anti-âge intensif. Modelage remodelant inspiré des techniques de digito-pression, suivi d’un masque plastifiant tenseur aux actifs marins purs.',
-    tag: 'Haute technicité',
-  },
-
-  // 2. Soins & Rituels du corps (tous >= 90 CHF)
-  {
-    id: 'voile-de-satin',
-    category: 'corps',
-    name: 'Soin Voile de Satin — Gommage Peau Neuve',
-    durationMinutes: 45,
-    durationLabel: '45 min',
-    priceChf: 110,
-    description:
-      'Exfoliation complète aux cristaux de sels marins reminéralisants, suivie d’une application onctueuse et massée de lait satinant. Peau douce et veloutée.',
-  },
-  {
-    id: 'bulles-des-mers',
-    category: 'corps',
-    name: 'Soin Bulles des Mers — Détox & Pureté du Dos',
-    durationMinutes: 45,
-    durationLabel: '45 min',
-    priceChf: 110,
-    description:
-      'Gommage purifiant du dos, pose sous occlusion thermique de boue marine auto-chauffante décontracturante, puis modelage délassant des trapèzes et du dos.',
-  },
-  {
-    id: 'grand-massage-relaxant',
-    category: 'corps',
-    name: 'Grand Massage Relaxant Marine — Signature Spa',
-    durationMinutes: 60,
-    durationLabel: '60 min',
-    priceChf: 145,
-    variants: [
-      { durationMinutes: 60, durationLabel: '60 min', priceChf: 145 },
-      { durationMinutes: 90, durationLabel: '90 min', priceChf: 210 },
-    ],
-    description:
-      'Massage complet du corps sur-mesure combinant effleurages profonds, drainages doux et pressions dénouantes à l’huile marine satinante parfum printanier.',
-    tag: 'Grand lâcher-prise',
-  },
-  {
-    id: 'echappee-belle',
-    category: 'corps',
-    name: 'Rituel Échappée Belle — Visage & Corps',
-    durationMinutes: 105,
-    durationLabel: '1h45',
-    priceChf: 230,
-    description:
-      'La synergie parfaite : le gommage complet du corps Voile de Satin ou massage ciblé du dos, immédiatement suivi du Soin Hydra Originel complet.',
-    tag: 'Rituel d’exception',
-  },
-
-  // 3. Épilations (Uniquement les forfaits signature, pas à la carte)
-  {
-    id: 'forfait-douceur',
-    category: 'epilation',
-    name: 'Forfait Douceur (Demi-jambes + Aisselles + Maillot)',
-    durationMinutes: 45,
-    durationLabel: '45 min',
-    priceChf: 95,
-    description:
-      'Demi-jambes + aisselles + maillot au choix. Formule essentielle rapide et nette avec cires douces haute tolérance, suivie d’une émulsion apaisante.',
-    tag: 'Forfait signature',
-  },
-  {
-    id: 'forfait-integral',
-    category: 'epilation',
-    name: 'Forfait Intégral (Jambes complètes + Aisselles + Maillot)',
-    durationMinutes: 60,
-    durationLabel: '60 min',
-    priceChf: 125,
-    description:
-      'Jambes complètes + aisselles + maillot au choix. Le rituel complet corps sans compromis avec soin apaisant post-épilation.',
-    tag: 'Rituel complet',
-  },
-
-  // 4. Services (Beauté mains/pieds et réhaussement de cils)
-  {
-    id: 'prestige-mains',
-    category: 'services',
-    name: 'Soin Prestige des Mains « Spa »',
-    durationMinutes: 60,
-    durationLabel: '60 min',
-    priceChf: 85,
-    description:
-      'Limage sur-mesure, travail précis des cuticules, gommage aux sels fins marins, masque régénérant tiède et modelage décontractant de l’avant-bras et de la main.',
-  },
-  {
-    id: 'prestige-pieds',
-    category: 'services',
-    name: 'Soin Prestige des Pieds « Spa »',
-    durationMinutes: 70,
-    durationLabel: '70 min',
-    priceChf: 105,
-    description:
-      'Élimination des callosités, mise en forme de l’ongle, soin des cuticules, gommage exfoliant en profondeur, masque adoucissant sous serviettes chaudes et modelage défatigant.',
-    tag: 'Détente absolue',
-  },
-  {
-    id: 'rehaussement-cils',
-    category: 'services',
-    name: 'Réhaussement de cils',
-    durationMinutes: 60,
-    durationLabel: '60 min',
-    priceChf: 100,
-    description:
-      'Courbure naturelle et durable de vos cils pour ouvrir le regard sans recourbe-cils ni mascara. Résultat impeccable durant 6 à 8 semaines.',
-  },
-];
-
-// Options Privilèges Cabine (Upselling doux)
-export const PRIVILEGE_OPTIONS: PrivilegeOption[] = [
-  {
-    id: 'option-boue-marine-dos',
-    nom: 'Option Boue Marine Auto-Chauffante Dos',
-    prix_chf: 30,
-    duree_minutes: 15,
-    description:
-      'Application d’une boue marine effervescente et reminéralisante le long de la colonne pendant votre soin. Dénoue le haut du corps.',
-  },
-  {
-    id: 'option-cuir-chevelu-nuque',
-    nom: 'Option Massage Relaxant Cuir Chevelu & Nuque',
-    prix_chf: 25,
-    duree_minutes: 15,
-    description: 'Manœuvres lentes et enveloppantes pour libérer les micro-tensions crâniennes.',
-  },
-  {
-    id: 'teinture-cils',
-    nom: 'Teinture des cils',
-    prix_chf: 30,
-    duree_minutes: 15,
-    description: 'Intensifie la noirceur naturelle des cils pour un regard profond dès le réveil.',
-  },
-  {
-    id: 'teinture-sourcils',
-    nom: 'Teinture des sourcils',
-    prix_chf: 22,
-    duree_minutes: 15,
-    description: 'Redéfinit subtilement la ligne du sourcil en harmonie avec votre carnation.',
-  },
-  {
-    id: 'duo-regard',
-    nom: 'Duo Regard (Teinture cils & sourcils)',
-    prix_chf: 45,
-    duree_minutes: 20,
-    description: 'La combinaison idéale pour un regard magnifié en douceur.',
-  },
-];
-
-const CATEGORIES = [
+const CATEGORIES: Array<{ id: CategoryId; label: string; icon: typeof Droplets; desc: string }> = [
   { id: 'visage', label: 'Soins du visage', icon: Droplets, desc: 'Protocoles marins Phytomer' },
   { id: 'corps', label: 'Rituels corps', icon: Flower2, desc: 'Massages & gommages' },
   { id: 'epilation', label: 'Forfaits épilation', icon: Scissors, desc: 'Forfaits signature complets' },
   { id: 'services', label: 'Mains, pieds & cils', icon: Sparkles, desc: 'Rituels spa & regard' },
 ];
 
+/** Fenêtre proposée dans le calendrier (le serveur borne en plus par ses propres règles). */
+const CALENDAR_DAYS = 60;
+const PERIODES: BookingPeriode[] = ['matin', 'apres_midi'];
+
+type StepNum = 1 | 2 | 3 | 4 | 5;
+
 interface ReservationClientProps {
   businessPhone?: string;
   businessOwner?: string;
 }
 
-export default function ReservationClient({ businessPhone, businessOwner }: ReservationClientProps) {
+async function readJson<T = any>(res: Response): Promise<T | null> {
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+export default function ReservationClient({ businessPhone }: ReservationClientProps) {
   const searchParams = useSearchParams();
 
-  // Étape courante (1: Prestation, 2: Privilèges/Upsell, 3: Créneau, 4: Coordonnées, 5: Confirmation)
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [currentStep, setCurrentStep] = useState<StepNum>(1);
 
-  // Catalogues dynamiques synchronisés avec la base de données
+  // Catalogue : repli codé en dur tant que la base n'a pas répondu (ou si elle échoue).
   const [servicesCatalog, setServicesCatalog] = useState<PrestationItem[]>(PRESTATIONS_CATALOG);
-  const [privilegesCatalog, setPrivilegesCatalog] = useState<PrivilegeOption[]>(PRIVILEGE_OPTIONS);
+  const [catalogKey, setCatalogKey] = useState(0);
+  const [catalogNotice, setCatalogNotice] = useState<string | null>(null);
+  const catalogParamsApplied = useRef(false);
 
-  // Étape 1 : Prestation
-  const [selectedCategory, setSelectedCategory] = useState<'visage' | 'corps' | 'epilation' | 'services'>('visage');
+  // Étape 1 : prestation
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('visage');
   const [selectedService, setSelectedService] = useState<PrestationItem | null>(PRESTATIONS_CATALOG[0]);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState<number>(0);
 
-  // Étape 2 : Offre du moment exclusive (Upselling doux unique)
+  // Étape 2 : offre du moment
   const [includeMonthlyOffer, setIncludeMonthlyOffer] = useState<boolean>(false);
   const [monthlyOffer, setMonthlyOffer] = useState<MonthlyOfferData | null>(null);
 
-  // Étape 3 : Date & Moment (Matin dès 9h ou Après-midi dès 14h)
+  // Étape 3 : jour + période
+  const today = useMemo(() => todayZurich(), []);
+  const calendarRange = useMemo(() => ({ from: today, to: addDays(today, CALENDAR_DAYS - 1) }), [today]);
+  const [calendar, setCalendar] = useState<PublicCalendar | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [calendarKey, setCalendarKey] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null); // '09:00' = Matin, '14:00' = Après-midi
+  const [dayInfo, setDayInfo] = useState<AvailableDaySlots | null>(null);
+  const [selectedPeriode, setSelectedPeriode] = useState<BookingPeriode | null>(null);
   const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [slotsKey, setSlotsKey] = useState(0);
+  const [slotsNotice, setSlotsNotice] = useState<string | null>(null);
 
-  // Étape 4 : Coordonnées
+  // Étape 4 : coordonnées
   const [formData, setFormData] = useState({
     prenom: '',
     nom: '',
@@ -302,89 +133,129 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     ville: '',
     notes: '',
   });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [consentEmail, setConsentEmail] = useState(false);
+  const [consentWhatsapp, setConsentWhatsapp] = useState(false);
+  const [champPiege, setChampPiege] = useState('');
+  const [formErrors, setFormErrors] = useState<ContactErrors>({});
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const submittingRef = useRef(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Étape 5 : Confirmation
-  const [confirmedBooking, setConfirmedBooking] = useState<any | null>(null);
+  // Étape 5 : confirmation
+  const [confirmedBooking, setConfirmedBooking] = useState<PublicBookingView | null>(null);
+  const [submittedPrenom, setSubmittedPrenom] = useState('');
+  const [submittedEstimate, setSubmittedEstimate] = useState(0);
 
-  // ── Chargement de l'Offre du moment active ──
+  // Focus / défilement au changement d'étape
+  const stepTopRef = useRef<HTMLDivElement | null>(null);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const firstRender = useRef(true);
+
+  const stepsList = useMemo(
+    () =>
+      monthlyOffer && monthlyOffer.active
+        ? [
+            { num: 1, label: 'Prestation' },
+            { num: 2, label: 'Offre du moment' },
+            { num: 3, label: 'Séance' },
+            { num: 4, label: 'Coordonnées' },
+          ]
+        : [
+            { num: 1, label: 'Prestation' },
+            { num: 3, label: 'Séance' },
+            { num: 4, label: 'Coordonnées' },
+          ],
+    [monthlyOffer]
+  );
+  const stepIndex = stepsList.findIndex((s) => s.num === currentStep);
+  const stepLabel = stepsList[stepIndex]?.label ?? '';
+
   useEffect(() => {
-    fetch('/api/bookings/monthly-offer')
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    stepTopRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    headingRef.current?.focus({ preventScroll: true });
+  }, [currentStep]);
+
+  // ── Offre du moment active ──
+  const loadMonthlyOffer = useCallback(() => {
+    return fetch('/api/bookings/monthly-offer')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.offer?.active) {
-          setMonthlyOffer(data.offer);
-        }
+        setMonthlyOffer(data?.offer?.active ? data.offer : null);
       })
       .catch(() => {});
   }, []);
 
-  // ── Chargement des soins dynamiques & gestion des paramètres d'URL ──
   useEffect(() => {
+    loadMonthlyOffer();
+  }, [loadMonthlyOffer]);
+
+  // ── Catalogue des soins (base) + paramètres d'URL ──
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolve = (list: PrestationItem[]) => {
+      const paramSoin = searchParams?.get('soin') || searchParams?.get('service');
+      const paramCat = searchParams?.get('category');
+
+      if (!catalogParamsApplied.current) {
+        catalogParamsApplied.current = true;
+        if (paramSoin) {
+          const needle = paramSoin.toLowerCase();
+          const match = list.find((s) => s.id.toLowerCase() === needle || s.name.toLowerCase().includes(needle));
+          if (match) {
+            setSelectedCategory(match.category);
+            setSelectedService(match);
+            setSelectedVariantIndex(0);
+            return;
+          }
+        }
+        if (paramCat && CATEGORIES.some((c) => c.id === paramCat)) {
+          const firstInCat = list.find((s) => s.category === paramCat);
+          if (firstInCat) {
+            setSelectedCategory(paramCat as CategoryId);
+            setSelectedService(firstInCat);
+            setSelectedVariantIndex(0);
+            return;
+          }
+        }
+      }
+
+      // Rattache la sélection courante aux identifiants réels (UUID) de la base.
+      setSelectedService((prev) => {
+        if (!prev) return list[0] ?? null;
+        const found = list.find((s) => s.id === prev.id || s.name.toLowerCase() === prev.name.toLowerCase());
+        return found || list.find((s) => s.category === prev.category) || list[0] || null;
+      });
+    };
+
     fetch('/api/bookings/services')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (cancelled) return;
         if (data?.success && Array.isArray(data.services) && data.services.length > 0) {
           setServicesCatalog(data.services);
-
-          const paramSoin = searchParams?.get('soin') || searchParams?.get('service');
-          const paramCat = searchParams?.get('category');
-
-          if (paramSoin) {
-            const needle = paramSoin.toLowerCase();
-            const match = data.services.find(
-              (s: PrestationItem) =>
-                s.id.toLowerCase() === needle ||
-                s.name.toLowerCase().includes(needle)
-            );
-            if (match) {
-              setSelectedCategory(match.category);
-              setSelectedService(match);
-              setSelectedVariantIndex(0);
-              return;
-            }
-          }
-
-          if (paramCat && ['visage', 'corps', 'epilation', 'services'].includes(paramCat)) {
-            setSelectedCategory(paramCat as any);
-            const firstInCat = data.services.find((s: PrestationItem) => s.category === paramCat);
-            if (firstInCat) {
-              setSelectedService(firstInCat);
-              setSelectedVariantIndex(0);
-              return;
-            }
-          }
-
-          // Mise à jour de selectedService avec les UUIDs réels de la BDD
-          setSelectedService((prev) => {
-            if (!prev) return data.services[0];
-            const found = data.services.find(
-              (s: PrestationItem) => s.id === prev.id || s.name.toLowerCase() === prev.name.toLowerCase()
-            );
-            return found || data.services[0];
-          });
+          resolve(data.services);
+        } else {
+          // Base injoignable : le repli (ids de carteSoins) reste utilisable.
+          resolve(PRESTATIONS_CATALOG);
         }
       })
-      .catch((err) => console.warn('[ReservationClient] Services dynamiques non chargés:', err));
-  }, [searchParams]);
+      .catch((err) => {
+        console.warn('[ReservationClient] Services dynamiques non chargés:', err);
+        if (!cancelled) resolve(PRESTATIONS_CATALOG);
+      });
 
-  // Initialisation de la date (prochain jour ouvré dès le lendemain, hors dimanche, ou paramètre URL)
-  useEffect(() => {
-    const paramDate = searchParams?.get('date');
-    if (paramDate && /^\d{4}-\d{2}-\d{2}$/.test(paramDate)) {
-      setSelectedDate(paramDate);
-      return;
-    }
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    if (d.getDay() === 0) d.setDate(d.getDate() + 1); // Passer au lundi si dimanche
-    setSelectedDate(toLocalDateStr(d));
-  }, [searchParams]);
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, catalogKey]);
 
-  // Gestion du changement de catégorie : sélectionne automatiquement le premier soin de la nouvelle catégorie
-  const handleCategoryChange = (catId: 'visage' | 'corps' | 'epilation' | 'services') => {
+  const handleCategoryChange = (catId: CategoryId) => {
     setSelectedCategory(catId);
     const firstInCat = servicesCatalog.find((p) => p.category === catId);
     if (firstInCat) {
@@ -393,29 +264,21 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     }
   };
 
-  // ── Calcul des totaux (durée et prix) ──
+  // ── Totaux (estimation d'affichage : le serveur recalcule prix et durée) ──
   const { currentDurationMinutes, baseDurationMinutes, currentPriceChf, currentServiceName } = useMemo(() => {
     if (!selectedService) {
       return { currentDurationMinutes: 60, baseDurationMinutes: 60, currentPriceChf: 0, currentServiceName: '' };
     }
-
-    const baseDuration = selectedService.variants
-      ? selectedService.variants[selectedVariantIndex]?.durationMinutes ?? selectedService.durationMinutes
-      : selectedService.durationMinutes;
-
-    let basePrice = selectedService.variants
-      ? selectedService.variants[selectedVariantIndex]?.priceChf ?? selectedService.priceChf
-      : selectedService.priceChf;
+    const variant = selectedService.variants?.[selectedVariantIndex];
+    const baseDuration = variant?.durationMinutes ?? selectedService.durationMinutes;
+    const basePrice = variant?.priceChf ?? selectedService.priceChf;
 
     let duration = baseDuration;
     let price = basePrice;
-
-    // Ajout de l'Offre du moment
     if (includeMonthlyOffer && monthlyOffer) {
       price += Number(monthlyOffer.prix_chf);
       duration += 30;
     }
-
     return {
       currentDurationMinutes: duration,
       baseDurationMinutes: baseDuration,
@@ -424,239 +287,287 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     };
   }, [selectedService, selectedVariantIndex, includeMonthlyOffer, monthlyOffer]);
 
-  // ── Chargement des créneaux disponibles & auto-sélection Matin / Après-midi ──
+  // ── Calendrier des jours (GET /api/bookings/calendar) ──
+  const atSlotsStep = currentStep >= 3;
   useEffect(() => {
-    if (!selectedDate || currentStep < 3) return;
+    if (!atSlotsStep) return;
+    const ctrl = new AbortController();
+    setCalendarLoading(true);
+    setCalendarError(null);
 
-    setLoadingSlots(true);
-    setSlotsError(null);
-
-    const url = `/api/bookings/available-slots?date=${selectedDate}&duration=${currentDurationMinutes}`;
-
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error('Impossible de charger les disponibilités');
-        return res.json();
+    const { from, to } = calendarRange;
+    fetch(`/api/bookings/calendar?from=${from}&to=${to}&duration=${currentDurationMinutes}`, { signal: ctrl.signal })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(
+            res.status === 503
+              ? "L'agenda est momentanément indisponible."
+              : "Impossible de charger le calendrier de l'institut."
+          );
+        }
+        const data = await readJson<PublicCalendar>(res);
+        if (!data || typeof data.jours !== 'object' || data.jours === null) {
+          throw new Error("Réponse inattendue du calendrier de l'institut.");
+        }
+        return data;
       })
       .then((data) => {
-        if (data.ouvert === false) {
-          setAvailableSlots([]);
-          setSelectedSlot(null);
-          setSlotsError("L'institut est fermé à cette date. Veuillez choisir un autre jour.");
-        } else {
-          const slots: TimeSlot[] = data.slots || [];
-          setAvailableSlots(slots);
-
-          const hasMorning = slots.some((s) => parseInt(s.heure.split(':')[0], 10) < 13 && s.disponible);
-          const hasAfternoon = slots.some((s) => parseInt(s.heure.split(':')[0], 10) >= 13 && s.disponible);
-
-          if (!hasMorning && !hasAfternoon) {
-            setSelectedSlot(null);
-            setSlotsError("Aucune disponibilité pour cette date. Veuillez choisir un autre jour.");
-          } else {
-            // Sélection automatique de la période préférée
-            setSelectedSlot((prev) => {
-              if (prev === '09:00' && hasMorning) return '09:00';
-              if (prev === '14:00' && hasAfternoon) return '14:00';
-              if (hasMorning) return '09:00';
-              return '14:00';
-            });
-          }
-        }
+        setCalendar(data);
+        setCalendarLoading(false);
       })
       .catch((err) => {
-        console.error(err);
-        setSelectedSlot(null);
-        setSlotsError("Erreur lors de la vérification de l'agenda. Veuillez réessayer.");
+        if (ctrl.signal.aborted) return;
+        console.error('[ReservationClient] calendrier:', err);
+        setCalendar(null);
+        setCalendarError(err?.message || "Impossible de charger le calendrier de l'institut.");
+        setCalendarLoading(false);
+      });
+
+    return () => ctrl.abort();
+  }, [atSlotsStep, currentDurationMinutes, calendarKey, calendarRange]);
+
+  const isDayAvailable = useCallback(
+    (d: string) => {
+      const j = calendar?.jours?.[d];
+      return !!j && (j.matin || j.apres_midi);
+    },
+    [calendar]
+  );
+
+  // Choix du jour : on garde celui de la cliente s'il est toujours libre, sinon
+  // le paramètre d'URL (?date=), sinon le premier jour disponible.
+  useEffect(() => {
+    if (!calendar) return;
+    setSelectedDate((prev) => {
+      if (prev && isDayAvailable(prev)) return prev;
+      const paramDate = searchParams?.get('date');
+      if (!prev && isValidDateStr(paramDate) && isDayAvailable(paramDate)) return paramDate;
+      let d = calendarRange.from;
+      for (let i = 0; i < CALENDAR_DAYS; i++, d = addDays(d, 1)) {
+        if (isDayAvailable(d)) return d;
+      }
+      return '';
+    });
+  }, [calendar, isDayAvailable, searchParams, calendarRange]);
+
+  // ── Périodes du jour choisi (GET /api/bookings/available-slots) ──
+  useEffect(() => {
+    if (!atSlotsStep || !selectedDate) {
+      setDayInfo(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    setLoadingSlots(true);
+    setSlotsError(null);
+    setDayInfo(null);
+
+    fetch(`/api/bookings/available-slots?date=${selectedDate}&duration=${currentDurationMinutes}`, {
+      signal: ctrl.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = res.status === 400 ? await readJson<{ error?: string }>(res) : null;
+          throw new Error(
+            res.status === 503
+              ? "L'agenda est momentanément indisponible. Veuillez réessayer dans un instant."
+              : body?.error || 'Impossible de charger les disponibilités.'
+          );
+        }
+        const data = await readJson<AvailableDaySlots>(res);
+        if (!data || !data.periodes || !data.periodes.matin || !data.periodes.apres_midi) {
+          throw new Error('Réponse inattendue de l’agenda.');
+        }
+        return data;
+      })
+      .then((data) => {
+        setDayInfo(data);
+        const { matin, apres_midi } = data.periodes;
+        const open = data.ouvert !== false;
+        setSelectedPeriode((prev) => {
+          if (!open) return null;
+          if (prev && data.periodes[prev]?.disponible) return prev;
+          if (matin.disponible && !apres_midi.disponible) return 'matin';
+          if (!matin.disponible && apres_midi.disponible) return 'apres_midi';
+          return null; // les deux sont libres : la cliente choisit.
+        });
+      })
+      .catch((err) => {
+        if (ctrl.signal.aborted) return;
+        console.error('[ReservationClient] créneaux:', err);
+        setSelectedPeriode(null);
+        setSlotsError(err?.message || "Erreur lors de la vérification de l'agenda.");
       })
       .finally(() => {
-        setLoadingSlots(false);
+        if (!ctrl.signal.aborted) setLoadingSlots(false);
       });
-  }, [selectedDate, currentDurationMinutes, currentStep]);
 
-  // Détection de la disponibilité Matin et Après-midi
-  const isMorningAvailable = useMemo(() => {
-    return availableSlots.some((s) => parseInt(s.heure.split(':')[0], 10) < 13 && s.disponible);
-  }, [availableSlots]);
+    return () => ctrl.abort();
+  }, [atSlotsStep, selectedDate, currentDurationMinutes, slotsKey]);
 
-  const isAfternoonAvailable = useMemo(() => {
-    return availableSlots.some((s) => parseInt(s.heure.split(':')[0], 10) >= 13 && s.disponible);
-  }, [availableSlots]);
+  const periodes = dayInfo?.periodes;
+  const anyPeriodeAvailable = !!periodes && (periodes.matin.disponible || periodes.apres_midi.disponible);
+  const selectedPeriodeLabel = selectedPeriode
+    ? periodeLabel(selectedPeriode, periodes?.[selectedPeriode]?.premier_creneau)
+    : '';
+  const formattedDate = selectedDate ? formatDateLong(selectedDate) : '';
 
-
-  // ── Créneaux filtrés par période (Matin dès 9h / Après-midi dès 14h) ──
-  const { morningSlots, afternoonSlots } = useMemo(() => {
-    const morning: TimeSlot[] = [];
-    const afternoon: TimeSlot[] = [];
-
-    for (const s of availableSlots) {
-      const [h] = s.heure.split(':').map((x) => parseInt(x, 10));
-      if (h < 13) {
-        morning.push(s);
-      } else {
-        afternoon.push(s);
-      }
-    }
-
-    return { morningSlots: morning, afternoonSlots: afternoon };
-  }, [availableSlots]);
-
-  // 14 prochains jours ouvrés (du lundi au samedi) calculés en heure locale
-  const dateOptions = useMemo(() => {
-    const dates: { dateStr: string; dayName: string; dayNumber: number; monthName: string; isSunday: boolean }[] = [];
-    const now = new Date();
-
-    for (let i = 1; i <= 28 && dates.length < 14; i++) {
-      const d = new Date(now);
-      d.setDate(now.getDate() + i);
-      const isSunday = d.getDay() === 0;
-
-      if (!isSunday) {
-        const dateStr = toLocalDateStr(d);
-        const dayName = d.toLocaleDateString('fr-CH', { weekday: 'short' });
-        const dayNumber = d.getDate();
-        const monthName = d.toLocaleDateString('fr-CH', { month: 'short' });
-        dates.push({ dateStr, dayName, dayNumber, monthName, isSunday });
-      }
-    }
-    return dates;
-  }, []);
-
-
-  // ── Validation de l'étape coordonnées ──
-  const validateForm = () => {
-    const errors: Record<string, string> = {};
-    if (!formData.nom.trim()) errors.nom = 'Votre nom est requis.';
-    if (!formData.prenom.trim()) errors.prenom = 'Votre prénom est requis.';
-    if (!formData.telephone.trim()) {
-      errors.telephone = 'Le numéro de téléphone est indispensable pour vous confirmer le rendez-vous.';
-    } else if (formData.telephone.replace(/[^\d+]/g, '').length < 8) {
-      errors.telephone = 'Veuillez renseigner un numéro de téléphone valide.';
-    }
-    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      errors.email = 'Adresse e-mail invalide.';
-    }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+  // ── Soumission (POST /api/bookings) ──
+  const focusFirstError = (errors: ContactErrors) => {
+    const order: Array<keyof ContactErrors> = ['prenom', 'nom', 'telephone', 'email'];
+    const first = order.find((k) => errors[k]);
+    if (first) document.getElementById(`rf-${first}`)?.focus();
   };
 
-  // ── Soumission finale de la réservation ──
-  const handleSubmitBooking = async () => {
-    if (!validateForm()) return;
-    if (!selectedService || !selectedSlot) {
-      alert('Veuillez sélectionner un soin et un créneau horaire.');
+  const handleSubmitBooking = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (submittingRef.current) return; // anti double-clic (le state n'est pas encore à jour)
+
+    const errors = validateContact(formData);
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      focusFirstError(errors);
+      return;
+    }
+    if (!selectedService || !selectedDate || !selectedPeriode) {
+      setSubmitError('Veuillez choisir un soin, un jour et le matin ou l’après-midi.');
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
 
-    // Préparation de l'Offre du Moment exclusive (si cochée)
-    const optionsToSend: { id: string; nom: string; prix_chf: number; duree_minutes: number }[] = [];
-    if (includeMonthlyOffer && monthlyOffer) {
-      optionsToSend.push({
-        id: monthlyOffer.id,
-        nom: `Offre du Moment : ${monthlyOffer.titre}`,
-        prix_chf: Number(monthlyOffer.prix_chf),
-        duree_minutes: 30,
-      });
-    }
+    const variant = selectedService.variants?.[selectedVariantIndex];
+    const email = formData.email.trim();
 
-    const periodLabel = selectedSlot === '09:00' ? 'La séance du matin (dès 09h00)' : "La séance de l'après-midi (dès 14h00)";
-    const periodNote = `Période souhaitée : ${periodLabel} — Horaire définitif fixé avec Emmanuelle`;
-    const finalNotes = formData.notes?.trim()
-      ? `${periodNote}\nNotes : ${formData.notes.trim()}`
-      : periodNote;
+    // Le navigateur n'envoie que des identifiants : nom, prix et durée sont
+    // retrouvés dans le catalogue par le serveur.
+    const payload: PublicBookingRequest = {
+      nom: formData.nom.trim(),
+      prenom: formData.prenom.trim(),
+      telephone: formData.telephone.trim(),
+      email: email || null,
+      code_postal: formData.codePostal.trim() || null,
+      ville: formData.ville.trim() || null,
+      service_id: selectedService.id,
+      options: [], // pas d'options choisies en ligne : Emmanuelle les propose au téléphone
+      offer_of_month_id: includeMonthlyOffer && monthlyOffer ? monthlyOffer.id : null,
+      variante_duree_minutes: variant ? variant.durationMinutes : null,
+      date_rdv: selectedDate,
+      periode: selectedPeriode,
+      notes_cliente: formData.notes.trim() || null,
+      consent_email: !!email && consentEmail,
+      consent_whatsapp: consentWhatsapp,
+      champ_piege: champPiege,
+    };
+
+    const phoneHint = businessPhone ? ` ou appelez l’institut au ${businessPhone}` : '';
 
     try {
-      const payload = {
-        nom: formData.nom,
-        prenom: formData.prenom,
-        telephone: formData.telephone,
-        email: formData.email || null,
-        code_postal: formData.codePostal || null,
-        ville: formData.ville || null,
-        service_id: selectedService.id,
-        service_nom: currentServiceName,
-        service_prix_chf: currentPriceChf,
-        // On transmet la durée de base, le serveur calcule base + options
-        service_duree_minutes: baseDurationMinutes,
-        options: optionsToSend,
-        offer_of_month_id: includeMonthlyOffer && monthlyOffer ? monthlyOffer.id : null,
-        date_rdv: selectedDate,
-        heure_rdv: selectedSlot,
-        notes_cliente: finalNotes,
-      };
-
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
-      const data = await res.json();
+      const data = await readJson<{
+        booking?: Partial<PublicBookingView>;
+        error?: string;
+        code?: PublicBookingErrorCode;
+      }>(res);
 
       if (!res.ok) {
-        throw new Error(data.error || 'Erreur lors de la réservation.');
+        const code = data?.code;
+        const serverMessage = data?.error;
+        if (code === 'doublon') {
+          // Pas de retour à l'étape 3 : la période n'est pas en cause.
+          setSubmitError(
+            `${serverMessage ? `${serverMessage} ` : ''}Votre demande est peut-être déjà enregistrée : vérifiez vos e-mails${
+              businessPhone ? ` ou appelez l’institut au ${businessPhone}` : ' ou appelez l’institut'
+            }.`
+          );
+        } else if (code === 'trop_de_demandes') {
+          setSubmitError(
+            serverMessage || `Trop de demandes pour le moment. Patientez un peu avant de réessayer${phoneHint}.`
+          );
+        } else if (code === 'offre_indisponible') {
+          // On reste sur l'étape en cours : la cliente peut envoyer sa demande sans l'offre.
+          setIncludeMonthlyOffer(false);
+          setMonthlyOffer(null);
+          void loadMonthlyOffer();
+          setSubmitError(
+            'L’offre du moment n’est plus disponible : elle a été retirée de votre demande et le total mis à jour. Vous pouvez envoyer votre demande sans elle.'
+          );
+        } else if (code === 'soin_inconnu') {
+          setCatalogNotice(
+            'Ce soin n’est plus disponible à la réservation en ligne. Choisissez-en un autre, ou contactez l’institut.'
+          );
+          setCatalogKey((k) => k + 1);
+          setCurrentStep(1);
+        } else if (code === 'periode_complete' || (!code && res.status === 409)) {
+          // La période a été prise entre-temps : on recharge les disponibilités.
+          setSlotsNotice('Cette période vient d’être prise. Choisissez-en une autre ci-dessous.');
+          setSelectedPeriode(null);
+          setCalendarKey((k) => k + 1);
+          setSlotsKey((k) => k + 1);
+          setCurrentStep(3);
+        } else if (!code && res.status === 422) {
+          setCatalogNotice(
+            'Ce soin n’est plus disponible à la réservation en ligne. Choisissez-en un autre, ou contactez l’institut.'
+          );
+          setCatalogKey((k) => k + 1);
+          setCurrentStep(1);
+        } else if (res.status === 429) {
+          setSubmitError(`Trop de tentatives. Patientez quelques minutes avant de réessayer${phoneHint}.`);
+        } else if (res.status === 400) {
+          setSubmitError(data?.error || 'Certaines informations sont invalides. Vérifiez le formulaire.');
+        } else {
+          setSubmitError(
+            `Une erreur est survenue de notre côté. Réessayez dans un instant${phoneHint}.`
+          );
+        }
+        return;
       }
 
-      setConfirmedBooking(data.booking);
+      // Une réponse de piège à robots est factice : on complète avec ce que la cliente a choisi.
+      const raw = data?.booking ?? {};
+      setConfirmedBooking({
+        id: raw.id ?? '',
+        service_nom: raw.service_nom ?? currentServiceName,
+        options: raw.options ?? [],
+        date_rdv: raw.date_rdv ?? selectedDate,
+        periode: raw.periode ?? selectedPeriode,
+        service_duree_minutes: raw.service_duree_minutes ?? currentDurationMinutes,
+        total_chf: typeof raw.total_chf === 'number' ? raw.total_chf : currentPriceChf,
+      });
+      setSubmittedPrenom(formData.prenom.trim());
+      setSubmittedEstimate(currentPriceChf);
       setCurrentStep(5);
-      window.scrollTo({ top: 80, behavior: 'smooth' });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erreur réservation:', err);
-      setSubmitError(err.message || 'Une erreur inattendue est survenue.');
+      setSubmitError(
+        `Connexion impossible. Vérifiez votre réseau et réessayez. Si le problème persiste, contactez l’institut${
+          businessPhone ? ` au ${businessPhone}` : ''
+        }.`
+      );
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
-  const formattedDate = useMemo(() => {
-    if (!selectedDate) return '';
-    const d = new Date(`${selectedDate}T12:00:00`);
-    return d.toLocaleDateString('fr-CH', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  }, [selectedDate]);
+  // ── Petits composants de champ ──
+  const fieldClass = (hasError: boolean) =>
+    `w-full px-4 py-3 rounded-[var(--radius-base,0.75rem)] border bg-paper text-sm focus:outline-none transition-all ${
+      hasError ? 'border-red-600 bg-red-50/30' : 'border-border focus:border-sage focus:ring-1 focus:ring-sage'
+    }`;
+  const labelClass = 'text-xs font-semibold text-stone-deep uppercase tracking-wider block';
 
-  // Fichier ICS calendrier
-  const downloadIcs = () => {
-    if (!confirmedBooking) return;
-    const startStr = `${confirmedBooking.date_rdv.replace(/-/g, '')}T${confirmedBooking.heure_rdv.replace(':', '')}00`;
-    const [h, m] = confirmedBooking.heure_rdv.split(':').map((x: string) => parseInt(x, 10));
-    const endMinutes = h * 60 + m + (confirmedBooking.service_duree_minutes || 60);
-    const endH = Math.floor(endMinutes / 60) % 24;
-    const endM = endMinutes % 60;
-    const endStr = `${confirmedBooking.date_rdv.replace(/-/g, '')}T${endH.toString().padStart(2, '0')}${endM.toString().padStart(2, '0')}00`;
+  const emailFilled = formData.email.trim().length > 0;
+  const stepTotal = stepsList.length;
+  const headingText =
+    currentStep === 5 ? '' : `Étape ${stepIndex + 1} sur ${stepTotal} : ${stepLabel}`;
 
-    const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Emmanuelle Esthetique//FR',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      'BEGIN:VEVENT',
-      `SUMMARY:Rendez-vous Emmanuelle Esthétique — ${confirmedBooking.service_nom}`,
-      `DESCRIPTION:Soin en cabine privée : ${confirmedBooking.service_nom}. En attente de validation définitive par Emmanuelle.`,
-      `LOCATION:Emmanuelle Esthétique, Palézieux-Gare (Vaud, Suisse)`,
-      `DTSTART:${startStr}`,
-      `DTEND:${endStr}`,
-      'STATUS:TENTATIVE',
-      'END:VEVENT',
-      'END:VCALENDAR',
-    ].join('\r\n');
-
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = window.URL.createObjectURL(blob);
-    link.setAttribute('download', `rendez-vous-emmanuelle-${confirmedBooking.date_rdv}.ics`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const estimatedSummary = `${chf(currentPriceChf)} · ${currentDurationMinutes} min`;
 
   return (
     <div className="min-h-screen bg-paper text-stone-deep pt-36 sm:pt-44 lg:pt-48 pb-20 px-4 sm:px-6 lg:px-8">
@@ -664,93 +575,108 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
         {/* En-tête éditorial */}
         <div className="text-center mb-8 sm:mb-12 space-y-3">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase bg-sage/10 text-sage border border-sage/20">
-            <Sparkles className="w-3.5 h-3.5 text-sage" />
-            Cabine Privée · Soins d'Exception
+            <Sparkles className="w-3.5 h-3.5 text-sage" aria-hidden="true" />
+            Cabine Privée · Soins d&apos;Exception
           </span>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif text-stone-deep font-normal tracking-tight">
             Réserver votre soin en ligne
           </h1>
           <p className="text-muted max-w-xl mx-auto text-sm sm:text-base font-light leading-relaxed">
-            Offrez-vous une parenthèse marine exclusive. Choisissez votre rituel, personnalisez vos privilèges et sélectionnez votre créneau en toute quiétude.
+            Choisissez votre rituel, le jour et la demi-journée qui vous conviennent. Emmanuelle vous rappelle ensuite
+            pour fixer l&apos;horaire exact.
           </p>
         </div>
+
+        {/* Ancre de défilement / focus au changement d'étape */}
+        <div ref={stepTopRef} className="scroll-mt-28" />
 
         {/* Stepper horizontal */}
         {currentStep < 5 && (
           <div className="mb-10">
             <div data-surface className="bg-surface border border-border rounded-[var(--radius-base,1rem)] p-3 sm:p-4 shadow-xs">
-              <nav aria-label="Étapes de réservation" className="flex items-center justify-between">
-                {(monthlyOffer && monthlyOffer.active
-                  ? [
-                      { num: 1, label: 'Prestation' },
-                      { num: 2, label: 'Offre du moment' },
-                      { num: 3, label: 'Séance' },
-                      { num: 4, label: 'Coordonnées' },
-                    ]
-                  : [
-                      { num: 1, label: 'Prestation' },
-                      { num: 3, label: 'Séance' },
-                      { num: 4, label: 'Coordonnées' },
-                    ]
-                ).map((step, idx, arr) => {
-                  const isActive = currentStep === step.num;
-                  const isCompleted = currentStep > step.num;
-                  return (
-                    <React.Fragment key={step.num}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (step.num < currentStep) setCurrentStep(step.num as any);
-                        }}
-                        disabled={step.num > currentStep}
-                        className={`flex items-center gap-2 sm:gap-2.5 transition-all text-left ${
-                          step.num < currentStep ? 'cursor-pointer' : 'cursor-default'
-                        }`}
-                      >
-                        <span
-                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                            isActive
-                              ? 'bg-sage text-white shadow-sm ring-4 ring-sage/20'
-                              : isCompleted
-                              ? 'bg-sage/80 text-white'
-                              : 'bg-stone-100 text-stone-400'
-                          }`}
-                        >
-                          {isCompleted ? <Check className="w-4 h-4" /> : idx + 1}
-                        </span>
-                        <span className="hidden sm:inline">
-                          <span
-                            className={`block text-xs font-semibold uppercase tracking-wider ${
-                              isActive ? 'text-sage' : isCompleted ? 'text-stone-700' : 'text-stone-400'
+              <nav aria-label="Étapes de réservation">
+                <ol className="flex items-center justify-between">
+                  {stepsList.map((step, idx, arr) => {
+                    const isActive = currentStep === step.num;
+                    const isCompleted = currentStep > step.num;
+                    return (
+                      <React.Fragment key={step.num}>
+                        <li className="flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (step.num < currentStep) setCurrentStep(step.num as StepNum);
+                            }}
+                            disabled={step.num > currentStep}
+                            aria-current={isActive ? 'step' : undefined}
+                            aria-label={`Étape ${idx + 1} sur ${arr.length} : ${step.label}${
+                              isCompleted ? ' (terminée, revenir)' : isActive ? ' (en cours)' : ''
+                            }`}
+                            className={`flex items-center gap-2 sm:gap-2.5 transition-all text-left ${
+                              step.num < currentStep ? 'cursor-pointer' : 'cursor-default'
                             }`}
                           >
-                            {step.label}
-                          </span>
-                        </span>
-                      </button>
-                      {idx < arr.length - 1 && (
-                        <div
-                          className={`h-0.5 flex-1 mx-2 sm:mx-4 rounded-full transition-colors ${
-                            currentStep > step.num ? 'bg-sage' : 'bg-border'
-                          }`}
-                        />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+                            <span
+                              aria-hidden="true"
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                                isActive
+                                  ? 'bg-sage text-white shadow-sm ring-4 ring-sage/20'
+                                  : isCompleted
+                                  ? 'bg-sage/80 text-white'
+                                  : 'bg-stone-100 text-stone-600'
+                              }`}
+                            >
+                              {isCompleted ? <Check className="w-4 h-4" /> : idx + 1}
+                            </span>
+                            <span className="hidden sm:inline" aria-hidden="true">
+                              <span
+                                className={`block text-xs font-semibold uppercase tracking-wider ${
+                                  isActive ? 'text-sage' : isCompleted ? 'text-stone-700' : 'text-stone-600'
+                                }`}
+                              >
+                                {step.label}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                        {idx < arr.length - 1 && (
+                          <li
+                            aria-hidden="true"
+                            className={`h-0.5 flex-1 mx-2 sm:mx-4 rounded-full transition-colors ${
+                              currentStep > step.num ? 'bg-sage' : 'bg-border'
+                            }`}
+                          />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </ol>
               </nav>
             </div>
           </div>
-
         )}
 
-        {/* ═══════════════════════════════════════════════════════════════════
-            ÉTAPE 1 : CHOIX DE LA PRESTATION
-            ═══════════════════════════════════════════════════════════════════ */}
+        {/* Titre d'étape : annoncé et focalisé à chaque changement d'étape */}
+        {currentStep < 5 && (
+          <h2 ref={headingRef} tabIndex={-1} className="sr-only focus:outline-none">
+            {headingText}
+          </h2>
+        )}
+
+        {/* ═══ ÉTAPE 1 : PRESTATION ═══ */}
         {currentStep === 1 && (
           <div className="space-y-8 animate-fadein">
-            {/* Onglets de catégories */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+            {catalogNotice && (
+              <div
+                role="alert"
+                className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm flex items-start gap-3"
+              >
+                <AlertCircle className="w-5 h-5 shrink-0 text-amber-700" aria-hidden="true" />
+                <span>{catalogNotice}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3" role="group" aria-label="Catégories de soins">
               {CATEGORIES.map((cat) => {
                 const isCatActive = selectedCategory === cat.id;
                 const IconComponent = cat.icon;
@@ -758,16 +684,20 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => handleCategoryChange(cat.id as any)}
+                    aria-pressed={isCatActive}
+                    onClick={() => handleCategoryChange(cat.id)}
                     className={`p-3.5 sm:p-4 rounded-[var(--radius-base,0.75rem)] text-left border transition-all ${
                       isCatActive
                         ? 'bg-sage text-white border-sage shadow-sm'
                         : 'bg-surface text-stone-deep border-border hover:border-sage/40 hover:bg-stone-50'
                     }`}
                   >
-                    <IconComponent className={`w-5 h-5 mb-2 ${isCatActive ? 'text-white' : 'text-sage'}`} />
+                    <IconComponent
+                      className={`w-5 h-5 mb-2 ${isCatActive ? 'text-white' : 'text-sage'}`}
+                      aria-hidden="true"
+                    />
                     <div className="text-xs sm:text-sm font-semibold leading-tight">{cat.label}</div>
-                    <div className={`text-[11px] mt-0.5 truncate ${isCatActive ? 'text-white/80' : 'text-muted'}`}>
+                    <div className={`text-[11px] mt-0.5 truncate ${isCatActive ? 'text-white/90' : 'text-muted'}`}>
                       {cat.desc}
                     </div>
                   </button>
@@ -775,93 +705,115 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
               })}
             </div>
 
-            {/* Liste des soins de la catégorie sélectionnée */}
-            <div className="space-y-4">
-              {servicesCatalog.filter((p) => p.category === selectedCategory).map((item) => {
-                const isSelected = selectedService?.id === item.id;
-                return (
-                  <div
-                    key={item.id}
-                    data-surface
-                    onClick={() => {
-                      setSelectedService(item);
-                      setSelectedVariantIndex(0);
-                    }}
-                    className={`group relative p-5 sm:p-6 rounded-[var(--radius-base,1rem)] border transition-all cursor-pointer bg-surface ${
-                      isSelected
-                        ? 'border-sage ring-2 ring-sage/20 shadow-md bg-sage/5'
-                        : 'border-border hover:border-sage/40 hover:shadow-xs'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                      <div className="space-y-1.5 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-serif font-medium text-stone-deep group-hover:text-sage transition-colors">
-                            {item.name}
-                          </h3>
-                          {item.tag && (
-                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-sage/10 text-sage border border-sage/20">
-                              {item.tag}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-muted text-xs sm:text-sm leading-relaxed max-w-2xl font-light">
-                          {item.description}
-                        </p>
+            <fieldset className="space-y-4 min-w-0">
+              <legend className="sr-only">Choisissez votre soin</legend>
+              {servicesCatalog
+                .filter((p) => p.category === selectedCategory)
+                .map((item) => {
+                  const isSelected = selectedService?.id === item.id;
+                  const shownVariant = item.variants && isSelected ? item.variants[selectedVariantIndex] : undefined;
+                  return (
+                    <div
+                      key={item.id}
+                      data-surface
+                      className={`group relative rounded-[var(--radius-base,1rem)] border transition-all bg-surface focus-within:ring-2 focus-within:ring-sage/40 ${
+                        isSelected
+                          ? 'border-sage ring-2 ring-sage/20 shadow-md bg-sage/5'
+                          : 'border-border hover:border-sage/40 hover:shadow-xs'
+                      }`}
+                    >
+                      <label className="block cursor-pointer p-5 sm:p-6">
+                        <input
+                          type="radio"
+                          name="soin"
+                          value={item.id}
+                          checked={isSelected}
+                          aria-labelledby={`rf-soin-${item.id}-nom`}
+                          aria-describedby={`rf-soin-${item.id}-desc`}
+                          onChange={() => {
+                            setSelectedService(item);
+                            setSelectedVariantIndex(0);
+                          }}
+                          className="sr-only"
+                        />
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div className="space-y-1.5 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                id={`rf-soin-${item.id}-nom`}
+                                className="text-lg font-serif font-medium text-stone-deep group-hover:text-sage transition-colors"
+                              >
+                                {item.name}
+                              </span>
+                              {item.tag && (
+                                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-sage/10 text-sage border border-sage/20">
+                                  {item.tag}
+                                </span>
+                              )}
+                            </div>
+                            <p
+                              id={`rf-soin-${item.id}-desc`}
+                              className="text-muted text-xs sm:text-sm leading-relaxed max-w-2xl font-light"
+                            >
+                              {item.description}
+                            </p>
+                          </div>
 
-                        {/* Variantes (ex: Grand massage relaxant 60 min ou 90 min) */}
-                        {item.variants && item.variants.length > 0 && isSelected && (
-                          <div className="pt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-xs text-muted font-medium">Choisissez la durée :</span>
-                            {item.variants.map((v, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => setSelectedVariantIndex(idx)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-border">
+                            <div className="text-right">
+                              <div className="text-xl font-serif font-semibold text-sage">
+                                {chf(shownVariant?.priceChf ?? item.priceChf)}
+                              </div>
+                              <div className="inline-flex items-center gap-1 text-xs text-muted">
+                                <Clock className="w-3.5 h-3.5 text-muted" aria-hidden="true" />
+                                {shownVariant?.durationLabel ?? item.durationLabel}
+                              </div>
+                            </div>
+                            <div
+                              aria-hidden="true"
+                              className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all ${
+                                isSelected ? 'bg-sage border-sage text-white' : 'border-border text-transparent'
+                              }`}
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </div>
+                          </div>
+                        </div>
+                      </label>
+
+                      {/* Variantes de durée (ex. massage relaxant 60 ou 90 min) */}
+                      {item.variants && item.variants.length > 0 && isSelected && (
+                        <fieldset className="px-5 sm:px-6 pb-5 sm:pb-6 -mt-2 flex flex-wrap items-center gap-2 min-w-0">
+                          <legend className="text-xs text-muted font-medium float-left mr-2 py-1.5">
+                            Choisissez la durée :
+                          </legend>
+                          {item.variants.map((v, idx) => (
+                            <label key={v.durationMinutes} className="cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`duree-${item.id}`}
+                                checked={selectedVariantIndex === idx}
+                                onChange={() => setSelectedVariantIndex(idx)}
+                                className="sr-only peer"
+                              />
+                              <span
+                                className={`inline-block px-3 py-2 rounded-lg text-xs font-semibold transition-all peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-sage ${
                                   selectedVariantIndex === idx
                                     ? 'bg-sage text-white shadow-xs'
                                     : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                                 }`}
                               >
-                                {v.durationLabel} — CHF {v.priceChf}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-border">
-                        <div className="text-right">
-                          <div className="text-xl font-serif font-semibold text-sage">
-                            CHF{' '}
-                            {item.variants && isSelected
-                              ? item.variants[selectedVariantIndex]?.priceChf
-                              : item.priceChf}
-                          </div>
-                          <div className="inline-flex items-center gap-1 text-xs text-muted">
-                            <Clock className="w-3.5 h-3.5 text-muted" />
-                            {item.variants && isSelected
-                              ? item.variants[selectedVariantIndex]?.durationLabel
-                              : item.durationLabel}
-                          </div>
-                        </div>
-
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all ${
-                            isSelected ? 'bg-sage border-sage text-white' : 'border-border text-transparent'
-                          }`}
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                        </div>
-                      </div>
+                                {v.durationLabel} — {chf(v.priceChf)}
+                              </span>
+                            </label>
+                          ))}
+                        </fieldset>
+                      )}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+            </fieldset>
 
-            {/* Barre récapitulative et bouton de progression Étape 1 */}
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-4 sm:p-5 border border-border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-center sm:text-left">
                 <span className="text-xs text-muted block font-medium">Soin sélectionné :</span>
@@ -869,7 +821,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                   {currentServiceName || 'Veuillez choisir un soin'}
                 </span>
                 <div className="text-xs text-sage font-medium mt-0.5">
-                  CHF {currentPriceChf} · Durée : {baseDurationMinutes} min
+                  {chf(selectedService ? currentPriceChf : 0)} · Durée : {baseDurationMinutes} min
                 </div>
               </div>
 
@@ -877,47 +829,40 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                 type="button"
                 data-btn="primary"
                 onClick={() => {
-                  if (monthlyOffer && monthlyOffer.active) {
-                    setCurrentStep(2);
-                  } else {
-                    setCurrentStep(3);
-                  }
+                  setCatalogNotice(null);
+                  setCurrentStep(monthlyOffer && monthlyOffer.active ? 2 : 3);
                 }}
                 disabled={!selectedService}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 font-medium tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {monthlyOffer && monthlyOffer.active ? "Continuer vers l'Offre du Moment" : "Choisir votre séance"}
-                <ChevronRight className="w-4 h-4" />
+                {monthlyOffer && monthlyOffer.active ? "Continuer vers l'offre du moment" : 'Choisir votre séance'}
+                <ChevronRight className="w-4 h-4" aria-hidden="true" />
               </button>
-
             </div>
           </div>
         )}
 
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            ÉTAPE 2 : L'OFFRE DU MOMENT
-            ═══════════════════════════════════════════════════════════════════ */}
+        {/* ═══ ÉTAPE 2 : OFFRE DU MOMENT ═══ */}
         {currentStep === 2 && (
           <div className="space-y-8 animate-fadein">
-            {/* Récapitulatif du soin principal sélectionné */}
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-xs flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage">
+                <div className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage" aria-hidden="true">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-xs text-muted font-medium">Votre soin principal sélectionné :</div>
+                  <div className="text-xs text-muted font-medium">Votre soin principal :</div>
                   <div className="text-base font-serif font-semibold text-stone-deep">{currentServiceName}</div>
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-base font-serif font-semibold text-sage">CHF {selectedService?.priceChf}</div>
+                <div className="text-base font-serif font-semibold text-sage">
+                  {chf(selectedService ? (selectedService.variants?.[selectedVariantIndex]?.priceChf ?? selectedService.priceChf) : 0)}
+                </div>
                 <div className="text-xs text-muted">{baseDurationMinutes} min</div>
               </div>
             </div>
 
-            {/* Mise en avant de l'Offre du Moment */}
             {monthlyOffer && monthlyOffer.active && (
               <div
                 data-surface
@@ -926,27 +871,21 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                 <div className="flex flex-col md:flex-row gap-6 items-center">
                   {monthlyOffer.image_url && (
                     <div className="w-full md:w-52 h-44 rounded-xl overflow-hidden shrink-0 shadow-inner bg-stone-100">
-                      <img
-                        src={monthlyOffer.image_url}
-                        alt={monthlyOffer.titre}
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={monthlyOffer.image_url} alt={monthlyOffer.titre} className="w-full h-full object-cover" />
                     </div>
                   )}
 
                   <div className="flex-1 space-y-2.5 text-left">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sage text-white text-[11px] font-bold uppercase tracking-wider">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Offre Exclusive du Moment
+                      <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                      Offre exclusive du moment
                     </div>
                     <h3 className="text-xl sm:text-2xl font-serif font-semibold text-stone-deep">{monthlyOffer.titre}</h3>
                     {monthlyOffer.description && (
-                      <p className="text-muted text-xs sm:text-sm font-light leading-relaxed">
-                        {monthlyOffer.description}
-                      </p>
+                      <p className="text-muted text-xs sm:text-sm font-light leading-relaxed">{monthlyOffer.description}</p>
                     )}
                     <div className="text-lg font-serif font-semibold text-sage">
-                      Tarif Préférentiel : CHF {monthlyOffer.prix_chf}
+                      Tarif préférentiel : {chf(Number(monthlyOffer.prix_chf))}
                     </div>
                   </div>
 
@@ -954,12 +893,13 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                     <button
                       type="button"
                       data-btn={includeMonthlyOffer ? 'primary' : 'secondary'}
+                      aria-pressed={includeMonthlyOffer}
                       onClick={() => setIncludeMonthlyOffer(!includeMonthlyOffer)}
                       className="w-full md:w-auto px-6 py-3.5 text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2"
                     >
                       {includeMonthlyOffer ? (
                         <>
-                          <Check className="w-4 h-4" />
+                          <Check className="w-4 h-4" aria-hidden="true" />
                           Offre du moment ajoutée
                         </>
                       ) : (
@@ -971,13 +911,10 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
               </div>
             )}
 
-            {/* Barre de total estimé & navigation */}
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-center sm:text-left">
                 <span className="text-xs text-muted block">Total estimé de votre soin :</span>
-                <span className="text-2xl font-serif font-bold text-sage">
-                  CHF {currentPriceChf}
-                </span>
+                <span className="text-2xl font-serif font-bold text-sage">{chf(currentPriceChf)}</span>
                 <span className="text-xs text-muted ml-2">({currentDurationMinutes} min prévues)</span>
               </div>
 
@@ -997,254 +934,265 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                   className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-7 py-3 text-sm font-medium tracking-wide shadow-md transition-all"
                 >
                   Choisir votre séance
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════════════════════
-            ÉTAPE 3 : SÉLECTION DU CRÉNEAU HORAIRE
-            ═══════════════════════════════════════════════════════════════════ */}
+        {/* ═══ ÉTAPE 3 : JOUR + PÉRIODE ═══ */}
         {currentStep === 3 && (
           <div className="space-y-8 animate-fadein">
-            {/* Guide & explication buffer cabine */}
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-xs flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage shrink-0" aria-hidden="true">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div className="space-y-1 text-xs sm:text-sm text-stone-deep font-light">
-                <p className="font-semibold text-stone-deep">
-                  Sélection en temps réel · Lundi au Samedi de 9h00 à 18h00
-                </p>
+                <p className="font-semibold text-stone-deep">Vous choisissez un jour et une demi-journée.</p>
                 <p className="text-muted">
-                  Un battement sanitaire et sérénité de <strong>30 minutes</strong> est automatiquement réservé après chaque soin pour assurer une aération complète, la désinfection de la cabine et votre absolue discrétion.
+                  Emmanuelle vous appelle ensuite pour <strong>fixer avec vous l&apos;horaire exact</strong>. Un temps
+                  de battement est réservé après chaque soin pour aérer et désinfecter la cabine, et garantir votre
+                  discrétion.
                 </p>
               </div>
             </div>
 
-            {/* Sélecteur de date rapide */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base sm:text-lg font-serif font-medium text-stone-deep">
-                  1. Choisissez le jour de votre rendez-vous :
-                </h3>
-                <span className="text-xs text-muted font-light">Fermé le dimanche</span>
+            {slotsNotice && (
+              <div
+                role="alert"
+                className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm flex items-start gap-3"
+              >
+                <AlertCircle className="w-5 h-5 shrink-0 text-amber-700" aria-hidden="true" />
+                <span>{slotsNotice}</span>
               </div>
+            )}
 
-              <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
-                {dateOptions.map((item) => {
-                  const isDateSelected = selectedDate === item.dateStr;
-                  return (
-                    <button
-                      key={item.dateStr}
-                      type="button"
-                      onClick={() => setSelectedDate(item.dateStr)}
-                      className={`p-3 rounded-[var(--radius-base,0.75rem)] border text-center transition-all flex flex-col items-center justify-center gap-0.5 ${
-                        isDateSelected
-                          ? 'bg-sage text-white border-sage shadow-sm ring-2 ring-sage/20'
-                          : 'bg-surface text-stone-deep border-border hover:border-sage hover:bg-stone-50'
-                      }`}
-                    >
-                      <span className={`text-[11px] uppercase tracking-wider font-semibold ${isDateSelected ? 'text-white/80' : 'text-muted'}`}>
-                        {item.dayName}
-                      </span>
-                      <span className="text-lg font-bold font-serif leading-tight">{item.dayNumber}</span>
-                      <span className={`text-[10px] ${isDateSelected ? 'text-white/70' : 'text-muted'}`}>
-                        {item.monthName}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Jour */}
+            <section className="space-y-3" aria-labelledby="rf-jour-titre">
+              <h3 id="rf-jour-titre" className="text-base sm:text-lg font-serif font-medium text-stone-deep">
+                1. Choisissez le jour de votre rendez-vous
+              </h3>
 
-              {/* Champ calendrier natif pour date ultérieure */}
-              <div className="flex items-center gap-2 pt-2 text-xs text-muted">
-                <Calendar className="w-3.5 h-3.5 text-sage" />
-                <span>Autre date :</span>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-surface border border-border rounded-lg px-2.5 py-1 text-xs text-stone-deep focus:outline-none focus:ring-1 focus:ring-sage"
-                />
-              </div>
-            </div>
-
-            {/* Sélection de la séance : Matin ou Après-midi */}
-            <div className="space-y-4">
-              <div className="border-b border-border pb-3">
-                <h3 className="text-base sm:text-lg font-serif font-medium text-stone-deep">
-                  2. Choisissez votre séance pour le <span className="capitalize">{formattedDate}</span> :
-                </h3>
-                <p className="text-xs text-muted font-light mt-0.5">
-                  Emmanuelle réserve la cabine pour vous le matin ou l'après-midi. L'horaire exact sera fixé directement avec vous lors de sa confirmation téléphonique.
-                </p>
-              </div>
-
-              {loadingSlots ? (
-                <div className="py-16 text-center space-y-3 bg-surface rounded-[var(--radius-base,1rem)] border border-border">
-                  <RefreshCw className="w-6 h-6 animate-spin mx-auto text-sage" />
-                  <p className="text-xs sm:text-sm text-muted font-light">
-                    Interrogation de l'agenda d'Emmanuelle et vérification des disponibilités...
-                  </p>
+              {calendarLoading && !calendar ? (
+                <div role="status" className="py-12 text-center space-y-3 bg-surface rounded-[var(--radius-base,1rem)] border border-border">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto text-sage" aria-hidden="true" />
+                  <p className="text-xs sm:text-sm text-muted font-light">Chargement du calendrier de l&apos;institut…</p>
                 </div>
-              ) : slotsError ? (
-                <div className="p-6 rounded-[var(--radius-base,1rem)] bg-amber-50 border border-amber-200 text-amber-800 text-sm flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
-                  <p>{slotsError}</p>
+              ) : calendarError ? (
+                <div role="alert" className="p-5 rounded-[var(--radius-base,1rem)] bg-amber-50 border border-amber-200 text-amber-900 text-sm space-y-3">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 shrink-0 text-amber-700" aria-hidden="true" />
+                    <p>
+                      {calendarError} Nous ne pouvons pas enregistrer de demande sans consulter l&apos;agenda.
+                      {businessPhone && (
+                        <>
+                          {' '}Vous pouvez aussi appeler l&apos;institut au{' '}
+                          <a href={`tel:${businessPhone.replace(/[^\d+]/g, '')}`} className="underline font-semibold">
+                            {businessPhone}
+                          </a>
+                          .
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    data-btn="secondary"
+                    onClick={() => setCalendarKey((k) => k + 1)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold"
+                  >
+                    <RefreshCw className="w-4 h-4" aria-hidden="true" />
+                    Réessayer
+                  </button>
                 </div>
-              ) : !isMorningAvailable && !isAfternoonAvailable ? (
-                <div className="py-12 text-center bg-surface rounded-[var(--radius-base,1rem)] border border-border p-6 space-y-2">
-                  <Clock className="w-8 h-8 text-stone-300 mx-auto" />
-                  <h4 className="text-sm font-semibold text-stone-deep">Aucune séance disponible pour cette journée</h4>
+              ) : calendar && !selectedDate ? (
+                <div className="py-10 text-center bg-surface rounded-[var(--radius-base,1rem)] border border-border p-6 space-y-2">
+                  <Clock className="w-8 h-8 text-muted mx-auto" aria-hidden="true" />
+                  <h4 className="text-sm font-semibold text-stone-deep">Aucun jour disponible pour le moment</h4>
                   <p className="text-xs text-muted max-w-sm mx-auto font-light">
-                    Emmanuelle est complète ou indisponible ce jour-là. Veuillez sélectionner une autre date parmi les propositions ci-dessus.
+                    L&apos;agenda est complet sur les prochaines semaines pour la durée de ce soin.
+                    {businessPhone && ` Contactez l’institut au ${businessPhone}.`}
                   </p>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Carte 1 : La séance du matin */}
-                  <button
-                    type="button"
-                    disabled={!isMorningAvailable}
-                    onClick={() => setSelectedSlot('09:00')}
-                    className={`p-6 rounded-[var(--radius-base,1rem)] border text-left transition-all relative flex flex-col justify-between gap-4 ${
-                      !isMorningAvailable
-                        ? 'bg-stone-50/70 border-border opacity-50 cursor-not-allowed'
-                        : selectedSlot === '09:00'
-                        ? 'bg-sage/10 border-sage ring-2 ring-sage shadow-md text-stone-deep'
-                        : 'bg-surface border-border hover:border-sage hover:bg-stone-50/50 text-stone-deep shadow-xs'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
-                            selectedSlot === '09:00' ? 'bg-sage text-white shadow-xs' : 'bg-sage/10 text-sage'
-                          }`}
-                        >
-                          <Sun className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <h4 className="text-base sm:text-lg font-serif font-bold text-stone-deep">
-                            La séance du matin
-                          </h4>
-                          <span className="text-xs text-muted font-light">Dès 09h00</span>
-                        </div>
-                      </div>
-                      <div>
-                        {isMorningAvailable ? (
-                          <span
-                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                              selectedSlot === '09:00'
-                                ? 'bg-sage text-white'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            }`}
-                          >
-                            Disponible
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-stone-100 text-stone-400 border border-stone-200">
-                            Complet
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-muted font-light leading-relaxed">
-                      Idéal pour commencer votre journée dans la douceur et la sérénité en cabine privée.
-                    </p>
-
-                    <div className="text-[11px] text-sage font-medium pt-3 border-t border-border/60 flex items-center justify-between">
-                      <span>Horaire définitif fixé avec Emmanuelle</span>
-                      {selectedSlot === '09:00' && <CheckCircle2 className="w-4 h-4 text-sage" />}
-                    </div>
-                  </button>
-
-                  {/* Carte 2 : La séance de l'après-midi */}
-                  <button
-                    type="button"
-                    disabled={!isAfternoonAvailable}
-                    onClick={() => setSelectedSlot('14:00')}
-                    className={`p-6 rounded-[var(--radius-base,1rem)] border text-left transition-all relative flex flex-col justify-between gap-4 ${
-                      !isAfternoonAvailable
-                        ? 'bg-stone-50/70 border-border opacity-50 cursor-not-allowed'
-                        : selectedSlot === '14:00'
-                        ? 'bg-sage/10 border-sage ring-2 ring-sage shadow-md text-stone-deep'
-                        : 'bg-surface border-border hover:border-sage hover:bg-stone-50/50 text-stone-deep shadow-xs'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
-                            selectedSlot === '14:00' ? 'bg-sage text-white shadow-xs' : 'bg-sage/10 text-sage'
-                          }`}
-                        >
-                          <Sunset className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <h4 className="text-base sm:text-lg font-serif font-bold text-stone-deep">
-                            La séance de l'après-midi
-                          </h4>
-                          <span className="text-xs text-muted font-light">Dès 14h00</span>
-                        </div>
-                      </div>
-                      <div>
-                        {isAfternoonAvailable ? (
-                          <span
-                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                              selectedSlot === '14:00'
-                                ? 'bg-sage text-white'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            }`}
-                          >
-                            Disponible
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-stone-100 text-stone-400 border border-stone-200">
-                            Complet
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-muted font-light leading-relaxed">
-                      Parfait pour vous offrir une parenthèse de déconnexion et de ressourcement dans l'après-midi.
-                    </p>
-
-                    <div className="text-[11px] text-sage font-medium pt-3 border-t border-border/60 flex items-center justify-between">
-                      <span>Horaire définitif fixé avec Emmanuelle</span>
-                      {selectedSlot === '14:00' && <CheckCircle2 className="w-4 h-4 text-sage" />}
-                    </div>
-                  </button>
+              ) : calendar ? (
+                <div className={calendarLoading ? 'opacity-60 pointer-events-none' : ''} aria-busy={calendarLoading}>
+                  <DayCalendar
+                    from={calendarRange.from}
+                    to={calendarRange.to}
+                    jours={calendar.jours}
+                    selected={selectedDate}
+                    today={today}
+                    onSelect={(d) => {
+                      setSlotsNotice(null);
+                      setSelectedDate(d);
+                    }}
+                  />
                 </div>
-              )}
-            </div>
+              ) : null}
+            </section>
 
-            {/* Récapitulatif du créneau retenu & navigation étape 3 */}
+            {/* Période */}
+            {calendar && selectedDate && (
+              <section className="space-y-4" aria-labelledby="rf-periode-titre">
+                <div className="border-b border-border pb-3">
+                  <h3 id="rf-periode-titre" className="text-base sm:text-lg font-serif font-medium text-stone-deep">
+                    2. Matin ou après-midi, le <span>{formattedDate}</span> ?
+                  </h3>
+                  <p className="text-xs text-muted font-light mt-0.5">
+                    L&apos;horaire exact sera fixé avec Emmanuelle lors d&apos;un appel : l&apos;heure indiquée est celle
+                    du premier créneau possible dans la demi-journée, à titre indicatif.
+                  </p>
+                </div>
+
+                <div>
+                  {loadingSlots ? (
+                    <div role="status" className="py-14 text-center space-y-3 bg-surface rounded-[var(--radius-base,1rem)] border border-border">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-sage" aria-hidden="true" />
+                      <p className="text-xs sm:text-sm text-muted font-light">
+                        Vérification des disponibilités…
+                      </p>
+                    </div>
+                  ) : slotsError ? (
+                    <div role="alert" className="p-5 rounded-[var(--radius-base,1rem)] bg-amber-50 border border-amber-200 text-amber-900 text-sm space-y-3">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 shrink-0 text-amber-700" aria-hidden="true" />
+                        <p>{slotsError}</p>
+                      </div>
+                      <button
+                        type="button"
+                        data-btn="secondary"
+                        onClick={() => setSlotsKey((k) => k + 1)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold"
+                      >
+                        <RefreshCw className="w-4 h-4" aria-hidden="true" />
+                        Réessayer
+                      </button>
+                    </div>
+                  ) : dayInfo && (dayInfo.ouvert === false || !anyPeriodeAvailable) ? (
+                    <div className="py-10 text-center bg-surface rounded-[var(--radius-base,1rem)] border border-border p-6 space-y-2">
+                      <Clock className="w-8 h-8 text-muted mx-auto" aria-hidden="true" />
+                      <h4 className="text-sm font-semibold text-stone-deep">
+                        {dayInfo.ouvert === false ? 'L’institut est fermé ce jour-là' : 'Aucune séance disponible ce jour-là'}
+                      </h4>
+                      <p className="text-xs text-muted max-w-sm mx-auto font-light">
+                        Veuillez sélectionner un autre jour dans le calendrier ci-dessus.
+                      </p>
+                    </div>
+                  ) : dayInfo && periodes ? (
+                    <fieldset className="min-w-0">
+                      <legend className="sr-only">Choisissez le matin ou l&apos;après-midi</legend>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {PERIODES.map((p) => {
+                          const info = periodes[p];
+                          const available = info.disponible;
+                          const checked = selectedPeriode === p;
+                          const Icon = p === 'matin' ? Sun : Sunset;
+                          return (
+                            <label
+                              key={p}
+                              className={`relative p-5 sm:p-6 rounded-[var(--radius-base,1rem)] border text-left transition-all flex flex-col justify-between gap-4 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-sage has-[:focus-visible]:ring-offset-2 ${
+                                !available
+                                  ? 'bg-stone-50 border-border cursor-not-allowed'
+                                  : checked
+                                  ? 'bg-sage/10 border-sage ring-2 ring-sage shadow-md text-stone-deep cursor-pointer'
+                                  : 'bg-surface border-border hover:border-sage hover:bg-stone-50/50 text-stone-deep shadow-xs cursor-pointer'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="periode"
+                                value={p}
+                                checked={checked}
+                                disabled={!available}
+                                aria-labelledby={`rf-periode-${p}-nom`}
+                                aria-describedby={`rf-periode-${p}-desc`}
+                                onChange={() => {
+                                  setSlotsNotice(null);
+                                  setSelectedPeriode(p);
+                                }}
+                                className="sr-only"
+                              />
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    aria-hidden="true"
+                                    className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
+                                      checked ? 'bg-sage text-white shadow-xs' : available ? 'bg-sage/10 text-sage' : 'bg-stone-100 text-stone-600'
+                                    }`}
+                                  >
+                                    <Icon className="w-6 h-6" />
+                                  </div>
+                                  <div>
+                                    <span
+                                      id={`rf-periode-${p}-nom`}
+                                      className={`block text-base sm:text-lg font-serif font-bold ${available ? 'text-stone-deep' : 'text-stone-600'}`}
+                                    >
+                                      {PERIODE_LABEL[p]}
+                                    </span>
+                                    <span
+                                      id={`rf-periode-${p}-desc`}
+                                      className={`text-xs font-light ${available ? 'text-muted' : 'text-stone-600'}`}
+                                    >
+                                      {available && info.premier_creneau
+                                        ? `dès ${formatHeure(info.premier_creneau)}`
+                                        : available
+                                        ? 'Disponible'
+                                        : 'Plus de place'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span
+                                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 ${
+                                    !available
+                                      ? 'bg-stone-100 text-stone-700 border border-stone-300'
+                                      : checked
+                                      ? 'bg-sage text-white'
+                                      : 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                                  }`}
+                                >
+                                  {!available ? 'Complet' : checked ? 'Choisi' : 'Disponible'}
+                                </span>
+                              </div>
+
+                              <p className={`text-xs font-light leading-relaxed ${available ? 'text-muted' : 'text-stone-600'}`}>
+                                {p === 'matin'
+                                  ? 'Pour commencer votre journée dans la douceur, en cabine privée.'
+                                  : 'Pour vous offrir une parenthèse de ressourcement dans l’après-midi.'}
+                              </p>
+
+                              <div className={`text-[11px] font-medium pt-3 border-t border-border/60 flex items-center justify-between ${available ? 'text-sage' : 'text-stone-600'}`}>
+                                <span>Horaire exact fixé avec Emmanuelle lors d&apos;un appel</span>
+                                {checked && <CheckCircle2 className="w-4 h-4 text-sage" aria-hidden="true" />}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  ) : null}
+                </div>
+              </section>
+            )}
+
+            {/* Récapitulatif + navigation */}
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-4 sm:p-5 border border-border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage shrink-0" aria-hidden="true">
                   <CalendarCheck className="w-5 h-5 text-sage" />
                 </div>
                 <div>
-                  <span className="text-xs text-muted block font-medium">Votre séance choisie :</span>
-                  {selectedSlot ? (
-                    <div className="text-base sm:text-lg font-serif font-semibold text-stone-deep capitalize">
-                      {formattedDate} —{' '}
-                      <span className="text-sage">
-                        {selectedSlot === '09:00' ? 'La séance du matin (dès 09h00)' : "La séance de l'après-midi (dès 14h00)"}
-                      </span>
+                  <span className="text-xs text-muted block font-medium">Votre demande :</span>
+                  {selectedPeriode && selectedDate ? (
+                    <div className="text-base sm:text-lg font-serif font-semibold text-stone-deep">
+                      <span className="capitalize">{formattedDate}</span> —{' '}
+                      <span className="text-sage">{selectedPeriodeLabel}</span>
                     </div>
                   ) : (
-                    <div className="text-sm text-stone-400 italic">Veuillez choisir la séance du matin ou de l'après-midi</div>
+                    <div className="text-sm text-muted italic">Choisissez un jour, puis le matin ou l&apos;après-midi</div>
                   )}
                   <span className="text-xs text-muted block font-light">
-                    Horaire exact fixé avec Emmanuelle lors de la confirmation téléphonique
+                    Horaire exact fixé avec Emmanuelle lors d&apos;un appel
                   </span>
                 </div>
               </div>
@@ -1262,93 +1210,84 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                   type="button"
                   data-btn="primary"
                   onClick={() => setCurrentStep(4)}
-                  disabled={!selectedSlot}
+                  disabled={!calendar || !selectedPeriode || !selectedDate || loadingSlots || !!slotsError}
                   className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-8 py-3.5 font-medium text-sm sm:text-base tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Continuer vers vos Coordonnées
-                  <ChevronRight className="w-4 h-4" />
+                  Continuer vers vos coordonnées
+                  <ChevronRight className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
           </div>
         )}
 
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            ÉTAPE 4 : COORDONNÉES & MENTION RASSURANTE 1-2-3
-            ═══════════════════════════════════════════════════════════════════ */}
+        {/* ═══ ÉTAPE 4 : COORDONNÉES ═══ */}
         {currentStep === 4 && (
-          <div className="space-y-8 animate-fadein">
-            {/* Récapitulatif sélection date & soin */}
+          <form className="space-y-8 animate-fadein" onSubmit={handleSubmitBooking} noValidate>
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-xs flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
-                <span className="text-xs text-muted font-medium">Récapitulatif de votre séance :</span>
+                <span className="text-xs text-muted font-medium">Récapitulatif de votre demande :</span>
                 <div className="text-base font-serif font-semibold text-stone-deep">
                   {currentServiceName}
-                  {includeMonthlyOffer && monthlyOffer && ` + Offre du Moment (${monthlyOffer.titre})`}
+                  {includeMonthlyOffer && monthlyOffer && ` + offre du moment (${monthlyOffer.titre})`}
                 </div>
-                <div className="text-xs text-muted flex items-center gap-2">
-                  <Calendar className="w-3.5 h-3.5 text-sage" />
-                  <span className="capitalize">{formattedDate}</span> —{' '}
-                  <span className="font-semibold text-stone-deep">
-                    {selectedSlot === '09:00' ? 'La séance du matin (dès 09h00)' : "La séance de l'après-midi (dès 14h00)"}
-                  </span>
-                  <span className="text-muted font-light">({currentDurationMinutes} min)</span>
+                <div className="text-xs text-muted flex flex-wrap items-center gap-x-2">
+                  <span className="capitalize">{formattedDate}</span>
+                  <span aria-hidden="true">—</span>
+                  <span className="font-semibold text-stone-deep">{selectedPeriodeLabel}</span>
+                  <span className="font-light">({currentDurationMinutes} min)</span>
                 </div>
+                <div className="text-[11px] text-muted font-light">Horaire exact fixé avec Emmanuelle lors d&apos;un appel.</div>
               </div>
               <div className="text-right">
-                <span className="text-xs text-muted block">Montant à régler sur place :</span>
-                <span className="text-2xl font-serif font-bold text-sage">CHF {currentPriceChf}</span>
+                <span className="text-xs text-muted block">Total estimé, à régler sur place :</span>
+                <span className="text-2xl font-serif font-bold text-sage">{chf(currentPriceChf)}</span>
               </div>
             </div>
 
-            {/* Mention rassurante 1-2-3 (Charte Confiance Cabine Privée) */}
+            {/* Charte de confiance */}
             <div className="rounded-[var(--radius-base,1rem)] border border-sage/30 bg-surface p-6 shadow-xs space-y-4">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-sage">
-                <ShieldCheck className="w-4 h-4 text-sage" />
-                Charte Sérénité & Confiance Emmanuelle Esthétique
+                <ShieldCheck className="w-4 h-4 text-sage" aria-hidden="true" />
+                Charte sérénité &amp; confiance Emmanuelle Esthétique
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-paper rounded-xl p-4 border border-border space-y-1.5">
-                  <div className="w-6 h-6 rounded-full bg-sage text-white flex items-center justify-center text-xs font-bold">
-                    1
+                {[
+                  {
+                    n: 1,
+                    title: 'Aucun paiement en ligne',
+                    text: 'Votre demande se fait sans carte bancaire sur le site. Vous réglez sur place le jour de votre venue (cartes, Twint ou espèces).',
+                  },
+                  {
+                    n: 2,
+                    title: 'Confirmation personnelle',
+                    text: 'Emmanuelle vous rappelle personnellement pour fixer l’horaire exact et répondre à vos éventuelles attentes. Votre demande n’est confirmée qu’à ce moment-là.',
+                  },
+                  {
+                    n: 3,
+                    title: 'Cabine privée exclusive',
+                    text: 'Vous êtes l’unique hôte de l’institut. Un temps de battement est réservé entre chaque soin pour votre entière tranquillité.',
+                  },
+                ].map((c) => (
+                  <div key={c.n} className="bg-paper rounded-xl p-4 border border-border space-y-1.5">
+                    <div className="w-6 h-6 rounded-full bg-sage text-white flex items-center justify-center text-xs font-bold" aria-hidden="true">
+                      {c.n}
+                    </div>
+                    <h4 className="text-xs font-bold text-stone-deep uppercase tracking-wide">{c.title}</h4>
+                    <p className="text-[12px] text-muted font-light leading-relaxed">{c.text}</p>
                   </div>
-                  <h4 className="text-xs font-bold text-stone-deep uppercase tracking-wide">Aucun paiement en ligne</h4>
-                  <p className="text-[12px] text-muted font-light leading-relaxed">
-                    Votre réservation se fait sans carte bancaire sur le site. Vous réglez sur place le jour de votre venue (cartes, Twint ou espèces).
-                  </p>
-                </div>
-
-                <div className="bg-paper rounded-xl p-4 border border-border space-y-1.5">
-                  <div className="w-6 h-6 rounded-full bg-sage text-white flex items-center justify-center text-xs font-bold">
-                    2
-                  </div>
-                  <h4 className="text-xs font-bold text-stone-deep uppercase tracking-wide">Confirmation personnelle</h4>
-                  <p className="text-[12px] text-muted font-light leading-relaxed">
-                    Emmanuelle vérifie son planning et vous rappelle personnellement pour confirmer l’horaire exact et vos éventuelles attentes spécifiques.
-                  </p>
-                </div>
-
-                <div className="bg-paper rounded-xl p-4 border border-border space-y-1.5">
-                  <div className="w-6 h-6 rounded-full bg-sage text-white flex items-center justify-center text-xs font-bold">
-                    3
-                  </div>
-                  <h4 className="text-xs font-bold text-stone-deep uppercase tracking-wide">Cabine privée exclusive</h4>
-                  <p className="text-[12px] text-muted font-light leading-relaxed">
-                    Vous êtes l’unique hôte de l'institut. 30 minutes de battement sont réservées avant et après pour votre entière tranquillité.
-                  </p>
-                </div>
+                ))}
               </div>
             </div>
 
-            {/* Formulaire des coordonnées */}
+            {/* Coordonnées */}
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-6 sm:p-8 border border-border shadow-sm space-y-6">
               <h3 className="text-xl font-serif font-medium text-stone-deep">Vos coordonnées de contact</h3>
 
               {submitError && (
-                <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 shrink-0" />
+                <div role="alert" className="p-4 rounded-xl bg-red-50 border border-red-300 text-red-800 text-xs sm:text-sm flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
                   <span>{submitError}</span>
                 </div>
               )}
@@ -1356,287 +1295,277 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Prénom */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-stone-deep uppercase tracking-wider block">
-                    Prénom <span className="text-red-500">*</span>
+                  <label htmlFor="rf-prenom" className={labelClass}>
+                    Prénom <span className="text-red-700" aria-hidden="true">*</span>
                   </label>
                   <input
+                    id="rf-prenom"
                     type="text"
                     required
-                    placeholder="Ex: Sophie"
+                    aria-required="true"
+                    autoComplete="given-name"
+                    maxLength={80}
+                    placeholder="Ex : Sophie"
                     value={formData.prenom}
                     onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
-                    className={`w-full px-4 py-3 rounded-[var(--radius-base,0.75rem)] border bg-paper text-sm focus:outline-none transition-all ${
-                      formErrors.prenom ? 'border-red-400 bg-red-50/30' : 'border-border focus:border-sage focus:ring-1 focus:ring-sage'
-                    }`}
+                    aria-invalid={!!formErrors.prenom}
+                    aria-describedby={formErrors.prenom ? 'rf-prenom-err' : undefined}
+                    className={fieldClass(!!formErrors.prenom)}
                   />
-                  {formErrors.prenom && <p className="text-[11px] text-red-500">{formErrors.prenom}</p>}
+                  {formErrors.prenom && <p id="rf-prenom-err" className="text-xs text-red-700">{formErrors.prenom}</p>}
                 </div>
 
                 {/* Nom */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-stone-deep uppercase tracking-wider block">
-                    Nom de famille <span className="text-red-500">*</span>
+                  <label htmlFor="rf-nom" className={labelClass}>
+                    Nom de famille <span className="text-red-700" aria-hidden="true">*</span>
                   </label>
                   <input
+                    id="rf-nom"
                     type="text"
                     required
-                    placeholder="Ex: Dufour"
+                    aria-required="true"
+                    autoComplete="family-name"
+                    maxLength={80}
+                    placeholder="Ex : Dufour"
                     value={formData.nom}
                     onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-                    className={`w-full px-4 py-3 rounded-[var(--radius-base,0.75rem)] border bg-paper text-sm focus:outline-none transition-all ${
-                      formErrors.nom ? 'border-red-400 bg-red-50/30' : 'border-border focus:border-sage focus:ring-1 focus:ring-sage'
-                    }`}
+                    aria-invalid={!!formErrors.nom}
+                    aria-describedby={formErrors.nom ? 'rf-nom-err' : undefined}
+                    className={fieldClass(!!formErrors.nom)}
                   />
-                  {formErrors.nom && <p className="text-[11px] text-red-500">{formErrors.nom}</p>}
+                  {formErrors.nom && <p id="rf-nom-err" className="text-xs text-red-700">{formErrors.nom}</p>}
                 </div>
 
                 {/* Téléphone */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-stone-deep uppercase tracking-wider block">
-                    Numéro de Téléphone (Mobile) <span className="text-red-500">*</span>
+                  <label htmlFor="rf-telephone" className={labelClass}>
+                    Téléphone (mobile de préférence) <span className="text-red-700" aria-hidden="true">*</span>
                   </label>
                   <div className="relative">
                     <input
+                      id="rf-telephone"
                       type="tel"
+                      inputMode="tel"
                       required
-                      placeholder="+41 79 123 45 67"
+                      aria-required="true"
+                      autoComplete="tel"
+                      maxLength={30}
+                      placeholder="079 123 45 67"
                       value={formData.telephone}
                       onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
-                      className={`w-full px-4 py-3 rounded-[var(--radius-base,0.75rem)] border bg-paper text-sm focus:outline-none transition-all ${
-                        formErrors.telephone ? 'border-red-400 bg-red-50/30' : 'border-border focus:border-sage focus:ring-1 focus:ring-sage'
-                      }`}
+                      aria-invalid={!!formErrors.telephone}
+                      aria-describedby={formErrors.telephone ? 'rf-telephone-err' : 'rf-telephone-hint'}
+                      className={`${fieldClass(!!formErrors.telephone)} pr-11`}
                     />
-                    <Phone className="w-4 h-4 text-muted absolute right-4 top-3.5" />
+                    <Phone className="w-4 h-4 text-muted absolute right-4 top-3.5" aria-hidden="true" />
                   </div>
                   {formErrors.telephone ? (
-                    <p className="text-[11px] text-red-500">{formErrors.telephone}</p>
+                    <p id="rf-telephone-err" className="text-xs text-red-700">{formErrors.telephone}</p>
                   ) : (
-                    <p className="text-[11px] text-muted font-light">Emmanuelle vous appelle ou vous écrit sur ce numéro.</p>
+                    <p id="rf-telephone-hint" className="text-xs text-muted font-light">
+                      Emmanuelle vous appelle (ou vous écrit) sur ce numéro.
+                    </p>
                   )}
                 </div>
 
-                {/* Email */}
+                {/* E-mail */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-stone-deep uppercase tracking-wider block">
+                  <label htmlFor="rf-email" className={labelClass}>
                     Adresse e-mail (optionnelle)
                   </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      placeholder="sophie.dufour@exemple.ch"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className={`w-full px-4 py-3 rounded-[var(--radius-base,0.75rem)] border bg-paper text-sm focus:outline-none transition-all ${
-                        formErrors.email ? 'border-red-400 bg-red-50/30' : 'border-border focus:border-sage focus:ring-1 focus:ring-sage'
-                      }`}
-                    />
-                  </div>
+                  <input
+                    id="rf-email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    maxLength={120}
+                    placeholder="sophie.dufour@exemple.ch"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    aria-invalid={!!formErrors.email}
+                    aria-describedby={formErrors.email ? 'rf-email-err' : 'rf-email-hint'}
+                    className={fieldClass(!!formErrors.email)}
+                  />
                   {formErrors.email ? (
-                    <p className="text-[11px] text-red-500">{formErrors.email}</p>
+                    <p id="rf-email-err" className="text-xs text-red-700">{formErrors.email}</p>
                   ) : (
-                    <p className="text-[11px] text-muted font-light">Pour recevoir une copie de confirmation.</p>
+                    <p id="rf-email-hint" className="text-xs text-muted font-light">
+                      Pour recevoir un accusé de réception de votre demande.
+                    </p>
                   )}
                 </div>
 
-                {/* Code Postal */}
+                {/* Code postal */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-stone-deep uppercase tracking-wider block">
-                    Code Postal
+                  <label htmlFor="rf-cp" className={labelClass}>
+                    Code postal
                   </label>
                   <input
+                    id="rf-cp"
                     type="text"
-                    placeholder="Ex: 1607"
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    maxLength={10}
+                    placeholder="Ex : 1607"
                     value={formData.codePostal}
                     onChange={(e) => setFormData({ ...formData, codePostal: e.target.value })}
-                    className="w-full px-4 py-3 rounded-[var(--radius-base,0.75rem)] border border-border bg-paper text-sm focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage transition-all"
+                    className={fieldClass(false)}
                   />
                 </div>
 
                 {/* Ville */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-stone-deep uppercase tracking-wider block">
+                  <label htmlFor="rf-ville" className={labelClass}>
                     Localité / Ville
                   </label>
                   <input
+                    id="rf-ville"
                     type="text"
-                    placeholder="Ex: Palézieux"
+                    autoComplete="address-level2"
+                    maxLength={80}
+                    placeholder="Ex : Palézieux"
                     value={formData.ville}
                     onChange={(e) => setFormData({ ...formData, ville: e.target.value })}
-                    className="w-full px-4 py-3 rounded-[var(--radius-base,0.75rem)] border border-border bg-paper text-sm focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage transition-all"
+                    className={fieldClass(false)}
                   />
                 </div>
               </div>
 
-              {/* Notes et souhaits particuliers */}
+              {/* Remarques */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-stone-deep uppercase tracking-wider block">
-                  Remarques ou souhaits particuliers (allergies, peaux sensibles, cadeau, etc.)
+                <label htmlFor="rf-notes" className={labelClass}>
+                  Remarques ou souhaits particuliers (optionnel)
                 </label>
                 <textarea
+                  id="rf-notes"
                   rows={3}
-                  placeholder="Précisez ici vos attentes ou sensibilités cutanées particulières pour qu'Emmanuelle prépare au mieux votre cabine..."
+                  maxLength={1000}
+                  aria-describedby="rf-notes-hint"
+                  placeholder="Une préférence, une occasion (cadeau, événement), un souhait particulier pour votre venue…"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-4 py-3 rounded-[var(--radius-base,0.75rem)] border border-border bg-paper text-sm focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage transition-all"
+                  className={fieldClass(false)}
+                />
+                <p id="rf-notes-hint" className="text-xs text-muted font-light">
+                  Merci de ne pas indiquer d&apos;informations de santé ici : Emmanuelle vous posera les questions utiles
+                  de vive voix.
+                </p>
+              </div>
+
+              {/* Piège à robots : invisible et hors parcours clavier, doit rester vide */}
+              <div
+                aria-hidden="true"
+                style={{ position: 'absolute', left: '-10000px', top: 'auto', width: 1, height: 1, overflow: 'hidden' }}
+              >
+                <label htmlFor="rf-champ-piege">Laisser vide</label>
+                <input
+                  id="rf-champ-piege"
+                  type="text"
+                  name="champ_piege"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                  value={champPiege}
+                  onChange={(e) => setChampPiege(e.target.value)}
                 />
               </div>
+
+              {/* Consentements : facultatifs, jamais précochés */}
+              <fieldset className="space-y-3 pt-2 border-t border-border min-w-0">
+                <legend className="text-xs font-semibold text-stone-deep uppercase tracking-wider pt-4 pb-1">
+                  Restons en contact (facultatif)
+                </legend>
+
+                {emailFilled && (
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={consentEmail}
+                      onChange={(e) => setConsentEmail(e.target.checked)}
+                      className="mt-1 w-4 h-4 shrink-0 accent-[var(--color-sage)]"
+                    />
+                    <span className="text-sm text-stone-deep font-light leading-relaxed">
+                      Je souhaite recevoir les offres d&apos;Emmanuelle par <strong className="font-semibold">e-mail</strong>.
+                      Désinscription possible à tout moment, gratuitement.
+                    </span>
+                  </label>
+                )}
+
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={consentWhatsapp}
+                    onChange={(e) => setConsentWhatsapp(e.target.checked)}
+                    className="mt-1 w-4 h-4 shrink-0 accent-[var(--color-sage)]"
+                  />
+                  <span className="text-sm text-stone-deep font-light leading-relaxed">
+                    Je souhaite recevoir les offres d&apos;Emmanuelle par <strong className="font-semibold">WhatsApp</strong>.
+                    Désinscription possible à tout moment, gratuitement.
+                  </span>
+                </label>
+
+                <p className="text-xs text-muted font-light leading-relaxed">
+                  Ces cases ne sont pas nécessaires pour réserver. Vos coordonnées servent à traiter votre demande et à
+                  vous rappeler ; elles ne sont utilisées pour des offres que si vous cochez l&apos;une de ces cases.{' '}
+                  <Link href="/mentions-legales" target="_blank" className="underline text-sage font-medium">
+                    Mentions légales et protection des données
+                    <span className="sr-only"> (s&apos;ouvre dans un nouvel onglet)</span>
+                  </Link>
+                  .
+                </p>
+              </fieldset>
             </div>
 
-            {/* Validation & Envoi */}
-            <div className="flex items-center justify-between pt-4">
+            {/* Envoi */}
+            <div className="flex items-center justify-between pt-2 gap-3">
               <button
                 type="button"
                 data-btn="secondary"
                 onClick={() => setCurrentStep(3)}
+                disabled={submitting}
                 className="px-5 py-3 text-sm font-medium transition-all"
               >
                 Retour
               </button>
 
               <button
-                type="button"
+                type="submit"
                 data-btn="primary"
-                onClick={handleSubmitBooking}
                 disabled={submitting}
-                className="inline-flex items-center gap-2 px-9 py-3.5 font-medium text-sm sm:text-base tracking-wide shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-busy={submitting}
+                className="inline-flex items-center gap-2 px-6 sm:px-9 py-3.5 font-medium text-sm sm:text-base tracking-wide shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {submitting ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Enregistrement de votre demande...
+                    <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    Envoi en cours…
                   </>
                 ) : (
                   <>
-                    Confirmer ma demande de rendez-vous
-                    <CheckCircle2 className="w-5 h-5" />
+                    Envoyer ma demande
+                    <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
                   </>
                 )}
               </button>
             </div>
-          </div>
+            <p className="text-center text-xs text-muted font-light -mt-4">
+              {estimatedSummary} · Votre demande sera confirmée par Emmanuelle lors de son appel.
+            </p>
+          </form>
         )}
 
-        {/* ═══════════════════════════════════════════════════════════════════
-            ÉTAPE 5 : RÉCAPITULATIF ET CONFIRMATION DIDACTIQUE
-            ═══════════════════════════════════════════════════════════════════ */}
+        {/* ═══ ÉTAPE 5 : DEMANDE ENREGISTRÉE ═══ */}
         {currentStep === 5 && confirmedBooking && (
-          <div className="space-y-8 animate-fadein">
-            <div
-              data-surface
-              className="bg-surface rounded-[var(--radius-base,1.5rem)] p-8 sm:p-10 border border-sage/30 shadow-md text-center space-y-6"
-            >
-              <div className="w-16 h-16 rounded-full bg-sage/10 border border-sage/30 text-sage flex items-center justify-center mx-auto shadow-inner">
-                <Check className="w-8 h-8 stroke-[2.5]" />
-              </div>
-
-              <div className="space-y-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-sage">
-                  Demande bien transmise
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-serif text-stone-deep font-normal">
-                  Merci {confirmedBooking.prenom}, votre rendez-vous est pré-réservé !
-                </h2>
-                <p className="text-muted text-sm max-w-lg mx-auto font-light leading-relaxed">
-                  Emmanuelle a bien reçu votre demande. Elle vérifie son carnet de rendez-vous et vous contactera très rapidement par téléphone ou WhatsApp pour valider l'horaire précis.
-                </p>
-              </div>
-
-              {/* Carte de détails */}
-              <div className="bg-paper rounded-[var(--radius-base,1rem)] p-6 max-w-lg mx-auto text-left border border-border space-y-3">
-                <div className="flex items-center justify-between pb-3 border-b border-border">
-                  <span className="text-xs text-muted">Référence dossier :</span>
-                  <span className="text-xs font-mono font-semibold text-stone-deep">
-                    {confirmedBooking.id?.slice(0, 8).toUpperCase()}
-                  </span>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="text-xs text-muted font-medium">Soin réservé :</div>
-                  <div className="text-base font-serif font-bold text-stone-deep">
-                    {confirmedBooking.service_nom}
-                  </div>
-                  {confirmedBooking.options && confirmedBooking.options.length > 0 && (
-                    <div className="text-xs text-muted">
-                      Options : {confirmedBooking.options.map((o: any) => o.nom).join(', ')}
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
-                  <div>
-                    <span className="text-xs text-muted block">Séance demandée :</span>
-                    <span className="text-sm font-semibold text-stone-deep capitalize">
-                      {new Date(`${confirmedBooking.date_rdv}T12:00:00`).toLocaleDateString('fr-CH', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                      })}{' '}
-                      —{' '}
-                      <strong>
-                        {confirmedBooking.heure_rdv === '09:00'
-                          ? 'Séance du matin'
-                          : confirmedBooking.heure_rdv === '14:00'
-                          ? "Séance de l'après-midi"
-                          : confirmedBooking.heure_rdv}
-                      </strong>
-                    </span>
-                    <span className="text-[10px] text-muted block font-light">
-                      Horaire exact convenu avec Emmanuelle
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted block">Durée prévue :</span>
-                    <span className="text-sm font-semibold text-stone-deep">
-                      {confirmedBooking.service_duree_minutes} minutes
-                    </span>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-border flex items-center justify-between">
-                  <span className="text-xs text-muted">Tarif à régler sur place :</span>
-                  <span className="text-xl font-serif font-bold text-sage">
-                    CHF {confirmedBooking.service_prix_chf}
-                  </span>
-                </div>
-              </div>
-
-              {/* Actions de confirmation */}
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  data-btn="secondary"
-                  onClick={downloadIcs}
-                  className="inline-flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-semibold transition-all shadow-xs"
-                >
-                  <CalendarCheck className="w-4 h-4 text-sage" />
-                  Ajouter à mon agenda (.ics)
-                </button>
-
-                {businessPhone && (
-                  <a
-                    href={`https://wa.me/${businessPhone.replace(/[^\d]/g, '')}?text=${encodeURIComponent(
-                      `Bonjour Emmanuelle, je viens d'effectuer une réservation pour le soin ${confirmedBooking.service_nom} le ${confirmedBooking.date_rdv} à ${confirmedBooking.heure_rdv}.`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-btn="primary"
-                    className="inline-flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-semibold transition-all shadow-xs"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    Écrire sur WhatsApp
-                  </a>
-                )}
-
-                <Link
-                  href="/"
-                  data-btn="ghost"
-                  className="inline-flex items-center gap-2 px-6 py-3 text-xs sm:text-sm font-semibold transition-all"
-                >
-                  Retourner à l’accueil
-                </Link>
-              </div>
-            </div>
-          </div>
+          <ConfirmationStep
+            booking={confirmedBooking}
+            prenom={submittedPrenom}
+            businessPhone={businessPhone}
+            estimatedTotal={submittedEstimate}
+            headingRef={headingRef}
+          />
         )}
       </div>
     </div>

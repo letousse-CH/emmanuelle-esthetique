@@ -121,6 +121,32 @@ Pour activer l'upload de fichiers, renseigner les cinq variables R2
 d'une erreur S3 opaque. Le sous-domaine public `pub-xxxx.r2.dev` d'un bucket
 suffit : pas besoin de domaine personnalisé.
 
+## Réservations en ligne (v2, 2026-10-03)
+
+Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
+`supabase/migrations/20261004_reservations_v2.sql` (après `20261003`).
+
+> **La cliente demande une date et une période (matin / après-midi), pas une heure.**
+> Emmanuelle la rappelle, fait l'upselling, puis fixe l'horaire définitif.
+
+- `horaire_fixe = false` : demande « souple », `heure_rdv` n'est qu'indicative et
+  ne bloque pas une heure précise. `true` : l'heure est arrêtée et bloque l'agenda.
+- Le moteur de créneaux est pur et testable : `src/services/bookingEngine.ts`
+  (`npx tsx scripts/test-booking-engine.ts`). Tout se calcule en `Europe/Zurich`,
+  jamais avec `toISOString().split('T')` (UTC).
+- **Prix, durées et options viennent toujours du catalogue côté serveur**, jamais du
+  navigateur. Aucune écriture `anon` sur `bookings` : tout passe par `POST /api/bookings`
+  (clé de service). La disponibilité est *fail-closed* (503 si la base ne répond pas).
+- Les indisponibilités (jour, période, plage horaire) vivent dans `booking_blocks` ;
+  `fermetures_exceptionnelles` est un héritage vidé par la migration.
+- CRM : rapprochement par e-mail puis téléphone normalisé, **jamais par nom seul**
+  (homonymes). Une réservation ne vaut pas consentement publicitaire : cases décochées
+  par défaut sur le formulaire.
+- E-mails à la cliente : confirmation, déplacement, annulation seulement (jamais de
+  renvoi si rien de pertinent n'a changé). Tout texte interpolé est échappé.
+- Pas encore fait : rappel automatique la veille (`rappel_effectue` n'est pas écrit),
+  passage « Encaisser » vers la caisse, pièce jointe .ics (`sendEmail` ne la gère pas).
+
 ## Caisse, clientèle & facturation
 
 Module **interne** (rien n'est exposé au rôle `anon`), sous `/admin/caisse` :

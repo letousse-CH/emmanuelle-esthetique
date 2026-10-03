@@ -83,17 +83,35 @@ export async function deleteOrArchiveClient(id: string): Promise<'deleted' | 'ar
   return 'deleted';
 }
 
+/**
+ * Chiffres « nationaux » d'un numéro, pour comparer `079 123`, `+41 79 123 45 67`
+ * et `0041791234567` : indicatif 41 et 0 initial retirés.
+ */
+function nationalDigits(raw: string): string {
+  const t = (raw ?? '').trim();
+  let d = t.replace(/\D/g, '');
+  if (t.startsWith('+') || t.startsWith('00')) {
+    if (t.startsWith('00')) d = d.slice(2);
+    if (d.startsWith('41')) d = d.slice(2);
+  } else if (!d.startsWith('0') && d.startsWith('41') && d.length >= 11) {
+    d = d.slice(2);
+  }
+  return d.replace(/^0+/, '');
+}
+
 /** Filtre local sur nom, prénom ou téléphone — utilisé par la barre de recherche. */
 export function matchClient(c: Client, term: string): boolean {
   const q = term.trim().toLowerCase();
   if (!q) return true;
-  const phone = (c.telephone ?? '').replace(/[\s.\-/()]/g, '');
-  const qPhone = q.replace(/[\s.\-/()]/g, '');
+  // Téléphone : comparé sur les chiffres nationaux des deux côtés (« 079 123 » trouve « +41 79 123 45 67 »).
+  const phone = nationalDigits(c.telephone ?? '');
+  const qPhone = nationalDigits(term);
+  const looksLikePhone = /^[\d\s+.\-/()]+$/.test(term.trim());
   return (
     `${c.prenom} ${c.nom}`.toLowerCase().includes(q) ||
     `${c.nom} ${c.prenom}`.toLowerCase().includes(q) ||
     (c.email ?? '').toLowerCase().includes(q) ||
-    (qPhone.length >= 2 && phone.includes(qPhone))
+    (looksLikePhone && qPhone.length >= 2 && phone.includes(qPhone))
   );
 }
 

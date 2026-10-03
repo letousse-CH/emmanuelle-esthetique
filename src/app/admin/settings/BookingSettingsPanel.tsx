@@ -19,6 +19,14 @@ import {
   Sliders,
 } from 'lucide-react';
 import { Button, Callout, FormMessage } from '../../../components/admin/ui';
+import type { BookingSettings } from '../../../types/booking';
+import { timeToMinutes } from '../../../types/booking';
+import BlocksSection from '../../../components/admin/reservations/BlocksSection';
+import { FeedbackProvider } from '../../../components/admin/reservations/Feedback';
+import SyncClientsButton from '../../../components/admin/reservations/SyncClientsButton';
+import WeeklyHoursEditor, { normalizeHours, validateHours } from '../../../components/admin/reservations/WeeklyHoursEditor';
+import type { WeeklyHours } from '../../../components/admin/reservations/WeeklyHoursEditor';
+import { adminFetch, unwrap } from '../../../components/admin/reservations/lib';
 
 interface MonthlyOfferForm {
   id?: string;
@@ -37,9 +45,21 @@ interface BookingSettingsForm {
   gcal_calendar_id: string;
   notification_email: string;
   smartphone_phone: string;
+  pas_creneau_minutes: number;
+  heure_coupure_periode: string;
 }
 
+const PAS_OPTIONS = [5, 10, 15, 20, 30, 60];
+
 export default function BookingSettingsPanel() {
+  return (
+    <FeedbackProvider>
+      <BookingSettingsContent />
+    </FeedbackProvider>
+  );
+}
+
+function BookingSettingsContent() {
   // ── État Offre du mois ──
   const [offer, setOffer] = useState<MonthlyOfferForm>({
     titre: '',
@@ -61,7 +81,10 @@ export default function BookingSettingsPanel() {
     gcal_calendar_id: '',
     notification_email: '',
     smartphone_phone: '',
+    pas_creneau_minutes: 15,
+    heure_coupure_periode: '13:00',
   });
+  const [hours, setHours] = useState<WeeklyHours>(() => normalizeHours(null));
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -97,20 +120,28 @@ export default function BookingSettingsPanel() {
 
       // 2. Paramètres de réservation
       setSettingsLoading(true);
-      const resSettings = await fetch('/api/bookings/settings', { headers });
-      if (resSettings.ok) {
-        const jsonSettings = await resSettings.json();
-        if (jsonSettings.settings) {
+      try {
+        const jsonSettings = await adminFetch('/api/admin/booking-settings');
+        const s = unwrap<Partial<BookingSettings> | undefined>(jsonSettings, 'settings');
+        if (s) {
           setSettings((prev) => ({
             ...prev,
-            buffer_minutes: jsonSettings.settings.buffer_minutes ?? 30,
-            anticipation_min_heures: jsonSettings.settings.anticipation_min_heures ?? 2,
-            anticipation_max_jours: jsonSettings.settings.anticipation_max_jours ?? 60,
-            gcal_sync_enabled: Boolean(jsonSettings.settings.gcal_sync_enabled),
-            gcal_calendar_id: jsonSettings.settings.gcal_calendar_id || '',
-            notification_email: jsonSettings.settings.notification_email || '',
+            buffer_minutes: s.buffer_minutes ?? 30,
+            anticipation_min_heures: s.anticipation_min_heures ?? 2,
+            anticipation_max_jours: s.anticipation_max_jours ?? 60,
+            gcal_sync_enabled: Boolean(s.gcal_sync_enabled),
+            gcal_calendar_id: s.gcal_calendar_id || '',
+            notification_email: s.notification_email || '',
+            pas_creneau_minutes: s.pas_creneau_minutes ?? 15,
+            heure_coupure_periode: s.heure_coupure_periode || '13:00',
           }));
+          setHours(normalizeHours(s.jours_ouverture as WeeklyHours | undefined));
         }
+      } catch (err) {
+        setSettingsMsg({
+          type: 'error',
+          text: err instanceof Error ? err.message : 'Les paramètres de réservation n’ont pas pu être chargés.',
+        });
       }
 
       // Téléphone de l'institut depuis table settings
@@ -166,35 +197,43 @@ export default function BookingSettingsPanel() {
     }
   };
 
+  const hoursErrors = validateHours(hours);
+  const hoursErrorList = Object.keys(hoursErrors);
+
   // ── Sauvegarde Paramètres & Google Sync ──
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavingSettings(true);
     setSettingsMsg(null);
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || '';
+    if (hoursErrorList.length > 0) {
+      setSettingsMsg({ type: 'error', text: 'Corrigez les horaires d’ouverture avant d’enregistrer.' });
+      return;
+    }
+    if (!settings.heure_coupure_periode || timeToMinutes(settings.heure_coupure_periode) < 6 * 60) {
+      setSettingsMsg({ type: 'error', text: 'Indiquez l’heure à laquelle le matin se termine (par exemple 13:00).' });
+      return;
+    }
 
-      // Mise à jour booking_settings
-      const res = await fetch('/api/bookings/settings', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+    setSavingSettings(true);
+    try {
+      // Mise à jour booking_settings (horaires, pas de la grille, coupure matin / après-midi inclus)
+      await adminFetch('/api/admin/booking-settings', {
+        method: 'PUT',
         body: JSON.stringify({
           buffer_minutes: Number(settings.buffer_minutes),
           anticipation_min_heures: Number(settings.anticipation_min_heures),
           anticipation_max_jours: Number(settings.anticipation_max_jours),
+          // Un jour fermé part sans plage : rien d'invalide ne peut voyager avec lui.
+          jours_ouverture: Object.fromEntries(
+            Object.entries(hours).map(([k, v]) => [k, v.ouvert ? v : { ouvert: false, plages: [] }]),
+          ),
+          pas_creneau_minutes: Number(settings.pas_creneau_minutes),
+          heure_coupure_periode: settings.heure_coupure_periode,
           gcal_sync_enabled: Boolean(settings.gcal_sync_enabled),
           gcal_calendar_id: settings.gcal_calendar_id || null,
           notification_email: settings.notification_email || null,
         }),
       });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erreur enregistrement paramètres');
 
       // Mise à jour téléphone dans settings si modifié
       if (settings.smartphone_phone) {
@@ -490,9 +529,12 @@ export default function BookingSettingsPanel() {
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
-                    min="1"
+                    min="0"
                     value={settings.anticipation_min_heures}
-                    onChange={(e) => setSettings({ ...settings, anticipation_min_heures: parseInt(e.target.value, 10) || 1 })}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      setSettings({ ...settings, anticipation_min_heures: Number.isFinite(n) && n >= 0 ? n : 0 });
+                    }}
                     className="w-24 text-sm px-3.5 py-2 rounded-xl border border-stone-200"
                   />
                   <span className="text-xs text-stone-500">heures</span>
@@ -517,6 +559,54 @@ export default function BookingSettingsPanel() {
                 <p className="text-[11px] text-stone-400 font-light">Période maximale proposée aux clientes en ligne.</p>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-1">
+                <label htmlFor="bs-pas" className="text-xs font-semibold text-stone-700 block">
+                  Écart entre deux heures proposées
+                </label>
+                <select
+                  id="bs-pas"
+                  value={settings.pas_creneau_minutes}
+                  onChange={(e) => setSettings({ ...settings, pas_creneau_minutes: parseInt(e.target.value, 10) })}
+                  className="w-40 text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white"
+                >
+                  {PAS_OPTIONS.map((m) => (
+                    <option key={m} value={m}>
+                      Toutes les {m} min
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-stone-500 font-light">
+                  Quand vous choisissez l’heure d’un rendez-vous, les créneaux sont proposés à ce rythme (15 min recommandées).
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="bs-coupure" className="text-xs font-semibold text-stone-700 block">
+                  Le matin se termine à
+                </label>
+                <input
+                  id="bs-coupure"
+                  type="time"
+                  value={settings.heure_coupure_periode}
+                  onChange={(e) => setSettings({ ...settings, heure_coupure_periode: e.target.value })}
+                  className="w-40 text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white"
+                />
+                <p className="text-[11px] text-stone-500 font-light">
+                  Sépare « matin » et « après-midi » dans les demandes des clientes.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Horaires hebdomadaires */}
+          <div className="border-t border-stone-100 pt-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <CalendarDays size={16} className="text-accent" />
+              <h3 className="text-sm font-bold text-stone-900">Horaires d’ouverture de la semaine</h3>
+            </div>
+            <WeeklyHoursEditor value={hours} onChange={setHours} errors={hoursErrors} />
           </div>
 
           <div className="flex justify-end pt-3">
@@ -537,6 +627,29 @@ export default function BookingSettingsPanel() {
             </button>
           </div>
         </form>
+      </section>
+
+      {/* ═════════════════════════════════════════════════════════════════════
+          SECTION 3 : INDISPONIBILITÉS (congés, vacances, plages horaires)
+          ═════════════════════════════════════════════════════════════════════ */}
+      <section className="bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 shadow-xs space-y-6">
+        <div className="space-y-1 border-b border-stone-100 pb-5">
+          <h2 className="text-xl font-bold text-stone-900">Congés et indisponibilités</h2>
+          <p className="text-xs sm:text-sm text-stone-500 font-light">
+            Bloquez une journée, des vacances ou quelques heures : ces horaires ne seront plus proposés aux clientes. Aucun rendez-vous déjà pris n’est annulé.
+          </p>
+        </div>
+        <BlocksSection />
+      </section>
+
+      {/* ═════════════════════════════════════════════════════════════════════
+          SECTION 4 : RATTACHER LES RÉSERVATIONS À LA CLIENTÈLE
+          ═════════════════════════════════════════════════════════════════════ */}
+      <section className="bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 shadow-xs space-y-4">
+        <div className="space-y-1 border-b border-stone-100 pb-5">
+          <h2 className="text-xl font-bold text-stone-900">Clientèle</h2>
+        </div>
+        <SyncClientsButton />
       </section>
     </div>
   );

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '../../../../services/supabase';
 import { getSupabaseAdmin } from '../../../../utils/supabaseAdmin';
-import { parseDurationMinutes } from '../../../../services/booking';
+import { FALLBACK_OPTIONS, classifyCatalogRow, stripAccents } from '../../../../services/booking';
 
 export const runtime = 'nodejs';
 export const revalidate = 60; // Cache 1 minute
@@ -59,15 +59,14 @@ export async function GET() {
       const prix = Number(s.prix_chf) || 0;
       const catNom = s.category_id ? catMap.get(s.category_id) || '' : '';
 
-      // ── Options privilèges d'upselling ──
-      if (
-        nomLower.includes('option') ||
-        nomLower.includes('teinture') ||
-        nomLower.includes('duo regard')
-      ) {
-        let dur = parseDurationMinutes(desc, 15);
-        if (nomLower.includes('duo regard')) dur = 20;
+      // Classement partagé avec la création côté serveur (services/booking.ts) :
+      // ce qui n'est pas listé ici ne peut pas non plus être réservé en ligne.
+      const c = classifyCatalogRow(s, catNom);
+      if (c.kind === 'hors_ligne') continue;
+      const dur = c.durationMinutes;
 
+      // ── Options privilèges d'upselling ──
+      if (c.kind === 'option') {
         options.push({
           id: s.id,
           nom,
@@ -78,68 +77,40 @@ export async function GET() {
         continue;
       }
 
-      // ── Catégorie 1 : Rituels et massages du corps (>= 90 CHF) ──
-      if (catNom.includes('corps') || (nomLower.includes('corps') && !catNom.includes('visage')) || nomLower.includes('massage') || nomLower.includes('voile') || nomLower.includes('bulle') || nomLower.includes('echappée')) {
-        if (prix >= 90) {
-          const dur = parseDurationMinutes(desc, nomLower.includes('echappée') ? 105 : nomLower.includes('90') ? 90 : 60);
-          services.push({
-            id: s.id,
-            category: 'corps',
-            name: nom,
-            durationMinutes: dur,
-            durationLabel: dur >= 60 ? (dur === 105 ? '1h45' : `${dur} min`) : `${dur} min`,
-            priceChf: prix,
-            description: desc && !desc.match(/^\d+\s*min$/) ? desc : 'La rencontre entre le magnétisme marin et une gestuelle manuelle précise, enveloppante et décontractante.',
-            tag: nomLower.includes('relaxant') ? 'Lâcher-prise' : nomLower.includes('echappée') ? 'Visage & Corps' : undefined,
-          });
-        }
-        continue;
-      }
-
-      // ── Catégorie 2 : Soins du visage (>= 90 CHF) ──
-      if (catNom.includes('visage') || nomLower.includes('visage')) {
-        if (prix >= 90) {
-          const dur = parseDurationMinutes(desc, 60);
-          services.push({
-            id: s.id,
-            category: 'visage',
-            name: nom,
-            durationMinutes: dur,
-            durationLabel: `${dur} min`,
-            priceChf: prix,
-            description: desc && !desc.match(/^\d+\s*min$/) ? desc : 'Protocole marin d’exception Phytomer associant manœuvres expertes et éclat visible.',
-            tag: nomLower.includes('jeunesse') ? 'Haute technicité' : nomLower.includes('hydra') ? 'Soin signature' : 'Éclat express',
-          });
-        }
-        continue;
-      }
-
-      // ── Catégorie 3 : Épilations (Uniquement les forfaits) ──
-      if (catNom.includes('epilation') || nomLower.includes('epilation')) {
-        if (nomLower.includes('forfait') || s.type === 'forfait') {
-          const dur = parseDurationMinutes(desc, nomLower.includes('integral') ? 60 : 45);
-          services.push({
-            id: s.id,
-            category: 'epilation',
-            name: nom,
-            durationMinutes: dur,
-            durationLabel: `${dur} min`,
-            priceChf: prix,
-            description: desc && desc !== `${dur} min` ? desc : 'Forfait complet tout compris avec cires douces haute tolérance.',
-            tag: 'Forfait tout compris',
-          });
-        }
-        continue;
-      }
-
-      // ── Catégorie 4 : Services (Mains, pieds, réhaussement de cils) ──
-      if (
-        nomLower.includes('mains') ||
-        nomLower.includes('pieds') ||
-        nomLower.includes('rehaussement') ||
-        nomLower.includes('réhaussement')
-      ) {
-        let dur = parseDurationMinutes(desc, nomLower.includes('pieds') ? 70 : 60);
+      if (c.category === 'corps') {
+        services.push({
+          id: s.id,
+          category: 'corps',
+          name: nom,
+          durationMinutes: dur,
+          durationLabel: dur === 105 ? '1h45' : `${dur} min`,
+          priceChf: prix,
+          description: desc && !desc.match(/^\d+\s*min$/) ? desc : 'La rencontre entre le magnétisme marin et une gestuelle manuelle précise, enveloppante et décontractante.',
+          tag: nomLower.includes('relaxant') ? 'Lâcher-prise' : stripAccents(nomLower).includes('echappee') ? 'Visage & Corps' : undefined,
+        });
+      } else if (c.category === 'visage') {
+        services.push({
+          id: s.id,
+          category: 'visage',
+          name: nom,
+          durationMinutes: dur,
+          durationLabel: `${dur} min`,
+          priceChf: prix,
+          description: desc && !desc.match(/^\d+\s*min$/) ? desc : 'Protocole marin d’exception Phytomer associant manœuvres expertes et éclat visible.',
+          tag: nomLower.includes('jeunesse') ? 'Haute technicité' : nomLower.includes('hydra') ? 'Soin signature' : 'Éclat express',
+        });
+      } else if (c.category === 'epilation') {
+        services.push({
+          id: s.id,
+          category: 'epilation',
+          name: nom,
+          durationMinutes: dur,
+          durationLabel: `${dur} min`,
+          priceChf: prix,
+          description: desc && desc !== `${dur} min` ? desc : 'Forfait complet tout compris avec cires douces haute tolérance.',
+          tag: 'Forfait tout compris',
+        });
+      } else if (c.category === 'services') {
         services.push({
           id: s.id,
           category: 'services',
@@ -150,19 +121,14 @@ export async function GET() {
           description: desc && desc !== `${dur} min` ? desc : 'Mise en beauté experte et soin cocooning.',
           tag: nomLower.includes('pieds') ? 'Détente absolue' : undefined,
         });
-        continue;
       }
     }
 
-    // Ajout de l'Option Boue Marine Dos si absente de la table services
+    // Option de repli (aussi connue du serveur à la création) si absente de la table services
+    const fallbackId = 'option-boue-marine-dos';
     if (!options.some((o) => o.nom.toLowerCase().includes('boue marine'))) {
-      options.unshift({
-        id: 'option-boue-marine-dos',
-        nom: 'Option Boue Marine Auto-Chauffante Dos',
-        duree_minutes: 15,
-        prix_chf: 30,
-        description: 'Application d’une boue marine effervescente le long de la colonne. Dénoue le dos.',
-      });
+      const f = FALLBACK_OPTIONS[fallbackId];
+      options.unshift({ id: fallbackId, nom: f.nom, duree_minutes: f.duree_minutes, prix_chf: f.prix_chf, description: f.description });
     }
 
     return NextResponse.json({

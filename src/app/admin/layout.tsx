@@ -56,6 +56,8 @@ type NavItem = {
   exact?: boolean;
   /** Chemins supplémentaires qui rendent l'entrée active. */
   also?: string[];
+  /** Pastille de compte (ex. demandes à rappeler). */
+  badge?: number;
 };
 type NavGroup = { label?: string; items: NavItem[] };
 
@@ -81,6 +83,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const [aiStatus, setAiStatus] = useState<any>(null);
   const [aiBudget, setAiBudget] = useState<any>(null);
+  // Demandes de réservation en attente qui n'ont pas encore été rappelées.
+  const [toCallCount, setToCallCount] = useState(0);
 
   const mobileMenuButtonRef = React.useRef<HTMLButtonElement>(null);
   const asideRef = React.useRef<HTMLElement>(null);
@@ -185,6 +189,36 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => window.removeEventListener('admin:ai-key-changed', onKeyChange);
   }, []);
 
+  React.useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const loadToCall = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        const res = await fetch('/api/admin/bookings?statut=en_attente&limit=200', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        const list: Array<{ statut?: string; contacte_at?: string | null }> = json.bookings ?? [];
+        if (!cancelled) setToCallCount(list.filter((b) => b.statut === 'en_attente' && !b.contacte_at).length);
+      } catch {
+        /* La pastille est un confort : on ignore silencieusement un échec réseau. */
+      }
+    };
+    loadToCall();
+    const timer = window.setInterval(loadToCall, 120000);
+    window.addEventListener('admin:bookings-changed', loadToCall);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('admin:bookings-changed', loadToCall);
+    };
+  }, [user, pathname]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
@@ -199,7 +233,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     {
       items: [
         { name: 'Tableau de bord', path: '/admin', icon: LayoutDashboard, exact: true },
-        { name: 'Réservations', path: '/admin/reservations', icon: CalendarDays },
+        { name: 'Réservations', path: '/admin/reservations', icon: CalendarDays, badge: toCallCount },
       ],
     },
     {
@@ -334,6 +368,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           className={`shrink-0 ${active ? 'text-accent' : 'text-stone-700'}`}
         />
         <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{item.name}</span>
+        {item.badge ? (
+          <span
+            className={`ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-amber-600 px-1.5 text-[11.5px] font-bold leading-5 text-white ${collapsed ? 'lg:hidden' : ''}`}
+            aria-label={`${item.badge} demande${item.badge > 1 ? 's' : ''} à appeler`}
+          >
+            {item.badge}
+          </span>
+        ) : null}
       </Link>
     );
   };

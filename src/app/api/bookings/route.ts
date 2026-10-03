@@ -1,123 +1,63 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createBooking, getBookings, type BookingInput, type BookingStatus } from '../../../services/booking';
+import { createPublicBooking, isHoneypotTriggered } from '../../../services/booking';
+import { isValidDateStr } from '../../../services/bookingEngine';
 import { checkRateLimit } from '../../../utils/rateLimit';
-import { validateSupabaseToken } from '../../../utils/apiAuth';
+import { BAD_JSON, clientIp, errorResponse, readJson } from './_shared';
 
 export const runtime = 'nodejs';
 
 /**
  * POST /api/bookings
- * Création d'une réservation publique par une cliente.
- * Protégé par rate limiter (5 réservations par tranche de 5 minutes par IP).
+ * Dépose une DEMANDE de rendez-vous (date + période). Prix, durée et options sont
+ * retrouvés côté serveur : le corps n'est jamais cru sur parole.
+ *
+ * 201 { success, booking: PublicBookingView } · 400 validation · 409 période complète
+ * · 422 soin inconnu · 429 débit · 503 base indisponible.
+ * Champ-piège `champ_piege` rempli (`website` est ignoré) : 200 factice, rien n'est écrit.
  */
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
-
-  const rateCheck = await checkRateLimit(ip, { windowMs: 5 * 60_000, maxRequests: 5 });
-  if (!rateCheck.success) {
+  const rate = await checkRateLimit(clientIp(req), { windowMs: 5 * 60_000, maxRequests: 5 });
+  if (!rate.success) {
     return NextResponse.json(
       { error: 'Trop de tentatives de réservation. Veuillez patienter quelques minutes.' },
-      { status: 429 }
+      { status: 429 },
     );
   }
 
-  let body: any;
+  const body = await readJson(req);
+  if (body === null || typeof body !== 'object') return BAD_JSON();
+
+  if (isHoneypotTriggered(body)) {
+    const b = body as Record<string, unknown>;
+    return NextResponse.json({
+      success: true,
+      booking: {
+        id: crypto.randomUUID(),
+        service_nom: '',
+        options: [],
+        date_rdv: isValidDateStr(b.date_rdv) ? b.date_rdv : '',
+        periode: b.periode === 'apres_midi' ? 'apres_midi' : 'matin',
+        service_duree_minutes: 0,
+        total_chf: 0,
+      },
+    });
+  }
+
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Corps de requête JSON invalide.' }, { status: 400 });
-  }
-
-  const {
-    nom,
-    prenom,
-    telephone,
-    email,
-    code_postal,
-    ville,
-    service_id,
-    service_nom,
-    service_prix_chf,
-    service_duree_minutes,
-    options,
-    offer_of_month_id,
-    date_rdv,
-    heure_rdv,
-    notes_cliente,
-  } = body || {};
-
-  if (!nom || !prenom || !telephone || !service_nom || !date_rdv || !heure_rdv) {
+    const { view } = await createPublicBooking(body);
     return NextResponse.json(
-      { error: 'Champs obligatoires manquants : nom, prénom, téléphone, soin, date et heure.' },
-      { status: 400 }
+      { success: true, booking: view, message: 'Votre demande de rendez-vous a bien été prise en compte.' },
+      { status: 201 },
     );
+  } catch (err) {
+    return errorResponse(err, '/api/bookings POST');
   }
-
-  const bookingInput: BookingInput = {
-    nom: String(nom).trim(),
-    prenom: String(prenom).trim(),
-    telephone: String(telephone).trim(),
-    email: email ? String(email).trim().toLowerCase() : null,
-    code_postal: code_postal ? String(code_postal).trim() : null,
-    ville: ville ? String(ville).trim() : null,
-    service_id: service_id ? String(service_id).trim() : null,
-    service_nom: String(service_nom).trim(),
-    service_prix_chf: Number(service_prix_chf) || 0,
-    service_duree_minutes: service_duree_minutes ? Number(service_duree_minutes) : undefined,
-    options: Array.isArray(options) ? options : [],
-    offer_of_month_id: offer_of_month_id ? String(offer_of_month_id).trim() : null,
-    date_rdv: String(date_rdv).trim(),
-    heure_rdv: String(heure_rdv).trim(),
-    notes_cliente: notes_cliente ? String(notes_cliente).trim() : null,
-  };
-
-  const authHeader = req.headers.get('authorization') || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (token) {
-    const isAdmin = await validateSupabaseToken(token);
-    if (isAdmin && body.bypass_availability_check) {
-      bookingInput.bypass_availability_check = true;
-    }
-  }
-
-  const result = await createBooking(bookingInput);
-
-  if (!result.success) {
-    return NextResponse.json({ error: result.error }, { status: 422 });
-  }
-
-  return NextResponse.json({
-    success: true,
-    booking: result.booking,
-    message: 'Votre demande de rendez-vous a bien été prise en compte.',
-  });
 }
 
-/**
- * GET /api/bookings
- * Consultation des réservations (Réservé à l'administrateur).
- */
-export async function GET(req: NextRequest) {
-  const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  const isAdmin = await validateSupabaseToken(token);
-
-  if (!isAdmin) {
-    return NextResponse.json({ error: 'Accès non autorisé.' }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(req.url);
-  const date = searchParams.get('date') || undefined;
-  const startDate = searchParams.get('startDate') || undefined;
-  const endDate = searchParams.get('endDate') || undefined;
-  const statut = (searchParams.get('statut') as BookingStatus) || undefined;
-  const clientId = searchParams.get('clientId') || undefined;
-  const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : undefined;
-
-  try {
-    const bookings = await getBookings({ date, startDate, endDate, statut, clientId, limit });
-    return NextResponse.json({ bookings });
-  } catch (err: any) {
-    console.error('[/api/bookings GET] Erreur:', err);
-    return NextResponse.json({ error: 'Erreur lors de la récupération des réservations.' }, { status: 500 });
-  }
+/** OBSOLÈTE (410) : remplacée par GET /api/admin/bookings. */
+export async function GET() {
+  return NextResponse.json(
+    { error: 'Route supprimée : utilisez /api/admin/bookings.' },
+    { status: 410 },
+  );
 }
