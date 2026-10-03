@@ -172,9 +172,9 @@ export default function CockpitClient() {
       <CaisseCatalogNav />
 
       {/* En-tête Cockpit */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-stone-900 via-stone-850 to-emerald-950 text-white p-6 rounded-2xl shadow-md border border-stone-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-stone-900 via-stone-850 to-emerald-950 text-white p-4 sm:p-6 rounded-2xl shadow-md border border-stone-800">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
               <Sparkles size={12} className="text-emerald-400" /> Cockpit de l&apos;Esthéticienne
             </span>
@@ -190,10 +190,10 @@ export default function CockpitClient() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 md:shrink-0">
           <button
             onClick={() => setDemoMode(!demoMode)}
-            className={`text-xs px-3 py-1.5 rounded-xl border transition-colors flex items-center gap-1.5 cursor-pointer ${
+            className={`text-[13px] min-h-11 md:min-h-0 px-3 py-1.5 rounded-xl border transition-colors flex items-center gap-1.5 cursor-pointer ${
               demoMode
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                 : 'bg-stone-800 text-stone-300 border-stone-700 hover:bg-stone-700'
@@ -208,7 +208,7 @@ export default function CockpitClient() {
 
       {/* ── 1. OBJECTIFS DE LA SEMAINE (Jauges 2 clientes/jour & Panier 250-450 CHF) ── */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-3">
           <h2 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
             <Target size={16} className="text-emerald-700" />
             Objectifs Hebdomadaires en Cours
@@ -220,16 +220,16 @@ export default function CockpitClient() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Jauge Fréquentation (2 clientes par jour) */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
                 <span className="text-xs font-semibold text-stone-600 uppercase">Fréquentation Semaine</span>
                 <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 text-[11px] font-bold">
                   Cible : 2 / jour
                 </span>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-stone-950">{weekStats.clientesCount}</span>
+              <div className="mt-3 flex flex-wrap items-baseline gap-x-2">
+                <span className="text-2xl sm:text-3xl font-extrabold break-words text-stone-950">{weekStats.clientesCount}</span>
                 <span className="text-stone-500 text-xs font-medium">/ {CIBLE_CLIENTES_HEBDO} clientes accueillies</span>
               </div>
               <p className="text-[11.5px] text-stone-600 mt-1">
@@ -250,7 +250,7 @@ export default function CockpitClient() {
                   style={{ width: `${pctClientes}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[10.5px] text-stone-600 mt-1.5 font-medium">
+              <div className="flex justify-between gap-2 text-[10.5px] text-stone-600 mt-1.5 font-medium">
                 <span>0</span>
                 <span>5 (mi-semaine)</span>
                 <span className="font-bold text-stone-900">10 clientes (Cible)</span>
@@ -259,16 +259,16 @@ export default function CockpitClient() {
           </div>
 
           {/* Jauge Panier Moyen (250 à 450 CHF) */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
                 <span className="text-xs font-semibold text-stone-600 uppercase">Panier Moyen Réalisé</span>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
                   Fourchette 250 – 450 CHF
                 </span>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-emerald-800">
+              <div className="mt-3 flex flex-wrap items-baseline gap-x-2">
+                <span className="text-2xl sm:text-3xl font-extrabold break-words text-emerald-800">
                   {formatCHF(weekStats.panierMoyen)}
                 </span>
                 <span className="text-stone-500 text-xs font-medium">/ cliente</span>
@@ -306,7 +306,7 @@ export default function CockpitClient() {
                   style={{ width: `${Math.min(100, (weekStats.panierMoyen / 600) * 100)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[10.5px] text-stone-600 mt-1.5 font-medium">
+              <div className="flex justify-between gap-2 text-[10.5px] text-stone-600 mt-1.5 font-medium">
                 <span>0</span>
                 <span className="text-emerald-800 font-bold">250 CHF (Min)</span>
                 <span className="text-emerald-900 font-bold">450 CHF (Haut)</span>
@@ -315,16 +315,16 @@ export default function CockpitClient() {
           </div>
 
           {/* Jauge Chiffre d'Affaires Hebdomadaire */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
                 <span className="text-xs font-semibold text-stone-600 uppercase">Chiffre d&apos;Affaires Semaine</span>
                 <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11px] font-bold">
                   Objectif 3&apos;500 CHF
                 </span>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-stone-950">
+              <div className="mt-3 flex flex-wrap items-baseline gap-x-2">
+                <span className="text-2xl sm:text-3xl font-extrabold break-words text-stone-950">
                   {formatCHF(weekStats.caTotal)}
                 </span>
                 <span className="text-stone-500 text-xs font-medium">encaissés</span>
@@ -341,7 +341,7 @@ export default function CockpitClient() {
                   style={{ width: `${pctCA}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[10.5px] text-stone-600 mt-1.5 font-medium">
+              <div className="flex justify-between gap-2 text-[10.5px] text-stone-600 mt-1.5 font-medium">
                 <span>0</span>
                 <span>2&apos;500 CHF (Seuil)</span>
                 <span className="font-bold text-stone-900">3&apos;500 CHF ({pctCA}%)</span>
@@ -352,7 +352,7 @@ export default function CockpitClient() {
       </div>
 
       {/* ── 2. POTENTIEL DE CA DU STOCK VENTE (GISEMENT EN RAYON) ── */}
-      <div className="bg-gradient-to-br from-emerald-50/90 via-white to-stone-50 border border-emerald-200/90 rounded-2xl p-6 shadow-xs">
+      <div className="bg-gradient-to-br from-emerald-50/90 via-white to-stone-50 border border-emerald-200/90 rounded-2xl p-4 sm:p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-emerald-100">
           <div>
             <div className="flex items-center gap-2">
@@ -373,10 +373,10 @@ export default function CockpitClient() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
-          <div className="bg-white p-4 rounded-xl border border-emerald-200/60 shadow-2xs">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-5">
+          <div className="bg-white min-w-0 p-4 rounded-xl border border-emerald-200/60 shadow-2xs">
             <span className="text-[11.5px] text-stone-500 font-medium block">CA Potentiel Total en Rayon</span>
-            <span className="text-2xl font-black text-emerald-800 mt-1 block">
+            <span className="text-xl sm:text-2xl font-black break-words text-emerald-800 mt-1 block">
               {formatCHF(stockStats.caPotentiel)}
             </span>
             <span className="text-[11px] text-emerald-700 mt-0.5 block">
@@ -384,9 +384,9 @@ export default function CockpitClient() {
             </span>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-purple-200/60 shadow-2xs">
+          <div className="bg-white min-w-0 p-4 rounded-xl border border-purple-200/60 shadow-2xs">
             <span className="text-[11.5px] text-stone-500 font-medium block">Marge Brute à Encaisser</span>
-            <span className="text-2xl font-black text-purple-900 mt-1 block">
+            <span className="text-xl sm:text-2xl font-black break-words text-purple-900 mt-1 block">
               {formatCHF(stockStats.margePotentielle)}
             </span>
             <span className="text-[11px] text-purple-700 mt-0.5 block">
@@ -394,9 +394,9 @@ export default function CockpitClient() {
             </span>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs">
+          <div className="bg-white min-w-0 p-4 rounded-xl border border-stone-200 shadow-2xs">
             <span className="text-[11.5px] text-stone-500 font-medium block">Articles Vente Disponibles</span>
-            <span className="text-2xl font-black text-stone-900 mt-1 block">
+            <span className="text-xl sm:text-2xl font-black break-words text-stone-900 mt-1 block">
               {stockStats.totalUnites} flacons
             </span>
             <span className="text-[11px] text-stone-500 mt-0.5 block">
@@ -404,9 +404,9 @@ export default function CockpitClient() {
             </span>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-blue-200/60 shadow-2xs">
+          <div className="bg-white min-w-0 p-4 rounded-xl border border-blue-200/60 shadow-2xs">
             <span className="text-[11.5px] text-stone-500 font-medium block">Potentiel en Clientes Équipées</span>
-            <span className="text-2xl font-black text-blue-900 mt-1 block">
+            <span className="text-xl sm:text-2xl font-black break-words text-blue-900 mt-1 block">
               ~{Math.max(1, Math.round(stockStats.totalUnites / 2))} clientes
             </span>
             <span className="text-[11px] text-blue-700 mt-0.5 block">
@@ -443,7 +443,7 @@ export default function CockpitClient() {
                       Réf. {item.product.reference || '—'}
                     </span>
                   </div>
-                  <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-between">
+                  <div className="mt-2.5 pt-2 border-t border-stone-100 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                     <span className="bg-stone-100 text-stone-800 px-1.5 py-0.5 rounded font-bold text-[11px]">
                       {item.product.stock} en stock
                     </span>
@@ -460,7 +460,7 @@ export default function CockpitClient() {
 
       {/* ── 3. MESSAGES CIBLÉS & COACHING ESTHÉTIQUE POUR EMMANUELLE ── */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-3">
           <h2 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
             <Flame size={16} className="text-accent" />
             Messages Ciblés & Recommandations du Coach
@@ -472,7 +472,7 @@ export default function CockpitClient() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Carte 1 : Alertes Stock et Réassort */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-3">
+          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
             <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
               <AlertTriangle className="text-amber-500" size={17} />
               <span>Priorités Stock & Ruptures</span>
@@ -517,7 +517,7 @@ export default function CockpitClient() {
           </div>
 
           {/* Carte 2 : La Méthode "Panier 250 - 450 CHF" */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-3">
+          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
             <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
               <ShoppingBag className="text-emerald-700" size={17} />
               <span>La Formule Panier 250 – 450 CHF</span>
@@ -529,19 +529,19 @@ export default function CockpitClient() {
               </p>
 
               <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-950 space-y-1 text-[11.5px]">
-                <div className="flex justify-between font-semibold">
+                <div className="flex justify-between gap-3 font-semibold">
                   <span>1. Soin Expert Cabine</span>
                   <span>140 – 180 CHF</span>
                 </div>
-                <div className="flex justify-between text-stone-700">
+                <div className="flex justify-between gap-3 text-stone-700">
                   <span>+ 1 Crème hydratante / anti-âge</span>
                   <span>75 – 110 CHF</span>
                 </div>
-                <div className="flex justify-between text-stone-700">
+                <div className="flex justify-between gap-3 text-stone-700">
                   <span>+ 1 Sérum Oligoforce ou Nettoyant</span>
                   <span>45 – 105 CHF</span>
                 </div>
-                <div className="pt-1 border-t border-emerald-200 flex justify-between font-extrabold text-emerald-900 text-xs">
+                <div className="pt-1 border-t border-emerald-200 flex justify-between gap-3 font-extrabold text-emerald-900 text-xs">
                   <span>= Panier Total Moyen</span>
                   <span>260 – 395 CHF</span>
                 </div>
@@ -554,7 +554,7 @@ export default function CockpitClient() {
           </div>
 
           {/* Carte 3 : Les 4 Réflexes en Cabine */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-3">
+          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
             <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
               <Sparkles className="text-purple-700" size={17} />
               <span>Les 4 Réflexes Post-Soin</span>
@@ -583,7 +583,7 @@ export default function CockpitClient() {
       </div>
 
       {/* ── 4. SIMULATEUR INTERACTIF DE REVENU & AVS (CANTON DE VAUD) ── */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xs">
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-stone-200">
           <div>
             <div className="flex items-center gap-2">
@@ -606,7 +606,7 @@ export default function CockpitClient() {
           <div className="lg:col-span-6 space-y-5">
             {/* Curseur Clientes par jour */}
             <div>
-              <div className="flex justify-between items-center mb-1.5">
+              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-0.5 mb-1.5">
                 <label className="text-xs font-semibold text-stone-800">
                   Clientes par jour : <span className="text-emerald-800 text-sm font-bold">{simClientesJour} cliente{simClientesJour > 1 ? 's' : ''} / jour</span>
                 </label>
@@ -621,7 +621,7 @@ export default function CockpitClient() {
                 onChange={e => setSimClientesJour(Number(e.target.value))}
                 className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-emerald-700"
               />
-              <div className="flex justify-between text-[10px] text-stone-400 mt-1">
+              <div className="flex flex-wrap justify-between gap-x-3 text-[10px] text-stone-400 mt-1">
                 <span>1 (démarrage)</span>
                 <span className="font-bold text-emerald-800">2 (rythme cible)</span>
                 <span>3</span>
@@ -631,7 +631,7 @@ export default function CockpitClient() {
 
             {/* Curseur Jours travaillés */}
             <div>
-              <div className="flex justify-between items-center mb-1.5">
+              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-0.5 mb-1.5">
                 <label className="text-xs font-semibold text-stone-800">
                   Jours d&apos;ouverture par semaine : <span className="text-emerald-800 text-sm font-bold">{simJoursSemaine} jours</span>
                 </label>
@@ -646,7 +646,7 @@ export default function CockpitClient() {
                 onChange={e => setSimJoursSemaine(Number(e.target.value))}
                 className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-emerald-700"
               />
-              <div className="flex justify-between text-[10px] text-stone-400 mt-1">
+              <div className="flex flex-wrap justify-between gap-x-3 text-[10px] text-stone-400 mt-1">
                 <span>3 jours</span>
                 <span>4 jours</span>
                 <span className="font-bold text-emerald-800">5 jours (Mar - Sam)</span>
@@ -656,7 +656,7 @@ export default function CockpitClient() {
 
             {/* Curseur Panier Moyen */}
             <div>
-              <div className="flex justify-between items-center mb-1.5">
+              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-0.5 mb-1.5">
                 <label className="text-xs font-semibold text-stone-800">
                   Panier moyen par cliente : <span className="text-emerald-800 text-sm font-bold">{formatCHF(simPanierMoyen)}</span>
                 </label>
@@ -671,7 +671,7 @@ export default function CockpitClient() {
                 onChange={e => setSimPanierMoyen(Number(e.target.value))}
                 className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-emerald-700"
               />
-              <div className="flex justify-between text-[10px] text-stone-400 mt-1">
+              <div className="flex flex-wrap justify-between gap-x-3 text-[10px] text-stone-400 mt-1">
                 <span>150 CHF (Soin seul)</span>
                 <span className="font-semibold text-emerald-700">250 CHF (Soin + 1 produit)</span>
                 <span className="font-bold text-emerald-800">350 CHF (Soin + Routine)</span>
@@ -681,28 +681,28 @@ export default function CockpitClient() {
           </div>
 
           {/* Résultats projetés */}
-          <div className="lg:col-span-6 bg-stone-50 p-5 rounded-2xl border border-stone-200 flex flex-col justify-between">
+          <div className="lg:col-span-6 bg-stone-50 p-4 sm:p-5 rounded-2xl border border-stone-200 flex flex-col justify-between">
             <div className="space-y-3">
               <span className="text-xs font-bold text-stone-900 uppercase tracking-wider block">
                 Projection Financière Réalisable
               </span>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-white rounded-xl border border-stone-200">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 min-w-0 bg-white rounded-xl border border-stone-200">
                   <span className="text-stone-500 text-[11px]">CA Hebdomadaire</span>
-                  <p className="text-lg font-bold text-stone-950 mt-0.5">{formatCHF(simResults.caSemaine)}</p>
+                  <p className="text-base sm:text-lg font-bold text-stone-950 mt-0.5 break-words">{formatCHF(simResults.caSemaine)}</p>
                   <p className="text-[10.5px] text-stone-400">sur {simResults.clientesSemaine} clientes</p>
                 </div>
 
-                <div className="p-3 bg-white rounded-xl border border-stone-200">
+                <div className="p-3 min-w-0 bg-white rounded-xl border border-stone-200">
                   <span className="text-stone-500 text-[11px]">CA Mensuel Estimé</span>
-                  <p className="text-lg font-bold text-stone-950 mt-0.5">{formatCHF(simResults.caMois)}</p>
+                  <p className="text-base sm:text-lg font-bold text-stone-950 mt-0.5 break-words">{formatCHF(simResults.caMois)}</p>
                   <p className="text-[10.5px] text-stone-400">base 4.2 semaines</p>
                 </div>
               </div>
 
-              <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs space-y-1">
-                <div className="flex justify-between text-emerald-950 font-bold">
+              <div className="p-3.5 bg-emerald-50/80 min-w-0 border border-emerald-200 rounded-xl text-xs space-y-1">
+                <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-emerald-950 font-bold">
                   <span>Rémunération Nette Mensuelle Estimée</span>
                   <span className="text-sm font-extrabold text-emerald-800">
                     {formatCHF(simResults.remunerationNetteMensuelle)} / mois
@@ -714,7 +714,7 @@ export default function CockpitClient() {
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-stone-200 flex items-center justify-between text-xs">
+            <div className="mt-4 pt-3 border-t border-stone-200 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
               <span className="text-stone-500 text-[11px]">Chiffre d&apos;affaires annuel projeté :</span>
               <span className="font-bold text-stone-900">{formatCHF(simResults.caAn)} / an</span>
             </div>
