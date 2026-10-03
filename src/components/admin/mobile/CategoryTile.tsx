@@ -21,10 +21,10 @@ function loadAssets(): Promise<Asset[]> {
 
 /** Mots-clés (sans accent, minuscules) cherchés dans le nom du fichier, par thème. */
 const THEMES: { match: RegExp; files: string[] }[] = [
-  { match: /visage|facial|eclat|anti-age|jeunesse/, files: ['soins-visages', 'portrait'] },
-  { match: /corps|massage|rituel|minceur/, files: ['soins-corps'] },
+  { match: /visage|facial|eclat|anti-age|jeunesse/, files: ['1790587791640', 'soins-visages'] },
+  { match: /corps|massage|rituel|minceur/, files: ['1790587819698', 'soins-corps'] },
   { match: /epilation|cire|sucre/, files: ['epilation (1)', 'epilation'] },
-  { match: /regard|cil|sourcil|maquillage/, files: ['portrait (1)', 'portrait'] },
+  { match: /regard|cil|sourcil|maquillage/, files: ['1790587847303', 'portrait (1)'] },
   { match: /main|pied|beaute des/, files: ['textures-cremes', 'compose-marin'] },
   { match: /produit|creme|soin maison/, files: ['creme de soin', 'textures-cremes (1)'] },
   { match: /bon|cadeau/, files: ['algues-marines'] },
