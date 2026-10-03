@@ -7,8 +7,9 @@ import ApiKeysPanel from './ApiKeysPanel';
 import DesignSystemPanel from './DesignSystemPanel';
 import EditorialVoiceInterviewModal from './EditorialVoiceInterviewModal';
 import FleetManagerPanel from './FleetManagerPanel';
+import BookingSettingsPanel from './BookingSettingsPanel';
 import { supabase } from '../../../services/supabase';
-import { Save, Lock, Tag, Image, X, Check, Sun, Moon, Palette, Type, Sliders, Eye, RefreshCw, Share2, Puzzle, Building2, Sparkles, AlertTriangle, BookOpen, CreditCard, Mic, ShieldCheck, Server, ExternalLink, KeyRound } from 'lucide-react';
+import { Save, Lock, Tag, Image, X, Check, Sun, Moon, Palette, Type, Sliders, Eye, RefreshCw, Share2, Puzzle, Building2, Sparkles, AlertTriangle, BookOpen, CreditCard, Mic, ShieldCheck, Server, ExternalLink, KeyRound, CalendarDays } from 'lucide-react';
 import { settingsCache } from '../../../hooks/useSettings';
 import { SETTINGS_DEFAULTS } from '../../../constants/settings';
 import { AI_EFFORT_LEVELS, AI_MODELS, AiEffort, AiModelSpec, DEFAULT_AI_EFFORT, DEFAULT_AI_MODEL } from '../../../constants/aiModels';
@@ -38,6 +39,8 @@ const SETTINGS_SECTIONS: TabItem[] = [
     description: "Modèle utilisé pour les textes générés et budget mensuel à surveiller." },
   { id: 'caisse', label: 'Caisse & TVA', icon: CreditCard,
     description: 'Taux de TVA, IBAN, mentions de facture et bons cadeaux.' },
+  { id: 'booking', label: 'Réservations & Offre du mois', icon: CalendarDays,
+    description: "Offre du mois active, synchronisation Google Agenda et alertes smartphone." },
   { id: 'fleet', label: 'Flotte Multi-Sites', icon: Server,
     description: 'Mettre à jour les autres sites installés avec ce même outil.' },
   { id: 'security', label: 'Sécurité', icon: Lock,
@@ -224,7 +227,7 @@ export default function Settings() {
   const [editorialMessage, setEditorialMessage]       = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isEditorialVoiceModalOpen, setIsEditorialVoiceModalOpen] = useState(false);
 
-  const [activeTab, setActiveTab]                     = useState<'general' | 'business' | 'editorial' | 'modules' | 'caisse' | 'ai' | 'style' | 'fleet' | 'security' | 'keys'>('general');
+  const [activeTab, setActiveTab]                     = useState<'general' | 'business' | 'editorial' | 'modules' | 'caisse' | 'booking' | 'ai' | 'style' | 'fleet' | 'security' | 'keys'>('general');
 
   /*
     Si une lecture échoue (connexion coupée, session expirée), les champs restent
@@ -2152,6 +2155,9 @@ export default function Settings() {
             )}
           </div>
         )}
+
+        {/* ── Onglet Réservations & Offre du mois ─────────────────── */}
+        {activeTab === 'booking' && <BookingSettingsPanel />}
 
         {/* ── Onglet Flotte Multi-Sites ────────────────────────────── */}
         {activeTab === 'fleet' && isMasterStudio && <FleetManagerPanel />}

@@ -24,7 +24,8 @@ export type AutomationEvent =
   | 'agent.qualified'
   | 'sale.created'
   | 'subscriber.created'
-  | 'article.published';
+  | 'article.published'
+  | 'booking.created';
 
 // ── Actions ────────────────────────────────────────────────────────────────
 

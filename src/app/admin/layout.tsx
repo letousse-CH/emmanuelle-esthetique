@@ -197,7 +197,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
    */
   const navGroups: NavGroup[] = ([
     {
-      items: [{ name: 'Tableau de bord', path: '/admin', icon: LayoutDashboard, exact: true }],
+      items: [
+        { name: 'Tableau de bord', path: '/admin', icon: LayoutDashboard, exact: true },
+        { name: 'Réservations', path: '/admin/reservations', icon: CalendarDays },
+      ],
     },
     {
       label: 'Site',

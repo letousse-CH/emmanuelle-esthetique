@@ -1,9 +1,29 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../services/supabase';
 import Link from 'next/link';
-import { Eye, FileText, Mail, Layers, ArrowUpRight, ArrowRight, CreditCard, Send, CalendarDays } from 'lucide-react';
+import {
+  Eye,
+  FileText,
+  Mail,
+  Layers,
+  ArrowUpRight,
+  ArrowRight,
+  CreditCard,
+  Send,
+  CalendarDays,
+  Phone,
+  MessageCircle,
+  Check,
+  X,
+  Clock,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  CalendarCheck,
+  ChevronRight,
+} from 'lucide-react';
 import { useModuleFlags } from '../../hooks/useModuleFlags';
 import { SITE_CONFIG } from '../../config/site';
 import AdminOnboardingWizard from '../../components/admin/AdminOnboardingWizard';
@@ -11,11 +31,28 @@ import AdminOnboardingWizard from '../../components/admin/AdminOnboardingWizard'
 interface DayCount { date: string; count: number }
 interface PageStat  { page: string; count: number }
 
+interface DashboardBooking {
+  id: string;
+  nom: string;
+  prenom: string;
+  telephone: string;
+  email?: string | null;
+  service_nom: string;
+  service_prix_chf: number;
+  service_duree_minutes: number;
+  options?: { id: string; nom: string; prix_chf: number }[];
+  date_rdv: string;
+  heure_rdv: string;
+  statut: 'en_attente' | 'confirme' | 'refuse' | 'annule' | 'termine';
+  notes_cliente?: string | null;
+}
+
 const PAGE_LABELS: Record<string, string> = {
   '/':                    'Accueil',
   '/about':               'Mon Approche',
   '/blog':                'Blog',
   '/contact':             'Contact',
+  '/reservation':         'Réservation en ligne',
   '/seance-individuelle': 'Séance individuelle',
   '/programme-complet':   'Programme complet',
   '/mentions-legales':    'Mentions légales',
@@ -42,9 +79,79 @@ export default function Dashboard() {
   const [days, setDays]               = useState<DayCount[]>([]);
   const [topPages, setTopPages]       = useState<PageStat[]>([]);
 
+  // ── Réservations du jour & demandes en attente ──
+  const [todayBookings, setTodayBookings]     = useState<DashboardBooking[]>([]);
+  const [pendingBookings, setPendingBookings] = useState<DashboardBooking[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+
   const flags = useModuleFlags();
 
-  useEffect(() => { load(); }, []);
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  useEffect(() => {
+    load();
+    loadBookings();
+  }, []);
+
+  const loadBookings = async () => {
+    setBookingsLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setBookingsLoading(false);
+        return;
+      }
+
+      const res = await fetch('/api/bookings', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        const all: DashboardBooking[] = json.bookings || [];
+
+        // Soins du jour (exclut annulés et refusés)
+        const forToday = all
+          .filter((b) => b.date_rdv === todayStr && !['annule', 'refuse'].includes(b.statut))
+          .sort((a, b) => a.heure_rdv.localeCompare(b.heure_rdv));
+
+        // Demandes en attente de confirmation
+        const pending = all
+          .filter((b) => b.statut === 'en_attente')
+          .sort((a, b) => `${a.date_rdv} ${a.heure_rdv}`.localeCompare(`${b.date_rdv} ${b.heure_rdv}`));
+
+        setTodayBookings(forToday);
+        setPendingBookings(pending);
+      }
+    } catch (err) {
+      console.error('[Dashboard] Erreur chargement réservations:', err);
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  const handleUpdateBookingStatus = async (id: string, newStatut: 'confirme' | 'annule' | 'termine') => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
+
+      const res = await fetch(`/api/bookings/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ statut: newStatut }),
+      });
+
+      if (!res.ok) throw new Error('Erreur mise à jour');
+
+      // Rechargement immédiat
+      loadBookings();
+    } catch (err: any) {
+      alert(`Erreur : ${err.message}`);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -92,12 +199,16 @@ export default function Dashboard() {
 
   // Les actions du quotidien, dans l'ordre où on s'en sert.
   const actions = [
+    {
+      label: 'Réservations',
+      text: pendingBookings.length > 0 ? `${pendingBookings.length} demande${pendingBookings.length > 1 ? 's' : ''} en attente` : `${todayBookings.length} rdv aujourd’hui`,
+      href: '/admin/reservations',
+      icon: CalendarDays,
+    },
     ...(flags.caisse ? [{ label: 'Encaisser', text: 'Nouvelle vente ou prestation', href: '/admin/caisse', icon: CreditCard }] : []),
     { label: 'Modifier une page', text: `${fmt(pageCount)} page${pageCount > 1 ? 's' : ''} sur le site`, href: '/admin/pages', icon: Layers },
     ...(flags.blog ? [{ label: 'Rédiger un article', text: `${fmt(articles)} publié${articles > 1 ? 's' : ''}`, href: '/admin/blog/new', icon: FileText }] : []),
-    ...(flags.events ? [{ label: 'Créer un événement', text: 'Atelier, date, inscriptions', href: '/admin/events/new', icon: CalendarDays }] : []),
-    ...(flags.newsletter ? [{ label: 'Envoyer la newsletter', text: `${fmt(subscribers)} abonné${subscribers > 1 ? 's' : ''}`, href: '/admin/newsletter', icon: Send }] : []),
-  ].slice(0, 4);
+  ];
 
   const stats = [
     { label: "Visites aujourd'hui", value: today },
@@ -108,7 +219,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-12 animate-fadein">
+    <div className="space-y-10 animate-fadein">
       {/* En-tête */}
       <header className="flex flex-wrap items-end justify-between gap-6">
         <div>
@@ -116,17 +227,249 @@ export default function Dashboard() {
           <h1 className="mt-1 text-[32px] font-semibold tracking-tight text-stone-950 leading-tight">
             {greeting}
           </h1>
-          <p className="mt-2 text-[16px] text-stone-700">Voici l’essentiel de {siteName || 'votre site'} aujourd’hui.</p>
+          <p className="mt-2 text-[16px] text-stone-700">Voici l’essentiel d’Emmanuelle Esthétique aujourd’hui.</p>
         </div>
-        <a
-          href={SITE_CONFIG.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-stone-100 text-[14px] font-semibold text-stone-900 hover:bg-stone-200 transition-colors"
-        >
-          Voir le site <ArrowUpRight size={16} />
-        </a>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/reservations"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-stone-900 text-[14px] font-semibold text-white hover:bg-stone-800 transition-colors shadow-xs"
+          >
+            <CalendarCheck size={16} /> Planning complet
+          </Link>
+          <a
+            href={SITE_CONFIG.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-stone-100 text-[14px] font-semibold text-stone-900 hover:bg-stone-200 transition-colors"
+          >
+            Voir le site <ArrowUpRight size={16} />
+          </a>
+        </div>
       </header>
+
+      {/* ── SECTION PRIORITAIRE : RENDEZ-VOUS DU JOUR & DEMANDES EN ATTENTE ── */}
+      <section aria-labelledby="reservations-priority-title" className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <h2 id="reservations-priority-title" className="text-xl font-bold tracking-tight text-stone-950">
+              Activité Cabine & Réservations
+            </h2>
+            {pendingBookings.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-white animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                {pendingBookings.length} demande{pendingBookings.length > 1 ? 's' : ''} à confirmer
+              </span>
+            )}
+          </div>
+          <Link
+            href="/admin/reservations"
+            className="text-xs font-semibold text-accent hover:underline inline-flex items-center gap-1"
+          >
+            Gérer toutes les réservations <ChevronRight size={14} />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* CARTE 1 : RENDEZ-VOUS DU JOUR */}
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                    <Clock size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-900">Rendez-vous du jour</h3>
+                    <p className="text-xs text-stone-500 capitalize">{dateLabel}</p>
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-stone-600 bg-stone-100 px-2.5 py-1 rounded-full">
+                  {todayBookings.length} rdv prévu{todayBookings.length > 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {bookingsLoading ? (
+                <div className="py-8 text-center text-xs text-stone-400">Chargement de votre planning...</div>
+              ) : todayBookings.length === 0 ? (
+                <div className="py-8 text-center space-y-1">
+                  <p className="text-sm font-medium text-stone-700">Aucun rendez-vous prévu aujourd'hui</p>
+                  <p className="text-xs text-stone-400 font-light">Votre cabine est libre pour des soins impromptus ou la préparation des produits.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {todayBookings.map((b) => {
+                    const cleanPhone = b.telephone.replace(/[^\d]/g, '');
+                    const waMsg = encodeURIComponent(`Bonjour ${b.prenom}, c'est Emmanuelle au sujet de votre rendez-vous aujourd'hui à ${b.heure_rdv}.`);
+                    return (
+                      <div
+                        key={b.id}
+                        className="p-3.5 rounded-xl border border-stone-100 bg-[#FAF7F2]/60 hover:bg-[#FAF7F2] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold bg-[#183B36] text-white px-2 py-0.5 rounded">
+                              {b.heure_rdv}
+                            </span>
+                            <span className="text-sm font-semibold text-stone-900">
+                              {b.prenom} {b.nom}
+                            </span>
+                            <span className="text-xs text-stone-500">
+                              (CHF {b.service_prix_chf})
+                            </span>
+                          </div>
+                          <p className="text-xs text-stone-600 font-light">
+                            {b.service_nom} · {b.service_duree_minutes} min
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <a
+                            href={`tel:${b.telephone.replace(/\s+/g, '')}`}
+                            className="p-2 rounded-lg bg-white border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs transition-colors"
+                            title="Appeler"
+                          >
+                            <Phone size={14} />
+                          </a>
+                          <a
+                            href={`https://wa.me/${cleanPhone}?text=${waMsg}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-lg bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-colors"
+                            title="WhatsApp"
+                          >
+                            <MessageCircle size={14} />
+                          </a>
+                          {b.statut === 'confirme' && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateBookingStatus(b.id, 'termine')}
+                              className="px-2.5 py-1.5 rounded-lg bg-stone-900 text-white text-xs font-medium hover:bg-stone-800 transition-colors"
+                            >
+                              Terminer
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CARTE 2 : DEMANDES DE RÉSERVATION À CONFIRMER */}
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+                    <AlertTriangle size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-900">Demandes à confirmer</h3>
+                    <p className="text-xs text-stone-500">Clientes ayant réservé en ligne</p>
+                  </div>
+                </div>
+                {pendingBookings.length > 0 && (
+                  <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-full">
+                    {pendingBookings.length} en attente
+                  </span>
+                )}
+              </div>
+
+              {bookingsLoading ? (
+                <div className="py-8 text-center text-xs text-stone-400">Vérification des demandes...</div>
+              ) : pendingBookings.length === 0 ? (
+                <div className="py-8 text-center space-y-1">
+                  <CheckCircle2 size={24} className="mx-auto text-emerald-500" />
+                  <p className="text-sm font-medium text-stone-700">Aucune demande en attente</p>
+                  <p className="text-xs text-stone-400 font-light">Toutes les réservations en ligne ont été confirmées.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingBookings.slice(0, 3).map((b) => {
+                    const cleanPhone = b.telephone.replace(/[^\d]/g, '');
+                    const formattedDateShort = new Date(`${b.date_rdv}T12:00:00`).toLocaleDateString('fr-CH', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                    });
+                    const waMsg = encodeURIComponent(`Bonjour ${b.prenom}, c'est Emmanuelle d'Emmanuelle Esthétique au sujet de votre demande de rdv pour le ${b.date_rdv} à ${b.heure_rdv}.`);
+
+                    return (
+                      <div
+                        key={b.id}
+                        className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-stone-900 capitalize">
+                              {formattedDateShort} à {b.heure_rdv}
+                            </span>
+                            <span className="text-sm font-semibold text-stone-900">
+                              {b.prenom} {b.nom}
+                            </span>
+                          </div>
+                          <p className="text-xs text-stone-600">
+                            {b.service_nom} · CHF {b.service_prix_chf}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <a
+                            href={`tel:${b.telephone.replace(/\s+/g, '')}`}
+                            className="p-2 rounded-lg bg-white border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs"
+                            title="Appeler"
+                          >
+                            <Phone size={14} />
+                          </a>
+                          <a
+                            href={`https://wa.me/${cleanPhone}?text=${waMsg}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-lg bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20"
+                            title="WhatsApp"
+                          >
+                            <MessageCircle size={14} />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateBookingStatus(b.id, 'confirme')}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                            title="Confirmer la réservation"
+                          >
+                            <Check size={14} /> Confirmer
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Refuser/annuler la demande de ${b.prenom} ${b.nom} ?`)) {
+                                handleUpdateBookingStatus(b.id, 'annule');
+                              }
+                            }}
+                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                            title="Replanifier ou annuler"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {pendingBookings.length > 3 && (
+                    <Link
+                      href="/admin/reservations"
+                      className="block text-center text-xs font-semibold text-accent hover:underline py-1"
+                    >
+                      + {pendingBookings.length - 3} autre(s) demande(s) à confirmer
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Actions principales */}
       <section aria-labelledby="actions-title">

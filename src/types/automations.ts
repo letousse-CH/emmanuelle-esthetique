@@ -177,6 +177,9 @@ export const EVENT_CATALOG: EventSpec[] = [
   { key: 'agent.qualified', label: 'Un agent IA passe la main',
     description: "Une conversation atteint sa limite d'échanges et attend un humain.",
     emitted: "Quand l'agent propose de transmettre à une personne." },
+  { key: 'booking.created', label: 'Une réservation est effectuée',
+    description: "Une cliente réserve un soin en ligne.",
+    emitted: "Dès que la réservation est enregistrée sur le site." },
 ];
 
 /** Les trois façons de déclencher une automatisation, expliquées. */

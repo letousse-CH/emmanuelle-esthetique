@@ -111,6 +111,10 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
     navLinks = flattenMenu(parsed);
   } catch { /* keep empty */ }
 
+  if (!navLinks.some((l) => l.path === '/reservation')) {
+    navLinks.push({ name: 'Réservation en ligne', path: '/reservation' });
+  }
+
   /*
     Les liens de bas de page viennent des réglages, comme la navigation. Ils
     étaient écrits en dur (`/cgv`, `/politique-de-confidentialite`) et
