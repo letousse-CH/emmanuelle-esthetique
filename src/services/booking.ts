@@ -70,6 +70,7 @@ export interface BookingInput {
   date_rdv: string; // YYYY-MM-DD
   heure_rdv: string; // HH:mm
   notes_cliente?: string | null;
+  bypass_availability_check?: boolean;
 }
 
 export interface MonthlyOffer {
@@ -479,14 +480,16 @@ export async function createBooking(
   );
 
   // 1. Vérification de disponibilité anti-doublon (Race condition safe)
-  const availableCheck = await getAvailableSlots(input.date_rdv, totalDuration);
-  const matchingSlot = availableCheck.slots.find((s) => s.heure === input.heure_rdv);
+  if (!input.bypass_availability_check) {
+    const availableCheck = await getAvailableSlots(input.date_rdv, totalDuration);
+    const matchingSlot = availableCheck.slots.find((s) => s.heure === input.heure_rdv);
 
-  if (!availableCheck.ouvert || !matchingSlot || !matchingSlot.disponible) {
-    return {
-      success: false,
-      error: 'Ce créneau horaire n’est plus disponible. Veuillez en sélectionner un autre.',
-    };
+    if (!availableCheck.ouvert || !matchingSlot || !matchingSlot.disponible) {
+      return {
+        success: false,
+        error: 'Ce créneau horaire n’est plus disponible. Veuillez en sélectionner un autre.',
+      };
+    }
   }
 
   // 2. Rapprochement CRM Cliente : recherche par téléphone ou e-mail

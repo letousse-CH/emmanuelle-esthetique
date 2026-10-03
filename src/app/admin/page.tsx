@@ -303,11 +303,11 @@ export default function Dashboard() {
                     return (
                       <div
                         key={b.id}
-                        className="p-3.5 rounded-xl border border-stone-100 bg-[#FAF7F2]/60 hover:bg-[#FAF7F2] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        className="p-3.5 rounded-xl border border-stone-100 bg-stone-50/70 hover:bg-stone-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                       >
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-bold bg-[#183B36] text-white px-2 py-0.5 rounded">
+                            <span className="font-mono text-xs font-bold bg-accent text-accent-fg px-2 py-0.5 rounded">
                               {b.heure_rdv}
                             </span>
                             <span className="text-sm font-semibold text-stone-900">

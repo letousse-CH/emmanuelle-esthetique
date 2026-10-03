@@ -1,6 +1,5 @@
 import { Inter, Cormorant_Garamond } from 'next/font/google';
 import '../index.css';
-import UniversalPageEditorGate from '../components/pagebuilder/UniversalPageEditorGate';
 import ScrollAnimations from '../components/ScrollAnimations';
 import MotionLayer from '../components/MotionLayer';
 import { getSettingsServer } from '../services/settingsServer';
@@ -341,7 +340,6 @@ export default async function RootLayout({
         />
         <ScrollAnimations />
         <MotionLayer />
-        <UniversalPageEditorGate />
         {children}
       </body>
     </html>

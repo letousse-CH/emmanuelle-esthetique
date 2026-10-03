@@ -71,6 +71,15 @@ export async function POST(req: NextRequest) {
     notes_cliente: notes_cliente ? String(notes_cliente).trim() : null,
   };
 
+  const authHeader = req.headers.get('authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (token) {
+    const isAdmin = await validateSupabaseToken(token);
+    if (isAdmin && body.bypass_availability_check) {
+      bookingInput.bypass_availability_check = true;
+    }
+  }
+
   const result = await createBooking(bookingInput);
 
   if (!result.success) {

@@ -223,7 +223,7 @@ export default function BookingSettingsPanel() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-100 pb-5">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-lg bg-[#EBF1ED] text-[#2C5E55] flex items-center justify-center font-bold">
+              <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold">
                 <Sparkles size={16} />
               </span>
               <h2 className="text-xl font-bold text-stone-900">L'Offre du Mois en ligne</h2>
@@ -334,7 +334,7 @@ export default function BookingSettingsPanel() {
             <button
               type="submit"
               disabled={savingOffer}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold tracking-wide transition-all shadow-sm"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-accent-fg hover:bg-accent-hover text-xs font-semibold tracking-wide transition-all shadow-sm disabled:opacity-50"
             >
               {savingOffer ? (
                 <>
@@ -460,7 +460,7 @@ export default function BookingSettingsPanel() {
           {/* Règles de cabine & Battement */}
           <div className="border-t border-stone-100 pt-5 space-y-4">
             <div className="flex items-center gap-2">
-              <Clock size={16} className="text-[#829B88]" />
+              <Clock size={16} className="text-accent" />
               <h3 className="text-sm font-bold text-stone-900">Règles d'exploitation de la Cabine</h3>
             </div>
 
@@ -523,7 +523,7 @@ export default function BookingSettingsPanel() {
             <button
               type="submit"
               disabled={savingSettings}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold tracking-wide transition-all shadow-sm"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-accent-fg hover:bg-accent-hover text-xs font-semibold tracking-wide transition-all shadow-sm disabled:opacity-50"
             >
               {savingSettings ? (
                 <>

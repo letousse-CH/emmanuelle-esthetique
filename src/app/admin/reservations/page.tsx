@@ -236,6 +236,7 @@ export default function ReservationsAdminPage() {
         date_rdv: newRdv.date_rdv,
         heure_rdv: newRdv.heure_rdv,
         notes_cliente: newRdv.notes_admin ? `[Prise manuelle admin] : ${newRdv.notes_admin}` : null,
+        bypass_availability_check: true,
       };
 
       const res = await fetch('/api/bookings', {
@@ -507,9 +508,9 @@ export default function ReservationsAdminPage() {
                         {b.options.map((opt) => (
                           <span
                             key={opt.id}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-[#EBF1ED] text-[#2C5E55] border border-[#829B88]/20"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-accent/10 text-accent border border-accent/20"
                           >
-                            <Sparkles className="w-3 h-3 text-[#829B88]" />
+                            <Sparkles className="w-3 h-3 text-accent" />
                             {opt.nom} (+ CHF {opt.prix_chf})
                           </span>
                         ))}
