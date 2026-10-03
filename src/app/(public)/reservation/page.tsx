@@ -74,7 +74,7 @@ export default async function ReservationPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(reservationActionLd) }}
       />
       <Suspense fallback={
-        <div className="min-h-screen bg-paper text-stone-deep py-12 px-4 flex items-center justify-center">
+        <div className="min-h-screen bg-paper text-stone-deep pt-36 sm:pt-44 lg:pt-48 pb-20 px-4 flex items-center justify-center">
           <div className="text-center space-y-3">
             <div className="w-8 h-8 border-2 border-sage border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="text-sm text-muted">Chargement de votre espace de réservation...</p>
