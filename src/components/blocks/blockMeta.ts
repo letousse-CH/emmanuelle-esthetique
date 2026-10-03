@@ -115,7 +115,7 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { key: 'align', label: 'Alignement', kind: 'select', style: true, options: ALIGN_OPTIONS.slice(0, 2) },
       { key: 'size', label: 'Taille du titre', kind: 'select', style: true, options: [{ value: 'medium', label: 'Moyenne' }, { value: 'large', label: 'Grande' }] },
     ],
-    create: () => ({ id: uid(), type: 'hero', eyebrow: 'Institut · Palézieux-Gare', title: 'Titre de la page', text: 'Une phrase d\'accueil claire.', ctaText: 'Prendre rendez-vous', ctaUrl: '/contact', align: 'left', size: 'large' }),
+    create: () => ({ id: uid(), type: 'hero', eyebrow: 'Institut · Palézieux-Gare', title: 'Titre de la page', text: 'Une phrase d\'accueil claire.', ctaText: 'Prendre rendez-vous', ctaUrl: '/reservation', align: 'left', size: 'large' }),
   },
   image: {
     type: 'image', label: 'Image', description: 'Une photo, avec légende.', category: 'media',
@@ -322,7 +322,7 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { key: 'align', label: 'Alignement', kind: 'select', style: true, options: ALIGN_OPTIONS },
       { key: 'newTab', label: 'Ouvrir dans un nouvel onglet', kind: 'toggle', style: true },
     ],
-    create: () => ({ id: uid(), type: 'button', text: 'Prendre rendez-vous', url: '/contact', variant: 'primary', align: 'left' }),
+    create: () => ({ id: uid(), type: 'button', text: 'Prendre rendez-vous', url: '/reservation', variant: 'primary', align: 'left' }),
   },
   callout: {
     type: 'callout', label: 'Appel à réserver', description: 'Titre, phrase et bouton, centrés — à poser sur un fond coloré.', category: 'action',
@@ -334,7 +334,7 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { key: 'ctaText', label: 'Bouton', kind: 'text' },
       { key: 'ctaUrl', label: 'Lien du bouton', kind: 'url' },
     ],
-    create: () => ({ id: uid(), type: 'callout', title: 'Réserver votre soin', text: 'Je vous réponds sous 24 h.', ctaText: 'Écrire à Emmanuelle', ctaUrl: '/contact' }),
+    create: () => ({ id: uid(), type: 'callout', title: 'Réserver votre soin', text: 'Cabine privée à Palézieux-Gare.', ctaText: 'Prendre rendez-vous en ligne', ctaUrl: '/reservation' }),
   },
   contact: {
     type: 'contact', label: 'Coordonnées', description: 'Adresse, téléphone, e-mail, horaires.', category: 'action',

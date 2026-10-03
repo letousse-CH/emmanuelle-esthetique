@@ -159,9 +159,7 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   ]),
 
   // Cible du bouton d'action principal de la navbar ("Prendre rendez-vous").
-  // À remplacer par l'URL du module de réservation (Fresha, SimplyBook,
-  // Calendly…) dès qu'il est ouvert.
-  header_register_link: '',
+  header_register_link: '/reservation',
 };
 
 // Keys whose values are image URLs — passed through proxyUrl on overrides

@@ -74,7 +74,9 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
   const logoUrl = settings.global_logo;
   // Nom affiché en repli du logo — saisi dans Paramètres > Entreprise.
   const businessName = settings.business_name || '';
-  const registerLink = settings.header_register_link || '/reservation';
+  const registerLink = settings.header_register_link && settings.header_register_link !== '/contact'
+    ? settings.header_register_link
+    : '/reservation';
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const navRef = useRef<HTMLElement>(null);

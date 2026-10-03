@@ -423,7 +423,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
               <div className="bg-stone-900 text-white rounded-2xl p-5 space-y-3">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Aller plus loin</p>
                 <Link
-                  href="/contact"
+                  href="/reservation"
                   className="block bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors"
                 >
                   <p className="font-serif text-sm font-bold text-white mb-1">Prendre rendez-vous</p>

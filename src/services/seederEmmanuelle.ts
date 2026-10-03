@@ -2476,7 +2476,7 @@ export async function seedEmmanuelleNavAndBusiness(): Promise<void> {
     // Type Schema.org spécifique — meilleur signal Rich Results
     { key: 'business_schema_type', value: 'BeautySalon' },
     // Home register link (bouton "Prendre rendez-vous" du header)
-    { key: 'header_register_link', value: '/contact' },
+    { key: 'header_register_link', value: '/reservation' },
   ];
 
   for (const row of rows) {

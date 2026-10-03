@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Mail, MapPin, Phone } from 'lucide-react';
 
 import ContactForm from '../../../components/ContactForm';
@@ -142,16 +143,14 @@ export default async function ContactPage() {
             </div>
           )}
 
-          {settings.header_register_link && (
-            <div className="pt-4">
-              <a
-                href={settings.header_register_link}
-                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sage transition-all hover:gap-3"
-              >
-                Prendre rendez-vous →
-              </a>
-            </div>
-          )}
+          <div className="pt-4">
+            <Link
+              href="/reservation"
+              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sage transition-all hover:gap-3"
+            >
+              Prendre rendez-vous en ligne →
+            </Link>
+          </div>
         </div>
 
         <ContactForm light />

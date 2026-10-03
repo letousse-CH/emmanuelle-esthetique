@@ -4,8 +4,8 @@ import type { PageSection, SectionData, SectionType } from './wireframes.config'
 export const SECTION_DEFAULTS: Record<string, Record<string, unknown>> = {
   hero_1:        { title: 'Nouveau titre', description: 'Description…' },
   hero_2:        { title: 'Nouveau titre' },
-  hero_3:        { title: 'Votre titre', title_italic: 'ici', description: '', items: ['Première prestation', 'Deuxième prestation', 'Troisième prestation'], cta_primary_text: 'Réserver', cta_primary_href: '/contact', image_url: '' },
-  hero_4:        { title: 'Votre titre', title_italic: 'ici', description: '', card_title: 'Sur rendez-vous', card_text: '', cta_text: 'Prendre rendez-vous', cta_href: '/contact', image_url: '' },
+  hero_3:        { title: 'Votre titre', title_italic: 'ici', description: '', items: ['Première prestation', 'Deuxième prestation', 'Troisième prestation'], cta_primary_text: 'Réserver', cta_primary_href: '/reservation', image_url: '' },
+  hero_4:        { title: 'Votre titre', title_italic: 'ici', description: '', card_title: 'Sur rendez-vous', card_text: '', cta_text: 'Prendre rendez-vous', cta_href: '/reservation', image_url: '' },
   hero_5:        { eyebrow: 'Nos soins', title: 'Titre de la page', description: 'Une phrase d\'introduction courte.', align: 'center' },
   intro_1:       { quote: '« Notre savoir-faire au service de votre bien-être. »', text: 'Découvrez notre histoire et notre engagement au quotidien.', cta_text: 'En savoir plus', cta_href: '/contact' },
   features_1:    { title: 'Points clés', items: ['Point 1', 'Point 2'] },
