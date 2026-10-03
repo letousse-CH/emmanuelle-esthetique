@@ -1743,7 +1743,7 @@ function RemiseControl({ line, onPatch, large = false }: {
       </button>
       {open && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          {[5, 10, 15, 20].map(v => (
+          {[5, 10, 15, 20, 30, 50].map(v => (
             <button
               key={v} type="button" onClick={() => apply(v)} aria-pressed={pct === v}
               className={`rounded-lg border font-semibold tabular-nums cursor-pointer ${btn} ${
