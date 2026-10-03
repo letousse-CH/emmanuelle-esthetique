@@ -8,6 +8,7 @@
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSettings } from '../../../../hooks/useSettings';
 import {
   AlertTriangle,
   BarChart3,
@@ -610,6 +611,24 @@ function SiteStatsCard({ block, onOpen, onRetry }: { block: Block<import('./home
 
 // ── Vue ──────────────────────────────────────────────────────────────────────
 
+/** Logo du site (réglage `global_logo`), centré en tête de l'accueil ; le nom de l'entreprise sert de repli. */
+function HomeLogo() {
+  const settings = useSettings(['global_logo', 'business_name']);
+  const [broken, setBroken] = useState(false);
+  const logo = settings.global_logo;
+  const name = settings.business_name || 'Emmanuelle Esthétique';
+  return (
+    <div className="flex justify-center pt-1">
+      {logo && !broken ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logo} alt={name} onError={() => setBroken(true)} className="h-14 w-auto max-w-[70%] object-contain" />
+      ) : (
+        <p className="text-[20px] font-semibold tracking-tight text-stone-900">{name}</p>
+      )}
+    </div>
+  );
+}
+
 export default function MobileHomeView({ data, caisseEnabled, onRetry, onSiteStatsOpen, now: nowProp }: MobileHomeViewProps) {
   const now = useNow(nowProp);
   const pendingN = data.pending.status === 'ready' ? data.pending.data.length : 0;
@@ -618,6 +637,7 @@ export default function MobileHomeView({ data, caisseEnabled, onRetry, onSiteSta
   return (
     <div className="mx-auto w-full max-w-xl space-y-8">
       <h1 className="sr-only">Accueil</h1>
+      <HomeLogo />
       <Greeting now={now} />
 
       <PageSection title="Actions rapides" hideTitle>
