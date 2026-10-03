@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, UserPlus, Trash2, Pencil, X, Check, Loader2, Archive, Download,
-  Mail, MessageCircle, Cake,
+  Mail, MessageCircle, Cake, Phone,
 } from 'lucide-react';
+import { Chip, ChipBar, EmptyState, Fab, Skeleton } from '../../../../components/admin/mobile/ui';
 import {
   createClient, deleteOrArchiveClient, listClientStats, listClients, matchClient, updateClient,
 } from '../../../../services/caisse';
 import type { ClientInput } from '../../../../services/caisse';
-import { clientFullName, formatCHF } from '../../../../types/caisse';
+import { clientBirthMonth, clientFullName, formatCHF, moisDepuis } from '../../../../types/caisse';
 import type { Client, ClientStats } from '../../../../types/caisse';
 import { toWhatsAppNumber } from '../../../../types/promotions';
 import ClientDetail from './ClientDetail';
@@ -37,8 +39,39 @@ export default function ClientsClient() {
   const [stats, setStats]         = useState<Map<string, ClientStats>>(new Map());
   const [busyId, setBusyId]       = useState<string | null>(null);
   const [flash, setFlash]         = useState<string | null>(null);
+  const [filter, setFilter]       = useState<ClientFilter>('toutes');
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  // `?client=<id>` ouvre la fiche, `?nouvelle=1` la création : consommés une
+  // seule fois, pour qu'un rechargement ne rouvre rien.
+  const openClientId = useRef<string | null>(searchParams.get('client'));
+  const triedArchived = useRef(false);
+  useEffect(() => {
+    const wantsNew = searchParams.get('nouvelle') === '1';
+    if (wantsNew) setEditing('new');
+    if (wantsNew || searchParams.get('client')) router.replace('/admin/caisse/clients', { scroll: false });
+  }, [searchParams, router]);
 
   useEffect(() => { load(); }, [showArchived]);
+
+  // La fiche demandée par l'URL : on la cherche dans la liste chargée, puis,
+  // faute de la trouver, parmi les archivées avant de renoncer.
+  useEffect(() => {
+    const id = openClientId.current;
+    if (!id || loading) return;
+    const found = clients.find(c => c.id === id);
+    if (found) {
+      openClientId.current = null;
+      setDetail(found);
+    } else if (!showArchived && !triedArchived.current) {
+      triedArchived.current = true;
+      setShowArchived(true);
+    } else {
+      openClientId.current = null;
+      setError('La fiche demandée est introuvable.');
+    }
+  }, [clients, loading, showArchived]);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -54,13 +87,22 @@ export default function ClientsClient() {
     }
   };
 
-  const filtered = useMemo(
-    () => clients.filter(c => matchClient(c, search)),
-    [clients, search],
-  );
+  const filtered = useMemo(() => {
+    const mois = new Date().getMonth() + 1;
+    return clients.filter(c => {
+      if (!matchClient(c, search)) return false;
+      switch (filter) {
+        case 'revenir': { const m = moisDepuis(stats.get(c.id)?.derniere_visite ?? null); return m !== null && m >= 6; }
+        case 'email': return c.consent_email;
+        case 'whatsapp': return c.consent_whatsapp;
+        case 'anniv': return clientBirthMonth(c) === mois;
+        default: return true;
+      }
+    });
+  }, [clients, search, filter, stats]);
 
-  const handleDelete = async (c: Client) => {
-    if (!confirm(`Supprimer la fiche de ${clientFullName(c)} ?\n\nSi elle apparaît sur une facture, elle sera archivée plutôt que supprimée (conservation comptable de 10 ans).`)) return;
+  const handleDelete = async (c: Client, skipConfirm = false) => {
+    if (!skipConfirm && !confirm(`Supprimer la fiche de ${clientFullName(c)} ?\n\nSi elle apparaît sur une facture, elle sera archivée plutôt que supprimée (conservation comptable de 10 ans).`)) return;
     setBusyId(c.id);
     try {
       const outcome = await deleteOrArchiveClient(c.id);
@@ -133,7 +175,7 @@ export default function ClientsClient() {
           ? 'Fichier des clientes, historique des passages et accords publicitaires.'
           : `${filtered.length} fiche${filtered.length !== 1 ? 's' : ''}${search ? ` sur ${clients.length}` : ''}${showArchived ? ', archivées comprises' : ''}.`}
         actions={
-          <>
+          <div className="hidden lg:flex items-center gap-2">
             <Button
               icon={Download} onClick={exportCSV} disabled={filtered.length === 0}
               title="Télécharger la liste affichée (fichier CSV, s'ouvre dans Excel)"
@@ -143,7 +185,7 @@ export default function ClientsClient() {
             <Button variant="primary" icon={UserPlus} onClick={() => setEditing('new')}>
               Ajouter une cliente
             </Button>
-          </>
+          </div>
         }
       />
 
@@ -157,7 +199,27 @@ export default function ClientsClient() {
         </Callout>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* Téléphone : recherche large + filtres en pastilles */}
+      <div className="lg:hidden space-y-3">
+        <div className="relative">
+          <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500" aria-hidden="true" />
+          <label htmlFor="clients-search-m" className="sr-only">Rechercher une cliente</label>
+          <input
+            id="clients-search-m"
+            type="search" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Nom, téléphone, e-mail…" autoComplete="off"
+            className="w-full min-h-12 rounded-xl border border-stone-300 bg-white pl-11 pr-4 text-[16px] text-stone-900 placeholder:text-stone-500 outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
+          />
+        </div>
+        <ChipBar label="Filtrer les clientes" activeKey={`${filter}-${showArchived}`}>
+          {CLIENT_FILTERS.map(f => (
+            <Chip key={f.id} selected={filter === f.id} onClick={() => setFilter(f.id)} icon={f.icon}>{f.label}</Chip>
+          ))}
+          <Chip selected={showArchived} onClick={() => setShowArchived(v => !v)} icon={Archive}>Archivées</Chip>
+        </ChipBar>
+      </div>
+
+      <div className="hidden lg:flex flex-row gap-3">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-600" />
           <label htmlFor="clients-search" className="sr-only">Rechercher une cliente</label>
@@ -179,7 +241,38 @@ export default function ClientsClient() {
         </button>
       </div>
 
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      {/* Téléphone : une carte par cliente */}
+      <div className="lg:hidden">
+        {loading ? (
+          <div className="space-y-3" aria-busy="true">
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-[92px] rounded-2xl" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={Search}
+            title={search ? `Aucune fiche pour « ${search} »` : filter !== 'toutes' ? 'Aucune cliente dans ce filtre' : 'Aucune cliente enregistrée'}
+            description={search || filter !== 'toutes' ? 'Essayez une autre recherche ou un autre filtre.' : 'Ajoutez votre première cliente, ou créez-la en passant en caisse.'}
+            action={search || filter !== 'toutes'
+              ? <Button size="md" variant="secondary" className="min-h-11" onClick={() => { setSearch(''); setFilter('toutes'); }}>Tout afficher</Button>
+              : <Button size="md" variant="primary" icon={UserPlus} className="min-h-11" onClick={() => setEditing('new')}>Ajouter une cliente</Button>}
+          />
+        ) : (
+          <ul className="space-y-3" aria-label="Clientes">
+            {filtered.map(c => (
+              <li key={c.id}>
+                <ClientCard
+                  client={c} stat={stats.get(c.id)} busy={busyId === c.id}
+                  onOpen={() => setDetail(c)} onUnarchive={() => handleUnarchive(c)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        {/* Place pour le bouton flottant */}
+        <div className="h-20" aria-hidden="true" />
+      </div>
+
+      <div className="hidden lg:block bg-white border border-stone-200 rounded-xl overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
             <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
@@ -197,7 +290,7 @@ export default function ClientsClient() {
           </div>
         ) : (
           <>
-            <div className="hidden sm:block overflow-x-auto">
+            <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-stone-200 bg-stone-50/50">
@@ -253,44 +346,18 @@ export default function ClientsClient() {
               </table>
             </div>
 
-            <div className="sm:hidden divide-y divide-stone-200">
-              {filtered.map(c => (
-                <div key={c.id} className={`p-4 space-y-2 ${c.archived ? 'opacity-60' : ''}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <button
-                      onClick={() => setDetail(c)}
-                      className="font-medium text-stone-900 text-sm text-left flex items-center gap-1.5 cursor-pointer"
-                    >
-                      {clientFullName(c)}
-                    </button>
-                    <RowActions
-                      client={c} busy={busyId === c.id}
-                      onEdit={() => setEditing(c)}
-                      onDelete={() => handleDelete(c)}
-                      onUnarchive={() => handleUnarchive(c)}
-                    />
-                  </div>
-                  <p className="text-[12.5px] text-stone-600">
-                    {[c.telephone, c.email].filter(Boolean).join(' · ') || 'Aucun contact'}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <ConsentBadges client={c} />
-                    <span className="text-[13px] text-stone-600 tabular-nums">
-                      {stats.get(c.id)?.derniere_visite ? dateCH(stats.get(c.id)!.derniere_visite) : 'Jamais venue'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
           </>
         )}
       </div>
+
+      <Fab icon={UserPlus} label="Nouvelle cliente" extended onClick={() => setEditing('new')} />
 
       {editing && (
         <ClientDialog
           client={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
+          onDelete={editing === 'new' ? undefined : () => { const c = editing; setEditing(null); void handleDelete(c, true); }}
         />
       )}
 
@@ -305,6 +372,76 @@ export default function ClientsClient() {
             setClients(prev => prev.map(x => (x.id === c.id ? c : x)));
           }}
         />
+      )}
+    </div>
+  );
+}
+
+type ClientFilter = 'toutes' | 'revenir' | 'email' | 'whatsapp' | 'anniv';
+const CLIENT_FILTERS: { id: ClientFilter; label: string; icon?: React.ElementType }[] = [
+  { id: 'toutes', label: 'Toutes' },
+  { id: 'revenir', label: 'À relancer' },
+  { id: 'email', label: 'Accord e-mail', icon: Mail },
+  { id: 'whatsapp', label: 'Accord WhatsApp', icon: MessageCircle },
+  { id: 'anniv', label: 'Anniversaire du mois', icon: Cake },
+];
+
+const initiales = (c: Client) =>
+  `${(c.prenom ?? '').trim().charAt(0)}${(c.nom ?? '').trim().charAt(0)}`.toUpperCase() || '?';
+
+/**
+ * Carte d'une cliente (téléphone) : un tap sur le corps ouvre la fiche, les deux
+ * boutons ronds appellent ou ouvrent WhatsApp sans quitter la liste. Le lien
+ * WhatsApp ouvre seulement la conversation : rien n'est envoyé.
+ */
+export function ClientCard({ client, stat, busy, onOpen, onUnarchive }: {
+  client: Client;
+  stat: ClientStats | undefined;
+  busy?: boolean;
+  onOpen: () => void;
+  onUnarchive?: () => void;
+}) {
+  const wa = toWhatsAppNumber(client.telephone);
+  const tel = client.telephone ? client.telephone.replace(/[^\d+]/g, '') : '';
+  const visites = Number(stat?.nb_visites ?? 0);
+  const roundBtn = 'grid size-11 shrink-0 place-items-center rounded-full bg-stone-100 text-stone-800 active:bg-stone-200';
+  return (
+    <div className={`flex items-center rounded-2xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)] ${client.archived ? 'opacity-70' : ''}`}>
+      <button
+        type="button" onClick={onOpen} aria-label={`Ouvrir la fiche de ${clientFullName(client)}`}
+        className="flex min-h-[84px] min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left cursor-pointer active:bg-stone-50 rounded-l-2xl"
+      >
+        <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-accent-soft text-[15px] font-semibold text-accent">
+          {initiales(client)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <span className="truncate text-[16px] font-semibold leading-snug text-stone-950">{clientFullName(client) || 'Sans nom'}</span>
+            {client.archived && <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[12px] font-semibold text-stone-700">Archivée</span>}
+          </span>
+          <span className="mt-0.5 block truncate text-[14px] text-stone-600">
+            {stat?.derniere_visite ? `Dernière visite : ${dateCH(stat.derniere_visite)}` : 'Jamais venue'}
+          </span>
+          <span className="block truncate text-[14px] tabular-nums text-stone-700">
+            {visites > 0 ? `${visites} visite${visites > 1 ? 's' : ''} · ${formatCHF(stat?.total_encaisse ?? 0)}` : client.telephone || 'Aucune visite'}
+          </span>
+        </span>
+      </button>
+      {busy ? (
+        <span className="grid size-11 place-items-center pr-2"><Loader2 size={18} className="animate-spin text-stone-600" aria-label="En cours" /></span>
+      ) : client.archived ? (
+        <button type="button" onClick={onUnarchive} className="mr-3 min-h-11 shrink-0 px-2 text-[14px] font-semibold text-accent cursor-pointer">Réactiver</button>
+      ) : (
+        <div className="flex shrink-0 items-center gap-1.5 pr-3">
+          {tel ? (
+            <a href={`tel:${tel}`} aria-label={`Appeler ${clientFullName(client)}`} className={roundBtn}><Phone size={19} aria-hidden="true" /></a>
+          ) : null}
+          {wa ? (
+            <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" aria-label={`Écrire à ${clientFullName(client)} sur WhatsApp`} className={roundBtn}>
+              <MessageCircle size={19} aria-hidden="true" />
+            </a>
+          ) : null}
+        </div>
       )}
     </div>
   );
@@ -374,11 +511,14 @@ function RowActions({ client, busy, onEdit, onDelete, onUnarchive }: {
   );
 }
 
-function ClientDialog({ client, onClose, onSaved }: {
+function ClientDialog({ client, onClose, onSaved, onDelete }: {
   client: Client | null;
   onClose: () => void;
   onSaved: () => void;
+  /** Téléphone seulement : supprimer (ou archiver si la fiche figure sur une facture). */
+  onDelete?: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm]     = useState<ClientInput>(client
     ? {
         nom: client.nom, prenom: client.prenom,
@@ -504,6 +644,26 @@ function ClientDialog({ client, onClose, onSaved }: {
           </fieldset>
 
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+
+          {onDelete && !client?.archived && (
+            <div className="lg:hidden">
+              {confirmDelete ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
+                  <p className="text-[14px] text-red-900 leading-snug">
+                    Supprimer cette fiche ? Si elle figure sur une facture, elle sera archivée (conservation comptable de 10 ans).
+                  </p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setConfirmDelete(false)} className="min-h-11 flex-1 rounded-lg bg-white border border-stone-300 text-[15px] font-semibold text-stone-800 cursor-pointer">Garder</button>
+                    <button type="button" onClick={onDelete} className="min-h-11 flex-1 rounded-lg bg-red-600 text-[15px] font-semibold text-white cursor-pointer">Supprimer</button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setConfirmDelete(true)} className="flex min-h-11 w-full items-center justify-center gap-2 text-[15px] font-semibold text-red-700 cursor-pointer">
+                  <Trash2 size={16} aria-hidden="true" /> Supprimer la fiche
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-2 pt-1">
             <button

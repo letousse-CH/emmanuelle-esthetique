@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, UserPlus, X, Plus, Minus, Trash2, Check, Download,
   Receipt, AlertCircle, Loader2, Pencil, Gift, Ticket, PenLine, Layers, Package,
-  Cake, Mail, MessageCircle, Target, CheckCircle2, Sparkles,
+  Cake, Mail, MessageCircle, Target, CheckCircle2, Sparkles, CalendarCheck, ChevronRight, User,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
 import { Button, Callout, LinkButton, PageHeader } from '../../../components/admin/ui';
@@ -15,7 +15,13 @@ import {
   listProducts, listServiceCategories, listServices, matchClient,
 } from '../../../services/caisse';
 import { downloadBonCadeau, downloadFacture } from '../../../utils/factureDownload';
-import { takeCaisseCorrection } from '../../../utils/caissePrefill';
+import {
+  clearCaisseDraft, loadCaisseDraft, saveCaisseDraft, takeCaisseCorrection,
+} from '../../../utils/caissePrefill';
+import { supabase } from '../../../services/supabase';
+import { BottomSheet, Chip, ChipBar, SegmentedControl } from '../../../components/admin/mobile/ui';
+import { PERIODE_LABEL } from '../../../types/booking';
+import type { Booking, BookingDetail } from '../../../types/booking';
 import {
   CLIENT_DE_PASSAGE, MODES_PAIEMENT, TAUX_TVA_CH, cartTotals, clientFullName, formatCHF,
   giftCardStatusLabel, isGiftCardUsable, isVenteProduct, stockLevel,
@@ -28,6 +34,58 @@ import type {
 
 const newKey = () =>
   (globalThis.crypto?.randomUUID?.() ?? `l${Date.now()}${Math.random()}`);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Lignes de panier d'un rendez-vous : le soin, puis chaque option. Une ligne
+ * est rattachée au catalogue quand son identifiant est un UUID de `services`
+ * (un forfait reste UNE ligne) ; sinon c'est une ligne libre au nom et au prix
+ * du rendez-vous. Aucun montant n'est calculé ici : ce sont les prix convenus
+ * avec la cliente, modifiables dans le panier, et la facture est recalculée par
+ * Postgres.
+ */
+function linesFromBooking(b: Booking, services: Service[], tauxDefaut: number): CartLine[] {
+  const out: CartLine[] = [];
+  const push = (id: string | null | undefined, nom: string, prix: number) => {
+    const svc = id && UUID_RE.test(id) ? services.find(s => s.id === id) : undefined;
+    out.push({
+      key: newKey(),
+      service_id: svc?.id ?? null,
+      description: nom || svc?.nom || 'Prestation',
+      prix_unitaire_ttc: Number.isFinite(prix) && prix >= 0 ? prix : Number(svc?.prix_chf ?? 0),
+      quantite: 1,
+      taux_tva: Number(svc?.taux_tva_defaut ?? tauxDefaut),
+    });
+  };
+  push(b.service_id, b.service_nom, Number(b.service_prix_chf));
+  for (const o of b.options ?? []) push(o.id, o.nom, Number(o.prix_chf));
+  return out;
+}
+
+/** « Camille — 14h30 » (horaire arrêté) ou « Camille — après-midi » (créneau souple). */
+function rdvLabel(b: Booking): string {
+  const quand = b.horaire_fixe && b.heure_rdv
+    ? b.heure_rdv.slice(0, 5).replace(':', 'h')
+    : (PERIODE_LABEL[(b.periode ?? b.periode_demandee) as keyof typeof PERIODE_LABEL] ?? '').toLowerCase();
+  const nom = (b.prenom || b.nom || '').trim() || 'la cliente';
+  return quand ? `${nom} — ${quand}` : nom;
+}
+
+/** Marque le rendez-vous « terminé », sans prévenir la cliente. `false` si la requête échoue. */
+async function markBookingDone(id: string): Promise<boolean> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`/api/admin/bookings/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify({ statut: 'termine', notify_client: false }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export default function CaisseClient() {
   const settings = useSettings([
@@ -63,11 +121,24 @@ export default function CaisseClient() {
   // il ne reste qu'à ré-encaisser les données rectifiées.
   const [correction, setCorrection] = useState<{ id: string; numero: string } | null>(null);
 
+  // Rendez-vous en cours d'encaissement (panier pré-rempli depuis l'agenda).
+  // Une fois la facture émise, il est marqué « terminé » — jamais avant.
+  const [rdv, setRdv] = useState<{ id: string; label: string; sansFiche?: boolean } | null>(null);
+  const [rdvToLoad, setRdvToLoad] = useState<string | null>(null);
+  const [rdvLoading, setRdvLoading] = useState(false);
+  const [rdvError, setRdvError] = useState<string | null>(null);
+  const [rdvOutcome, setRdvOutcome] = useState<'pending' | 'ok' | 'failed' | null>(null);
+  const [restoreNote, setRestoreNote] = useState<string | null>(null);
+  const [pendingGiftCode, setPendingGiftCode] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [showQuickClient, setShowQuickClient] = useState<{ initial: string } | null>(null);
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   useEffect(() => { load(); }, []);
 
   // Lien « Vendre un bon » de l'écran Bons cadeaux : ouvre directement la vente.
-  const searchParams = useSearchParams();
-  const router = useRouter();
   useEffect(() => {
     if (searchParams.get('vendre') !== 'bon') return;
     setShowGiftSale(true);
@@ -75,32 +146,82 @@ export default function CaisseClient() {
     router.replace('/admin/caisse', { scroll: false });
   }, [searchParams, router]);
 
-  useEffect(() => {
-    const pending = takeCaisseCorrection();
-    if (!pending) return;
-    setCorrection({ id: pending.corrigeTransactionId, numero: pending.numero });
-    setLines(pending.lines.map(l => ({ ...l, key: newKey() })));
-    setMode(pending.modePaiement === 'bon_cadeau' ? 'twint' : pending.modePaiement);
-    setNote(pending.note ?? '');
-    if (pending.clientId) {
-      // La fiche est chargée par `load()` : on la retrouve dès qu'elle arrive.
-      setPendingClientId(pending.clientId);
-      setPendingClientLabel(pending.clientLabel);
-    }
-  }, []);
-
   const [pendingClientId, setPendingClientId] = useState<string | null>(null);
   const [pendingClientLabel, setPendingClientLabel] = useState<string | null>(null);
   // Cliente de la facture corrigée introuvable (fiche archivée entre-temps) :
   // sans avertissement, la facture rectifiée partirait en « client de passage ».
   const [missingClientLabel, setMissingClientLabel] = useState<string | null>(null);
+
+  // Démarrage, une seule fois (le garde-fou évite le double passage du mode
+  // strict). Par ordre de priorité : correction du journal, rendez-vous de
+  // l'agenda (`?rdv=`), puis brouillon du panier laissé en changeant d'onglet.
+  // Les paramètres d'URL sont consommés : recharger ne doit pas remplir deux fois.
+  const bootRef = useRef(false);
+  useEffect(() => {
+    if (bootRef.current) return;
+    bootRef.current = true;
+    const pending = takeCaisseCorrection();
+    const rdvId = searchParams.get('rdv');
+    const clientParam = searchParams.get('client');
+
+    if (pending) {
+      setCorrection({ id: pending.corrigeTransactionId, numero: pending.numero });
+      setLines(pending.lines.map(l => ({ ...l, key: newKey() })));
+      setMode(pending.modePaiement === 'bon_cadeau' ? 'twint' : pending.modePaiement);
+      setNote(pending.note ?? '');
+      if (pending.clientId) {
+        // La fiche est chargée par `load()` : on la retrouve dès qu'elle arrive.
+        setPendingClientId(pending.clientId);
+        setPendingClientLabel(pending.clientLabel);
+      }
+    } else if (rdvId) {
+      // Le panier du rendez-vous remplace un éventuel brouillon : deux
+      // clientes ne se mélangent pas dans une même facture.
+      clearCaisseDraft();
+      setRdvToLoad(rdvId);
+    } else {
+      const d = loadCaisseDraft();
+      if (d) {
+        setLines(d.lines);
+        setMode(d.mode === 'bon_cadeau' ? 'twint' : d.mode);
+        setNote(d.note);
+        if (d.correction) setCorrection(d.correction);
+        if (d.rdv) setRdv(d.rdv);
+        if (d.clientId) {
+          setPendingClientId(d.clientId);
+          setPendingClientLabel(d.clientLabel);
+        }
+        if (d.giftCode) {
+          // Le bon a pu être utilisé ailleurs entre-temps : on le revérifie
+          // en base plutôt que de croire le brouillon.
+          setPendingGiftCode(d.giftCode);
+          findGiftCardByCode(d.giftCode)
+            .then(card => {
+              if (card && isGiftCardUsable(card)) setGiftCard(card);
+              else setRestoreNote(`Le bon ${d.giftCode} n'est plus utilisable : il a été retiré de l'encaissement.`);
+            })
+            .catch(() => setRestoreNote(`Le bon ${d.giftCode} n'a pas pu être revérifié : présentez-le à nouveau.`))
+            .finally(() => setPendingGiftCode(null));
+        }
+      }
+    }
+
+    // `?client=<id>` : « Encaisser » depuis la fiche cliente.
+    if (clientParam && !pending && !rdvId) {
+      setPendingClientId(clientParam);
+      setPendingClientLabel(null);
+    }
+    if (rdvId || clientParam) router.replace('/admin/caisse', { scroll: false });
+    setReady(true);
+  }, [searchParams, router]);
+
   useEffect(() => {
     // Pas de verdict tant que la liste n'est pas là (chargement ou échec :
     // « Réessayer » relancera la recherche).
     if (!pendingClientId || loading || loadError) return;
     const found = clients.find(c => c.id === pendingClientId);
     if (found) setClient(found);
-    else setMissingClientLabel(pendingClientLabel);
+    else if (pendingClientLabel) setMissingClientLabel(pendingClientLabel);
     setPendingClientId(null);
   }, [pendingClientId, clients, loading, loadError, pendingClientLabel]);
 
@@ -125,6 +246,67 @@ export default function CaisseClient() {
       setLoading(false);
     }
   };
+
+  // ── Pré-remplissage depuis un rendez-vous ───────────────────────────────────
+  // Lit le rendez-vous, retrouve ses lignes dans le catalogue et ne fait QUE
+  // remplir le panier : les montants et la facture passent toujours par
+  // `caisse_create_transaction`. Attend le catalogue pour pouvoir rattacher
+  // chaque ligne à sa prestation.
+  useEffect(() => {
+    if (!rdvToLoad || loading || loadError) return;
+    const id = rdvToLoad;
+    setRdvToLoad(null);
+    let cancelled = false;
+    (async () => {
+      setRdvLoading(true); setRdvError(null);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`/api/admin/bookings/${encodeURIComponent(id)}`, {
+          headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(res.status === 404 ? 'Rendez-vous introuvable.' : `Erreur ${res.status}`);
+        const detail = (await res.json()) as BookingDetail;
+        if (cancelled) return;
+        const b = detail.booking;
+        setLines(linesFromBooking(b, services, tauxDefaut));
+        const fullName = `${b.prenom ?? ''} ${b.nom ?? ''}`.trim();
+        setRdv({ id: b.id, label: rdvLabel(b), sansFiche: !b.client_id });
+        if (b.client_id) {
+          setPendingClientId(b.client_id);
+          setPendingClientLabel(fullName);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setRdvError(
+            `Le rendez-vous n'a pas pu être chargé${err instanceof Error ? ` (${err.message})` : ''}. `
+            + 'Choisissez les prestations à la main : rien n\'a été encaissé.',
+          );
+        }
+      } finally {
+        if (!cancelled) setRdvLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rdvToLoad, loading, loadError]);
+
+  // Brouillon : le panier survit au changement d'onglet (Agenda, Clientes…).
+  useEffect(() => {
+    if (!ready || receipt) return;
+    const giftCode = giftCard?.code ?? pendingGiftCode;
+    if (lines.length === 0 && !client && !rdv && !correction && !giftCode && !note.trim()) {
+      clearCaisseDraft();
+      return;
+    }
+    saveCaisseDraft({
+      lines,
+      clientId: client?.id ?? pendingClientId,
+      clientLabel: client ? clientFullName(client) : (pendingClientLabel ?? ''),
+      mode, note, giftCode, correction,
+      rdv: rdv ? { id: rdv.id, label: rdv.label } : null,
+    });
+  }, [ready, receipt, lines, client, pendingClientId, pendingClientLabel, mode, note, giftCard, pendingGiftCode, correction, rdv]);
 
   const totals = useMemo(() => cartTotals(lines), [lines]);
 
@@ -218,6 +400,8 @@ export default function CaisseClient() {
   const resetCart = () => {
     setClient(null); setLines([]); setNote(''); setSubmitError(null); setReceipt(null);
     setGiftCard(null); setCorrection(null); setMissingClientLabel(null);
+    setRdv(null); setRdvOutcome(null); setRdvError(null); setRestoreNote(null);
+    clearCaisseDraft();
   };
 
   // Verrou synchrone : l'état `submitting` n'est visible qu'au rendu suivant,
@@ -239,6 +423,14 @@ export default function CaisseClient() {
         corrigeTransactionId: correction?.id ?? null,
       });
       setReceipt(tx);
+      clearCaisseDraft();
+      // Le rendez-vous n'est marqué « terminé » qu'APRÈS une facture émise.
+      // Si ce PATCH échoue, la facture reste valable : on le signale sur la
+      // quittance au lieu de l'annuler.
+      if (rdv) {
+        setRdvOutcome('pending');
+        void markBookingDone(rdv.id).then(ok => setRdvOutcome(ok ? 'ok' : 'failed'));
+      }
       // Une vente encaissée est l'événement `sale.created` du module
       // Automatisations. L'encaissement passe par une fonction Postgres
       // appelée depuis le navigateur : aucun code serveur ne le voit passer,
@@ -272,26 +464,11 @@ export default function CaisseClient() {
   };
 
   if (receipt) {
-    return <ReceiptPanel transaction={receipt} onNew={resetCart} />;
+    return <ReceiptPanel transaction={receipt} onNew={resetCart} rdvId={rdv?.id ?? null} rdvOutcome={rdvOutcome} />;
   }
 
-  return (
-    <div className={`space-y-6 ${lines.length > 0 ? 'pb-24 lg:pb-0' : ''}`}>
-      <PageHeader
-        title="Encaissement"
-        description={new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        actions={
-          <div className="flex items-center gap-2">
-            <LinkButton href="/admin/caisse/cockpit" icon={Target} variant="secondary">
-              Cockpit Hebdo (2 clientes/j)
-            </LinkButton>
-            <LinkButton href="/admin/caisse/journal" icon={Receipt}>
-              Journal des recettes
-            </LinkButton>
-          </div>
-        }
-      />
-
+  const banners = (
+    <>
       {correction && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">
           <PenLine size={16} className="shrink-0 mt-0.5" />
@@ -329,6 +506,67 @@ export default function CaisseClient() {
           <p className="mt-1 text-[13px] text-red-800/80 break-words">Détail technique : {loadError}</p>
         </Callout>
       )}
+
+      {rdv && (
+        <div className="flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-stone-900">
+          <CalendarCheck size={16} className="shrink-0 mt-0.5 text-accent" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold">Encaissement du rdv de {rdv.label}</p>
+            <p className="text-[13px] mt-0.5 leading-relaxed text-stone-700">
+              Le panier est pré-rempli avec les soins du rendez-vous : vérifiez-le avant d&apos;encaisser.
+              Le rendez-vous sera marqué terminé une fois la facture émise.
+            </p>
+            {rdv.sansFiche && !client && (
+              <p className="text-[13px] mt-1.5 font-semibold">
+                Ce rendez-vous n&apos;est pas rattaché à une fiche : choisissez la cliente avant d&apos;encaisser.
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => setRdv(null)}
+            title="Le rendez-vous ne sera pas marqué terminé"
+            className="shrink-0 min-h-11 px-1 text-[13px] font-semibold underline underline-offset-2 hover:no-underline cursor-pointer"
+          >
+            Détacher
+          </button>
+        </div>
+      )}
+
+      {rdvLoading && (
+        <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700">
+          <Loader2 size={15} className="animate-spin" /> Chargement du rendez-vous…
+        </div>
+      )}
+      {rdvError && <Callout tone="warning">{rdvError}</Callout>}
+
+      {missingClientLabel && !client && !correction && (
+        <Callout tone="warning">
+          La fiche de {missingClientLabel} n&apos;a pas été retrouvée (peut-être archivée) : choisissez la cliente avant d&apos;encaisser.
+        </Callout>
+      )}
+      {restoreNote && <Callout tone="warning">{restoreNote}</Callout>}
+    </>
+  );
+
+  return (
+    <>
+    <div className="hidden lg:block space-y-6">
+      <PageHeader
+        title="Encaissement"
+        description={new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        actions={
+          <div className="flex items-center gap-2">
+            <LinkButton href="/admin/caisse/cockpit" icon={Target} variant="secondary">
+              Cockpit Hebdo (2 clientes/j)
+            </LinkButton>
+            <LinkButton href="/admin/caisse/journal" icon={Receipt}>
+              Journal des recettes
+            </LinkButton>
+          </div>
+        }
+      />
+
+      {banners}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
         {/* ── Colonne gauche : cliente + catalogue ─────────────────────── */}
@@ -557,46 +795,54 @@ export default function CaisseClient() {
         </div>
       </div>
 
-      {/* Récapitulatif flottant — téléphone uniquement. Il ne valide pas
-          l'encaissement : il amène au choix du mode de paiement. Valider d'ici
-          enregistrerait le mode par défaut, donc une ligne fausse dans le livre
-          de caisse pour un simple pouce mal placé. */}
-      {lines.length > 0 && (
-        <div
-          className="lg:hidden fixed inset-x-0 z-30 px-4 pb-3"
-          style={{ bottom: 'calc(var(--caisse-tabbar-h, 0px) + env(safe-area-inset-bottom))' }}
-        >
-          <button
-            onClick={() => paymentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-            className="w-full flex items-center justify-between gap-3 bg-accent text-accent-fg pl-5 pr-4 py-3.5 rounded-xl shadow-lg active:bg-accent-hover transition-colors cursor-pointer"
-          >
-            <span className="text-[13px] text-accent-fg/80">
-              {lines.length} ligne{lines.length !== 1 ? 's' : ''}
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="text-base font-semibold tabular-nums">{formatCHF(resteAPayer)}</span>
-              <span className="text-[13px] text-accent-fg/80">Paiement →</span>
-            </span>
-          </button>
-        </div>
-      )}
-
-      {showGiftUse && (
-        <GiftCardUseDialog
-          onClose={() => setShowGiftUse(false)}
-          onFound={(card) => { setGiftCard(card); setShowGiftUse(false); }}
-        />
-      )}
-
-      {showGiftSale && !loading && (
-        <GiftCardSaleDialog
-          services={services}
-          validiteMois={bonValiditeMois}
-          onClose={() => setShowGiftSale(false)}
-          onAdd={addGiftCardLine}
-        />
-      )}
     </div>
+
+    {/* ── Téléphone : parcours d'encaissement à une main ─────────────────── */}
+    <div className="lg:hidden">
+      <MobileCheckout
+        banners={banners}
+        services={services} categories={categories} products={products} loading={loading}
+        lines={lines} tvaActive={tvaActive}
+        totals={totals} montantBon={montantBon} resteAPayer={resteAPayer}
+        giftCard={giftCard}
+        mode={mode} onMode={setMode}
+        note={note} onNote={setNote}
+        client={client} clients={clients}
+        onSelectClient={setClient}
+        onNewClient={(initial) => setShowQuickClient({ initial })}
+        onPickService={addService} onPickProduct={addProduct} onCustom={addCustomLine}
+        onSellGift={() => setShowGiftSale(true)}
+        onUseGift={() => setShowGiftUse(true)}
+        onRemoveGift={() => setGiftCard(null)}
+        onPatchLine={patchLine} onRemoveLine={removeLine} onClearCart={() => setLines([])}
+        submitting={submitting} submitError={submitError} onSubmit={handleSubmit}
+      />
+    </div>
+
+    {showGiftUse && (
+      <GiftCardUseDialog
+        onClose={() => setShowGiftUse(false)}
+        onFound={(card) => { setGiftCard(card); setShowGiftUse(false); }}
+      />
+    )}
+
+    {showGiftSale && !loading && (
+      <GiftCardSaleDialog
+        services={services}
+        validiteMois={bonValiditeMois}
+        onClose={() => setShowGiftSale(false)}
+        onAdd={addGiftCardLine}
+      />
+    )}
+
+    {showQuickClient && (
+      <QuickClientDialog
+        initial={showQuickClient.initial}
+        onClose={() => setShowQuickClient(null)}
+        onCreated={(c) => { setClients(prev => [...prev, c]); setClient(c); setShowQuickClient(null); }}
+      />
+    )}
+    </>
   );
 }
 
@@ -632,7 +878,7 @@ function GiftCardUseDialog({ onClose, onFound }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[120] bg-stone-900/40 flex items-center justify-center p-4" onClick={onClose}>
       <div
         role="dialog" aria-modal="true" aria-label="Utiliser un bon cadeau"
         onClick={e => e.stopPropagation()}
@@ -721,7 +967,7 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[120] bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto">
       <div
         role="dialog" aria-modal="true" aria-label="Vendre un bon cadeau"
         onClick={e => e.stopPropagation()}
@@ -962,13 +1208,16 @@ function ClientPicker({ clients, selected, onSelect, onCreated }: {
  * Les accords publicitaires ne se cochent que si elle l'a dit : un opt-in
  * accordé par omission n'en est pas un (LCD art. 3 al. 1 let. o).
  */
-function QuickClientDialog({ onClose, onCreated }: {
+function QuickClientDialog({ onClose, onCreated, initial = '' }: {
   onClose: () => void;
   onCreated: (c: Client) => void;
+  /** Texte tapé dans la recherche : un numéro préremplit le téléphone, un nom le nom. */
+  initial?: string;
 }) {
-  const [nom, setNom]                 = useState('');
+  const initialIsPhone = /^[\d\s+.\-/()]{4,}$/.test(initial.trim());
+  const [nom, setNom]                 = useState(initialIsPhone ? '' : initial.trim());
   const [prenom, setPrenom]           = useState('');
-  const [telephone, setTelephone]     = useState('');
+  const [telephone, setTelephone]     = useState(initialIsPhone ? initial.trim() : '');
   const [email, setEmail]             = useState('');
   const [dateNaissance, setDateNaissance] = useState('');
   const [notes, setNotes]             = useState('');
@@ -1006,7 +1255,7 @@ function QuickClientDialog({ onClose, onCreated }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[120] bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto">
       <div
         role="dialog"
         aria-modal="true"
@@ -1462,7 +1711,13 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
 
 // ── Confirmation d'encaissement ─────────────────────────────────────────────
 
-function ReceiptPanel({ transaction, onNew }: { transaction: Transaction; onNew: () => void }) {
+export function ReceiptPanel({ transaction, onNew, rdvId = null, rdvOutcome = null }: {
+  transaction: Transaction;
+  onNew: () => void;
+  /** Rendez-vous encaissé, et sort de son passage à « terminé ». */
+  rdvId?: string | null;
+  rdvOutcome?: 'pending' | 'ok' | 'failed' | null;
+}) {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emitted, setEmitted] = useState<GiftCard[]>([]);
@@ -1497,8 +1752,8 @@ function ReceiptPanel({ transaction, onNew }: { transaction: Transaction; onNew:
   };
 
   return (
-    <div className="max-w-md mx-auto py-8">
-      <div className="bg-white border border-stone-200 rounded-xl p-8 text-center space-y-5">
+    <div className="max-w-md mx-auto py-2 lg:py-8">
+      <div className="bg-white border border-stone-200 rounded-2xl lg:rounded-xl p-6 lg:p-8 text-center space-y-5">
         <div className="w-14 h-14 rounded-full bg-accent/10 text-accent flex items-center justify-center mx-auto">
           <Check size={26} />
         </div>
@@ -1539,6 +1794,20 @@ function ReceiptPanel({ transaction, onNew }: { transaction: Transaction; onNew:
           </div>
         )}
 
+        {rdvOutcome === 'ok' && (
+          <p role="status" className="text-[13px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+            Le rendez-vous est marqué comme terminé.
+          </p>
+        )}
+        {rdvOutcome === 'failed' && (
+          <p role="status" className="text-[13px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            La facture est bien enregistrée, mais le rendez-vous n&apos;a pas pu être marqué comme terminé.{' '}
+            <Link href={`/admin/reservations${rdvId ? `?id=${rdvId}` : ''}`} className="font-semibold underline underline-offset-2">
+              Le terminer depuis l&apos;agenda
+            </Link>
+          </p>
+        )}
+
         {error && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
         )}
@@ -1547,25 +1816,762 @@ function ReceiptPanel({ transaction, onNew }: { transaction: Transaction; onNew:
           <button
             onClick={download}
             disabled={downloading}
-            className="w-full flex items-center justify-center gap-2 bg-accent text-accent-fg py-3 rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 bg-accent text-accent-fg min-h-12 lg:min-h-0 py-3 rounded-xl lg:rounded-lg text-[15px] lg:text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer"
           >
             {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
             {downloading ? 'Génération…' : 'Télécharger la quittance PDF'}
           </button>
           <button
             onClick={onNew}
-            className="w-full py-3 rounded-lg bg-stone-100 text-stone-900 text-sm font-semibold hover:bg-stone-200 transition-colors cursor-pointer"
+            className="w-full min-h-12 lg:min-h-0 py-3 rounded-xl lg:rounded-lg bg-stone-100 text-stone-900 text-[15px] lg:text-sm font-semibold hover:bg-stone-200 transition-colors cursor-pointer"
           >
             Nouvel encaissement
           </button>
           <Link
             href="/admin/caisse/journal"
-            className="block w-full py-2 text-stone-600 text-[13px] hover:text-stone-900 underline-offset-2 hover:underline transition-colors"
+            className="block w-full py-3 lg:py-2 text-stone-600 text-[14px] lg:text-[13px] hover:text-stone-900 underline-offset-2 hover:underline transition-colors"
           >
             Voir le journal des recettes
           </Link>
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Téléphone : encaissement à une main ─────────────────────────────────────
+//
+// Trois gestes : (1) toucher les soins et produits, (2) ouvrir le panier d'un
+// tap sur la barre du bas, (3) régler (mode, bon, cliente) et valider au pouce.
+// Ce composant n'écrit rien et ne calcule aucun montant : il reçoit l'état et
+// les totaux de `CaisseClient`, qui reste seul à passer par `createTransaction`.
+
+export interface MobileCheckoutProps {
+  banners: React.ReactNode;
+  services: Service[];
+  categories: ServiceCategory[];
+  products: Product[];
+  loading: boolean;
+  lines: CartLine[];
+  tvaActive: boolean;
+  totals: { ttc: number; ht: number; tva: number };
+  montantBon: number;
+  resteAPayer: number;
+  giftCard: GiftCard | null;
+  mode: ModePaiement;
+  onMode: (m: ModePaiement) => void;
+  note: string;
+  onNote: (v: string) => void;
+  client: Client | null;
+  clients: Client[];
+  onSelectClient: (c: Client | null) => void;
+  /** Ouvre la création express ; `initial` est le texte déjà tapé dans la recherche. */
+  onNewClient: (initial: string) => void;
+  onPickService: (s: Service) => void;
+  onPickProduct: (p: Product) => void;
+  onCustom: (description: string, prix: number) => void;
+  onSellGift: () => void;
+  onUseGift: () => void;
+  onRemoveGift: () => void;
+  onPatchLine: (key: string, patch: Partial<CartLine>) => void;
+  onRemoveLine: (key: string) => void;
+  onClearCart: () => void;
+  submitting: boolean;
+  submitError: string | null;
+  onSubmit: () => void;
+}
+
+const M_INPUT =
+  'w-full min-h-12 rounded-xl border border-stone-300 bg-white px-4 text-[16px] text-stone-900 placeholder:text-stone-500 outline-none focus:border-accent focus:ring-2 focus:ring-accent/25';
+
+export function MobileCheckout(p: MobileCheckoutProps) {
+  const [sheet, setSheet] = useState<null | 'cart' | 'pay'>(null);
+  const [clientSheet, setClientSheet] = useState(false);
+  const [customSheet, setCustomSheet] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const itemCount = useMemo(() => p.lines.reduce((n, l) => n + Number(l.quantite || 0), 0), [p.lines]);
+  const soldeParBon = p.resteAPayer === 0 && p.montantBon > 0;
+
+  // Panier vidé pendant que la feuille est ouverte : on la ferme.
+  useEffect(() => {
+    if (p.lines.length === 0 && sheet) setSheet(null);
+    if (p.lines.length < 2) setConfirmClear(false);
+  }, [p.lines.length, sheet]);
+
+  const closeSheet = () => { setSheet(null); setConfirmClear(false); };
+
+  const cartFooter = (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => {
+          if (p.lines.length <= 1 || confirmClear) { p.onClearCart(); setConfirmClear(false); }
+          else setConfirmClear(true);
+        }}
+        className={`min-h-12 shrink-0 rounded-xl px-4 text-[15px] font-semibold cursor-pointer ${
+          confirmClear ? 'bg-red-600 text-white' : 'bg-white text-stone-700 border border-stone-300'
+        }`}
+      >
+        {confirmClear ? 'Confirmer ?' : 'Vider'}
+      </button>
+      <button
+        type="button"
+        onClick={() => { setConfirmClear(false); setSheet('pay'); }}
+        className="flex min-h-12 flex-1 items-center justify-between gap-2 rounded-xl bg-accent px-5 text-accent-fg text-[16px] font-semibold cursor-pointer"
+      >
+        <span>Paiement</span>
+        <span className="flex items-center gap-1 tabular-nums">{formatCHF(p.resteAPayer)} <ChevronRight size={18} aria-hidden="true" /></span>
+      </button>
+    </div>
+  );
+
+  const payFooter = (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => setSheet('cart')}
+        className="min-h-12 shrink-0 rounded-xl border border-stone-300 bg-white px-4 text-[15px] font-semibold text-stone-700 cursor-pointer"
+      >
+        Retour
+      </button>
+      <button
+        type="button"
+        onClick={p.onSubmit}
+        disabled={p.lines.length === 0 || p.submitting}
+        className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-accent-fg text-[16px] font-semibold disabled:opacity-50 cursor-pointer"
+      >
+        {p.submitting
+          ? <><Loader2 size={18} className="animate-spin" aria-hidden="true" /> Encaissement…</>
+          : soldeParBon
+            ? <><Check size={18} aria-hidden="true" /> Valider la prestation</>
+            : <><Check size={18} aria-hidden="true" /> Encaisser {formatCHF(p.resteAPayer)}</>}
+      </button>
+    </div>
+  );
+
+  return (
+    <div className={`space-y-4 ${p.lines.length > 0 ? 'pb-24' : ''}`}>
+      {p.banners && <div className="space-y-3 empty:hidden">{p.banners}</div>}
+
+      {/* Cliente : un tap pour la choisir ou en créer une */}
+      <button
+        type="button"
+        onClick={() => setClientSheet(true)}
+        className="flex min-h-[60px] w-full items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 text-left shadow-[0_1px_2px_rgba(28,25,23,0.04)] cursor-pointer active:bg-stone-50"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
+          <User size={20} aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] text-stone-600">Cliente</span>
+          <span className="block truncate text-[16px] font-medium text-stone-950">
+            {p.client ? clientFullName(p.client) : CLIENT_DE_PASSAGE}
+          </span>
+        </span>
+        <span className="shrink-0 text-[14px] font-semibold text-accent">{p.client ? 'Changer' : 'Choisir'}</span>
+      </button>
+
+      <MobileCatalog
+        services={p.services} categories={p.categories} products={p.products} loading={p.loading}
+        lines={p.lines}
+        onPickService={p.onPickService} onPickProduct={p.onPickProduct}
+        onCustom={() => setCustomSheet(true)} onSellGift={p.onSellGift}
+      />
+
+      {/* Barre d'encaissement : posée au-dessus de la barre d'onglets, ouvre le panier */}
+      {p.lines.length > 0 && (
+        <div
+          className="fixed inset-x-0 z-30 px-4 pb-3"
+          style={{ bottom: 'calc(var(--caisse-tabbar-h, 0px) + env(safe-area-inset-bottom))' }}
+        >
+          <button
+            type="button"
+            onClick={() => setSheet('cart')}
+            className="flex min-h-[64px] w-full items-center justify-between gap-3 rounded-2xl bg-accent pl-4 pr-5 text-accent-fg shadow-[0_8px_24px_rgba(28,25,23,0.25)] cursor-pointer active:bg-accent-hover"
+          >
+            <span className="flex items-center gap-3">
+              <span className="grid h-8 min-w-8 place-items-center rounded-full bg-white/25 px-2 text-[15px] font-bold tabular-nums">{itemCount}</span>
+              <span className="text-left leading-tight">
+                <span className="block text-[13px] text-accent-fg/80">{itemCount > 1 ? 'articles' : 'article'}</span>
+                <span className="block text-[15px] font-semibold">Voir le panier</span>
+              </span>
+            </span>
+            <span className="text-right leading-tight">
+              <span className="block text-[13px] text-accent-fg/80">{p.montantBon > 0 ? 'Reste à régler' : 'Total'}</span>
+              <span className="block text-[22px] font-bold tabular-nums">{formatCHF(p.resteAPayer)}</span>
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Panier puis paiement : une seule feuille, deux étapes */}
+      <BottomSheet
+        open={sheet !== null}
+        onClose={closeSheet}
+        title={sheet === 'pay' ? 'Paiement' : 'Panier'}
+        size="full"
+        footer={sheet === 'pay' ? payFooter : cartFooter}
+      >
+        {sheet === 'pay' ? (
+          <div className="space-y-5">
+            <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4 text-center">
+              <p className="text-[14px] text-stone-600">{p.montantBon > 0 ? 'Reste à encaisser' : 'Total à encaisser'}</p>
+              <p className="mt-1 text-[34px] font-bold leading-none tracking-tight text-stone-950 tabular-nums">{formatCHF(p.resteAPayer)}</p>
+              <p className="mt-2 text-[13px] text-stone-600">
+                {itemCount} article{itemCount > 1 ? 's' : ''}
+                {p.montantBon > 0 && <> · bon {p.giftCard?.code} : − {formatCHF(p.montantBon)}</>}
+                {!p.tvaActive && ' · TVA 0 %'}
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-2 text-[15px] font-semibold text-stone-900">{p.montantBon > 0 ? 'Reste à régler' : 'Mode de paiement'}</p>
+              {soldeParBon ? (
+                <div className="flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-[15px] text-stone-800">
+                  <Ticket size={18} className="shrink-0 text-accent" aria-hidden="true" />
+                  Intégralement réglé par le bon {p.giftCard?.code}. Rien à encaisser.
+                </div>
+              ) : (
+                <SegmentedControl
+                  label="Mode de paiement"
+                  value={p.mode}
+                  onChange={p.onMode}
+                  options={MODES_PAIEMENT.map(m => ({ value: m.value, label: m.label }))}
+                />
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setClientSheet(true)}
+              className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 text-left cursor-pointer active:bg-stone-50"
+            >
+              <User size={20} className="shrink-0 text-accent" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] text-stone-600">Facture au nom de</span>
+                <span className="block truncate text-[16px] font-medium text-stone-950">{p.client ? clientFullName(p.client) : CLIENT_DE_PASSAGE}</span>
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-stone-400" aria-hidden="true" />
+            </button>
+
+            {/* Bon cadeau présenté en paiement */}
+            {p.giftCard ? (
+              <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 text-[16px] font-semibold text-stone-950"><Ticket size={16} className="text-accent shrink-0" aria-hidden="true" /> {p.giftCard.code}</p>
+                    <p className="truncate text-[14px] text-stone-600">{p.giftCard.libelle}</p>
+                  </div>
+                  <button
+                    type="button" onClick={p.onRemoveGift} aria-label="Retirer le bon cadeau"
+                    className="-mr-2 -mt-1 grid size-11 shrink-0 place-items-center rounded-full text-stone-600 active:bg-red-50 active:text-red-700 cursor-pointer"
+                  >
+                    <X size={20} aria-hidden="true" />
+                  </button>
+                </div>
+                <dl className="space-y-1 text-[14px]">
+                  <div className="flex justify-between"><dt className="text-stone-600">Solde du bon</dt><dd className="tabular-nums text-stone-800">{formatCHF(p.giftCard.montant_restant)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-stone-600">Appliqué à cette vente</dt><dd className="font-semibold tabular-nums text-accent">− {formatCHF(p.montantBon)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-stone-600">Restera sur le bon</dt><dd className="tabular-nums text-stone-800">{formatCHF(Number(p.giftCard.montant_restant) - p.montantBon)}</dd></div>
+                </dl>
+                <p className="text-[13px] leading-relaxed text-stone-600">
+                  Cette part n&apos;entre pas dans les recettes : elle a été encaissée le jour où le bon a été vendu.
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button" onClick={p.onUseGift}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
+              >
+                <Ticket size={18} aria-hidden="true" /> Utiliser un bon cadeau
+              </button>
+            )}
+
+            <div>
+              <label htmlFor="m-caisse-note" className="mb-2 block text-[15px] font-semibold text-stone-900">
+                Note <span className="font-normal text-stone-600">(facultatif)</span>
+              </label>
+              <input
+                id="m-caisse-note" type="text" value={p.note} onChange={e => p.onNote(e.target.value)}
+                placeholder="Remarque…" className={M_INPUT}
+              />
+            </div>
+
+            {p.lines.length > 0 && p.resteAPayer > 0 && <BasketTarget reste={p.resteAPayer} />}
+
+            {p.submitError && (
+              <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-800">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <span>{p.submitError}</span>
+              </div>
+            )}
+
+            <p className="text-center text-[13px] leading-relaxed text-stone-600">
+              La facture est numérotée et enregistrée définitivement. Une erreur se corrige depuis le journal, avec le bouton « Corriger ».
+            </p>
+          </div>
+        ) : (
+          <div>
+            <ul className="divide-y divide-stone-100">
+              {p.lines.map(line => (
+                <MobileCartLine
+                  key={line.key} line={line} tvaActive={p.tvaActive}
+                  onPatch={patch => p.onPatchLine(line.key, patch)}
+                  onRemove={() => p.onRemoveLine(line.key)}
+                />
+              ))}
+            </ul>
+            <div className="mt-2 space-y-1.5 rounded-2xl bg-stone-50 border border-stone-200 p-4 text-[15px]">
+              {p.tvaActive && (
+                <>
+                  <MRow label="Total HT" value={formatCHF(p.totals.ht)} />
+                  <MRow label="TVA" value={formatCHF(p.totals.tva)} />
+                </>
+              )}
+              {p.montantBon > 0 && (
+                <>
+                  <MRow label="Total prestations" value={formatCHF(p.totals.ttc)} />
+                  <MRow label={`Bon ${p.giftCard?.code ?? ''}`} value={`− ${formatCHF(p.montantBon)}`} />
+                </>
+              )}
+              <div className="flex items-baseline justify-between pt-1">
+                <span className="font-medium text-stone-800">{p.montantBon > 0 ? 'Reste à encaisser' : 'Total'}</span>
+                <span className="text-[26px] font-bold tabular-nums text-stone-950">{formatCHF(p.resteAPayer)}</span>
+              </div>
+              {!p.tvaActive && <p className="text-[13px] text-stone-600">TVA 0 % — activité non assujettie</p>}
+            </div>
+          </div>
+        )}
+      </BottomSheet>
+
+      <MobileClientSheet
+        open={clientSheet}
+        onClose={() => setClientSheet(false)}
+        clients={p.clients}
+        selected={p.client}
+        onSelect={(c) => { p.onSelectClient(c); setClientSheet(false); }}
+        onNew={(initial) => { setClientSheet(false); p.onNewClient(initial); }}
+      />
+
+      <MobileCustomSheet
+        open={customSheet}
+        onClose={() => setCustomSheet(false)}
+        onAdd={(label, prix) => { p.onCustom(label, prix); setCustomSheet(false); }}
+      />
+    </div>
+  );
+}
+
+function MRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-stone-700">
+      <span>{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+/** Rappel du panier cible du Cockpit Hebdo (250–450 CHF), version compacte. */
+function BasketTarget({ reste }: { reste: number }) {
+  const inRange = reste >= 250 && reste <= 450;
+  const above = reste > 450;
+  return (
+    <div className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-[14px] leading-snug ${
+      inRange ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
+      : above ? 'bg-purple-50 text-purple-950 border-purple-200'
+      : 'bg-amber-50/80 text-amber-950 border-amber-200'
+    }`}>
+      {inRange ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden="true" />
+        : above ? <Sparkles size={17} className="mt-0.5 shrink-0 text-purple-700" aria-hidden="true" />
+        : <Target size={17} className="mt-0.5 shrink-0 text-amber-700" aria-hidden="true" />}
+      <span>
+        {inRange ? <><strong>Panier cible atteint</strong> : dans la fourchette 250–450 CHF.</>
+          : above ? <><strong>Panier d&apos;excellence</strong> (plus de 450 CHF) : bravo pour cette vente conseil.</>
+          : <><strong>Objectif panier 250–450 CHF</strong> : proposez 1 produit conseil pour atteindre le palier.</>}
+      </span>
+    </div>
+  );
+}
+
+// Catalogue : pastilles de catégories défilantes, grosses tuiles avec prix.
+function MobileCatalog({ services, categories, products, loading, lines, onPickService, onPickProduct, onCustom, onSellGift }: {
+  services: Service[];
+  categories: ServiceCategory[];
+  products: Product[];
+  loading: boolean;
+  lines: CartLine[];
+  onPickService: (s: Service) => void;
+  onPickProduct: (p: Product) => void;
+  onCustom: () => void;
+  onSellGift: () => void;
+}) {
+  const [tab, setTab] = useState('all');
+  const [search, setSearch] = useState('');
+  const [announce, setAnnounce] = useState('');
+
+  const tabs = useMemo(() => {
+    const list: { id: string; label: string }[] = [{ id: 'all', label: 'Tout' }];
+    for (const c of categories) {
+      if (services.some(s => s.category_id === c.id)) list.push({ id: c.id, label: c.nom });
+    }
+    if (services.some(s => !s.category_id || !categories.some(c => c.id === s.category_id))) {
+      list.push({ id: 'none', label: 'Divers' });
+    }
+    if (products.length > 0) list.push({ id: 'produits', label: 'Produits' });
+    return list;
+  }, [categories, services, products]);
+
+  const activeTab = tabs.some(t => t.id === tab) ? tab : 'all';
+  const term = search.trim().toLowerCase();
+
+  const filteredServices = useMemo(() => services.filter(s => {
+    if (!s.nom.toLowerCase().includes(term)) return false;
+    if (activeTab === 'all') return true;
+    if (activeTab === 'none') return !s.category_id || !categories.some(c => c.id === s.category_id);
+    return s.category_id === activeTab;
+  }), [services, categories, activeTab, term]);
+  const filteredProducts = useMemo(
+    () => products.filter(p => `${p.nom} ${p.marque ?? ''}`.toLowerCase().includes(term)),
+    [products, term],
+  );
+  const showProducts = (activeTab === 'produits' || activeTab === 'all') && filteredProducts.length > 0;
+  const showServices = activeTab !== 'produits' && filteredServices.length > 0;
+
+  const qtyService = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of lines) if (l.service_id) m.set(l.service_id, (m.get(l.service_id) ?? 0) + Number(l.quantite || 0));
+    return m;
+  }, [lines]);
+  const qtyProduct = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of lines) if (l.product_id) m.set(l.product_id, (m.get(l.product_id) ?? 0) + Number(l.quantite || 0));
+    return m;
+  }, [lines]);
+
+  const tileCls = 'relative flex min-h-[92px] w-full flex-col justify-between gap-2 rounded-2xl border border-stone-200 bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(28,25,23,0.04)] cursor-pointer transition-transform duration-150 active:scale-[0.97] active:bg-accent/5';
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500" aria-hidden="true" />
+        <label htmlFor="m-caisse-search" className="sr-only">Chercher une prestation ou un produit</label>
+        <input
+          id="m-caisse-search" type="search" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Chercher un soin ou un produit…" autoComplete="off"
+          className={`${M_INPUT} pl-11`}
+        />
+      </div>
+
+      {tabs.length > 2 && (
+        <ChipBar label="Catégories du catalogue" activeKey={activeTab}>
+          {tabs.map(t => (
+            <Chip key={t.id} selected={activeTab === t.id} onClick={() => setTab(t.id)} icon={t.id === 'produits' ? Package : undefined}>
+              {t.label}
+            </Chip>
+          ))}
+        </ChipBar>
+      )}
+
+      <p role="status" className="sr-only">{announce}</p>
+
+      {loading ? (
+        <div className="grid grid-cols-2 gap-3">
+          {[...Array(6)].map((_, i) => <div key={i} className="h-[92px] animate-pulse rounded-2xl bg-stone-200/70" />)}
+        </div>
+      ) : services.length === 0 && products.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-5 py-8 text-center">
+          <p className="mb-2 text-[16px] text-stone-800">Le catalogue est vide.</p>
+          <Link href="/admin/caisse/prestations" className="inline-flex min-h-11 items-center text-[15px] font-semibold text-accent">Créer le catalogue →</Link>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {showServices && (
+            <div className="grid grid-cols-2 gap-3">
+              {filteredServices.map(s => {
+                const q = qtyService.get(s.id) ?? 0;
+                return (
+                  <button
+                    key={s.id} type="button"
+                    onClick={() => { onPickService(s); setAnnounce(`${s.nom} ajouté`); }}
+                    className={`${tileCls} ${q > 0 ? 'border-accent/60 bg-accent/5' : ''}`}
+                  >
+                    <span className="block pr-6 text-[15px] font-medium leading-snug text-stone-950 line-clamp-3">{s.nom}</span>
+                    <span className="flex items-center gap-1.5 text-[16px] font-semibold tabular-nums text-stone-800">
+                      {s.type === 'forfait' && <Layers size={14} className="shrink-0 text-accent" aria-label="Forfait" />}
+                      {formatCHF(s.prix_chf)}
+                    </span>
+                    {q > 0 && (
+                      <span aria-label={`${q} dans le panier`} className="absolute right-2.5 top-2.5 grid h-6 min-w-6 place-items-center rounded-full bg-accent px-1.5 text-[13px] font-bold text-accent-fg">{q}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {showProducts && (
+            <div className="space-y-2">
+              {activeTab === 'all' && <p className="text-[15px] font-semibold text-stone-800">Produits</p>}
+              <div className="grid grid-cols-2 gap-3">
+                {filteredProducts.map(pr => {
+                  const q = qtyProduct.get(pr.id) ?? 0;
+                  // Stock restant APRÈS la vente en cours ; il peut passer sous zéro
+                  // sans bloquer la vente (l'inventaire rattrape l'écart).
+                  const restant = Number(pr.stock) - q;
+                  const niveau = stockLevel({ stock: restant, seuil_alerte: pr.seuil_alerte });
+                  return (
+                    <button
+                      key={pr.id} type="button"
+                      onClick={() => { onPickProduct(pr); setAnnounce(`${pr.nom} ajouté`); }}
+                      className={`${tileCls} ${q > 0 ? 'border-accent/60 bg-accent/5' : ''}`}
+                    >
+                      <span className="block pr-6 text-[15px] font-medium leading-snug text-stone-950 line-clamp-3">{pr.nom}</span>
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-[16px] font-semibold tabular-nums text-stone-800">{formatCHF(pr.prix_vente_chf)}</span>
+                        <span className={`rounded px-1.5 py-0.5 text-[12px] font-semibold tabular-nums ${
+                          niveau === 'rupture' ? 'bg-red-50 text-red-700' : niveau === 'bas' ? 'bg-amber-50 text-amber-800' : 'bg-stone-100 text-stone-700'
+                        }`}>
+                          <span className="sr-only">Stock restant : </span>{Math.round(restant * 100) / 100}
+                        </span>
+                      </span>
+                      {q > 0 && (
+                        <span aria-label={`${q} dans le panier`} className="absolute right-2.5 top-2.5 grid h-6 min-w-6 place-items-center rounded-full bg-accent px-1.5 text-[13px] font-bold text-accent-fg">{q}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!showServices && !showProducts && (
+            <p className="rounded-2xl border border-dashed border-stone-300 bg-white px-5 py-8 text-center text-[15px] text-stone-700">
+              Rien ne correspond{term ? ' à cette recherche' : ' dans cette catégorie'}.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Hors catalogue : montant libre, bon cadeau */}
+      <div className="grid grid-cols-2 gap-3 pt-1">
+        <button
+          type="button" onClick={onCustom}
+          className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
+        >
+          <PenLine size={17} aria-hidden="true" /> Montant libre
+        </button>
+        <button
+          type="button" onClick={onSellGift}
+          className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
+        >
+          <Gift size={17} aria-hidden="true" /> Vendre un bon
+        </button>
+      </div>
+      <p className="text-center">
+        <Link href="/admin/caisse/prestations" className="inline-flex min-h-11 items-center text-[14px] text-stone-600 underline underline-offset-2">
+          Gérer le catalogue
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
+  line: CartLine;
+  tvaActive: boolean;
+  onPatch: (patch: Partial<CartLine>) => void;
+  onRemove: () => void;
+}) {
+  const [editingPrice, setEditingPrice] = useState(false);
+  const total = line.prix_unitaire_ttc * line.quantite;
+  return (
+    <li className="space-y-3 py-4">
+      <div className="flex items-start gap-2">
+        <p className="min-w-0 flex-1 text-[16px] font-medium leading-snug text-stone-950">{line.description}</p>
+        <button
+          type="button" onClick={onRemove} aria-label={`Retirer ${line.description}`}
+          className="-mr-2 -mt-1.5 grid size-11 shrink-0 place-items-center rounded-full text-stone-500 active:bg-red-50 active:text-red-700 cursor-pointer"
+        >
+          <Trash2 size={20} aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1 rounded-2xl bg-stone-100 p-1" role="group" aria-label={`Quantité de ${line.description}`}>
+          <button
+            type="button" aria-label="Diminuer la quantité" disabled={line.quantite <= 1}
+            onClick={() => onPatch({ quantite: Math.max(1, line.quantite - 1) })}
+            className="grid size-11 place-items-center rounded-xl bg-white text-stone-800 shadow-sm disabled:opacity-35 cursor-pointer"
+          >
+            <Minus size={20} aria-hidden="true" />
+          </button>
+          <span className="min-w-10 text-center text-[18px] font-semibold tabular-nums text-stone-950" aria-live="polite">{line.quantite}</span>
+          <button
+            type="button" aria-label="Augmenter la quantité"
+            onClick={() => onPatch({ quantite: line.quantite + 1 })}
+            className="grid size-11 place-items-center rounded-xl bg-white text-stone-800 shadow-sm cursor-pointer"
+          >
+            <Plus size={20} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="text-right">
+          <p className="text-[19px] font-semibold tabular-nums text-stone-950">{formatCHF(total)}</p>
+          {editingPrice ? (
+            <input
+              type="text" inputMode="decimal" autoFocus defaultValue={String(line.prix_unitaire_ttc)}
+              aria-label="Prix unitaire en francs"
+              onBlur={e => {
+                const v = Number(e.target.value.replace(',', '.'));
+                if (Number.isFinite(v) && v >= 0) onPatch({ prix_unitaire_ttc: v });
+                setEditingPrice(false);
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              className="mt-1 h-11 w-28 rounded-xl border border-accent px-3 text-right text-[16px] tabular-nums text-stone-900 outline-none"
+            />
+          ) : (
+            <button
+              type="button" onClick={() => setEditingPrice(true)}
+              className="mt-0.5 inline-flex min-h-11 items-center gap-1.5 text-[14px] text-stone-600 tabular-nums cursor-pointer"
+            >
+              {line.quantite > 1 ? `${formatCHF(line.prix_unitaire_ttc)} pièce` : 'Modifier le prix'} <Pencil size={13} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {tvaActive && (
+        <div>
+          <label htmlFor={`m-tva-${line.key}`} className="sr-only">Taux de TVA</label>
+          <select
+            id={`m-tva-${line.key}`} value={line.taux_tva}
+            onChange={e => onPatch({ taux_tva: Number(e.target.value) })}
+            className="min-h-11 rounded-xl border border-stone-300 bg-white px-3 text-[16px] text-stone-800"
+          >
+            {TAUX_TVA_CH.map(t => <option key={t.value} value={t.value}>TVA {t.value} %</option>)}
+          </select>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function MobileClientSheet({ open, onClose, clients, selected, onSelect, onNew }: {
+  open: boolean;
+  onClose: () => void;
+  clients: Client[];
+  selected: Client | null;
+  onSelect: (c: Client | null) => void;
+  onNew: (initial: string) => void;
+}) {
+  const [search, setSearch] = useState('');
+  useEffect(() => { if (!open) setSearch(''); }, [open]);
+  const results = useMemo(() => clients.filter(c => matchClient(c, search)).slice(0, 40), [clients, search]);
+  const term = search.trim();
+
+  return (
+    <BottomSheet
+      open={open} onClose={onClose} title="Cliente" size="full" zIndex={110}
+      description="Cherchez par nom, téléphone ou e-mail, ou créez une fiche."
+    >
+      <div className="space-y-4">
+        <div className="relative">
+          <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500" aria-hidden="true" />
+          <label htmlFor="m-client-search" className="sr-only">Rechercher une cliente</label>
+          <input
+            id="m-client-search" type="search" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Nom, téléphone…" autoComplete="off" className={`${M_INPUT} pl-11`}
+          />
+        </div>
+
+        <button
+          type="button" onClick={() => onNew(term)}
+          className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-accent/40 bg-accent/5 px-4 text-left text-[16px] font-semibold text-accent cursor-pointer active:bg-accent/10"
+        >
+          <UserPlus size={20} aria-hidden="true" />
+          {term ? `Créer « ${term} »` : 'Nouvelle cliente'}
+        </button>
+
+        <ul className="divide-y divide-stone-100 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+          <li>
+            <button
+              type="button" onClick={() => onSelect(null)}
+              className="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left cursor-pointer active:bg-stone-50"
+            >
+              <span>
+                <span className="block text-[16px] font-medium text-stone-950">{CLIENT_DE_PASSAGE}</span>
+                <span className="block text-[14px] text-stone-600">Sans fiche cliente</span>
+              </span>
+              {!selected && <Check size={20} className="text-accent" aria-label="Choisie" />}
+            </button>
+          </li>
+          {results.map(c => (
+            <li key={c.id}>
+              <button
+                type="button" onClick={() => onSelect(c)}
+                className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-2 text-left cursor-pointer active:bg-stone-50"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[16px] font-medium text-stone-950">{clientFullName(c)}</span>
+                  {c.telephone && <span className="block truncate text-[14px] text-stone-600">{c.telephone}</span>}
+                </span>
+                {selected?.id === c.id && <Check size={20} className="shrink-0 text-accent" aria-label="Choisie" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {term && results.length === 0 && (
+          <p className="text-center text-[15px] text-stone-700">Aucune cliente trouvée pour « {term} ».</p>
+        )}
+      </div>
+    </BottomSheet>
+  );
+}
+
+function MobileCustomSheet({ open, onClose, onAdd }: {
+  open: boolean;
+  onClose: () => void;
+  onAdd: (label: string, prix: number) => void;
+}) {
+  const [label, setLabel] = useState('');
+  const [amount, setAmount] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { if (!open) { setLabel(''); setAmount(''); setError(null); } }, [open]);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const prix = Number(amount.replace(',', '.'));
+    if (!Number.isFinite(prix) || prix <= 0) {
+      setError('Montant non reconnu : saisissez un nombre, par exemple 45 ou 45.50.');
+      return;
+    }
+    onAdd(label.trim() || 'Prestation', Math.round(prix * 100) / 100);
+  };
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Montant libre" description="Geste commercial, article hors catalogue, forfait négocié…">
+      <form onSubmit={submit} className="space-y-4 pb-2">
+        <div>
+          <label htmlFor="m-custom-label" className="mb-1.5 block text-[15px] font-semibold text-stone-900">Libellé</label>
+          <input id="m-custom-label" type="text" value={label} onChange={e => setLabel(e.target.value)} placeholder="Prestation" className={M_INPUT} />
+        </div>
+        <div>
+          <label htmlFor="m-custom-amount" className="mb-1.5 block text-[15px] font-semibold text-stone-900">Montant (CHF)</label>
+          <input
+            id="m-custom-amount" type="text" inputMode="decimal" data-autofocus value={amount}
+            onChange={e => { setAmount(e.target.value); setError(null); }}
+            placeholder="45.00" className={`${M_INPUT} tabular-nums`}
+          />
+        </div>
+        {error && <p role="alert" className="text-[14px] text-red-700">{error}</p>}
+        <button
+          type="submit" disabled={!amount.trim()}
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent text-[16px] font-semibold text-accent-fg disabled:opacity-40 cursor-pointer"
+        >
+          <Plus size={18} aria-hidden="true" /> Ajouter au panier
+        </button>
+      </form>
+    </BottomSheet>
   );
 }

@@ -5,10 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Download, RefreshCw, Loader2, FileText, Ban,
-  ChevronDown, ChevronRight, TrendingUp, X, Check, PenLine, Ticket, Package,
+  ChevronDown, ChevronRight, ChevronLeft, TrendingUp, Check, PenLine, Ticket, Package, CalendarDays, Receipt,
 } from 'lucide-react';
 import { cancelTransaction, listTransactions } from '../../../../services/caisse';
 import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
+import {
+  BottomSheet, Chip, EmptyState, ListGroup, ListRow, SegmentedControl, Skeleton, StatTile,
+} from '../../../../components/admin/mobile/ui';
 import { downloadFacture } from '../../../../utils/factureDownload';
 import { setCaisseCorrection } from '../../../../utils/caissePrefill';
 import {
@@ -60,6 +63,9 @@ export default function JournalClient() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ tx: TransactionWithItems; intent: 'cancel' | 'correct' } | null>(null);
+  // Mobile : détail d'une écriture (feuille du bas) et choix de la période.
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [periodOpen, setPeriodOpen] = useState(false);
   const router = useRouter();
 
   const load = useCallback(async () => {
@@ -189,6 +195,32 @@ export default function JournalClient() {
 
   const periodLabel = mode === 'mois' ? `${MONTH_NAMES[month]} ${year}` : String(year);
 
+  // Mobile : écritures regroupées par jour, et période précédente / suivante.
+  const dayGroups = useMemo(() => {
+    const groups: { key: string; label: string; items: TransactionWithItems[] }[] = [];
+    for (const t of rows) {
+      const d = new Date(t.created_at);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      let g = groups[groups.length - 1];
+      if (!g || g.key !== key) {
+        const raw = d.toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' });
+        g = { key, label: raw.charAt(0).toUpperCase() + raw.slice(1), items: [] };
+        groups.push(g);
+      }
+      g.items.push(t);
+    }
+    return groups;
+  }, [rows]);
+
+  const detailTx = detailId ? rows.find(t => t.id === detailId) ?? null : null;
+
+  const shiftPeriod = (dir: -1 | 1) => {
+    if (mode === 'annee') { setYear(y => y + dir); return; }
+    const d = new Date(year, month + dir, 1);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+  };
+
   const toggle = (id: string) =>
     setExpanded(prev => {
       const next = new Set(prev);
@@ -314,38 +346,81 @@ export default function JournalClient() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Journal et chiffre d'affaires"
-        description={`Livre de caisse — ${periodLabel}`}
-        actions={
-          <>
-            <Button icon={RefreshCw} onClick={load} loading={loading} aria-label="Actualiser" title="Actualiser">
-              <span className="hidden sm:inline">Actualiser</span>
-            </Button>
-            <Button
-              variant="primary" icon={Download} onClick={exportCSV} disabled={rows.length === 0}
-              title="Fichier CSV de la période affichée, à transmettre à la fiducie"
-            >
-              Exporter pour la fiducie
-            </Button>
-          </>
-        }
-      />
+    <div className="flex flex-col gap-6">
+      <div className="hidden lg:block">
+        <PageHeader
+          title="Journal et chiffre d'affaires"
+          description={`Livre de caisse — ${periodLabel}`}
+          actions={
+            <>
+              <Button icon={RefreshCw} onClick={load} loading={loading} aria-label="Actualiser" title="Actualiser">
+                <span className="hidden sm:inline">Actualiser</span>
+              </Button>
+              <Button
+                variant="primary" icon={Download} onClick={exportCSV} disabled={rows.length === 0}
+                title="Fichier CSV de la période affichée, à transmettre à la fiducie"
+              >
+                Exporter pour la fiducie
+              </Button>
+            </>
+          }
+        />
+      </div>
 
       {error && (
         <Callout
           tone="danger"
           title="Une opération n'a pas abouti"
-          actions={<Button size="sm" variant="ghost" onClick={() => setError(null)}>Masquer</Button>}
+          actions={
+            <>
+              <Button size="sm" variant="secondary" className="lg:hidden" onClick={load}>Réessayer</Button>
+              <Button size="sm" variant="ghost" onClick={() => setError(null)}>Masquer</Button>
+            </>
+          }
         >
           <p>Vérifiez la connexion puis réessayez, par exemple avec « Actualiser ».</p>
           <p className="mt-1 text-[13px] text-red-800/80 break-words">Détail technique : {error}</p>
         </Callout>
       )}
 
+      {/* Mobile : période (feuille de choix), actions, recettes de la période */}
+      <div className="space-y-3 lg:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            type="button" onClick={() => shiftPeriod(-1)} aria-label={mode === 'mois' ? 'Mois précédent' : 'Année précédente'}
+            className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full border border-stone-200 bg-white text-stone-800 active:bg-stone-100"
+          >
+            <ChevronLeft size={20} aria-hidden="true" />
+          </button>
+          <button
+            type="button" onClick={() => setPeriodOpen(true)} aria-haspopup="dialog"
+            className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-[16px] font-semibold text-stone-950 active:bg-stone-100"
+          >
+            <CalendarDays size={18} className="text-accent" aria-hidden="true" />
+            <span className="truncate">{periodLabel}</span>
+            <ChevronDown size={16} className="text-stone-500" aria-hidden="true" />
+          </button>
+          <button
+            type="button" onClick={() => shiftPeriod(1)} aria-label={mode === 'mois' ? 'Mois suivant' : 'Année suivante'}
+            className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full border border-stone-200 bg-white text-stone-800 active:bg-stone-100"
+          >
+            <ChevronRight size={20} aria-hidden="true" />
+          </button>
+        </div>
+        <StatTile tone="accent" label={`Recettes ${periodLabel}`} amount={totals.ttc} loading={loading} hint={`${paidRows.length} encaissement${paidRows.length !== 1 ? 's' : ''}`} />
+        <div className="grid grid-cols-2 gap-2">
+          <Button icon={RefreshCw} onClick={load} loading={loading}>Actualiser</Button>
+          <Button
+            variant="primary" icon={Download} onClick={exportCSV} disabled={rows.length === 0}
+            title="Fichier CSV de la période affichée, à transmettre à la fiducie"
+          >
+            Export fiducie
+          </Button>
+        </div>
+      </div>
+
       {/* KPIs — toujours « à maintenant », quelle que soit la période affichée */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 max-lg:order-2">
         <Kpi label="Aujourd'hui"    value={formatCHF(kpis.jour)}    loading={loading} />
         <Kpi label="Cette semaine"  value={formatCHF(kpis.semaine)} loading={loading} />
         <Kpi label="Ce mois"        value={formatCHF(kpis.mois)}    loading={loading} />
@@ -353,7 +428,7 @@ export default function JournalClient() {
       </div>
 
       {/* Sélecteur de période */}
-      <div className="bg-white border border-stone-200 rounded-xl p-4 flex flex-wrap items-center gap-3">
+      <div className="hidden lg:flex bg-white border border-stone-200 rounded-xl p-4 flex-wrap items-center gap-3">
         <div className="flex rounded-lg border border-stone-200 overflow-hidden">
           {(['mois', 'annee'] as PeriodMode[]).map(m => (
             <button
@@ -398,7 +473,7 @@ export default function JournalClient() {
       {/* Marge sur marchandises — délibérément séparée du CA, qu'elle ne
           complète pas : c'est un indicateur de rentabilité, pas de recette. */}
       {margeProduits.articles > 0 && (
-        <div className="bg-white border border-stone-200 rounded-xl p-5">
+        <div className="bg-white border border-stone-200 rounded-xl p-4 lg:p-5 max-lg:order-2">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
@@ -433,8 +508,8 @@ export default function JournalClient() {
       )}
 
       {/* Graphiques */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div className="lg:col-span-3 bg-white border border-stone-200 rounded-xl p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 max-lg:order-2">
+        <div className="lg:col-span-3 bg-white border border-stone-200 rounded-xl p-4 lg:p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-[13px] font-medium text-stone-800">
               {mode === 'mois' ? 'Recettes par jour' : 'Recettes par mois'}
@@ -444,7 +519,7 @@ export default function JournalClient() {
           <SeriesChart data={series} loading={loading} />
         </div>
 
-        <div className="lg:col-span-2 bg-white border border-stone-200 rounded-xl p-6">
+        <div className="lg:col-span-2 bg-white border border-stone-200 rounded-xl p-4 lg:p-6">
           <h2 className="text-[13px] font-medium text-stone-800 mb-6">Par mode de paiement</h2>
           {loading ? (
             <div className="space-y-4">
@@ -496,8 +571,59 @@ export default function JournalClient() {
         </div>
       </div>
 
-      {/* Journal */}
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      {/* Journal — mobile : cartes groupées par jour, détail en feuille du bas */}
+      <section aria-label="Journal des recettes" className="space-y-3 max-lg:order-1 lg:hidden">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-[19px] font-semibold tracking-tight text-stone-950">Journal des recettes</h2>
+          <span className="text-[14px] text-stone-600">{rows.length} écriture{rows.length !== 1 ? 's' : ''}</span>
+        </div>
+        {loading ? (
+          <div className="space-y-2" role="status" aria-label="Chargement du journal">
+            {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-[68px] w-full" />)}
+          </div>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon={Receipt}
+            title="Aucun encaissement"
+            description="Rien n'a été encaissé sur cette période."
+            action={<Link href="/admin/caisse" className="inline-flex min-h-11 items-center rounded-lg bg-accent px-5 text-[15px] font-semibold text-accent-fg">Encaisser un soin</Link>}
+          />
+        ) : (
+          dayGroups.map(g => (
+            <div key={g.key} className="space-y-1.5">
+              <h3 className="px-1 text-[13px] font-semibold uppercase tracking-wide text-stone-600">{g.label}</h3>
+              <ListGroup label={g.label}>
+                {g.items.map(t => {
+                  const cancelled = t.status === 'annulee';
+                  const bon = Number(t.montant_bon ?? 0);
+                  return (
+                    <ListRow
+                      key={t.id}
+                      onClick={() => setDetailId(t.id)}
+                      className={cancelled ? 'opacity-60' : ''}
+                      title={t.client_label}
+                      subtitle={`${new Date(t.created_at).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })} · ${MODE_PAIEMENT_LABELS[t.mode_paiement]}`}
+                      trailing={
+                        <span className="text-right">
+                          <span className={`block text-[16px] font-semibold tabular-nums ${cancelled ? 'text-stone-600 line-through' : 'text-stone-950'}`}>
+                            {formatCHF(recetteEncaissee(t))}
+                          </span>
+                          {bon > 0 && !cancelled && <span className="block text-[12px] text-accent tabular-nums">+ bon {formatCHF(bon)}</span>}
+                          {cancelled && <span className="block text-[12px] font-semibold text-red-700">Annulée</span>}
+                          {t.corrige_transaction_id && <span className="block text-[12px] text-amber-700">rectificative</span>}
+                        </span>
+                      }
+                    />
+                  );
+                })}
+              </ListGroup>
+            </div>
+          ))
+        )}
+      </section>
+
+      {/* Journal — bureau */}
+      <div className="hidden lg:block bg-white border border-stone-200 rounded-xl overflow-hidden">
         <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between">
           <h2 className="text-[13px] font-medium text-stone-800">Journal des recettes</h2>
           <span className="text-[12.5px] text-stone-600">{rows.length} écriture{rows.length !== 1 ? 's' : ''}</span>
@@ -529,6 +655,60 @@ export default function JournalClient() {
           </ul>
         )}
       </div>
+
+      {/* Mobile : choix de la période */}
+      <BottomSheet
+        open={periodOpen} onClose={() => setPeriodOpen(false)} title="Période"
+        footer={<Button variant="primary" className="w-full" onClick={() => setPeriodOpen(false)}>Voir {periodLabel}</Button>}
+      >
+        <div className="space-y-5">
+          <SegmentedControl<PeriodMode>
+            label="Type de période" value={mode} onChange={setMode}
+            options={[{ value: 'mois', label: 'Par mois' }, { value: 'annee', label: 'Par année' }]}
+          />
+          <div>
+            <p className="mb-2 text-[14px] font-semibold text-stone-900">Année</p>
+            <div className="flex flex-wrap gap-2">
+              {years.map(y => <Chip key={y} selected={y === year} onClick={() => setYear(y)}>{y}</Chip>)}
+            </div>
+          </div>
+          {mode === 'mois' && (
+            <div>
+              <p className="mb-2 text-[14px] font-semibold text-stone-900">Mois</p>
+              <div className="grid grid-cols-3 gap-2">
+                {MONTH_NAMES.map((m, i) => (
+                  <Chip key={m} selected={i === month} onClick={() => setMonth(i)} className="justify-center px-2">{m}</Chip>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </BottomSheet>
+
+      {/* Mobile : détail d'une écriture */}
+      <BottomSheet
+        open={!!detailTx} onClose={() => setDetailId(null)}
+        title={detailTx?.numero ?? 'Écriture'}
+        description={detailTx ? `${detailTx.client_label} · ${new Date(detailTx.created_at).toLocaleDateString('fr-CH')} ${new Date(detailTx.created_at).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}` : undefined}
+        footer={detailTx && (
+          <div className="space-y-2">
+            <Button
+              variant="primary" className="w-full" icon={FileText}
+              loading={downloading === detailTx.id} onClick={() => handleDownload(detailTx)}
+            >
+              Quittance PDF
+            </Button>
+            {detailTx.status !== 'annulee' && (
+              <div className="grid grid-cols-2 gap-2">
+                <Button icon={PenLine} onClick={() => { setDetailId(null); setDialog({ tx: detailTx, intent: 'correct' }); }}>Corriger</Button>
+                <Button variant="danger" icon={Ban} onClick={() => { setDetailId(null); setDialog({ tx: detailTx, intent: 'cancel' }); }}>Annuler</Button>
+              </div>
+            )}
+          </div>
+        )}
+      >
+        {detailTx && <JournalDetail tx={detailTx} />}
+      </BottomSheet>
 
       {dialog && (
         <CancelDialog
@@ -570,13 +750,57 @@ function Kpi({ label, value, loading, accent }: {
   label: string; value: string; loading?: boolean; accent?: boolean;
 }) {
   return (
-    <div className={`bg-white border rounded-xl p-5 space-y-2 ${accent ? 'border-accent/30' : 'border-stone-200'}`}>
-      <p className="text-[13px] text-stone-600 font-medium flex items-center gap-1.5">
-        {accent && <TrendingUp size={13} className="text-accent" />}{label}
-      </p>
-      {loading
-        ? <div className="h-7 w-24 bg-stone-100 rounded animate-pulse" />
-        : <p className="text-xl font-semibold text-stone-900 tabular-nums">{value}</p>}
+    <>
+      <StatTile className="lg:hidden" label={label} value={value} loading={loading} />
+      <div className={`hidden lg:block bg-white border rounded-xl p-5 space-y-2 ${accent ? 'border-accent/30' : 'border-stone-200'}`}>
+        <p className="text-[13px] text-stone-600 font-medium flex items-center gap-1.5">
+          {accent && <TrendingUp size={13} className="text-accent" />}{label}
+        </p>
+        {loading
+          ? <div className="h-7 w-24 bg-stone-100 rounded animate-pulse" />
+          : <p className="text-xl font-semibold text-stone-900 tabular-nums">{value}</p>}
+      </div>
+    </>
+  );
+}
+
+/** Détail d'une écriture, dans la feuille du bas (mobile). Aucune donnée modifiée ici. */
+function JournalDetail({ tx }: { tx: TransactionWithItems }) {
+  const bon = Number(tx.montant_bon ?? 0);
+  const cancelled = tx.status === 'annulee';
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[14px] text-stone-600">
+          {cancelled ? 'Écriture annulée' : 'Recette encaissée'} · {MODE_PAIEMENT_LABELS[tx.mode_paiement]}
+        </span>
+        <span className={`text-[26px] font-semibold tabular-nums ${cancelled ? 'text-stone-500 line-through' : 'text-stone-950'}`}>
+          {formatCHF(recetteEncaissee(tx))}
+        </span>
+      </div>
+      <ul className="divide-y divide-stone-100 rounded-2xl border border-stone-200">
+        {tx.transaction_items.map(item => (
+          <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3 text-[15px]">
+            <span className="min-w-0 text-stone-900">
+              {Number(item.quantite) !== 1 && <span className="text-stone-600">{Number(item.quantite)} × </span>}
+              {item.description}
+              {Number(item.taux_tva) > 0 && <span className="text-stone-600"> (TVA {Number(item.taux_tva)} %)</span>}
+            </span>
+            <span className="shrink-0 tabular-nums text-stone-900">{formatCHF(item.total_ttc)}</span>
+          </li>
+        ))}
+      </ul>
+      <dl className="space-y-1.5 text-[14px]">
+        <div className="flex justify-between"><dt className="text-stone-600">Hors taxe</dt><dd className="tabular-nums text-stone-800">{formatCHF(tx.total_ht)}</dd></div>
+        <div className="flex justify-between"><dt className="text-stone-600">TVA</dt><dd className="tabular-nums text-stone-800">{formatCHF(tx.total_tva)}</dd></div>
+        <div className="flex justify-between font-semibold"><dt className="text-stone-800">Total de la facture</dt><dd className="tabular-nums text-stone-950">{formatCHF(tx.total_ttc)}</dd></div>
+        {bon > 0 && (
+          <div className="flex justify-between text-accent"><dt className="flex items-center gap-1.5"><Ticket size={14} aria-hidden="true" /> Réglé par bon cadeau</dt><dd className="tabular-nums">− {formatCHF(bon)}</dd></div>
+        )}
+      </dl>
+      {tx.corrige_transaction_id && <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-[14px] text-amber-800">Cette facture rectifie une écriture annulée.</p>}
+      {tx.note && <p className="text-[14px] italic text-stone-700">Note : {tx.note}</p>}
+      {tx.cancel_reason && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-[14px] text-red-700">Motif d&apos;annulation : {tx.cancel_reason}</p>}
     </div>
   );
 }
@@ -792,39 +1016,40 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4" onClick={() => { if (!saving) onClose(); }}>
-      <div
-        role="dialog" aria-modal="true"
-        aria-label={`${isCorrection ? 'Corriger' : 'Annuler'} la facture ${tx.numero}`}
-        onClick={e => e.stopPropagation()}
-        className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4"
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-            {isCorrection
-              ? <><PenLine size={15} className="text-amber-700" /> Corriger {tx.numero}</>
-              : <><Ban size={15} className="text-red-600" /> Annuler {tx.numero}</>}
-          </h3>
-          <button onClick={onClose} disabled={saving} aria-label="Fermer" className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer disabled:opacity-40">
-            <X size={16} />
-          </button>
+    <BottomSheet
+      open
+      onClose={() => { if (!saving) onClose(); }}
+      title={`${isCorrection ? 'Corriger' : 'Annuler'} ${tx.numero}`}
+      zIndex={110}
+      footer={
+        <div className="grid grid-cols-2 gap-2">
+          <Button type="button" onClick={onClose} disabled={saving}>Ne rien changer</Button>
+          <Button
+            type="submit" form="cancel-form" variant={isCorrection ? 'primary' : 'danger'}
+            disabled={saving || !reason.trim()}
+            icon={saving ? undefined : Check} loading={saving}
+          >
+            {saving ? 'En cours…' : isCorrection ? 'Annuler et ressaisir' : 'Annuler la facture'}
+          </Button>
         </div>
-
+      }
+    >
+      <div className="space-y-4">
         {isCorrection ? (
-          <div className="space-y-2 text-sm text-stone-600 leading-relaxed">
+          <div className="space-y-2 text-[15px] text-stone-600 leading-relaxed">
             <p>
               Mauvais mode de paiement, mauvais soin, mauvais montant : la facture est
               annulée <strong className="text-stone-800">dès maintenant</strong>, puis l&apos;écran de caisse
               s&apos;ouvre avec le panier déjà rempli. Il vous reste à rectifier et à encaisser à nouveau.
             </p>
-            <p className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-3.5 py-2.5">
+            <p className="text-[14px] bg-stone-50 border border-stone-200 rounded-lg px-3.5 py-2.5">
               La facture <strong className="text-stone-700">{tx.numero}</strong> ne disparaît pas :
               elle reste au journal, annulée, et la nouvelle y sera rattachée. C&apos;est ce qu&apos;exige
               le Code des obligations — une écriture ne se réécrit pas, elle se corrige au vu de tous.
             </p>
           </div>
         ) : (
-          <p className="text-sm text-stone-600 leading-relaxed">
+          <p className="text-[15px] text-stone-600 leading-relaxed">
             L&apos;écriture de <strong className="text-stone-700">{formatCHF(tx.total_ttc)}</strong> restera dans le
             journal avec son numéro — c&apos;est ce qu&apos;exige la traçabilité comptable. Elle sera simplement
             exclue du chiffre d&apos;affaires.
@@ -832,44 +1057,24 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
         )}
 
         {Number(tx.montant_bon ?? 0) > 0 && (
-          <p className="text-xs text-accent bg-accent/5 border border-accent/20 rounded-lg px-3.5 py-2.5">
+          <p className="text-[14px] text-accent bg-accent/5 border border-accent/20 rounded-lg px-3.5 py-2.5">
             Les {formatCHF(tx.montant_bon)} réglés par bon cadeau seront recrédités sur le bon.
           </p>
         )}
 
-        <form onSubmit={submit} className="space-y-3">
+        <form id="cancel-form" onSubmit={submit} className="space-y-3">
           <div>
-            <label htmlFor="cancel-reason" className="block text-[12.5px] font-medium text-stone-700 mb-1">Motif *</label>
+            <label htmlFor="cancel-reason" className="block text-[14px] font-medium text-stone-700 mb-1">Motif *</label>
             <input
               id="cancel-reason" type="text" value={reason} onChange={e => setReason(e.target.value)}
-              required autoFocus placeholder="Erreur de saisie, soin non réalisé…"
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+              required placeholder="Erreur de saisie, soin non réalisé…"
+              className="w-full h-11 px-3 border border-stone-200 rounded-lg text-[16px] text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
             />
           </div>
 
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-
-          <div className="flex gap-2">
-            <button
-              type="button" onClick={onClose} disabled={saving}
-              className="flex-1 py-2.5 rounded-lg bg-stone-100 text-stone-900 font-semibold text-sm hover:bg-stone-200 transition-colors cursor-pointer disabled:opacity-40"
-            >
-              Ne rien changer
-            </button>
-            <button
-              type="submit" disabled={saving || !reason.trim()}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40 cursor-pointer ${
-                isCorrection ? 'bg-accent text-accent-fg hover:bg-accent-hover' : 'bg-red-600 text-white hover:bg-red-700'
-              }`}
-            >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-              {saving
-                ? 'En cours…'
-                : isCorrection ? 'Annuler et ressaisir' : "Annuler la facture"}
-            </button>
-          </div>
+          {error && <p className="text-[14px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
         </form>
       </div>
-    </div>
+    </BottomSheet>
   );
 }

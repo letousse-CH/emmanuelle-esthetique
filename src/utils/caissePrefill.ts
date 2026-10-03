@@ -45,3 +45,65 @@ export function takeCaisseCorrection(): CaisseCorrection | null {
     return null;
   }
 }
+
+/**
+ * Brouillon de l'encaissement en cours.
+ *
+ * Passer à l'onglet Agenda ou Clientes démonte l'écran de caisse : sans cette
+ * sauvegarde, le panier serait perdu. On garde aussi le lien vers le rendez-vous
+ * en cours d'encaissement et la correction éventuelle, pour qu'un aller-retour
+ * ne les détache pas silencieusement.
+ *
+ * Aucun montant n'est stocké en dehors des lignes du panier (qui ne sont que
+ * ce que la caissière a choisi) : les totaux sont toujours recalculés, et le
+ * bon cadeau est revérifié en base à la restauration.
+ */
+const DRAFT_KEY = 'caisse:brouillon';
+
+export interface CaisseDraft {
+  lines: CartLine[];
+  clientId: string | null;
+  clientLabel: string;
+  mode: ModePaiement;
+  note: string;
+  giftCode: string | null;
+  correction: { id: string; numero: string } | null;
+  rdv: { id: string; label: string } | null;
+}
+
+export function saveCaisseDraft(draft: CaisseDraft): void {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // Navigation privée ou quota plein : le panier ne survivra pas au changement d'onglet.
+  }
+}
+
+export function loadCaisseDraft(): CaisseDraft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Partial<CaisseDraft>;
+    if (!d || !Array.isArray(d.lines)) return null;
+    return {
+      lines: d.lines,
+      clientId: d.clientId ?? null,
+      clientLabel: d.clientLabel ?? '',
+      mode: d.mode ?? 'twint',
+      note: d.note ?? '',
+      giftCode: d.giftCode ?? null,
+      correction: d.correction ?? null,
+      rdv: d.rdv ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clearCaisseDraft(): void {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // rien à faire
+  }
+}
