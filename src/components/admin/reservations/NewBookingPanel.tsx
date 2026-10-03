@@ -357,7 +357,7 @@ export default function NewBookingPanel({
               </button>
             </div>
           )}
-          <UpsellBlock options={options} onChange={setOptions} catalogOptions={catalog.options} />
+          <UpsellBlock options={options} onChange={setOptions} catalogOptions={catalog.options} catalogServices={catalog.services} />
           <TotalsBar prix={totalPrix} duree={totalDuree} />
         </Section>
 

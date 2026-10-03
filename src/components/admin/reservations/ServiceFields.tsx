@@ -6,7 +6,7 @@ import type { BookingOption } from '../../../types/booking';
 import { formatCHF } from '../../../types/booking';
 import { Button, Input, Select } from '../ui';
 import { CATEGORY_LABEL } from './hooks';
-import type { Catalog, CatalogOption } from './hooks';
+import type { Catalog, CatalogOption, CatalogService } from './hooks';
 import { formatDuration } from './lib';
 
 /** Choix du soin principal parmi le catalogue réel. */
@@ -63,11 +63,19 @@ export function UpsellBlock({
   options,
   onChange,
   catalogOptions,
+  catalogServices = [],
 }: {
   options: BookingOption[];
   onChange: (next: BookingOption[]) => void;
   catalogOptions: CatalogOption[];
+  /** Liste complète des soins : permet d'ajouter un ou plusieurs soins à la demande. */
+  catalogServices?: CatalogService[];
 }) {
+  const [soinsOpen, setSoinsOpen] = useState(false);
+  const [soinsCat, setSoinsCat] = useState<string | null>(null);
+  const cats = Array.from(new Set(catalogServices.map((s) => s.category)));
+  const addService = (s: CatalogService) =>
+    onChange([...options, { id: s.id, nom: s.name, prix_chf: s.priceChf, duree_minutes: s.durationMinutes, ajoute_par: 'admin' }]);
   const [nom, setNom] = useState('');
   const [prix, setPrix] = useState('');
   const [duree, setDuree] = useState('');
@@ -128,6 +136,52 @@ export function UpsellBlock({
             </li>
           ))}
         </ul>
+      )}
+
+      {catalogServices.length > 0 && (
+        <div className="space-y-2">
+          <Button onClick={() => { setSoinsOpen((o) => !o); setSoinsCat(null); }} icon={Plus} className="h-11">
+            Ajouter un soin
+          </Button>
+          {soinsOpen && !soinsCat && (
+            <div className="grid grid-cols-2 gap-2">
+              {cats.map((c) => (
+                <button
+                  key={c} type="button" onClick={() => setSoinsCat(c)}
+                  className="min-h-14 cursor-pointer rounded-xl border border-stone-300 bg-white px-3 py-2 text-left text-[15px] font-semibold text-stone-900 active:bg-accent-soft"
+                >
+                  {CATEGORY_LABEL[c] ?? c}
+                </button>
+              ))}
+            </div>
+          )}
+          {soinsOpen && soinsCat && (
+            <div className="space-y-2 rounded-xl border border-stone-300 bg-stone-50 p-2">
+              <button type="button" onClick={() => setSoinsCat(null)} className="min-h-11 cursor-pointer px-2 text-[14px] font-semibold text-accent">
+                ‹ Catégories · {CATEGORY_LABEL[soinsCat] ?? soinsCat}
+              </button>
+              <ul className="space-y-1.5">
+                {catalogServices.filter((s) => s.category === soinsCat).map((s) => {
+                  const done = options.some((o) => o.id === s.id);
+                  return (
+                    <li key={s.id}>
+                      <button
+                        type="button" disabled={done} onClick={() => addService(s)}
+                        className="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-lg bg-white px-3 py-2 text-left disabled:opacity-50"
+                      >
+                        <Plus size={16} className="shrink-0 text-accent" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 text-[15px] text-stone-950">{s.type === 'forfait' ? 'Forfait · ' : ''}{s.name}</span>
+                        <span className="shrink-0 text-[13px] tabular-nums text-stone-700">
+                          {done ? 'ajouté' : `+${formatCHF(s.priceChf)} · ${formatDuration(s.durationMinutes)}`}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
 
       {available.length > 0 && (

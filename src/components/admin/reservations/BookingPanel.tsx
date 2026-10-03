@@ -525,7 +525,7 @@ export default function BookingPanel({
             </label>
             <ServicePicker id={serviceId} catalog={catalog} value={draft.serviceId} currentLabel={draft.serviceNom} onPick={pickService} />
           </div>
-          <UpsellBlock options={draft.options} onChange={(o) => set({ options: o })} catalogOptions={catalog.options} />
+          <UpsellBlock options={draft.options} onChange={(o) => set({ options: o })} catalogOptions={catalog.options} catalogServices={catalog.services} />
           <TotalsBar prix={totalPrix} duree={totalDuree} />
           {totalDuree <= 0 && (
             <p className="text-[13.5px] text-amber-900">La durée du soin n’est pas connue : vérifiez-la avant de choisir l’heure.</p>
