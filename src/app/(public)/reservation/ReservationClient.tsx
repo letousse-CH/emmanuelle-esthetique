@@ -1293,22 +1293,17 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
               {/* Remarques */}
               <div className="space-y-1">
                 <label htmlFor="rf-notes" className={labelClass}>
-                  Remarques ou souhaits particuliers (optionnel)
+                  Message supplémentaire (optionnel)
                 </label>
                 <textarea
                   id="rf-notes"
                   rows={3}
                   maxLength={1000}
-                  aria-describedby="rf-notes-hint"
-                  placeholder="Une préférence, une occasion (cadeau, événement), un souhait particulier pour votre venue…"
+                  placeholder="Un message pour Emmanuelle…"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   className={fieldClass(false)}
                 />
-                <p id="rf-notes-hint" className="text-xs text-muted font-light">
-                  Merci de ne pas indiquer d&apos;informations de santé ici : Emmanuelle vous posera les questions utiles
-                  de vive voix.
-                </p>
               </div>
 
               {/* Piège à robots : invisible et hors parcours clavier, doit rester vide */}
