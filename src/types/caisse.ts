@@ -385,8 +385,28 @@ export interface CartLine {
   prix_unitaire_ttc: number;
   quantite: number;
   taux_tva: number;
+  /** Remise en % accordée sur la ligne ; `prix_base` garde le prix avant remise. */
+  remise_pct?: number;
+  prix_base?: number;
   /** Présent si la ligne vend un bon cadeau, qui sera émis à la validation. */
   gift_card?: GiftCardDraft;
+}
+
+/**
+ * Remise en % sur le prix unitaire d'une ligne. Le prix remisé devient le prix
+ * de la ligne (Postgres recalcule HT/TVA/TTC depuis ce prix) ; `prix_base` garde
+ * l'original pour pouvoir changer ou retirer la remise. 0 % rétablit le prix.
+ */
+export function remisePatch(line: Pick<CartLine, 'prix_unitaire_ttc' | 'prix_base'>, pct: number): Partial<CartLine> {
+  const base = line.prix_base ?? line.prix_unitaire_ttc;
+  const p = Math.min(100, Math.max(0, Number.isFinite(pct) ? pct : 0));
+  if (p === 0) return { prix_base: undefined, remise_pct: undefined, prix_unitaire_ttc: base };
+  return { prix_base: base, remise_pct: p, prix_unitaire_ttc: round2(base * (1 - p / 100)) };
+}
+
+/** Libellé figé sur la facture : « Soin (remise 10 %) ». */
+export function remiseLabel(l: Pick<CartLine, 'description' | 'remise_pct'>): string {
+  return l.remise_pct ? `${l.description} (remise ${Number(l.remise_pct)} %)` : l.description;
 }
 
 export const CLIENT_DE_PASSAGE = 'Client de passage';

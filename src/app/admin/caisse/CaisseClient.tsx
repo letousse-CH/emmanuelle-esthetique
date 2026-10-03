@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, UserPlus, X, Plus, Minus, Trash2, Check, Download,
   Receipt, AlertCircle, Loader2, Pencil, Gift, Ticket, PenLine, Layers, Package,
-  Cake, Mail, MessageCircle, Target, CheckCircle2, Sparkles, CalendarCheck, ChevronRight, ChevronLeft, User,
+  Cake, Mail, MessageCircle, Target, CheckCircle2, Sparkles, CalendarCheck, ChevronRight, ChevronLeft, User, Percent,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
 import { Button, Callout, LinkButton, PageHeader } from '../../../components/admin/ui';
@@ -24,7 +24,7 @@ import { CategoryTile, pickPhoto, useMediaAssets } from '../../../components/adm
 import { PERIODE_LABEL } from '../../../types/booking';
 import type { Booking, BookingDetail } from '../../../types/booking';
 import {
-  CLIENT_DE_PASSAGE, MODES_PAIEMENT, TAUX_TVA_CH, cartTotals, clientFullName, formatCHF,
+  CLIENT_DE_PASSAGE, MODES_PAIEMENT, TAUX_TVA_CH, cartTotals, clientFullName, formatCHF, remisePatch,
   giftCardStatusLabel, isGiftCardUsable, isVenteProduct, stockLevel,
 } from '../../../types/caisse';
 import { toWhatsAppNumber } from '../../../types/promotions';
@@ -1682,7 +1682,7 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
             aria-label="Prix unitaire en francs"
             onBlur={e => {
               const v = Number(e.target.value.replace(',', '.'));
-              if (Number.isFinite(v) && v >= 0) onPatch({ prix_unitaire_ttc: v });
+              if (Number.isFinite(v) && v >= 0) onPatch({ prix_unitaire_ttc: v, prix_base: undefined, remise_pct: undefined });
               setEditingPrice(false);
             }}
             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -1713,7 +1713,65 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
           </>
         )}
       </div>
+      {!line.gift_card && <RemiseControl line={line} onPatch={onPatch} />}
     </li>
+  );
+}
+
+// Remise en % sur une ligne : puces rapides + saisie libre ; le total se met à jour.
+function RemiseControl({ line, onPatch, large = false }: {
+  line: CartLine;
+  onPatch: (patch: Partial<CartLine>) => void;
+  large?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState('');
+  const pct = line.remise_pct ?? 0;
+  const base = line.prix_base ?? line.prix_unitaire_ttc;
+  const btn = large ? 'min-h-11 px-4 text-[15px]' : 'px-2.5 py-1 text-xs';
+  const apply = (v: number) => { onPatch(remisePatch(line, v)); };
+  return (
+    <div className="w-full">
+      <button
+        type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+        className={`inline-flex items-center gap-1.5 rounded-lg border font-medium cursor-pointer ${btn} ${
+          pct > 0 ? 'border-accent bg-accent/10 text-accent' : 'border-stone-200 text-stone-600 hover:border-stone-300'
+        }`}
+      >
+        <Percent size={large ? 16 : 12} aria-hidden="true" />
+        {pct > 0 ? `Remise ${pct} % · ${formatCHF(base)} → ${formatCHF(line.prix_unitaire_ttc)}` : 'Remise'}
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {[5, 10, 15, 20].map(v => (
+            <button
+              key={v} type="button" onClick={() => apply(v)} aria-pressed={pct === v}
+              className={`rounded-lg border font-semibold tabular-nums cursor-pointer ${btn} ${
+                pct === v ? 'border-transparent bg-accent text-accent-fg' : 'border-stone-200 bg-white text-stone-800'
+              }`}
+            >
+              {v} %
+            </button>
+          ))}
+          <label className="sr-only" htmlFor={`rem-${line.key}`}>Autre remise en pourcentage</label>
+          <input
+            id={`rem-${line.key}`} type="text" inputMode="decimal" value={custom} placeholder="Autre %"
+            onChange={e => {
+              setCustom(e.target.value);
+              const v = Number(e.target.value.replace(',', '.'));
+              if (e.target.value.trim() !== '' && Number.isFinite(v) && v >= 0 && v <= 100) apply(v);
+            }}
+            className={`w-24 rounded-lg border border-stone-300 text-right tabular-nums outline-none focus:border-accent ${large ? 'min-h-11 px-3 text-[16px]' : 'px-2 py-1 text-xs'}`}
+          />
+          {pct > 0 && (
+            <button type="button" onClick={() => { apply(0); setCustom(''); }}
+              className={`rounded-lg font-medium text-stone-600 underline underline-offset-2 cursor-pointer ${btn}`}>
+              Retirer
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2459,7 +2517,7 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
               aria-label="Prix unitaire en francs"
               onBlur={e => {
                 const v = Number(e.target.value.replace(',', '.'));
-                if (Number.isFinite(v) && v >= 0) onPatch({ prix_unitaire_ttc: v });
+                if (Number.isFinite(v) && v >= 0) onPatch({ prix_unitaire_ttc: v, prix_base: undefined, remise_pct: undefined });
                 setEditingPrice(false);
               }}
               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -2488,6 +2546,7 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
           </select>
         </div>
       )}
+      {!line.gift_card && <RemiseControl line={line} onPatch={onPatch} large />}
     </li>
   );
 }
