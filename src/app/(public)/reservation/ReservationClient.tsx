@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   Sparkles,
   Clock,
@@ -20,7 +21,16 @@ import {
   Flower2,
   Scissors,
   Star,
+  Sun,
+  Sunset,
 } from 'lucide-react';
+
+export function toLocalDateStr(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -257,26 +267,30 @@ interface ReservationClientProps {
 }
 
 export default function ReservationClient({ businessPhone, businessOwner }: ReservationClientProps) {
+  const searchParams = useSearchParams();
+
   // Étape courante (1: Prestation, 2: Privilèges/Upsell, 3: Créneau, 4: Coordonnées, 5: Confirmation)
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+
+  // Catalogues dynamiques synchronisés avec la base de données
+  const [servicesCatalog, setServicesCatalog] = useState<PrestationItem[]>(PRESTATIONS_CATALOG);
+  const [privilegesCatalog, setPrivilegesCatalog] = useState<PrivilegeOption[]>(PRIVILEGE_OPTIONS);
 
   // Étape 1 : Prestation
   const [selectedCategory, setSelectedCategory] = useState<'visage' | 'corps' | 'epilation' | 'services'>('visage');
   const [selectedService, setSelectedService] = useState<PrestationItem | null>(PRESTATIONS_CATALOG[0]);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState<number>(0);
 
-  // Étape 2 : Privilèges & Offre du mois
-  const [selectedPrivileges, setSelectedPrivileges] = useState<string[]>([]);
+  // Étape 2 : Offre du moment exclusive (Upselling doux unique)
   const [includeMonthlyOffer, setIncludeMonthlyOffer] = useState<boolean>(false);
   const [monthlyOffer, setMonthlyOffer] = useState<MonthlyOfferData | null>(null);
 
-  // Étape 3 : Date & Créneau
+  // Étape 3 : Date & Moment (Matin dès 9h ou Après-midi dès 14h)
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null); // '09:00' = Matin, '14:00' = Après-midi
   const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
-  const [timePeriodFilter, setTimePeriodFilter] = useState<'all' | 'matin' | 'aprem'>('all');
 
   // Étape 4 : Coordonnées
   const [formData, setFormData] = useState({
@@ -295,7 +309,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
   // Étape 5 : Confirmation
   const [confirmedBooking, setConfirmedBooking] = useState<any | null>(null);
 
-  // ── Chargement de l'Offre du mois active ──
+  // ── Chargement de l'Offre du moment active ──
   useEffect(() => {
     fetch('/api/bookings/monthly-offer')
       .then((res) => (res.ok ? res.json() : null))
@@ -307,13 +321,77 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
       .catch(() => {});
   }, []);
 
-  // Initialisation de la date (prochain jour ouvré dès le lendemain, hors dimanche)
+  // ── Chargement des soins dynamiques & gestion des paramètres d'URL ──
   useEffect(() => {
+    fetch('/api/bookings/services')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.success && Array.isArray(data.services) && data.services.length > 0) {
+          setServicesCatalog(data.services);
+
+          const paramSoin = searchParams?.get('soin') || searchParams?.get('service');
+          const paramCat = searchParams?.get('category');
+
+          if (paramSoin) {
+            const needle = paramSoin.toLowerCase();
+            const match = data.services.find(
+              (s: PrestationItem) =>
+                s.id.toLowerCase() === needle ||
+                s.name.toLowerCase().includes(needle)
+            );
+            if (match) {
+              setSelectedCategory(match.category);
+              setSelectedService(match);
+              setSelectedVariantIndex(0);
+              return;
+            }
+          }
+
+          if (paramCat && ['visage', 'corps', 'epilation', 'services'].includes(paramCat)) {
+            setSelectedCategory(paramCat as any);
+            const firstInCat = data.services.find((s: PrestationItem) => s.category === paramCat);
+            if (firstInCat) {
+              setSelectedService(firstInCat);
+              setSelectedVariantIndex(0);
+              return;
+            }
+          }
+
+          // Mise à jour de selectedService avec les UUIDs réels de la BDD
+          setSelectedService((prev) => {
+            if (!prev) return data.services[0];
+            const found = data.services.find(
+              (s: PrestationItem) => s.id === prev.id || s.name.toLowerCase() === prev.name.toLowerCase()
+            );
+            return found || data.services[0];
+          });
+        }
+      })
+      .catch((err) => console.warn('[ReservationClient] Services dynamiques non chargés:', err));
+  }, [searchParams]);
+
+  // Initialisation de la date (prochain jour ouvré dès le lendemain, hors dimanche, ou paramètre URL)
+  useEffect(() => {
+    const paramDate = searchParams?.get('date');
+    if (paramDate && /^\d{4}-\d{2}-\d{2}$/.test(paramDate)) {
+      setSelectedDate(paramDate);
+      return;
+    }
     const d = new Date();
     d.setDate(d.getDate() + 1);
     if (d.getDay() === 0) d.setDate(d.getDate() + 1); // Passer au lundi si dimanche
-    setSelectedDate(d.toISOString().split('T')[0]);
-  }, []);
+    setSelectedDate(toLocalDateStr(d));
+  }, [searchParams]);
+
+  // Gestion du changement de catégorie : sélectionne automatiquement le premier soin de la nouvelle catégorie
+  const handleCategoryChange = (catId: 'visage' | 'corps' | 'epilation' | 'services') => {
+    setSelectedCategory(catId);
+    const firstInCat = servicesCatalog.find((p) => p.category === catId);
+    if (firstInCat) {
+      setSelectedService(firstInCat);
+      setSelectedVariantIndex(0);
+    }
+  };
 
   // ── Calcul des totaux (durée et prix) ──
   const { currentDurationMinutes, baseDurationMinutes, currentPriceChf, currentServiceName } = useMemo(() => {
@@ -332,16 +410,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     let duration = baseDuration;
     let price = basePrice;
 
-    // Ajout des privilèges
-    for (const optId of selectedPrivileges) {
-      const p = PRIVILEGE_OPTIONS.find((opt) => opt.id === optId);
-      if (p) {
-        price += p.prix_chf;
-        duration += p.duree_minutes;
-      }
-    }
-
-    // Ajout offre du mois
+    // Ajout de l'Offre du moment
     if (includeMonthlyOffer && monthlyOffer) {
       price += Number(monthlyOffer.prix_chf);
       duration += 30;
@@ -353,15 +422,14 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
       currentPriceChf: price,
       currentServiceName: selectedService.name,
     };
-  }, [selectedService, selectedVariantIndex, selectedPrivileges, includeMonthlyOffer, monthlyOffer]);
+  }, [selectedService, selectedVariantIndex, includeMonthlyOffer, monthlyOffer]);
 
-  // ── Chargement des créneaux disponibles ──
+  // ── Chargement des créneaux disponibles & auto-sélection Matin / Après-midi ──
   useEffect(() => {
     if (!selectedDate || currentStep < 3) return;
 
     setLoadingSlots(true);
     setSlotsError(null);
-    setSelectedSlot(null);
 
     const url = `/api/bookings/available-slots?date=${selectedDate}&duration=${currentDurationMinutes}`;
 
@@ -373,19 +441,48 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
       .then((data) => {
         if (data.ouvert === false) {
           setAvailableSlots([]);
+          setSelectedSlot(null);
           setSlotsError("L'institut est fermé à cette date. Veuillez choisir un autre jour.");
         } else {
-          setAvailableSlots(data.slots || []);
+          const slots: TimeSlot[] = data.slots || [];
+          setAvailableSlots(slots);
+
+          const hasMorning = slots.some((s) => parseInt(s.heure.split(':')[0], 10) < 13 && s.disponible);
+          const hasAfternoon = slots.some((s) => parseInt(s.heure.split(':')[0], 10) >= 13 && s.disponible);
+
+          if (!hasMorning && !hasAfternoon) {
+            setSelectedSlot(null);
+            setSlotsError("Aucune disponibilité pour cette date. Veuillez choisir un autre jour.");
+          } else {
+            // Sélection automatique de la période préférée
+            setSelectedSlot((prev) => {
+              if (prev === '09:00' && hasMorning) return '09:00';
+              if (prev === '14:00' && hasAfternoon) return '14:00';
+              if (hasMorning) return '09:00';
+              return '14:00';
+            });
+          }
         }
       })
       .catch((err) => {
         console.error(err);
+        setSelectedSlot(null);
         setSlotsError("Erreur lors de la vérification de l'agenda. Veuillez réessayer.");
       })
       .finally(() => {
         setLoadingSlots(false);
       });
   }, [selectedDate, currentDurationMinutes, currentStep]);
+
+  // Détection de la disponibilité Matin et Après-midi
+  const isMorningAvailable = useMemo(() => {
+    return availableSlots.some((s) => parseInt(s.heure.split(':')[0], 10) < 13 && s.disponible);
+  }, [availableSlots]);
+
+  const isAfternoonAvailable = useMemo(() => {
+    return availableSlots.some((s) => parseInt(s.heure.split(':')[0], 10) >= 13 && s.disponible);
+  }, [availableSlots]);
+
 
   // ── Créneaux filtrés par période (Matin dès 9h / Après-midi dès 14h) ──
   const { morningSlots, afternoonSlots } = useMemo(() => {
@@ -404,18 +501,18 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     return { morningSlots: morning, afternoonSlots: afternoon };
   }, [availableSlots]);
 
-  // 14 prochains jours ouvrés (du lundi au samedi)
+  // 14 prochains jours ouvrés (du lundi au samedi) calculés en heure locale
   const dateOptions = useMemo(() => {
     const dates: { dateStr: string; dayName: string; dayNumber: number; monthName: string; isSunday: boolean }[] = [];
     const now = new Date();
 
-    for (let i = 1; i <= 21 && dates.length < 14; i++) {
+    for (let i = 1; i <= 28 && dates.length < 14; i++) {
       const d = new Date(now);
       d.setDate(now.getDate() + i);
       const isSunday = d.getDay() === 0;
 
       if (!isSunday) {
-        const dateStr = d.toISOString().split('T')[0];
+        const dateStr = toLocalDateStr(d);
         const dayName = d.toLocaleDateString('fr-CH', { weekday: 'short' });
         const dayNumber = d.getDate();
         const monthName = d.toLocaleDateString('fr-CH', { month: 'short' });
@@ -424,6 +521,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     }
     return dates;
   }, []);
+
 
   // ── Validation de l'étape coordonnées ──
   const validateForm = () => {
@@ -453,25 +551,22 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     setSubmitting(true);
     setSubmitError(null);
 
-    // Préparation des options complémentaires
-    const optionsToSend = selectedPrivileges.map((id) => {
-      const p = PRIVILEGE_OPTIONS.find((opt) => opt.id === id)!;
-      return {
-        id: p.id,
-        nom: p.nom,
-        prix_chf: p.prix_chf,
-        duree_minutes: p.duree_minutes,
-      };
-    });
-
+    // Préparation de l'Offre du Moment exclusive (si cochée)
+    const optionsToSend: { id: string; nom: string; prix_chf: number; duree_minutes: number }[] = [];
     if (includeMonthlyOffer && monthlyOffer) {
       optionsToSend.push({
         id: monthlyOffer.id,
-        nom: `Offre du Mois : ${monthlyOffer.titre}`,
+        nom: `Offre du Moment : ${monthlyOffer.titre}`,
         prix_chf: Number(monthlyOffer.prix_chf),
         duree_minutes: 30,
       });
     }
+
+    const periodLabel = selectedSlot === '09:00' ? 'La séance du matin (dès 09h00)' : "La séance de l'après-midi (dès 14h00)";
+    const periodNote = `Période souhaitée : ${periodLabel} — Horaire définitif fixé avec Emmanuelle`;
+    const finalNotes = formData.notes?.trim()
+      ? `${periodNote}\nNotes : ${formData.notes.trim()}`
+      : periodNote;
 
     try {
       const payload = {
@@ -490,7 +585,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
         offer_of_month_id: includeMonthlyOffer && monthlyOffer ? monthlyOffer.id : null,
         date_rdv: selectedDate,
         heure_rdv: selectedSlot,
-        notes_cliente: formData.notes || null,
+        notes_cliente: finalNotes,
       };
 
       const res = await fetch('/api/bookings', {
@@ -585,12 +680,19 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
           <div className="mb-10">
             <div data-surface className="bg-surface border border-border rounded-[var(--radius-base,1rem)] p-3 sm:p-4 shadow-xs">
               <nav aria-label="Étapes de réservation" className="flex items-center justify-between">
-                {[
-                  { num: 1, label: 'Prestation' },
-                  { num: 2, label: 'Privilèges' },
-                  { num: 3, label: 'Créneau' },
-                  { num: 4, label: 'Coordonnées' },
-                ].map((step, idx) => {
+                {(monthlyOffer && monthlyOffer.active
+                  ? [
+                      { num: 1, label: 'Prestation' },
+                      { num: 2, label: 'Offre du moment' },
+                      { num: 3, label: 'Séance' },
+                      { num: 4, label: 'Coordonnées' },
+                    ]
+                  : [
+                      { num: 1, label: 'Prestation' },
+                      { num: 3, label: 'Séance' },
+                      { num: 4, label: 'Coordonnées' },
+                    ]
+                ).map((step, idx, arr) => {
                   const isActive = currentStep === step.num;
                   const isCompleted = currentStep > step.num;
                   return (
@@ -614,7 +716,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                               : 'bg-stone-100 text-stone-400'
                           }`}
                         >
-                          {isCompleted ? <Check className="w-4 h-4" /> : step.num}
+                          {isCompleted ? <Check className="w-4 h-4" /> : idx + 1}
                         </span>
                         <span className="hidden sm:inline">
                           <span
@@ -626,10 +728,10 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                           </span>
                         </span>
                       </button>
-                      {idx < 3 && (
+                      {idx < arr.length - 1 && (
                         <div
                           className={`h-0.5 flex-1 mx-2 sm:mx-4 rounded-full transition-colors ${
-                            currentStep > idx + 1 ? 'bg-sage' : 'bg-border'
+                            currentStep > step.num ? 'bg-sage' : 'bg-border'
                           }`}
                         />
                       )}
@@ -639,6 +741,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
               </nav>
             </div>
           </div>
+
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
@@ -655,7 +758,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => setSelectedCategory(cat.id as any)}
+                    onClick={() => handleCategoryChange(cat.id as any)}
                     className={`p-3.5 sm:p-4 rounded-[var(--radius-base,0.75rem)] text-left border transition-all ${
                       isCatActive
                         ? 'bg-sage text-white border-sage shadow-sm'
@@ -674,7 +777,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
 
             {/* Liste des soins de la catégorie sélectionnée */}
             <div className="space-y-4">
-              {PRESTATIONS_CATALOG.filter((p) => p.category === selectedCategory).map((item) => {
+              {servicesCatalog.filter((p) => p.category === selectedCategory).map((item) => {
                 const isSelected = selectedService?.id === item.id;
                 return (
                   <div
@@ -758,24 +861,42 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
               })}
             </div>
 
-            {/* Bouton de progression */}
-            <div className="flex justify-end pt-4">
+            {/* Barre récapitulative et bouton de progression Étape 1 */}
+            <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-4 sm:p-5 border border-border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-center sm:text-left">
+                <span className="text-xs text-muted block font-medium">Soin sélectionné :</span>
+                <span className="text-base sm:text-lg font-serif font-semibold text-stone-deep">
+                  {currentServiceName || 'Veuillez choisir un soin'}
+                </span>
+                <div className="text-xs text-sage font-medium mt-0.5">
+                  CHF {currentPriceChf} · Durée : {baseDurationMinutes} min
+                </div>
+              </div>
+
               <button
                 type="button"
                 data-btn="primary"
-                onClick={() => setCurrentStep(2)}
+                onClick={() => {
+                  if (monthlyOffer && monthlyOffer.active) {
+                    setCurrentStep(2);
+                  } else {
+                    setCurrentStep(3);
+                  }
+                }}
                 disabled={!selectedService}
-                className="inline-flex items-center gap-2 px-8 py-3.5 font-medium tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 font-medium tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Continuer vers les Privilèges
+                {monthlyOffer && monthlyOffer.active ? "Continuer vers l'Offre du Moment" : "Choisir votre séance"}
                 <ChevronRight className="w-4 h-4" />
               </button>
+
             </div>
           </div>
         )}
 
+
         {/* ═══════════════════════════════════════════════════════════════════
-            ÉTAPE 2 : UPSELLING & OFFRE DU MOIS
+            ÉTAPE 2 : L'OFFRE DU MOMENT
             ═══════════════════════════════════════════════════════════════════ */}
         {currentStep === 2 && (
           <div className="space-y-8 animate-fadein">
@@ -792,19 +913,19 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
               </div>
               <div className="text-right">
                 <div className="text-base font-serif font-semibold text-sage">CHF {selectedService?.priceChf}</div>
-                <div className="text-xs text-muted">{currentDurationMinutes} min</div>
+                <div className="text-xs text-muted">{baseDurationMinutes} min</div>
               </div>
             </div>
 
-            {/* 1. Mise en avant de l'Offre du Mois (si active) */}
+            {/* Mise en avant de l'Offre du Moment */}
             {monthlyOffer && monthlyOffer.active && (
               <div
                 data-surface
-                className="relative overflow-hidden rounded-[var(--radius-base,1rem)] border-2 border-sage/40 bg-surface p-6 shadow-sm"
+                className="relative overflow-hidden rounded-[var(--radius-base,1rem)] border-2 border-sage/40 bg-surface p-6 sm:p-7 shadow-sm"
               >
                 <div className="flex flex-col md:flex-row gap-6 items-center">
                   {monthlyOffer.image_url && (
-                    <div className="w-full md:w-44 h-36 rounded-xl overflow-hidden shrink-0 shadow-inner bg-stone-100">
+                    <div className="w-full md:w-52 h-44 rounded-xl overflow-hidden shrink-0 shadow-inner bg-stone-100">
                       <img
                         src={monthlyOffer.image_url}
                         alt={monthlyOffer.titre}
@@ -813,19 +934,19 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                     </div>
                   )}
 
-                  <div className="flex-1 space-y-2 text-left">
+                  <div className="flex-1 space-y-2.5 text-left">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sage text-white text-[11px] font-bold uppercase tracking-wider">
                       <Sparkles className="w-3.5 h-3.5" />
-                      Offre Exclusive du Mois
+                      Offre Exclusive du Moment
                     </div>
-                    <h3 className="text-xl font-serif font-semibold text-stone-deep">{monthlyOffer.titre}</h3>
+                    <h3 className="text-xl sm:text-2xl font-serif font-semibold text-stone-deep">{monthlyOffer.titre}</h3>
                     {monthlyOffer.description && (
                       <p className="text-muted text-xs sm:text-sm font-light leading-relaxed">
                         {monthlyOffer.description}
                       </p>
                     )}
                     <div className="text-lg font-serif font-semibold text-sage">
-                      Tarif Privilège : CHF {monthlyOffer.prix_chf}
+                      Tarif Préférentiel : CHF {monthlyOffer.prix_chf}
                     </div>
                   </div>
 
@@ -834,15 +955,15 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                       type="button"
                       data-btn={includeMonthlyOffer ? 'primary' : 'secondary'}
                       onClick={() => setIncludeMonthlyOffer(!includeMonthlyOffer)}
-                      className="w-full md:w-auto px-5 py-3 text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2"
+                      className="w-full md:w-auto px-6 py-3.5 text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2"
                     >
                       {includeMonthlyOffer ? (
                         <>
                           <Check className="w-4 h-4" />
-                          Offre ajoutée à votre séance
+                          Offre du moment ajoutée
                         </>
                       ) : (
-                        '+ Ajouter cette offre exclusive'
+                        '+ Ajouter cette offre à mon soin'
                       )}
                     </button>
                   </div>
@@ -850,64 +971,10 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
               </div>
             )}
 
-            {/* 2. Options Privilèges Complémentaires (Upselling doux) */}
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <h3 className="text-xl font-serif text-stone-deep">Les Privilèges Cabine Complémentaires</h3>
-                <p className="text-xs sm:text-sm text-muted font-light">
-                  Complétez votre soin par une attention sur-mesure pour prolonger la détente (réalisées durant votre protocole ou en temps additionnel).
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {PRIVILEGE_OPTIONS.map((opt) => {
-                  const isChecked = selectedPrivileges.includes(opt.id);
-                  return (
-                    <div
-                      key={opt.id}
-                      data-surface
-                      onClick={() => {
-                        setSelectedPrivileges((prev) =>
-                          isChecked ? prev.filter((id) => id !== opt.id) : [...prev, opt.id]
-                        );
-                      }}
-                      className={`p-4 rounded-[var(--radius-base,0.75rem)] border transition-all cursor-pointer flex items-start gap-3 bg-surface ${
-                        isChecked ? 'border-sage ring-1 ring-sage bg-sage/5' : 'border-border hover:border-sage/40'
-                      }`}
-                    >
-                      <div
-                        className={`w-5 h-5 rounded mt-0.5 flex items-center justify-center shrink-0 border transition-all ${
-                          isChecked ? 'bg-sage border-sage text-white' : 'border-border text-transparent'
-                        }`}
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <h4 className="text-sm font-semibold text-stone-deep truncate">{opt.nom}</h4>
-                          <span className="text-sm font-serif font-semibold text-sage shrink-0">
-                            + CHF {opt.prix_chf}
-                          </span>
-                        </div>
-                        <p className="text-[12px] text-muted font-light mt-0.5 line-clamp-2">
-                          {opt.description}
-                        </p>
-                        {opt.duree_minutes > 0 && (
-                          <span className="inline-block mt-1 text-[11px] text-sage font-medium">
-                            +{opt.duree_minutes} min de bien-être
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* Barre de total estimé & navigation */}
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-center sm:text-left">
-                <span className="text-xs text-muted block">Total estimé de la séance :</span>
+                <span className="text-xs text-muted block">Total estimé de votre soin :</span>
                 <span className="text-2xl font-serif font-bold text-sage">
                   CHF {currentPriceChf}
                 </span>
@@ -929,7 +996,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                   onClick={() => setCurrentStep(3)}
                   className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-7 py-3 text-sm font-medium tracking-wide shadow-md transition-all"
                 >
-                  Choisir le créneau
+                  Choisir votre séance
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -1006,50 +1073,22 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
               </div>
             </div>
 
-            {/* Grille des créneaux horaires disponibles avec séparation Matin / Après-midi */}
+            {/* Sélection de la séance : Matin ou Après-midi */}
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+              <div className="border-b border-border pb-3">
                 <h3 className="text-base sm:text-lg font-serif font-medium text-stone-deep">
-                  2. Créneaux disponibles pour le <span className="capitalize">{formattedDate}</span> :
+                  2. Choisissez votre séance pour le <span className="capitalize">{formattedDate}</span> :
                 </h3>
-
-                {/* Filtre Matin / Après-midi */}
-                <div className="inline-flex rounded-lg bg-stone-100 p-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setTimePeriodFilter('all')}
-                    className={`px-3 py-1 rounded-md transition-all ${
-                      timePeriodFilter === 'all' ? 'bg-white text-stone-deep font-semibold shadow-xs' : 'text-stone-600'
-                    }`}
-                  >
-                    Tous
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTimePeriodFilter('matin')}
-                    className={`px-3 py-1 rounded-md transition-all ${
-                      timePeriodFilter === 'matin' ? 'bg-white text-stone-deep font-semibold shadow-xs' : 'text-stone-600'
-                    }`}
-                  >
-                    Matin (dès 9h)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTimePeriodFilter('aprem')}
-                    className={`px-3 py-1 rounded-md transition-all ${
-                      timePeriodFilter === 'aprem' ? 'bg-white text-stone-deep font-semibold shadow-xs' : 'text-stone-600'
-                    }`}
-                  >
-                    Après-midi (dès 14h)
-                  </button>
-                </div>
+                <p className="text-xs text-muted font-light mt-0.5">
+                  Emmanuelle réserve la cabine pour vous le matin ou l'après-midi. L'horaire exact sera fixé directement avec vous lors de sa confirmation téléphonique.
+                </p>
               </div>
 
               {loadingSlots ? (
                 <div className="py-16 text-center space-y-3 bg-surface rounded-[var(--radius-base,1rem)] border border-border">
                   <RefreshCw className="w-6 h-6 animate-spin mx-auto text-sage" />
                   <p className="text-xs sm:text-sm text-muted font-light">
-                    Interrogation de l'agenda d'Emmanuelle et calcul des battements...
+                    Interrogation de l'agenda d'Emmanuelle et vérification des disponibilités...
                   </p>
                 </div>
               ) : slotsError ? (
@@ -1057,137 +1096,183 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                   <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
                   <p>{slotsError}</p>
                 </div>
-              ) : availableSlots.length === 0 ? (
+              ) : !isMorningAvailable && !isAfternoonAvailable ? (
                 <div className="py-12 text-center bg-surface rounded-[var(--radius-base,1rem)] border border-border p-6 space-y-2">
                   <Clock className="w-8 h-8 text-stone-300 mx-auto" />
-                  <h4 className="text-sm font-semibold text-stone-deep">Aucun créneau disponible pour cette journée</h4>
+                  <h4 className="text-sm font-semibold text-stone-deep">Aucune séance disponible pour cette journée</h4>
                   <p className="text-xs text-muted max-w-sm mx-auto font-light">
-                    Emmanuelle est complète ou fermée ce jour-là. Veuillez sélectionner une autre date parmi les propositions ci-dessus.
+                    Emmanuelle est complète ou indisponible ce jour-là. Veuillez sélectionner une autre date parmi les propositions ci-dessus.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* Section MATIN (dès 09h00) */}
-                  {(timePeriodFilter === 'all' || timePeriodFilter === 'matin') && (
-                    <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-xs space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sage">
-                          <Clock className="w-4 h-4 text-sage" />
-                          Matinée (dès 9h00)
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Carte 1 : La séance du matin */}
+                  <button
+                    type="button"
+                    disabled={!isMorningAvailable}
+                    onClick={() => setSelectedSlot('09:00')}
+                    className={`p-6 rounded-[var(--radius-base,1rem)] border text-left transition-all relative flex flex-col justify-between gap-4 ${
+                      !isMorningAvailable
+                        ? 'bg-stone-50/70 border-border opacity-50 cursor-not-allowed'
+                        : selectedSlot === '09:00'
+                        ? 'bg-sage/10 border-sage ring-2 ring-sage shadow-md text-stone-deep'
+                        : 'bg-surface border-border hover:border-sage hover:bg-stone-50/50 text-stone-deep shadow-xs'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
+                            selectedSlot === '09:00' ? 'bg-sage text-white shadow-xs' : 'bg-sage/10 text-sage'
+                          }`}
+                        >
+                          <Sun className="w-6 h-6" />
                         </div>
-                        <span className="text-[11px] text-muted font-light">Idéal : 1 soin le matin</span>
+                        <div>
+                          <h4 className="text-base sm:text-lg font-serif font-bold text-stone-deep">
+                            La séance du matin
+                          </h4>
+                          <span className="text-xs text-muted font-light">Dès 09h00</span>
+                        </div>
                       </div>
-
-                      {morningSlots.length === 0 ? (
-                        <p className="text-xs text-muted italic">Aucun créneau disponible en matinée.</p>
-                      ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-                          {morningSlots.map((slot) => {
-                            const isSlotSelected = selectedSlot === slot.heure;
-                            const isPreferred = slot.heure === '09:00';
-                            return (
-                              <button
-                                key={slot.heure}
-                                type="button"
-                                disabled={!slot.disponible}
-                                onClick={() => setSelectedSlot(slot.heure)}
-                                className={`py-3 px-2 rounded-[var(--radius-base,0.75rem)] text-center border transition-all relative ${
-                                  !slot.disponible
-                                    ? 'bg-stone-50 text-stone-300 border-border cursor-not-allowed line-through'
-                                    : isSlotSelected
-                                    ? 'bg-sage text-white border-sage shadow-sm font-bold ring-2 ring-sage/20'
-                                    : 'bg-surface text-stone-deep border-border hover:border-sage hover:bg-stone-50 font-medium'
-                                }`}
-                              >
-                                {isPreferred && slot.disponible && !isSlotSelected && (
-                                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-sage/90 text-white text-[9px] px-1.5 py-0.2 rounded-full uppercase font-bold tracking-wider">
-                                    Idéal
-                                  </span>
-                                )}
-                                <span className="text-sm block">{slot.heure}</span>
-                                <span className="text-[10px] block opacity-70">jusqu'à {slot.fin}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Section APRÈS-MIDI (dès 14h00) */}
-                  {(timePeriodFilter === 'all' || timePeriodFilter === 'aprem') && (
-                    <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-xs space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sage">
-                          <Clock className="w-4 h-4 text-sage" />
-                          Après-midi (dès 14h00)
-                        </div>
-                        <span className="text-[11px] text-muted font-light">Idéal : 1 soin l'après-midi</span>
+                      <div>
+                        {isMorningAvailable ? (
+                          <span
+                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                              selectedSlot === '09:00'
+                                ? 'bg-sage text-white'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            Disponible
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-stone-100 text-stone-400 border border-stone-200">
+                            Complet
+                          </span>
+                        )}
                       </div>
-
-                      {afternoonSlots.length === 0 ? (
-                        <p className="text-xs text-muted italic">Aucun créneau disponible l'après-midi.</p>
-                      ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-                          {afternoonSlots.map((slot) => {
-                            const isSlotSelected = selectedSlot === slot.heure;
-                            const isPreferred = slot.heure === '14:00';
-                            return (
-                              <button
-                                key={slot.heure}
-                                type="button"
-                                disabled={!slot.disponible}
-                                onClick={() => setSelectedSlot(slot.heure)}
-                                className={`py-3 px-2 rounded-[var(--radius-base,0.75rem)] text-center border transition-all relative ${
-                                  !slot.disponible
-                                    ? 'bg-stone-50 text-stone-300 border-border cursor-not-allowed line-through'
-                                    : isSlotSelected
-                                    ? 'bg-sage text-white border-sage shadow-sm font-bold ring-2 ring-sage/20'
-                                    : 'bg-surface text-stone-deep border-border hover:border-sage hover:bg-stone-50 font-medium'
-                                }`}
-                              >
-                                {isPreferred && slot.disponible && !isSlotSelected && (
-                                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-sage/90 text-white text-[9px] px-1.5 py-0.2 rounded-full uppercase font-bold tracking-wider">
-                                    Idéal
-                                  </span>
-                                )}
-                                <span className="text-sm block">{slot.heure}</span>
-                                <span className="text-[10px] block opacity-70">jusqu'à {slot.fin}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
-                  )}
+
+                    <p className="text-xs text-muted font-light leading-relaxed">
+                      Idéal pour commencer votre journée dans la douceur et la sérénité en cabine privée.
+                    </p>
+
+                    <div className="text-[11px] text-sage font-medium pt-3 border-t border-border/60 flex items-center justify-between">
+                      <span>Horaire définitif fixé avec Emmanuelle</span>
+                      {selectedSlot === '09:00' && <CheckCircle2 className="w-4 h-4 text-sage" />}
+                    </div>
+                  </button>
+
+                  {/* Carte 2 : La séance de l'après-midi */}
+                  <button
+                    type="button"
+                    disabled={!isAfternoonAvailable}
+                    onClick={() => setSelectedSlot('14:00')}
+                    className={`p-6 rounded-[var(--radius-base,1rem)] border text-left transition-all relative flex flex-col justify-between gap-4 ${
+                      !isAfternoonAvailable
+                        ? 'bg-stone-50/70 border-border opacity-50 cursor-not-allowed'
+                        : selectedSlot === '14:00'
+                        ? 'bg-sage/10 border-sage ring-2 ring-sage shadow-md text-stone-deep'
+                        : 'bg-surface border-border hover:border-sage hover:bg-stone-50/50 text-stone-deep shadow-xs'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
+                            selectedSlot === '14:00' ? 'bg-sage text-white shadow-xs' : 'bg-sage/10 text-sage'
+                          }`}
+                        >
+                          <Sunset className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="text-base sm:text-lg font-serif font-bold text-stone-deep">
+                            La séance de l'après-midi
+                          </h4>
+                          <span className="text-xs text-muted font-light">Dès 14h00</span>
+                        </div>
+                      </div>
+                      <div>
+                        {isAfternoonAvailable ? (
+                          <span
+                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                              selectedSlot === '14:00'
+                                ? 'bg-sage text-white'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            Disponible
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-stone-100 text-stone-400 border border-stone-200">
+                            Complet
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted font-light leading-relaxed">
+                      Parfait pour vous offrir une parenthèse de déconnexion et de ressourcement dans l'après-midi.
+                    </p>
+
+                    <div className="text-[11px] text-sage font-medium pt-3 border-t border-border/60 flex items-center justify-between">
+                      <span>Horaire définitif fixé avec Emmanuelle</span>
+                      {selectedSlot === '14:00' && <CheckCircle2 className="w-4 h-4 text-sage" />}
+                    </div>
+                  </button>
                 </div>
               )}
             </div>
 
-            {/* Navigation étape 3 */}
-            <div className="flex items-center justify-between pt-4">
-              <button
-                type="button"
-                data-btn="secondary"
-                onClick={() => setCurrentStep(2)}
-                className="px-5 py-3 text-sm font-medium transition-all"
-              >
-                Retour
-              </button>
+            {/* Récapitulatif du créneau retenu & navigation étape 3 */}
+            <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-4 sm:p-5 border border-border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage shrink-0">
+                  <CalendarCheck className="w-5 h-5 text-sage" />
+                </div>
+                <div>
+                  <span className="text-xs text-muted block font-medium">Votre séance choisie :</span>
+                  {selectedSlot ? (
+                    <div className="text-base sm:text-lg font-serif font-semibold text-stone-deep capitalize">
+                      {formattedDate} —{' '}
+                      <span className="text-sage">
+                        {selectedSlot === '09:00' ? 'La séance du matin (dès 09h00)' : "La séance de l'après-midi (dès 14h00)"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-stone-400 italic">Veuillez choisir la séance du matin ou de l'après-midi</div>
+                  )}
+                  <span className="text-xs text-muted block font-light">
+                    Horaire exact fixé avec Emmanuelle lors de la confirmation téléphonique
+                  </span>
+                </div>
+              </div>
 
-              <button
-                type="button"
-                data-btn="primary"
-                onClick={() => setCurrentStep(4)}
-                disabled={!selectedSlot}
-                className="inline-flex items-center gap-2 px-8 py-3.5 font-medium text-sm sm:text-base tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Continuer vers vos Coordonnées
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <button
+                  type="button"
+                  data-btn="secondary"
+                  onClick={() => setCurrentStep(monthlyOffer?.active ? 2 : 1)}
+                  className="px-5 py-3 text-sm font-medium transition-all"
+                >
+                  Retour
+                </button>
+                <button
+                  type="button"
+                  data-btn="primary"
+                  onClick={() => setCurrentStep(4)}
+                  disabled={!selectedSlot}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-8 py-3.5 font-medium text-sm sm:text-base tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continuer vers vos Coordonnées
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         )}
+
 
         {/* ═══════════════════════════════════════════════════════════════════
             ÉTAPE 4 : COORDONNÉES & MENTION RASSURANTE 1-2-3
@@ -1200,11 +1285,15 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                 <span className="text-xs text-muted font-medium">Récapitulatif de votre séance :</span>
                 <div className="text-base font-serif font-semibold text-stone-deep">
                   {currentServiceName}
-                  {selectedPrivileges.length > 0 && ` + ${selectedPrivileges.length} privilège(s)`}
+                  {includeMonthlyOffer && monthlyOffer && ` + Offre du Moment (${monthlyOffer.titre})`}
                 </div>
                 <div className="text-xs text-muted flex items-center gap-2">
                   <Calendar className="w-3.5 h-3.5 text-sage" />
-                  <span className="capitalize">{formattedDate}</span> à <strong>{selectedSlot}</strong> ({currentDurationMinutes} min)
+                  <span className="capitalize">{formattedDate}</span> —{' '}
+                  <span className="font-semibold text-stone-deep">
+                    {selectedSlot === '09:00' ? 'La séance du matin (dès 09h00)' : "La séance de l'après-midi (dès 14h00)"}
+                  </span>
+                  <span className="text-muted font-light">({currentDurationMinutes} min)</span>
                 </div>
               </div>
               <div className="text-right">
@@ -1475,14 +1564,24 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
 
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
                   <div>
-                    <span className="text-xs text-muted block">Date & Heure :</span>
+                    <span className="text-xs text-muted block">Séance demandée :</span>
                     <span className="text-sm font-semibold text-stone-deep capitalize">
                       {new Date(`${confirmedBooking.date_rdv}T12:00:00`).toLocaleDateString('fr-CH', {
                         weekday: 'short',
                         day: 'numeric',
                         month: 'short',
                       })}{' '}
-                      à <strong>{confirmedBooking.heure_rdv}</strong>
+                      —{' '}
+                      <strong>
+                        {confirmedBooking.heure_rdv === '09:00'
+                          ? 'Séance du matin'
+                          : confirmedBooking.heure_rdv === '14:00'
+                          ? "Séance de l'après-midi"
+                          : confirmedBooking.heure_rdv}
+                      </strong>
+                    </span>
+                    <span className="text-[10px] text-muted block font-light">
+                      Horaire exact convenu avec Emmanuelle
                     </span>
                   </div>
                   <div>

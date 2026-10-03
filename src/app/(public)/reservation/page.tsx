@@ -25,6 +25,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata(RESERVATION_SLUG, meta, `${SITE_CONFIG.url}/reservation`);
 }
 
+import { Suspense } from 'react';
+
 export default async function ReservationPage() {
   const business = await getBusinessInfoServer();
   const settings = await getSettingsServer(['business_phone', 'business_owner', 'business_name']);
@@ -71,10 +73,20 @@ export default async function ReservationPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(reservationActionLd) }}
       />
-      <ReservationClient
-        businessPhone={settings.business_phone || business.phone}
-        businessOwner={settings.business_owner || business.owner}
-      />
+      <Suspense fallback={
+        <div className="min-h-screen bg-paper text-stone-deep py-12 px-4 flex items-center justify-center">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-sage border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-sm text-muted">Chargement de votre espace de réservation...</p>
+          </div>
+        </div>
+      }>
+        <ReservationClient
+          businessPhone={settings.business_phone || business.phone}
+          businessOwner={settings.business_owner || business.owner}
+        />
+      </Suspense>
     </>
   );
 }
+

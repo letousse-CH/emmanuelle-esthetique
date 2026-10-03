@@ -492,44 +492,98 @@ export async function createBooking(
     }
   }
 
-  // 2. Rapprochement CRM Cliente : recherche par téléphone ou e-mail
+  // 2. Rapprochement CRM Cliente : vérification stricte anti-doublon
   let clientId: string | null = null;
-  const cleanPhone = input.telephone.replace(/[\s\.\-\/]/g, '').trim();
+  const rawPhone = input.telephone.trim();
+  const cleanPhone = rawPhone.replace(/[\s\.\-\/]/g, '');
+  const phoneDigits = rawPhone.replace(/\D/g, '');
+  const phoneSuffix = phoneDigits.length >= 7 ? phoneDigits.slice(-7) : phoneDigits;
   const cleanEmail = input.email?.trim().toLowerCase() || null;
+  const cleanNom = input.nom.trim();
+  const cleanPrenom = input.prenom.trim();
 
   try {
-    let query = client.from('clients').select('id, telephone, email').eq('archived', false);
-    if (cleanPhone) {
-      query = query.or(`telephone.eq.${cleanPhone}${cleanEmail ? `,email.eq.${cleanEmail}` : ''}`);
-    } else if (cleanEmail) {
-      query = query.eq('email', cleanEmail);
+    // 2.1 Recherche d'abord par téléphone (exact ou suffixe 7 chiffres) ou e-mail
+    let matchedClient: any = null;
+
+    if (cleanEmail) {
+      const { data: byEmail } = await client
+        .from('clients')
+        .select('id, nom, prenom, telephone, email')
+        .ilike('email', cleanEmail)
+        .eq('archived', false)
+        .limit(1);
+      if (byEmail && byEmail.length > 0) {
+        matchedClient = byEmail[0];
+      }
     }
 
-    const { data: matchedClients } = await query.limit(1);
+    if (!matchedClient && phoneSuffix.length >= 7) {
+      const { data: byPhone } = await client
+        .from('clients')
+        .select('id, nom, prenom, telephone, email')
+        .ilike('telephone', `%${phoneSuffix}%`)
+        .eq('archived', false)
+        .limit(1);
+      if (byPhone && byPhone.length > 0) {
+        matchedClient = byPhone[0];
+      }
+    }
 
-    if (matchedClients && matchedClients.length > 0) {
-      clientId = matchedClients[0].id;
+    // 2.2 Si non trouvé par téléphone/e-mail, recherche par nom et prénom exacts
+    if (!matchedClient && cleanNom && cleanPrenom) {
+      const { data: byName } = await client
+        .from('clients')
+        .select('id, nom, prenom, telephone, email')
+        .ilike('nom', cleanNom)
+        .ilike('prenom', cleanPrenom)
+        .eq('archived', false)
+        .limit(1);
+      if (byName && byName.length > 0) {
+        matchedClient = byName[0];
+      }
+    }
+
+    if (matchedClient) {
+      // Cliente existante trouvée : ON NE CRÉE PAS DE NOUVELLE FICHE
+      clientId = matchedClient.id;
+
+      // Compléter les coordonnées manquantes sur la fiche existante sans écraser les données
+      const updates: Record<string, any> = {};
+      if (!matchedClient.email && cleanEmail) updates.email = cleanEmail;
+      if (!matchedClient.telephone && rawPhone) updates.telephone = rawPhone;
+      if (Object.keys(updates).length > 0) {
+        updates.updated_at = new Date().toISOString();
+        await client.from('clients').update(updates).eq('id', clientId);
+      }
     } else {
-      // Nouvelle cliente : création dans le fichier CRM clients
-      const { data: newClient } = await client
+      // Cliente inexistante en base : création automatique de la fiche dans Supabase
+      const { data: newClient, error: clientErr } = await client
         .from('clients')
         .insert({
-          nom: input.nom.trim(),
-          prenom: input.prenom.trim(),
-          telephone: cleanPhone,
+          nom: cleanNom,
+          prenom: cleanPrenom,
+          telephone: rawPhone,
           email: cleanEmail,
-          notes: `Créée automatiquement via la réservation en ligne (${input.date_rdv}).`,
+          notes: `Fiche créée automatiquement lors de la réservation en ligne (${input.date_rdv}).`,
+          consent_whatsapp: true,
+          consent_email: Boolean(cleanEmail),
+          consent_source: 'reservation_en_ligne',
+          updated_at: new Date().toISOString(),
         })
         .select('id')
         .single();
 
-      if (newClient) {
+      if (clientErr) {
+        console.warn('[createBooking] Erreur insertion nouvelle cliente:', clientErr);
+      } else if (newClient) {
         clientId = newClient.id;
       }
     }
   } catch (crmErr) {
     console.warn('[createBooking] Avertissement liaison CRM cliente:', crmErr);
   }
+
 
   // 3. Insertion de la réservation dans `bookings`
   const bookingData = {
