@@ -13,9 +13,14 @@ type Asset = { file_name: string; url: string; alt_text: string | null };
 
 let cache: Promise<Asset[]> | null = null;
 function loadAssets(): Promise<Asset[]> {
+  // Un résultat vide ou en erreur n'est pas gardé : on réessaiera au prochain affichage.
   cache ??= Promise.resolve(
     supabase.from('media_assets').select('file_name,url,alt_text').order('created_at', { ascending: false }).limit(200),
-  ).then(({ data }) => (data as Asset[] | null) ?? []).catch(() => []);
+  ).then(({ data }) => {
+    const rows = (data as Asset[] | null) ?? [];
+    if (rows.length === 0) cache = null;
+    return rows;
+  }).catch(() => { cache = null; return [] as Asset[]; });
   return cache;
 }
 
@@ -31,12 +36,16 @@ const THEMES: { match: RegExp; files: string[] }[] = [
   { match: /divers|autre|forfait/, files: ['algues-marines', 'le-mont-saint-michel'] },
 ];
 
+/** Photo d'ambiance des catégories sans thème reconnu. */
+const DEFAULT_FILES = ['1790593008713', '1790587847303', 'algues-marines'];
+
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export function pickPhoto(label: string, assets: Asset[]): string | null {
   const theme = THEMES.find(t => t.match.test(norm(label)));
-  if (!theme) return null;
-  for (const f of theme.files) {
+  // Catégorie inconnue : photo d'ambiance par défaut, pour qu'aucune tuile ne reste sans image.
+  const files = theme ? theme.files : DEFAULT_FILES;
+  for (const f of files) {
     const a = assets.find(x => norm(x.file_name).includes(f) || norm(x.url).includes(f.replace(/ /g, '-')));
     if (a) return a.url;
   }
