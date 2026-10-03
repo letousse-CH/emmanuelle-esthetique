@@ -13,6 +13,8 @@ import { CANAL_LABELS, segmentLabel } from '../../../types/promotions';
 import type { Promotion, PromotionSend } from '../../../types/promotions';
 import PromotionEditor from './PromotionEditor';
 import { Button, Callout, PageHeader } from '../../../components/admin/ui';
+import { Fab } from '../../../components/admin/mobile/ui';
+import { useConfirm } from '../../../components/admin/mobile-pages/useConfirm';
 
 const dateCH = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString('fr-CH') : '—';
@@ -30,6 +32,7 @@ export default function PromotionsClient() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Promotion | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmer, confirmNode] = useConfirm();
 
   useEffect(() => { load(); }, []);
 
@@ -81,9 +84,9 @@ export default function PromotionsClient() {
     const n = counts.get(p.id);
     const envoyes = (n?.email ?? 0) + (n?.whatsapp ?? 0);
     const suite = envoyes > 0
-      ? `\n\nSon journal d'envoi (${envoyes} destinataire${envoyes > 1 ? 's' : ''}) part avec elle : recréer la même promotion la renverrait à tout le monde.`
+      ? `Son journal d'envoi (${envoyes} destinataire${envoyes > 1 ? 's' : ''}) part avec elle : recréer la même promotion la renverrait à tout le monde.`
       : '';
-    if (!confirm(`Supprimer « ${p.nom} » ?${suite}`)) return;
+    if (!(await confirmer({ title: `Supprimer « ${p.nom} » ?`, message: suite || undefined, confirmLabel: 'Supprimer', danger: true }))) return;
     setBusyId(p.id);
     try {
       await deletePromotion(p.id);
@@ -106,15 +109,17 @@ export default function PromotionsClient() {
         title="Promotions"
         description={`Offres envoyées par e-mail ou WhatsApp aux clientes et aux abonnés du site.${total > 0 ? ` ${total} envoi${total > 1 ? 's' : ''} au total.` : ''}`}
         actions={
-          <Button variant="primary" icon={Plus} onClick={creer} loading={busyId === 'new'}>
-            Créer une promotion
-          </Button>
+          <div className="hidden lg:block">
+            <Button variant="primary" icon={Plus} onClick={creer} loading={busyId === 'new'}>
+              Créer une promotion
+            </Button>
+          </div>
         }
       />
 
       {/* Le consentement n'est pas un détail de conformité : c'est ce qui
           décide qui reçoit. Autant le dire là où on crée les envois. */}
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-[13px] text-stone-600 leading-relaxed">
+      <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-[13px] max-lg:text-[14px] text-stone-600 leading-relaxed">
         Une promotion ne part qu&apos;aux personnes qui ont donné leur accord : les cases
         <strong className="text-stone-700"> Accords publicitaires </strong> de chaque
         <Link href="/admin/caisse/clients" className="text-accent hover:underline mx-1">fiche cliente</Link>
@@ -148,24 +153,43 @@ export default function PromotionsClient() {
             </Button>
           </div>
         ) : (
-          <ul className="divide-y divide-stone-50">
+          <ul className="divide-y divide-stone-100 lg:divide-stone-50">
             {promotions.map(p => {
               const n = counts.get(p.id);
+              const pill = (cls: string) => (
+                <span
+                  className={`${cls} items-center gap-1 text-[12px] max-lg:text-[13px] font-semibold px-2 py-1 rounded ${
+                    p.status === 'envoyee' ? 'text-emerald-700 bg-emerald-50'
+                    : p.status === 'en_cours' ? 'text-amber-700 bg-amber-50'
+                    : 'text-stone-700 bg-stone-100'
+                  }`}
+                >
+                  {p.status === 'envoyee' && <Check size={11} />}
+                  {STATUS_LABELS[p.status]}
+                </span>
+              );
               return (
-                <li key={p.id} className="flex items-center gap-3 px-5 py-4 hover:bg-stone-50/50 transition-colors">
+                <li key={p.id} className="flex items-center gap-3 px-5 py-4 max-lg:px-4 max-lg:py-2 hover:bg-stone-50/50 transition-colors">
                   <button
                     onClick={() => setEditing(p)}
-                    className="flex-1 min-w-0 text-left cursor-pointer"
+                    className="flex-1 min-w-0 text-left cursor-pointer max-lg:min-h-[64px] max-lg:py-2"
                   >
-                    <p className="text-sm font-medium text-stone-900 truncate hover:underline underline-offset-2">
+                    <p className="text-sm max-lg:text-[16px] font-medium text-stone-900 truncate max-lg:whitespace-normal max-lg:line-clamp-2 hover:underline underline-offset-2">
                       {p.nom}
                     </p>
-                    <p className="truncate text-[12.5px] text-stone-600">
+                    <p className="truncate text-[12.5px] max-lg:text-[14px] max-lg:whitespace-normal text-stone-600">
                       {CANAL_LABELS[p.canal]} · {segmentLabel(p.segment)} · {dateCH(p.created_at)}
+                    </p>
+                    {/* Téléphone : les compteurs d'envoi passent sous le titre. */}
+                    <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-stone-600 tabular-nums lg:hidden">
+                      {pill('inline-flex')}
+                      {(n?.email ?? 0) > 0 && <span className="inline-flex items-center gap-1 whitespace-nowrap"><Mail size={13} aria-hidden="true" /> {n!.email} e-mail{n!.email > 1 ? 's' : ''}</span>}
+                      {(n?.whatsapp ?? 0) > 0 && <span className="inline-flex items-center gap-1 whitespace-nowrap"><MessageCircle size={13} aria-hidden="true" /> {n!.whatsapp} WhatsApp</span>}
+                      {!n?.email && !n?.whatsapp && <span className="whitespace-nowrap">Aucun envoi</span>}
                     </p>
                   </button>
 
-                  <div className="hidden sm:flex items-center gap-2 shrink-0">
+                  <div className="hidden lg:flex items-center gap-2 shrink-0">
                     {(n?.email ?? 0) > 0 && (
                       <span className="inline-flex items-center gap-1 text-[13px] text-stone-600 tabular-nums" title="E-mails envoyés">
                         <Mail size={13} className="text-stone-600" /> {n!.email}
@@ -183,16 +207,7 @@ export default function PromotionsClient() {
                     )}
                   </div>
 
-                  <span
-                    className={`shrink-0 inline-flex items-center gap-1 text-[12px] font-semibold px-2 py-1 rounded ${
-                      p.status === 'envoyee' ? 'text-emerald-700 bg-emerald-50'
-                      : p.status === 'en_cours' ? 'text-amber-700 bg-amber-50'
-                      : 'text-stone-700 bg-stone-100'
-                    }`}
-                  >
-                    {p.status === 'envoyee' && <Check size={11} />}
-                    {STATUS_LABELS[p.status]}
-                  </span>
+                  {pill('shrink-0 inline-flex max-lg:hidden')}
 
                   <div className="flex items-center gap-1 shrink-0">
                     {busyId === p.id ? (
@@ -202,14 +217,14 @@ export default function PromotionsClient() {
                         <button
                           onClick={() => setEditing(p)}
                           aria-label={`Ouvrir ${p.nom}`} title="Ouvrir"
-                          className="p-1.5 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
+                          className="p-1.5 max-lg:hidden text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors cursor-pointer"
                         >
                           <Pencil size={14} />
                         </button>
                         <button
                           onClick={() => supprimer(p)}
                           aria-label={`Supprimer ${p.nom}`} title="Supprimer"
-                          className="p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                          className="p-1.5 max-lg:grid max-lg:size-11 max-lg:place-items-center max-lg:p-0 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -222,6 +237,11 @@ export default function PromotionsClient() {
           </ul>
         )}
       </div>
+
+      {!editing && !loading && promotions.length > 0 && (
+        <Fab icon={Plus} label="Créer une promotion" extended onClick={creer} loading={busyId === 'new'} />
+      )}
+      {confirmNode}
 
       {editing && (
         <PromotionEditor

@@ -22,7 +22,8 @@ import { Button, Callout, FormMessage } from '../../../components/admin/ui';
 import type { BookingSettings } from '../../../types/booking';
 import { timeToMinutes } from '../../../types/booking';
 import BlocksSection from '../../../components/admin/reservations/BlocksSection';
-import { FeedbackProvider } from '../../../components/admin/reservations/Feedback';
+import { FeedbackProvider, useFeedback } from '../../../components/admin/reservations/Feedback';
+import { useIsLgSync } from '../../../components/admin/reservations/hooks';
 import SyncClientsButton from '../../../components/admin/reservations/SyncClientsButton';
 import WeeklyHoursEditor, { normalizeHours, validateHours } from '../../../components/admin/reservations/WeeklyHoursEditor';
 import type { WeeklyHours } from '../../../components/admin/reservations/WeeklyHoursEditor';
@@ -51,6 +52,16 @@ interface BookingSettingsForm {
 
 const PAS_OPTIONS = [5, 10, 15, 20, 30, 60];
 
+/**
+ * Barre d'enregistrement : sur téléphone elle reste collée en bas de l'écran
+ * (au-dessus de la barre d'onglets) tant que le formulaire est à l'écran ;
+ * sur ordinateur, bouton à droite en fin de formulaire, comme avant.
+ */
+const SAVE_BAR =
+  'sticky z-20 -mx-4 mt-2 border-t border-stone-200 bg-white/95 px-4 py-3 backdrop-blur ' +
+  'bottom-[calc(var(--admin-tabbar-h,0px)+env(safe-area-inset-bottom))] ' +
+  'lg:static lg:mx-0 lg:mt-0 lg:flex lg:justify-end lg:border-0 lg:bg-transparent lg:px-0 lg:pb-0 lg:pt-3 lg:backdrop-blur-none';
+
 export default function BookingSettingsPanel() {
   return (
     <FeedbackProvider>
@@ -60,6 +71,15 @@ export default function BookingSettingsPanel() {
 }
 
 function BookingSettingsContent() {
+  // Sur téléphone, le résultat d'un enregistrement apparaît aussi en bulle au-dessus de la barre d'onglets
+  // (le message en haut de la section est hors de l'écran quand on vient d'appuyer sur « Enregistrer »).
+  const fb = useFeedback();
+  const isLg = useIsLgSync();
+  const announce = (m: { type: 'success' | 'error'; text: string }) => {
+    if (isLg) return;
+    if (m.type === 'success') fb.success(m.text);
+    else fb.error(m.text);
+  };
   // ── État Offre du mois ──
   const [offer, setOffer] = useState<MonthlyOfferForm>({
     titre: '',
@@ -189,9 +209,13 @@ function BookingSettingsContent() {
         setOffer((prev) => ({ ...prev, id: json.offer.id }));
       }
 
-      setOfferMsg({ type: 'success', text: 'Offre du mois enregistrée avec succès.' });
+      const m = { type: 'success' as const, text: 'Offre du mois enregistrée avec succès.' };
+      setOfferMsg(m);
+      announce(m);
     } catch (err: any) {
-      setOfferMsg({ type: 'error', text: err.message || 'Erreur lors de la sauvegarde.' });
+      const m = { type: 'error' as const, text: err.message || 'Erreur lors de la sauvegarde.' };
+      setOfferMsg(m);
+      announce(m);
     } finally {
       setSavingOffer(false);
     }
@@ -206,11 +230,15 @@ function BookingSettingsContent() {
     setSettingsMsg(null);
 
     if (hoursErrorList.length > 0) {
-      setSettingsMsg({ type: 'error', text: 'Corrigez les horaires d’ouverture avant d’enregistrer.' });
+      const m = { type: 'error' as const, text: 'Corrigez les horaires d’ouverture avant d’enregistrer.' };
+      setSettingsMsg(m);
+      announce(m);
       return;
     }
     if (!settings.heure_coupure_periode || timeToMinutes(settings.heure_coupure_periode) < 6 * 60) {
-      setSettingsMsg({ type: 'error', text: 'Indiquez l’heure à laquelle le matin se termine (par exemple 13:00).' });
+      const m = { type: 'error' as const, text: 'Indiquez l’heure à laquelle le matin se termine (par exemple 13:00).' };
+      setSettingsMsg(m);
+      announce(m);
       return;
     }
 
@@ -242,23 +270,24 @@ function BookingSettingsContent() {
           .upsert({ key: 'business_phone', value: settings.smartphone_phone });
       }
 
-      setSettingsMsg({
-        type: 'success',
-        text: 'Paramètres et synchronisation enregistrés avec succès.',
-      });
+      const m = { type: 'success' as const, text: 'Paramètres et synchronisation enregistrés avec succès.' };
+      setSettingsMsg(m);
+      announce(m);
     } catch (err: any) {
-      setSettingsMsg({ type: 'error', text: err.message || 'Erreur lors de la sauvegarde.' });
+      const m = { type: 'error' as const, text: err.message || 'Erreur lors de la sauvegarde.' };
+      setSettingsMsg(m);
+      announce(m);
     } finally {
       setSavingSettings(false);
     }
   };
 
   return (
-    <div className="space-y-12 animate-fadein">
+    <div className="space-y-6 lg:space-y-12 animate-fadein">
       {/* ═════════════════════════════════════════════════════════════════════
           SECTION 1 : L'OFFRE DU MOIS
           ═════════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 shadow-xs space-y-6">
+      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-100 pb-5">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -267,20 +296,20 @@ function BookingSettingsContent() {
               </span>
               <h2 className="text-xl font-bold text-stone-900">L'Offre du Mois en ligne</h2>
             </div>
-            <p className="text-xs sm:text-sm text-stone-500 font-light">
+            <p className="text-[14px] sm:text-sm text-stone-600 sm:text-stone-500 font-light">
               Mettez en avant un soin d'exception ou un forfait saisonnier dans le module de réservation publique (Étape 2).
             </p>
           </div>
 
-          <label className="relative inline-flex items-center cursor-pointer select-none">
+          <label className="relative inline-flex min-h-11 items-center cursor-pointer select-none">
             <input
               type="checkbox"
               checked={offer.active}
               onChange={(e) => setOffer({ ...offer, active: e.target.checked })}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-            <span className="ml-3 text-xs font-semibold text-stone-700">
+            <div className="relative w-11 h-6 shrink-0 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            <span className="ml-3 text-[14px] lg:text-xs font-semibold text-stone-700">
               {offer.active ? 'Offre Active' : 'Offre Désactivée'}
             </span>
           </label>
@@ -288,7 +317,7 @@ function BookingSettingsContent() {
 
         {offerMsg && (
           <div
-            className={`p-4 rounded-xl text-xs sm:text-sm flex items-center gap-3 ${
+            className={`p-4 rounded-xl text-[14px] sm:text-sm flex items-center gap-3 ${
               offerMsg.type === 'success'
                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                 : 'bg-rose-50 text-rose-800 border border-rose-200'
@@ -302,7 +331,7 @@ function BookingSettingsContent() {
         <form onSubmit={handleSaveOffer} className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div className="sm:col-span-2 space-y-1">
-              <label className="text-xs font-semibold text-stone-700 block">
+              <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
                 Titre de l'Offre du mois *
               </label>
               <input
@@ -316,7 +345,7 @@ function BookingSettingsContent() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-stone-700 block">
+              <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
                 Tarif Préférentiel (CHF) *
               </label>
               <input
@@ -333,7 +362,7 @@ function BookingSettingsContent() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-stone-700 block">
+            <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
               Description & Avantages exclusifs
             </label>
             <textarea
@@ -346,7 +375,7 @@ function BookingSettingsContent() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-stone-700 block">
+            <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
               Visuel de l'Offre (URL de l'image)
             </label>
             <div className="flex gap-2">
@@ -369,11 +398,11 @@ function BookingSettingsContent() {
             )}
           </div>
 
-          <div className="flex justify-end pt-3">
+          <div className={SAVE_BAR}>
             <button
               type="submit"
               disabled={savingOffer}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-accent-fg hover:bg-accent-hover text-xs font-semibold tracking-wide transition-all shadow-sm disabled:opacity-50"
+              className="inline-flex w-full lg:w-auto min-h-12 lg:min-h-0 items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-accent-fg hover:bg-accent-hover text-[15px] lg:text-xs font-semibold tracking-wide transition-all shadow-sm disabled:opacity-50"
             >
               {savingOffer ? (
                 <>
@@ -392,7 +421,7 @@ function BookingSettingsContent() {
       {/* ═════════════════════════════════════════════════════════════════════
           SECTION 2 : GOOGLE AGENDA & NOTIFICATIONS SMARTPHONE
           ═════════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 shadow-xs space-y-6">
+      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-6">
         <div className="space-y-1 border-b border-stone-100 pb-5">
           <div className="flex items-center gap-2">
             <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold">
@@ -400,14 +429,14 @@ function BookingSettingsContent() {
             </span>
             <h2 className="text-xl font-bold text-stone-900">Synchronisation Google Agenda & Notifications</h2>
           </div>
-          <p className="text-xs sm:text-sm text-stone-500 font-light">
+          <p className="text-[14px] sm:text-sm text-stone-600 sm:text-stone-500 font-light">
             Synchronisez vos réservations en temps réel avec votre calendrier personnel et recevez les alertes sur votre smartphone.
           </p>
         </div>
 
         {settingsMsg && (
           <div
-            className={`p-4 rounded-xl text-xs sm:text-sm flex items-center gap-3 ${
+            className={`p-4 rounded-xl text-[14px] sm:text-sm flex items-center gap-3 ${
               settingsMsg.type === 'success'
                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                 : 'bg-rose-50 text-rose-800 border border-rose-200'
@@ -424,25 +453,25 @@ function BookingSettingsContent() {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <h3 className="text-sm font-bold text-stone-900">Synchronisation Google Calendar</h3>
-                <p className="text-xs text-stone-600 font-light">
+                <p className="text-[13.5px] lg:text-xs text-stone-600 font-light">
                   Chaque rendez-vous confirmé créera instantanément un événement dans l'agenda de votre téléphone.
                 </p>
               </div>
 
-              <label className="relative inline-flex items-center cursor-pointer select-none">
+              <label className="relative inline-flex min-h-11 items-center cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={settings.gcal_sync_enabled}
                   onChange={(e) => setSettings({ ...settings, gcal_sync_enabled: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="relative w-11 h-6 shrink-0 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
               </label>
             </div>
 
             {settings.gcal_sync_enabled && (
               <div className="space-y-1 pt-2 border-t border-blue-100 animate-fadein">
-                <label className="text-xs font-semibold text-stone-700 block">
+                <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
                   Identifiant de votre agenda Google (Calendar ID)
                 </label>
                 <input
@@ -452,7 +481,7 @@ function BookingSettingsContent() {
                   onChange={(e) => setSettings({ ...settings, gcal_calendar_id: e.target.value })}
                   className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 font-mono"
                 />
-                <p className="text-[11px] text-stone-500 font-light">
+                <p className="text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 font-light">
                   Trouvable dans les paramètres de votre Google Agenda (Rubrique « Intégrer l'agenda »).
                 </p>
               </div>
@@ -462,7 +491,7 @@ function BookingSettingsContent() {
           {/* Notifications Smartphone & E-mail */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-stone-700 block flex items-center gap-1.5">
+              <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block flex items-center gap-1.5">
                 <Smartphone size={14} className="text-stone-400" />
                 Téléphone Smartphone pour alertes WhatsApp
               </label>
@@ -473,13 +502,13 @@ function BookingSettingsContent() {
                 onChange={(e) => setSettings({ ...settings, smartphone_phone: e.target.value })}
                 className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 focus:outline-none focus:ring-1 focus:ring-stone-400"
               />
-              <p className="text-[11px] text-stone-400 font-light">
+              <p className="text-[13px] lg:text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 lg:text-stone-400 font-light">
                 Utilisé pour le contact direct avec les clientes depuis le tableau de bord.
               </p>
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-stone-700 block flex items-center gap-1.5">
+              <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block flex items-center gap-1.5">
                 <Mail size={14} className="text-stone-400" />
                 E-mail de notification administrateur
               </label>
@@ -490,7 +519,7 @@ function BookingSettingsContent() {
                 onChange={(e) => setSettings({ ...settings, notification_email: e.target.value })}
                 className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 focus:outline-none focus:ring-1 focus:ring-stone-400"
               />
-              <p className="text-[11px] text-stone-400 font-light">
+              <p className="text-[13px] lg:text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 lg:text-stone-400 font-light">
                 Reçoit instantanément l'e-mail de récapitulatif à chaque nouvelle demande.
               </p>
             </div>
@@ -505,7 +534,7 @@ function BookingSettingsContent() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-stone-700 block">
+                <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
                   Battement (buffer) entre deux soins
                 </label>
                 <div className="flex items-center gap-2">
@@ -517,13 +546,13 @@ function BookingSettingsContent() {
                     onChange={(e) => setSettings({ ...settings, buffer_minutes: parseInt(e.target.value, 10) || 0 })}
                     className="w-24 text-sm px-3.5 py-2 rounded-xl border border-stone-200"
                   />
-                  <span className="text-xs text-stone-500">minutes</span>
+                  <span className="text-[14px] lg:text-xs text-stone-600 lg:text-stone-500">minutes</span>
                 </div>
-                <p className="text-[11px] text-stone-400 font-light">30 min recommandées pour l'aération et la préparation.</p>
+                <p className="text-[13px] lg:text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 lg:text-stone-400 font-light">30 min recommandées pour l'aération et la préparation.</p>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-stone-700 block">
+                <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
                   Délai minimum d'anticipation
                 </label>
                 <div className="flex items-center gap-2">
@@ -537,13 +566,13 @@ function BookingSettingsContent() {
                     }}
                     className="w-24 text-sm px-3.5 py-2 rounded-xl border border-stone-200"
                   />
-                  <span className="text-xs text-stone-500">heures</span>
+                  <span className="text-[14px] lg:text-xs text-stone-600 lg:text-stone-500">heures</span>
                 </div>
-                <p className="text-[11px] text-stone-400 font-light">Empêche les réservations de dernière minute imprévues.</p>
+                <p className="text-[13px] lg:text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 lg:text-stone-400 font-light">Empêche les réservations de dernière minute imprévues.</p>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-stone-700 block">
+                <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
                   Horizon d'ouverture du calendrier
                 </label>
                 <div className="flex items-center gap-2">
@@ -554,22 +583,22 @@ function BookingSettingsContent() {
                     onChange={(e) => setSettings({ ...settings, anticipation_max_jours: parseInt(e.target.value, 10) || 30 })}
                     className="w-24 text-sm px-3.5 py-2 rounded-xl border border-stone-200"
                   />
-                  <span className="text-xs text-stone-500">jours</span>
+                  <span className="text-[14px] lg:text-xs text-stone-600 lg:text-stone-500">jours</span>
                 </div>
-                <p className="text-[11px] text-stone-400 font-light">Période maximale proposée aux clientes en ligne.</p>
+                <p className="text-[13px] lg:text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 lg:text-stone-400 font-light">Période maximale proposée aux clientes en ligne.</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-1">
-                <label htmlFor="bs-pas" className="text-xs font-semibold text-stone-700 block">
+                <label htmlFor="bs-pas" className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
                   Écart entre deux heures proposées
                 </label>
                 <select
                   id="bs-pas"
                   value={settings.pas_creneau_minutes}
                   onChange={(e) => setSettings({ ...settings, pas_creneau_minutes: parseInt(e.target.value, 10) })}
-                  className="w-40 text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white"
+                  className="w-full sm:w-40 text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white"
                 >
                   {PAS_OPTIONS.map((m) => (
                     <option key={m} value={m}>
@@ -577,13 +606,13 @@ function BookingSettingsContent() {
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-stone-500 font-light">
+                <p className="text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 font-light">
                   Quand vous choisissez l’heure d’un rendez-vous, les créneaux sont proposés à ce rythme (15 min recommandées).
                 </p>
               </div>
 
               <div className="space-y-1">
-                <label htmlFor="bs-coupure" className="text-xs font-semibold text-stone-700 block">
+                <label htmlFor="bs-coupure" className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
                   Le matin se termine à
                 </label>
                 <input
@@ -591,9 +620,9 @@ function BookingSettingsContent() {
                   type="time"
                   value={settings.heure_coupure_periode}
                   onChange={(e) => setSettings({ ...settings, heure_coupure_periode: e.target.value })}
-                  className="w-40 text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white"
+                  className="w-full sm:w-40 text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white"
                 />
-                <p className="text-[11px] text-stone-500 font-light">
+                <p className="text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 font-light">
                   Sépare « matin » et « après-midi » dans les demandes des clientes.
                 </p>
               </div>
@@ -609,11 +638,11 @@ function BookingSettingsContent() {
             <WeeklyHoursEditor value={hours} onChange={setHours} errors={hoursErrors} />
           </div>
 
-          <div className="flex justify-end pt-3">
+          <div className={SAVE_BAR}>
             <button
               type="submit"
               disabled={savingSettings}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-accent-fg hover:bg-accent-hover text-xs font-semibold tracking-wide transition-all shadow-sm disabled:opacity-50"
+              className="inline-flex w-full lg:w-auto min-h-12 lg:min-h-0 items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-accent-fg hover:bg-accent-hover text-[15px] lg:text-xs font-semibold tracking-wide transition-all shadow-sm disabled:opacity-50"
             >
               {savingSettings ? (
                 <>
@@ -632,10 +661,10 @@ function BookingSettingsContent() {
       {/* ═════════════════════════════════════════════════════════════════════
           SECTION 3 : INDISPONIBILITÉS (congés, vacances, plages horaires)
           ═════════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 shadow-xs space-y-6">
+      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-6">
         <div className="space-y-1 border-b border-stone-100 pb-5">
           <h2 className="text-xl font-bold text-stone-900">Congés et indisponibilités</h2>
-          <p className="text-xs sm:text-sm text-stone-500 font-light">
+          <p className="text-[14px] sm:text-sm text-stone-600 sm:text-stone-500 font-light">
             Bloquez une journée, des vacances ou quelques heures : ces horaires ne seront plus proposés aux clientes. Aucun rendez-vous déjà pris n’est annulé.
           </p>
         </div>
@@ -645,7 +674,7 @@ function BookingSettingsContent() {
       {/* ═════════════════════════════════════════════════════════════════════
           SECTION 4 : RATTACHER LES RÉSERVATIONS À LA CLIENTÈLE
           ═════════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 shadow-xs space-y-4">
+      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-4">
         <div className="space-y-1 border-b border-stone-100 pb-5">
           <h2 className="text-xl font-bold text-stone-900">Clientèle</h2>
         </div>

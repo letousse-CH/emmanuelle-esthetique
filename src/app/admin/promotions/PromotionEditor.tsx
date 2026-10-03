@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   X, Check, Loader2, AlertCircle, Mail, MessageCircle, Send, Users, ExternalLink,
   RotateCcw, Save, TriangleAlert,
@@ -18,6 +18,7 @@ import type {
   AudienceEntry, Promotion, PromotionCanal, PromotionSend, SegmentKey, Subscriber,
 } from '../../../types/promotions';
 import type { Client, ClientStats } from '../../../types/caisse';
+import { useConfirm } from '../../../components/admin/mobile-pages/useConfirm';
 
 const MOIS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -50,6 +51,9 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [testEmail, setTestEmail] = useState('');
+
+  const [confirmer, confirmNode] = useConfirm();
+  const confirming = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -139,7 +143,14 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
   const sendAll = async () => {
     const restants = parEmail.filter(e => !servis.email.has(e.email!.toLowerCase()));
     if (restants.length === 0) { setNotice('Tout le monde a déjà reçu cet e-mail.'); return; }
-    if (!confirm(`Envoyer « ${nom} » à ${restants.length} adresse${restants.length > 1 ? 's' : ''} ?\n\nCeux qui l'ont déjà reçu sont ignorés.`)) return;
+    confirming.current = true;
+    const ok = await confirmer({
+      title: `Envoyer à ${restants.length} adresse${restants.length > 1 ? 's' : ''} ?`,
+      message: `« ${nom} » partira par e-mail. Ceux qui l'ont déjà reçu sont ignorés.`,
+      confirmLabel: 'Envoyer',
+    });
+    confirming.current = false;
+    if (!ok) return;
 
     setSending(true); setError(null); setNotice(null);
     setProgress({ done: 0, total: restants.length });
@@ -214,12 +225,24 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
 
   // Fermer ne doit ni perdre un texte en cours de rédaction, ni laisser croire
   // qu'un envoi groupé est interrompu (il continue tant que la page est ouverte).
-  const requestClose = () => {
+  const requestClose = async () => {
+    if (confirming.current) return;
     if (sending) {
       setNotice('Un envoi est en cours : attendez qu’il se termine avant de fermer.');
       return;
     }
-    if (dirty && !confirm('Des modifications ne sont pas enregistrées. Fermer quand même et les perdre ?')) return;
+    if (dirty) {
+      confirming.current = true;
+      const ok = await confirmer({
+        title: 'Fermer sans enregistrer ?',
+        message: 'Des modifications ne sont pas enregistrées : elles seraient perdues.',
+        confirmLabel: 'Fermer et perdre',
+        cancelLabel: 'Continuer à modifier',
+        danger: true,
+      });
+      confirming.current = false;
+      if (!ok) return;
+    }
     onClose();
   };
 
@@ -231,13 +254,14 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
   });
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex justify-end bg-stone-900/40" onClick={requestClose}>
       <aside
         role="dialog" aria-modal="true" aria-label={`Promotion ${promotion.nom}`}
         onClick={e => e.stopPropagation()}
-        className="bg-stone-50 w-full sm:max-w-2xl h-full overflow-y-auto shadow-2xl"
+        className="bg-stone-50 w-full sm:max-w-2xl h-full overflow-y-auto shadow-2xl max-lg:overscroll-contain"
       >
-        <header className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-4 flex items-center justify-between gap-3">
+        <header className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-4 max-lg:px-3 max-lg:pt-[calc(0.75rem+env(safe-area-inset-top))] flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <label htmlFor="promo-nom" className="sr-only">Nom de la promotion</label>
             <input
@@ -252,13 +276,13 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
           </div>
           <button
             onClick={save} disabled={saving || !dirty}
-            className={`shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-semibold transition-colors disabled:opacity-45 cursor-pointer ${
+            className={`shrink-0 flex items-center gap-1.5 h-8 max-lg:h-11 px-3 rounded-lg text-[13px] max-lg:text-[14px] font-semibold transition-colors disabled:opacity-45 cursor-pointer ${
               dirty ? 'bg-accent text-accent-fg hover:bg-accent-hover' : 'bg-stone-100 text-stone-900 hover:bg-stone-200'
             }`}
           >
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} {dirty ? 'Enregistrer' : 'Enregistré'}
           </button>
-          <button onClick={requestClose} aria-label="Fermer" className="shrink-0 p-1.5 text-stone-600 hover:text-stone-900 cursor-pointer">
+          <button onClick={requestClose} aria-label="Fermer" className="shrink-0 p-1.5 max-lg:grid max-lg:size-11 max-lg:place-items-center max-lg:p-0 text-stone-600 hover:text-stone-900 cursor-pointer">
             <X size={18} />
           </button>
         </header>
@@ -268,14 +292,14 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
             <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <AlertCircle size={15} className="shrink-0 mt-0.5" />
               <span className="flex-1">{error}</span>
-              <button onClick={() => setError(null)} aria-label="Masquer" className="shrink-0 cursor-pointer"><X size={14} /></button>
+              <button onClick={() => setError(null)} aria-label="Masquer" className="shrink-0 cursor-pointer max-lg:-m-2.5 max-lg:grid max-lg:size-11 max-lg:place-items-center"><X size={14} /></button>
             </div>
           )}
           {notice && (
             <div className="flex items-start gap-2.5 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-stone-700">
               <Check size={15} className="shrink-0 mt-0.5 text-accent" />
               <span className="flex-1">{notice}</span>
-              <button onClick={() => setNotice(null)} aria-label="Masquer" className="shrink-0 cursor-pointer"><X size={14} /></button>
+              <button onClick={() => setNotice(null)} aria-label="Masquer" className="shrink-0 cursor-pointer max-lg:-m-2.5 max-lg:grid max-lg:size-11 max-lg:place-items-center"><X size={14} /></button>
             </div>
           )}
 
@@ -286,7 +310,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
               {(['email', 'whatsapp', 'les_deux'] as PromotionCanal[]).map(c => (
                 <button
                   key={c} onClick={() => mark(setCanal)(c)} aria-pressed={canal === c}
-                  className={`px-2 py-2 rounded-lg text-[13px] font-medium border transition-colors cursor-pointer ${
+                  className={`px-2 py-2 max-lg:min-h-12 rounded-lg text-[13px] max-lg:text-[14px] font-medium border transition-colors cursor-pointer ${
                     canal === c ? 'border-accent bg-accent-soft text-accent font-semibold' : 'border-stone-200 text-stone-700 hover:border-stone-300'
                   }`}
                 >
@@ -309,7 +333,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                   mark(setSegment)(key);
                   setParams(def?.param ? { [def.param.name]: def.param.default } : {});
                 }}
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
+                className="w-full px-3 py-2 max-lg:min-h-11 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
               >
                 {SEGMENTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
               </select>
@@ -326,7 +350,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                     id="promo-param"
                     value={params.mois ?? 0}
                     onChange={e => { setParams({ mois: Number(e.target.value) }); setDirty(true); }}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
+                    className="w-full px-3 py-2 max-lg:min-h-11 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
                   >
                     <option value={0}>Mois en cours</option>
                     {MOIS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
@@ -339,7 +363,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                       setParams({ [segmentDef.param!.name]: Math.max(1, Number(e.target.value) || 1) });
                       setDirty(true);
                     }}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none tabular-nums"
+                    className="w-full px-3 py-2 max-lg:min-h-11 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none tabular-nums"
                   />
                 )}
               </div>
@@ -364,7 +388,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                     WhatsApp mais ne recevr{parWa.length > 1 ? 'ont' : 'a'} rien :
                     {' '}<button
                       onClick={() => mark(setCanal)(utiliseEmail ? 'les_deux' : 'whatsapp')}
-                      className="font-semibold text-accent hover:underline cursor-pointer"
+                      className="font-semibold text-accent hover:underline cursor-pointer max-lg:py-2.5"
                     >
                       ajouter le canal WhatsApp
                     </button>.
@@ -375,7 +399,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                     {parEmail.length} adresse{parEmail.length > 1 ? 's' : ''} e-mail dans cette audience —
                     {' '}<button
                       onClick={() => mark(setCanal)('les_deux')}
-                      className="font-semibold text-accent hover:underline cursor-pointer"
+                      className="font-semibold text-accent hover:underline cursor-pointer max-lg:py-2.5"
                     >
                       ajouter le canal e-mail
                     </button>.
@@ -404,7 +428,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                 <input
                   id="promo-objet" type="text" value={objet} onChange={e => mark(setObjet)(e.target.value)}
                   placeholder="−20 % sur les soins du visage en septembre"
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 outline-none"
+                  className="w-full px-3 py-2 max-lg:min-h-11 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 outline-none"
                 />
               </div>
               <div>
@@ -426,11 +450,11 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                 <input
                   id="promo-test" type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)}
                   placeholder="Adresse pour un essai"
-                  className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 outline-none"
+                  className="flex-1 px-3 py-2 max-lg:min-h-11 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 outline-none"
                 />
                 <button
                   onClick={sendTest} disabled={sending || !testEmail.trim() || !objet.trim() || !messageEmail.trim()}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-stone-100 text-stone-900 font-semibold hover:bg-stone-200 text-sm transition-colors disabled:opacity-40 cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 max-lg:min-h-11 rounded-lg bg-stone-100 text-stone-900 font-semibold hover:bg-stone-200 text-sm transition-colors disabled:opacity-40 cursor-pointer"
                 >
                   {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Envoyer un essai
                 </button>
@@ -439,7 +463,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
               <button
                 onClick={sendAll}
                 disabled={sending || emailsRestants === 0 || !objet.trim() || !messageEmail.trim()}
-                className="w-full flex items-center justify-center gap-2 bg-accent text-accent-fg py-2.5 rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-40 cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 bg-accent text-accent-fg py-2.5 max-lg:min-h-12 rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors disabled:opacity-40 cursor-pointer"
               >
                 {sending && progress
                   ? <><Loader2 size={14} className="animate-spin" /> Envoi en cours : {progress.done} / {progress.total}…</>
@@ -459,7 +483,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                   <span>{echecsEmail} envoi{echecsEmail > 1 ? 's' : ''} en échec.</span>
                   <button
                     onClick={retryEchecs} disabled={sending}
-                    className="font-semibold underline underline-offset-2 hover:no-underline cursor-pointer disabled:opacity-40"
+                    className="font-semibold underline underline-offset-2 hover:no-underline cursor-pointer disabled:opacity-40 max-lg:min-h-11 max-lg:px-2"
                   >
                     Réessayer
                   </button>
@@ -494,11 +518,11 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                 </p>
               ) : (
                 <>
-                  <div className="flex items-center justify-between text-[12.5px] text-stone-600">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 text-[12.5px] text-stone-600">
                     <span>{waFaits} / {parWa.length} contactées</span>
                     {waFaits > 0 && <span className="text-stone-600">Une ligne est cochée dès que sa conversation a été ouverte</span>}
                   </div>
-                  <ul className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                  <ul className="space-y-1.5 max-h-80 max-lg:max-h-none overflow-y-auto max-lg:overflow-visible pr-1">
                     {parWa.map(entry => {
                       const fait = servis.whatsapp.has(entry.waNumber!.toLowerCase());
                       return (
@@ -515,7 +539,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                           {fait ? (
                             <button
                               onClick={() => undoWhatsApp(entry)}
-                              className="shrink-0 flex items-center gap-1 text-[12.5px] text-stone-600 hover:text-stone-700 cursor-pointer"
+                              className="shrink-0 flex items-center gap-1 text-[12.5px] max-lg:text-[14px] max-lg:min-h-11 max-lg:px-2 text-stone-600 hover:text-stone-700 cursor-pointer"
                               title="Remettre dans la liste (si le message n'a finalement pas été envoyé)"
                             >
                               <RotateCcw size={12} /> Pas envoyé
@@ -524,7 +548,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
                             <button
                               onClick={() => openWhatsApp(entry)}
                               disabled={!messageWa.trim()}
-                              className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg bg-stone-100 text-stone-900 font-semibold hover:bg-stone-200 text-[13px] transition-colors disabled:opacity-40 cursor-pointer"
+                              className="shrink-0 flex items-center gap-1.5 h-8 max-lg:h-11 px-3 rounded-lg bg-stone-100 text-stone-900 font-semibold hover:bg-stone-200 text-[13px] max-lg:text-[14px] transition-colors disabled:opacity-40 cursor-pointer"
                             >
                               <ExternalLink size={13} /> Ouvrir WhatsApp
                             </button>
@@ -538,8 +562,12 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
             </section>
           )}
         </div>
+        <div className="h-[env(safe-area-inset-bottom)] lg:hidden" aria-hidden="true" />
       </aside>
     </div>
+    {/* Hors du fond cliquable : un clic dans la feuille remonterait sinon jusqu'à lui. */}
+    {confirmNode}
+    </>
   );
 }
 

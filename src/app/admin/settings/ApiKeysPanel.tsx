@@ -360,7 +360,7 @@ export default function ApiKeysPanel() {
               href="https://resend.com/api-keys"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[14px] font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline shrink-0 w-fit"
+              className="inline-flex max-lg:min-h-11 items-center gap-1.5 text-[14px] font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline shrink-0 w-fit"
             >
               <span>Obtenir une clé Resend</span>
               <ExternalLink size={13} />
@@ -386,7 +386,7 @@ export default function ApiKeysPanel() {
                   type="button"
                   onClick={() => setShowResendKey(!showResendKey)}
                   aria-label={showResendKey ? 'Masquer la clé' : 'Afficher la clé'}
-                  className="absolute right-3 text-stone-600 hover:text-stone-900 cursor-pointer"
+                  className="absolute right-3 max-lg:right-0 max-lg:inline-flex max-lg:size-11 max-lg:items-center max-lg:justify-center text-stone-600 hover:text-stone-900 cursor-pointer"
                 >
                   {showResendKey ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -444,7 +444,7 @@ export default function ApiKeysPanel() {
               href="https://dash.cloudflare.com/?to=/:account/r2"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[14px] font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline shrink-0 w-fit"
+              className="inline-flex max-lg:min-h-11 items-center gap-1.5 text-[14px] font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline shrink-0 w-fit"
             >
               <span>Obtenir les clés Cloudflare</span>
               <ExternalLink size={13} />
@@ -523,7 +523,7 @@ export default function ApiKeysPanel() {
                   type="button"
                   onClick={() => setShowR2Secret(!showR2Secret)}
                   aria-label={showR2Secret ? 'Masquer la clé secrète' : 'Afficher la clé secrète'}
-                  className="absolute right-3 text-stone-600 hover:text-stone-900 cursor-pointer"
+                  className="absolute right-3 max-lg:right-0 max-lg:inline-flex max-lg:size-11 max-lg:items-center max-lg:justify-center text-stone-600 hover:text-stone-900 cursor-pointer"
                 >
                   {showR2Secret ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -585,7 +585,7 @@ export default function ApiKeysPanel() {
               href="https://www.bing.com/webmasters/indexnow"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[14px] font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline shrink-0 w-fit"
+              className="inline-flex max-lg:min-h-11 items-center gap-1.5 text-[14px] font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline shrink-0 w-fit"
             >
               <span>Créer une clé IndexNow</span>
               <ExternalLink size={13} />

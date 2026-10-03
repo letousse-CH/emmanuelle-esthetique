@@ -178,7 +178,7 @@ export default function AiKeyPanel() {
               type="button"
               onClick={() => setVisible((v) => !v)}
               aria-label={visible ? 'Masquer la clé' : 'Afficher la clé'}
-              className="absolute top-1/2 right-2 -translate-y-1/2 text-stone-600 transition-colors hover:text-stone-700 cursor-pointer"
+              className="absolute top-1/2 right-2 -translate-y-1/2 max-lg:right-0 max-lg:inline-flex max-lg:size-11 max-lg:items-center max-lg:justify-center text-stone-600 transition-colors hover:text-stone-700 cursor-pointer"
             >
               {visible ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
@@ -187,7 +187,7 @@ export default function AiKeyPanel() {
             type="button"
             onClick={() => void save(value)}
             disabled={busy || !value.trim()}
-            className="flex items-center gap-2 rounded-lg bg-accent px-4 h-10 text-[14px] font-semibold text-accent-fg transition-colors hover:bg-accent-hover disabled:opacity-45 cursor-pointer disabled:cursor-default whitespace-nowrap"
+            className="flex items-center gap-2 rounded-lg bg-accent px-4 h-11 lg:h-10 text-[14px] font-semibold text-accent-fg transition-colors hover:bg-accent-hover disabled:opacity-45 cursor-pointer disabled:cursor-default whitespace-nowrap"
           >
             {busy && <Loader2 size={14} className="animate-spin" />}
             Vérifier et enregistrer
@@ -213,7 +213,7 @@ export default function AiKeyPanel() {
           href="https://platform.claude.com/"
           target="_blank"
           rel="noreferrer"
-          className="group inline-flex items-center gap-1.5 text-sm text-stone-700 underline-offset-4 transition-colors hover:text-stone-900 hover:underline"
+          className="group inline-flex max-lg:min-h-11 items-center gap-1.5 text-sm text-stone-700 underline-offset-4 transition-colors hover:text-stone-900 hover:underline"
         >
           Obtenir une clé sur platform.claude.com
           <ExternalLink size={13} className="transition-transform " />

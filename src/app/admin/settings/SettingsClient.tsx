@@ -14,6 +14,7 @@ import { settingsCache } from '../../../hooks/useSettings';
 import { SETTINGS_DEFAULTS } from '../../../constants/settings';
 import { AI_EFFORT_LEVELS, AI_MODELS, AiEffort, AiModelSpec, DEFAULT_AI_EFFORT, DEFAULT_AI_MODEL } from '../../../constants/aiModels';
 import { MODULE_SETTING_KEYS } from '../../../config/moduleFlags';
+import SectionPicker from '../../../components/admin/mobile-pages/SectionPicker';
 import { Button, Callout, FormMessage, PageHeader, SideNav, ToggleRow, type TabItem } from '../../../components/admin/ui';
 
 /**
@@ -46,6 +47,16 @@ const SETTINGS_SECTIONS: TabItem[] = [
   { id: 'security', label: 'Sécurité', icon: Lock,
     description: 'Mot de passe du compte administrateur.' },
 ];
+
+/**
+ * Téléphone : la barre d'enregistrement d'un formulaire reste collée au-dessus
+ * de la barre d'onglets tant que le formulaire est à l'écran (sinon le bouton
+ * se trouvait tout en bas d'une page de 2 000 px). Sans effet à partir de `lg`.
+ */
+const STICKY_SAVE =
+  'max-lg:sticky max-lg:bottom-[calc(var(--admin-tabbar-h,0px)+env(safe-area-inset-bottom)+1rem)] max-lg:z-20 ' +
+  'max-lg:rounded-2xl max-lg:border max-lg:border-stone-200 max-lg:bg-white/95 max-lg:p-3 max-lg:shadow-[0_4px_16px_rgba(28,25,23,0.12)] ' +
+  'max-lg:backdrop-blur max-lg:[&>button]:flex-1';
 
 interface MediaAsset {
   id: string;
@@ -999,6 +1010,18 @@ export default function Settings() {
     setPwdLoading(false);
   };
 
+  const selectSection = (id: string) => {
+    setActiveTab(id as typeof activeTab);
+    // L'adresse suit la rubrique : sans cela, un lien « Régler » vers
+    // la rubrique déjà inscrite dans l'adresse ne changeait plus rien.
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', id);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search);
+    } catch { /* sans conséquence : seul l'onglet affiché compte */ }
+    if (window.innerWidth < 1024) window.scrollTo({ top: 0 });
+  };
+
   const currentSection = visibleSections.find((section) => section.id === activeTab);
 
   return (
@@ -1011,7 +1034,7 @@ export default function Settings() {
       {/* ── Modal sélecteur de médias ─────────────────────── */}
       {showPicker && (
         <div
-          className="fixed inset-0 z-[999999] bg-stone-900/70 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-[999999] bg-stone-900/70 backdrop-blur-sm flex items-center justify-center p-4 max-lg:items-end max-lg:p-0"
           onClick={() => setShowPicker(false)}
         >
           <div
@@ -1021,15 +1044,15 @@ export default function Settings() {
             aria-labelledby="media-picker-title"
             tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl rounded-xl overflow-hidden outline-none"
+            className="bg-white w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl rounded-xl overflow-hidden outline-none max-lg:max-h-[88dvh] max-lg:rounded-b-none"
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
               <h3 id="media-picker-title" className="font-semibold text-stone-900 text-[15px]">Choisir une image</h3>
-              <button onClick={() => setShowPicker(false)} aria-label="Fermer la médiathèque" className="p-2 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer">
+              <button onClick={() => setShowPicker(false)} aria-label="Fermer la médiathèque" className="p-2 max-lg:p-3 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer">
                 <X size={18} />
               </button>
             </div>
-            <div className="overflow-y-auto p-6">
+            <div className="overflow-y-auto p-6 max-lg:p-4 max-lg:pb-[calc(1rem+env(safe-area-inset-bottom))]">
               {mediaLoading ? (
                 <p className="text-center text-stone-700 py-12">Chargement des médias…</p>
               ) : mediaError ? (
@@ -1089,21 +1112,21 @@ export default function Settings() {
           son nom entier et une phrase qui dit ce qu'on y règle.
         */}
         <div className="mb-6 lg:mb-0">
-          <SideNav
+          {/* Téléphone : bouton « rubrique courante » + liste complète en feuille du bas. */}
+          <SectionPicker
             label="Rubriques des paramètres"
             active={activeTab}
-            onChange={(id) => {
-              setActiveTab(id as typeof activeTab);
-              // L'adresse suit la rubrique : sans cela, un lien « Régler » vers
-              // la rubrique déjà inscrite dans l'adresse ne changeait plus rien.
-              try {
-                const url = new URL(window.location.href);
-                url.searchParams.set('tab', id);
-                window.history.replaceState(window.history.state, '', url.pathname + url.search);
-              } catch { /* sans conséquence : seul l'onglet affiché compte */ }
-            }}
+            onChange={selectSection}
             items={visibleSections}
           />
+          <div className="hidden lg:block">
+            <SideNav
+              label="Rubriques des paramètres"
+              active={activeTab}
+              onChange={selectSection}
+              items={visibleSections}
+            />
+          </div>
         </div>
 
         <div className="min-w-0 space-y-8">
@@ -1149,7 +1172,7 @@ export default function Settings() {
                       <button
                         type="button"
                         onClick={(e) => openPicker('logo', e.currentTarget)}
-                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                        className="inline-flex h-11 lg:h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
@@ -1181,7 +1204,7 @@ export default function Settings() {
                       <button
                         type="button"
                         onClick={(e) => openPicker('footerLogo', e.currentTarget)}
-                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                        className="inline-flex h-11 lg:h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
@@ -1212,7 +1235,7 @@ export default function Settings() {
                       <button
                         type="button"
                         onClick={(e) => openPicker('footerImage', e.currentTarget)}
-                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                        className="inline-flex h-11 lg:h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
@@ -1243,7 +1266,7 @@ export default function Settings() {
                       <button
                         type="button"
                         onClick={(e) => openPicker('favicon', e.currentTarget)}
-                        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                        className="inline-flex h-11 lg:h-10 shrink-0 items-center gap-2 rounded-lg bg-stone-100 px-3.5 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                       >
                         <Image size={14} /> Médiathèque
                       </button>
@@ -1251,7 +1274,7 @@ export default function Settings() {
                     <p className="text-[13px] text-stone-600">Visible après la prochaine mise en ligne du site.</p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                     <Button type="submit" variant="primary" icon={Save} loading={logoLoading} disabled={!logoImage.trim()}>
                       Enregistrer l'identité visuelle
                     </Button>
@@ -1307,7 +1330,7 @@ export default function Settings() {
                     />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-stone-200">
+                  <div className={`flex flex-wrap items-center gap-3 pt-3 border-t border-stone-200 ${STICKY_SAVE}`}>
                     <Button type="submit" variant="primary" icon={Save} loading={socialLoading}>
                       Enregistrer les réseaux sociaux
                     </Button>
@@ -1346,7 +1369,7 @@ export default function Settings() {
                   />
                   <p className="text-[12.5px] text-stone-600">URL relative (ex : /about) ou absolue.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 pt-2">
+                <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                   <Button type="submit" variant="primary" icon={Save} loading={authorLoading}>
                     Enregistrer la présentation
                   </Button>
@@ -1398,7 +1421,7 @@ export default function Settings() {
                     />
                     <p className="text-[12.5px] text-stone-600">Exemple : /contact, /programme-complet, ou un lien externe complet https://...</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                     <Button type="submit" variant="primary" icon={Save} loading={headerRegisterLoading}>
                       Enregistrer le lien
                     </Button>
@@ -1532,7 +1555,7 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 pt-2">
+                <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                   <Button type="submit" variant="primary" icon={Save} loading={bizLoading}>
                     Enregistrer les coordonnées
                   </Button>
@@ -1586,7 +1609,7 @@ export default function Settings() {
                     <p className="font-mono text-2xl font-semibold text-stone-900 tracking-widest">{promoCode || 'BIENVENUE'}</p>
                     <p className="text-sm text-stone-600">Réduction de <strong>{promoAmount || '20 CHF'}</strong> sur la première prestation</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                     <Button type="submit" variant="primary" icon={Save} loading={promoLoading}>
                       Enregistrer le code promo
                     </Button>
@@ -1700,7 +1723,7 @@ export default function Settings() {
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 pt-2">
+                <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                   <Button type="submit" variant="primary" icon={Save} loading={editorialLoading}>
                     Enregistrer la ligne éditoriale
                   </Button>
@@ -1743,7 +1766,7 @@ export default function Settings() {
                   </div>
                 ))}
 
-                <div className="flex flex-wrap items-center gap-3 pt-2">
+                <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                   <Button type="submit" variant="primary" icon={Save} loading={modulesLoading}>
                     Enregistrer les modules
                   </Button>
@@ -1912,7 +1935,7 @@ export default function Settings() {
                   et à conserver les fichiers 10 ans (art. 958f).
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 pt-2">
+                <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                   <Button type="submit" variant="primary" icon={Save} loading={caisseLoading}>
                     Enregistrer les réglages de caisse
                   </Button>
@@ -2063,7 +2086,7 @@ export default function Settings() {
                   </p>
                 </fieldset>
 
-                <div className="flex flex-wrap items-center gap-3 pt-2">
+                <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                   <Button type="submit" variant="primary" icon={Save} loading={aiLoading}>
                     Enregistrer les réglages IA
                   </Button>
@@ -2200,7 +2223,7 @@ export default function Settings() {
                     placeholder="••••••••"
                   />
                 </div>
-                <div className="flex flex-wrap items-center gap-3 pt-4">
+                <div className={`flex flex-wrap items-center gap-3 pt-4 ${STICKY_SAVE}`}>
                   <Button type="submit" variant="primary" icon={Save} loading={pwdLoading} disabled={pwdLoading || !password}>
                     Mettre à jour le mot de passe
                   </Button>
