@@ -26,6 +26,7 @@ function loadAssets(): Promise<Asset[]> {
 
 /** Mots-clés (sans accent, minuscules) cherchés dans le nom du fichier, par thème. */
 const THEMES: { match: RegExp; files: string[] }[] = [
+  { match: /service|prestation/, files: ['1790593008713', '1790587847303'] },
   { match: /visage|facial|eclat|anti-age|jeunesse/, files: ['1790587791640', 'soins-visages'] },
   { match: /corps|massage|rituel|minceur/, files: ['1790587819698', 'soins-corps'] },
   { match: /epilation|cire|sucre/, files: ['epilation (1)', 'epilation'] },
