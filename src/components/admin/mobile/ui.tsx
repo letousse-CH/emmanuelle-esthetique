@@ -827,7 +827,7 @@ export function BottomSheet({ open, onClose, title, hideTitle, description, chil
           tabIndex={-1}
           className={cx(
             'pointer-events-auto flex w-full flex-col overflow-hidden bg-white shadow-[0_-8px_32px_rgba(28,25,23,0.18)] focus:outline-none',
-            'rounded-t-[22px] lg:max-w-lg lg:rounded-[22px] lg:shadow-2xl',
+            'rounded-t-[24px] lg:max-w-lg lg:rounded-[24px] lg:shadow-2xl',
             size === 'full' ? 'h-[94dvh] lg:h-auto lg:max-h-[88dvh]' : 'max-h-[90dvh] lg:max-h-[88dvh]',
             'transition-[translate,opacity,scale] duration-[240ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
             shown ? 'translate-y-0 opacity-100 lg:scale-100' : 'translate-y-full opacity-100 lg:translate-y-0 lg:scale-95 lg:opacity-0',

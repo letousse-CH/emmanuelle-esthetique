@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
+import { Geist } from 'next/font/google';
 import './admin.css';
 import AdminShell from './AdminShell';
 
@@ -11,6 +12,8 @@ import AdminShell from './AdminShell';
  * public ne l'annonce pas, donc il ne proposera jamais d'être installé. Les
  * pages sous /admin offrent « Ajouter à l'écran d'accueil ».
  */
+const geist = Geist({ subsets: ['latin'], variable: '--font-geist', display: 'swap' });
+
 export const metadata: Metadata = {
   title: 'Gestion',
   manifest: '/admin/manifest',
@@ -44,5 +47,5 @@ export const viewport: Viewport = {
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <AdminShell>{children}</AdminShell>;
+  return <div className={geist.variable}><AdminShell>{children}</AdminShell></div>;
 }

@@ -220,3 +220,47 @@
   .admin-main table[data-stack] tfoot { display: block; }
   .admin-main table[data-stack] tfoot tr { display: block; }
 }
+
+/* ── Style mobile « shadcn/ui » (Refero 0fd67ec5) — hors couleurs ───────────
+   Typographie Geist à interlettrage serré, cartes à 24 px avec filet fin et
+   ombre empilée très douce, boutons / champs / pastilles à 18 px, pas de
+   dégradé décoratif. Sous `lg` seulement : le bureau reste intact. Les
+   couleurs (sauge, pierre) ne changent pas. */
+@media (max-width: 1023.98px) {
+  .admin-shell {
+    font-family: var(--font-geist), var(--font-inter, Inter), system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'ss01' on, 'cv11' on;
+  }
+  .admin-shell h1,
+  .admin-shell h2,
+  .admin-shell h3 {
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+  }
+  .admin-shell .uppercase { letter-spacing: 0.05em; }
+
+  /* Cartes : 24 px, filet fin + ombre empilée (1 px, 3 px, 2 px). */
+  .admin-shell .rounded-2xl,
+  .admin-shell .rounded-3xl { border-radius: 24px; }
+  .admin-shell :is(.rounded-2xl, .rounded-3xl):is(.border, [class*='border-stone']):not(button):not(a) {
+    box-shadow: 0 0 0 1px rgba(23, 23, 23, 0.04), 0 1px 3px rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.07);
+  }
+
+  /* Éléments interactifs : 18 px (les ronds et pastilles `rounded-full` restent ronds). */
+  .admin-shell :is(button, a, input, select, textarea, summary):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl) {
+    border-radius: 18px;
+  }
+  .admin-shell :is(input, select, textarea):not([type='checkbox']):not([type='radio']):not([type='range']) {
+    border-radius: 18px;
+  }
+  .admin-shell textarea { border-radius: 20px; }
+
+  /* Pas de dégradé décoratif, sauf les voiles posés sur les photos (style en ligne). */
+  .admin-shell [class*='shadow-lg'], .admin-shell [class*='shadow-md'] {
+    box-shadow: 0 0 0 1px rgba(23, 23, 23, 0.04), 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Titres de page : plus grands et plus serrés, comme un titre « display » compact. */
+  .admin-shell .admin-main h1 { font-size: 1.75rem; letter-spacing: -0.03em; }
+}
