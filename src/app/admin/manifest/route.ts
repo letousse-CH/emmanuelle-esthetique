@@ -34,7 +34,7 @@ export async function GET() {
       orientation: 'portrait',
       lang: 'fr-CH',
       dir: 'ltr',
-      background_color: '#FAF7F2',
+      background_color: '#FFFFFF',
       theme_color: '#8A9A7B',
       categories: ['business', 'productivity'],
       icons: [
