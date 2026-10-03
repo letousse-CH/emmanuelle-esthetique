@@ -23,8 +23,8 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
   },
   icons: {
-    icon: '/icons/caisse-192.png',
-    apple: '/icons/caisse-apple-180.png',
+    icon: '/icons/algue-v2-192.png',
+    apple: '/icons/algue-v2-apple-180.png',
   },
   // L'admin contient des données clientes : on interdit explicitement
   // l'indexation, même si /admin n'est de toute façon pas atteignable sans

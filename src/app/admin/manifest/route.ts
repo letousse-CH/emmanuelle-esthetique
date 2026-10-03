@@ -38,11 +38,11 @@ export async function GET() {
       theme_color: '#8A9A7B',
       categories: ['business', 'productivity'],
       icons: [
-        { src: '/icons/caisse-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-        { src: '/icons/caisse-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/icons/algue-v2-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/icons/algue-v2-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
         // Variante « maskable » : Android rogne l'icône selon la forme du
         // lanceur, le monogramme y est donc réduit pour rester dans la zone sûre.
-        { src: '/icons/caisse-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        { src: '/icons/algue-v2-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
       shortcuts: [
         { name: 'Encaisser', short_name: 'Encaisser', url: '/admin/caisse' },
