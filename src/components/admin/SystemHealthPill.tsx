@@ -5,7 +5,27 @@ import { supabase } from '../../services/supabase';
 import { Activity } from 'lucide-react';
 import SystemHealthModal, { HealthData } from './SystemHealthModal';
 
-export default function SystemHealthPill() {
+// Le shell monte deux pastilles (bureau et téléphone, l'une masquée par CSS) :
+// on partage la requête en cours pour ne pas interroger le diagnostic deux fois.
+let inflight: Promise<HealthData> | null = null;
+
+async function loadHealth(token: string, refresh: boolean): Promise<HealthData> {
+  if (inflight && !refresh) return inflight;
+  const url = refresh ? '/api/admin/ai-status?refresh=true' : '/api/admin/ai-status';
+  const p = fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<HealthData>;
+    })
+    .finally(() => {
+      window.setTimeout(() => { if (inflight === p) inflight = null; }, 3000);
+    });
+  inflight = p;
+  return p;
+}
+
+/** `compact` : simple point d'état de 44 px, pour l'en-tête mobile. */
+export default function SystemHealthPill({ compact = false }: { compact?: boolean }) {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -28,12 +48,7 @@ export default function SystemHealthPill() {
         setFetchError('Session expirée : reconnectez-vous pour vérifier les services.');
         return;
       }
-      const url = refresh ? '/api/admin/ai-status?refresh=true' : '/api/admin/ai-status';
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
+      const json = await loadHealth(token, refresh);
       setHealth(json);
       setFetchError(null);
     } catch (err) {
@@ -54,6 +69,17 @@ export default function SystemHealthPill() {
 
   return (
     <>
+      {compact ? (
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          aria-label={`${label} : voir le détail`}
+          className="relative grid size-11 cursor-pointer place-items-center rounded-full text-stone-700 transition-colors active:bg-stone-100"
+        >
+          <Activity size={21} strokeWidth={1.9} aria-hidden="true" />
+          <span className={`absolute right-2.5 top-2.5 size-2.5 rounded-full ring-2 ring-white ${dot}`} aria-hidden="true" />
+        </button>
+      ) : (
       <button
         type="button"
         onClick={() => setModalOpen(true)}
@@ -64,6 +90,7 @@ export default function SystemHealthPill() {
         <span>{label}</span>
         <Activity size={13} className="text-stone-600" />
       </button>
+      )}
 
       <SystemHealthModal
         isOpen={modalOpen}

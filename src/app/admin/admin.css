@@ -12,6 +12,90 @@
 @plugin "@tailwindcss/typography";
 @source "../../";
 
+/* ── Application mobile (< lg) ────────────────────────────────────────────
+   Sous 1024 px l'admin se comporte comme une application : en-tête compact,
+   barre d'onglets basse, cibles tactiles de 44 px. Tout est rangé sous
+   `.admin-shell` (posé par AdminShell) : la page de connexion, qui charge aussi
+   cette feuille, n'en reçoit rien. Au-dessus de 1024 px, rien ne change. */
+.admin-shell {
+  /* Hauteur de la barre d'onglets : lue par Fab, StickyActionBar et les pages. */
+  --admin-tabbar-h: 0px;
+}
+
+@media (max-width: 1023.98px) {
+  .admin-shell {
+    --admin-tabbar-h: 4rem;
+    /* Barre d'encaissement flottante de CaisseClient : posée au-dessus de la
+       barre d'onglets, avec de quoi laisser dépasser le bouton Caisse central. */
+    --caisse-tabbar-h: 4.75rem;
+    /* Pas de défilement horizontal de la page (clip, pas hidden : l'en-tête reste « sticky »). */
+    overflow-x: clip;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Pas de rebond de défilement ni de « tirer pour rafraîchir » involontaire. */
+  html:has(.admin-shell),
+  body:has(.admin-shell) {
+    overscroll-behavior-y: none;
+  }
+
+  /* Place pour la barre d'onglets en bas de chaque page. */
+  .admin-shell .admin-main {
+    padding-bottom: calc(var(--admin-tabbar-h) + env(safe-area-inset-bottom) + 1.25rem);
+    max-width: 100%;
+  }
+
+  /* 16 px minimum : en dessous, iOS zoome la page au focus d'un champ. */
+  .admin-shell input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  .admin-shell select,
+  .admin-shell textarea {
+    font-size: 16px;
+  }
+
+  /* Pressé : retour immédiat au toucher. */
+  .admin-shell button:not(:disabled):active,
+  .admin-shell [role='button']:not([aria-disabled='true']):active {
+    transform: scale(0.98);
+  }
+
+  /* Les boutons qui se pressent déjà eux-mêmes (onglets, pastilles) ne doublent pas l'effet. */
+  .admin-shell .mobile-tabbar a:active { transform: none; }
+
+  /* Clavier virtuel ouvert : on rend la place à la saisie. */
+  .admin-shell[data-kbd='true'] .mobile-tabbar { transform: translateY(100%); }
+  .admin-shell[data-kbd='true'] .admin-fab { display: none; }
+
+  /* Défilement fluide des conteneurs horizontaux. */
+  .admin-shell .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+
+  /* App installée : rien à sélectionner par erreur dans la navigation. */
+  .admin-shell[data-app-mode='true'] .mobile-tabbar,
+  .admin-shell[data-app-mode='true'] .mobile-header {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
+/* Rangées défilantes sans barre de défilement visible (pastilles, sous-navigation). */
+.hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell *,
+  .admin-shell *::before,
+  .admin-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  html:has(.admin-shell), body:has(.admin-shell) { scroll-behavior: auto; }
+  .admin-shell button:not(:disabled):active { transform: none; }
+}
+
 /* ── Quill WYSIWYG : même rendu que la page article ── */
 .ql-editor {
   font-family: var(--font-sans);

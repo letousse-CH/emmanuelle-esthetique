@@ -43,8 +43,9 @@ const BUTTON_VARIANT: Record<ButtonVariant, string> = {
 };
 
 const BUTTON_SIZE: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3 text-[13px]',
-  md: 'h-10 px-4 text-[14px]',
+  // Sous `lg` (téléphone) : 44 px de haut minimum, cible tactile oblige.
+  sm: 'h-11 px-3.5 text-[14px] lg:h-8 lg:px-3 lg:text-[13px]',
+  md: 'h-11 px-4 text-[15px] lg:h-10 lg:text-[14px]',
 };
 
 export function Button({
@@ -112,7 +113,9 @@ export function PageHeader({
   breadcrumb?: { label: string; href?: string }[];
 }) {
   return (
-    <header className="mb-10">
+    // Sous `lg`, l'en-tête mobile affiche déjà le titre : le <h1> reste pour les
+    // lecteurs d'écran mais n'est plus répété à l'écran.
+    <header className={description || actions || (breadcrumb && breadcrumb.length > 0) ? 'mb-6 lg:mb-10' : 'lg:mb-10'}>
       {breadcrumb && breadcrumb.length > 0 && (
         <nav aria-label="Fil d'Ariane" className="mb-2 flex items-center gap-1 text-[13px] text-stone-600">
           {breadcrumb.map((crumb, i) => (
@@ -131,7 +134,7 @@ export function PageHeader({
       )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 max-w-3xl">
-          <h1 className="text-[28px] font-semibold tracking-tight text-stone-950 leading-tight">{title}</h1>
+          <h1 className="sr-only text-[28px] font-semibold tracking-tight text-stone-950 leading-tight lg:not-sr-only">{title}</h1>
           {description && <p className="mt-2 text-[15px] leading-relaxed text-stone-700">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
@@ -168,7 +171,7 @@ export function CardHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 px-6 py-5">
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 px-4 py-4 sm:px-6 sm:py-5">
       <div className="min-w-0">
         <h2 className="text-[18px] font-semibold text-stone-950 tracking-tight">{title}</h2>
         {description && <p className="mt-1 text-[14px] leading-relaxed text-stone-600">{description}</p>}
@@ -179,7 +182,7 @@ export function CardHeader({
 }
 
 export function CardBody({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`px-6 py-6 ${className}`}>{children}</div>;
+  return <div className={`px-4 py-4 sm:px-6 sm:py-6 ${className}`}>{children}</div>;
 }
 
 /** Pied de carte : c'est là, et nulle part ailleurs, que se valide un bloc. */
@@ -191,7 +194,7 @@ export function CardFooter({
   hint?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-stone-200 bg-stone-50/50 px-6 py-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-stone-200 bg-stone-50/50 px-4 py-3 sm:px-6 sm:py-4">
       <div className="min-w-0 text-[13px] text-stone-600">{hint}</div>
       <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
@@ -201,11 +204,12 @@ export function CardFooter({
 // ── Champs ─────────────────────────────────────────────────────────────────
 
 export const inputClass =
-  'rounded-lg border border-stone-300 bg-white px-3.5 text-[14px] text-stone-900 placeholder:text-stone-500 ' +
+  'rounded-lg border border-stone-300 bg-white px-3.5 text-[16px] lg:text-[14px] text-stone-900 placeholder:text-stone-500 ' +
   'transition-colors duration-150 focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/15 ' +
   'disabled:bg-stone-50 disabled:text-stone-500';
 
-export const inputHeight = 'h-10';
+// 44 px sous `lg` (cible tactile), 40 px sur ordinateur.
+export const inputHeight = 'h-11 lg:h-10';
 
 /**
  * Largeur pleine par défaut, sauf si l'appelant en impose une.
@@ -291,6 +295,7 @@ export function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer
+        before:absolute before:-inset-3 before:content-[''] lg:before:hidden
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2
         disabled:opacity-45 disabled:pointer-events-none ${checked ? 'bg-accent' : 'bg-stone-300'}`}
     >
@@ -455,7 +460,7 @@ export function Tabs({
               role="tab"
               aria-selected={isActive}
               onClick={() => onChange(item.id)}
-              className={`flex items-center gap-2 rounded-md px-3.5 h-9 text-[14px] transition-colors cursor-pointer
+              className={`flex items-center gap-2 rounded-md px-3.5 h-11 lg:h-9 text-[14px] transition-colors cursor-pointer
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
                   isActive
                     ? 'bg-white text-stone-950 font-semibold shadow-xs ring-1 ring-stone-200'
@@ -502,7 +507,7 @@ export function SideNav({
               role="tab"
               aria-selected={isActive}
               onClick={() => onChange(item.id)}
-              className={`group flex w-full min-w-max items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-w-0 ${
+              className={`group flex w-full min-w-max items-start gap-3 rounded-lg px-3 py-3 lg:py-2.5 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-w-0 ${
                 isActive ? 'bg-accent-soft' : 'hover:bg-stone-100'
               }`}
             >
@@ -606,7 +611,12 @@ export function CommandMenu({
       );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-stone-900/30 animate-fadein">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Rechercher dans l’administration"
+      className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-20 bg-stone-900/30 animate-fadein"
+    >
       <div
         className="fixed inset-0"
         onClick={onClose}
@@ -621,13 +631,20 @@ export function CommandMenu({
             placeholder="Aller à…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="flex-1 bg-transparent text-[15px] text-stone-900 placeholder:text-stone-500 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-[16px] sm:text-[15px] text-stone-900 placeholder:text-stone-500 focus:outline-none"
           />
-          <Kbd>Échap</Kbd>
+          <span className="hidden sm:inline-flex"><Kbd>Échap</Kbd></span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="-mr-2 h-11 shrink-0 cursor-pointer rounded-lg px-3 text-[15px] font-semibold text-accent sm:hidden"
+          >
+            Fermer
+          </button>
         </div>
 
         {/* Results */}
-        <div className="max-h-80 overflow-y-auto p-2 space-y-1">
+        <div className="max-h-[calc(100dvh-9rem)] sm:max-h-80 overflow-y-auto overscroll-contain p-2 space-y-1">
           {filtered.length === 0 ? (
             <div className="py-8 text-center text-xs text-stone-500">
               Aucun résultat trouvé pour "{query}"
@@ -638,7 +655,7 @@ export function CommandMenu({
                 key={item.id}
                 href={item.path}
                 onClick={onClose}
-                className="group flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-stone-100 transition-colors"
+                className="group flex min-h-12 items-center justify-between px-3 py-2.5 rounded-xl hover:bg-stone-100 active:bg-stone-100 transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {item.icon ? (
@@ -652,7 +669,7 @@ export function CommandMenu({
                     <p className="text-sm font-medium text-stone-900 truncate group-hover:text-stone-900">
                       {item.name}
                     </p>
-                    <p className="text-[11px] text-stone-500">{item.category}</p>
+                    <p className="text-[12px] text-stone-500">{item.category}</p>
                   </div>
                 </div>
                 <CornerDownLeft size={13} className="text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -661,7 +678,7 @@ export function CommandMenu({
           )}
         </div>
 
-        <div className="px-4 py-2.5 bg-stone-50 border-t border-stone-200 flex items-center justify-between text-[11px] text-stone-500">
+        <div className="hidden sm:flex px-4 py-2.5 bg-stone-50 border-t border-stone-200 items-center justify-between text-[11px] text-stone-500">
           <span><Kbd>⌘K</Kbd> ouvre la recherche partout</span>
           <span>Entrée pour ouvrir</span>
         </div>
