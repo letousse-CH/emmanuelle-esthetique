@@ -33,7 +33,6 @@ import {
 import {
   PRESTATIONS_CATALOG,
   PRIVILEGE_OPTIONS,
-  type MonthlyOfferData,
   type PrestationItem,
   type PrivilegeOption,
 } from './catalog';
@@ -46,7 +45,7 @@ import ConfirmationStep from './ConfirmationStep';
 // Exports conservés : l'ancienne page admin des réservations les importe encore
 // (période de transition). `TimeSlot` est désormais celui des types partagés.
 export { PRESTATIONS_CATALOG, PRIVILEGE_OPTIONS };
-export type { PrestationItem, PrivilegeOption, MonthlyOfferData, TimeSlot };
+export type { PrestationItem, PrivilegeOption, TimeSlot };
 
 /**
  * @deprecated Heure LOCALE DU NAVIGATEUR : ne pas l'utiliser pour décider d'une
@@ -73,7 +72,8 @@ const CATEGORIES: Array<{ id: CategoryId; label: string; icon: typeof Droplets; 
 const CALENDAR_DAYS = 60;
 const PERIODES: BookingPeriode[] = ['matin', 'apres_midi'];
 
-type StepNum = 1 | 2 | 3 | 4 | 5;
+// 1 Soin · 2 Date & période · 3 Coordonnées · 4 Confirmation
+type StepNum = 1 | 2 | 3 | 4;
 
 interface ReservationClientProps {
   businessPhone?: string;
@@ -104,11 +104,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const [selectedService, setSelectedService] = useState<PrestationItem | null>(PRESTATIONS_CATALOG[0]);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState<number>(0);
 
-  // Étape 2 : offre du moment
-  const [includeMonthlyOffer, setIncludeMonthlyOffer] = useState<boolean>(false);
-  const [monthlyOffer, setMonthlyOffer] = useState<MonthlyOfferData | null>(null);
-
-  // Étape 3 : jour + période
+  // Étape 2 : jour + période
   const today = useMemo(() => todayZurich(), []);
   const calendarRange = useMemo(() => ({ from: today, to: addDays(today, CALENDAR_DAYS - 1) }), [today]);
   const [calendar, setCalendar] = useState<PublicCalendar | null>(null);
@@ -123,7 +119,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const [slotsKey, setSlotsKey] = useState(0);
   const [slotsNotice, setSlotsNotice] = useState<string | null>(null);
 
-  // Étape 4 : coordonnées
+  // Étape 3 : coordonnées
   const [formData, setFormData] = useState({
     prenom: '',
     nom: '',
@@ -141,7 +137,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const submittingRef = useRef(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Étape 5 : confirmation
+  // Étape 4 : confirmation
   const [confirmedBooking, setConfirmedBooking] = useState<PublicBookingView | null>(null);
   const [submittedPrenom, setSubmittedPrenom] = useState('');
   const [submittedEstimate, setSubmittedEstimate] = useState(0);
@@ -151,22 +147,11 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const firstRender = useRef(true);
 
-  const stepsList = useMemo(
-    () =>
-      monthlyOffer && monthlyOffer.active
-        ? [
-            { num: 1, label: 'Prestation' },
-            { num: 2, label: 'Offre du moment' },
-            { num: 3, label: 'Séance' },
-            { num: 4, label: 'Coordonnées' },
-          ]
-        : [
-            { num: 1, label: 'Prestation' },
-            { num: 3, label: 'Séance' },
-            { num: 4, label: 'Coordonnées' },
-          ],
-    [monthlyOffer]
-  );
+  const stepsList = [
+    { num: 1, label: 'Prestation' },
+    { num: 2, label: 'Séance' },
+    { num: 3, label: 'Coordonnées' },
+  ];
   const stepIndex = stepsList.findIndex((s) => s.num === currentStep);
   const stepLabel = stepsList[stepIndex]?.label ?? '';
 
@@ -179,20 +164,6 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
     stepTopRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
     headingRef.current?.focus({ preventScroll: true });
   }, [currentStep]);
-
-  // ── Offre du moment active ──
-  const loadMonthlyOffer = useCallback(() => {
-    return fetch('/api/bookings/monthly-offer')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        setMonthlyOffer(data?.offer?.active ? data.offer : null);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    loadMonthlyOffer();
-  }, [loadMonthlyOffer]);
 
   // ── Catalogue des soins (base) + paramètres d'URL ──
   useEffect(() => {
@@ -275,20 +246,16 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
 
     let duration = baseDuration;
     let price = basePrice;
-    if (includeMonthlyOffer && monthlyOffer) {
-      price += Number(monthlyOffer.prix_chf);
-      duration += 30;
-    }
     return {
       currentDurationMinutes: duration,
       baseDurationMinutes: baseDuration,
       currentPriceChf: price,
       currentServiceName: selectedService.name,
     };
-  }, [selectedService, selectedVariantIndex, includeMonthlyOffer, monthlyOffer]);
+  }, [selectedService, selectedVariantIndex]);
 
   // ── Calendrier des jours (GET /api/bookings/calendar) ──
-  const atSlotsStep = currentStep >= 3;
+  const atSlotsStep = currentStep >= 2;
   useEffect(() => {
     if (!atSlotsStep) return;
     const ctrl = new AbortController();
@@ -451,7 +418,6 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
       ville: formData.ville.trim() || null,
       service_id: selectedService.id,
       options: [], // pas d'options choisies en ligne : Emmanuelle les propose au téléphone
-      offer_of_month_id: includeMonthlyOffer && monthlyOffer ? monthlyOffer.id : null,
       variante_duree_minutes: variant ? variant.durationMinutes : null,
       date_rdv: selectedDate,
       periode: selectedPeriode,
@@ -489,14 +455,6 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
           setSubmitError(
             serverMessage || `Trop de demandes pour le moment. Patientez un peu avant de réessayer${phoneHint}.`
           );
-        } else if (code === 'offre_indisponible') {
-          // On reste sur l'étape en cours : la cliente peut envoyer sa demande sans l'offre.
-          setIncludeMonthlyOffer(false);
-          setMonthlyOffer(null);
-          void loadMonthlyOffer();
-          setSubmitError(
-            'L’offre du moment n’est plus disponible : elle a été retirée de votre demande et le total mis à jour. Vous pouvez envoyer votre demande sans elle.'
-          );
         } else if (code === 'soin_inconnu') {
           setCatalogNotice(
             'Ce soin n’est plus disponible à la réservation en ligne. Choisissez-en un autre, ou contactez l’institut.'
@@ -509,7 +467,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
           setSelectedPeriode(null);
           setCalendarKey((k) => k + 1);
           setSlotsKey((k) => k + 1);
-          setCurrentStep(3);
+          setCurrentStep(2);
         } else if (!code && res.status === 422) {
           setCatalogNotice(
             'Ce soin n’est plus disponible à la réservation en ligne. Choisissez-en un autre, ou contactez l’institut.'
@@ -541,7 +499,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
       });
       setSubmittedPrenom(formData.prenom.trim());
       setSubmittedEstimate(currentPriceChf);
-      setCurrentStep(5);
+      setCurrentStep(4);
     } catch (err) {
       console.error('Erreur réservation:', err);
       setSubmitError(
@@ -565,7 +523,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const emailFilled = formData.email.trim().length > 0;
   const stepTotal = stepsList.length;
   const headingText =
-    currentStep === 5 ? '' : `Étape ${stepIndex + 1} sur ${stepTotal} : ${stepLabel}`;
+    currentStep === 4 ? '' : `Étape ${stepIndex + 1} sur ${stepTotal} : ${stepLabel}`;
 
   const estimatedSummary = `${chf(currentPriceChf)} · ${currentDurationMinutes} min`;
 
@@ -591,7 +549,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
         <div ref={stepTopRef} className="scroll-mt-28" />
 
         {/* Stepper horizontal */}
-        {currentStep < 5 && (
+        {currentStep < 4 && (
           <div className="mb-10">
             <div data-surface className="bg-surface border border-border rounded-[var(--radius-base,1rem)] p-3 sm:p-4 shadow-xs">
               <nav aria-label="Étapes de réservation">
@@ -657,7 +615,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
         )}
 
         {/* Titre d'étape : annoncé et focalisé à chaque changement d'étape */}
-        {currentStep < 5 && (
+        {currentStep < 4 && (
           <h2 ref={headingRef} tabIndex={-1} className="sr-only focus:outline-none">
             {headingText}
           </h2>
@@ -830,119 +788,20 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                 data-btn="primary"
                 onClick={() => {
                   setCatalogNotice(null);
-                  setCurrentStep(monthlyOffer && monthlyOffer.active ? 2 : 3);
+                  setCurrentStep(2);
                 }}
                 disabled={!selectedService}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 font-medium tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {monthlyOffer && monthlyOffer.active ? "Continuer vers l'offre du moment" : 'Choisir votre séance'}
+                Choisir votre séance
                 <ChevronRight className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </div>
         )}
 
-        {/* ═══ ÉTAPE 2 : OFFRE DU MOMENT ═══ */}
+        {/* ═══ ÉTAPE 2 : JOUR + PÉRIODE ═══ */}
         {currentStep === 2 && (
-          <div className="space-y-8 animate-fadein">
-            <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-xs flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage" aria-hidden="true">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-xs text-muted font-medium">Votre soin principal :</div>
-                  <div className="text-base font-serif font-semibold text-stone-deep">{currentServiceName}</div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-base font-serif font-semibold text-sage">
-                  {chf(selectedService ? (selectedService.variants?.[selectedVariantIndex]?.priceChf ?? selectedService.priceChf) : 0)}
-                </div>
-                <div className="text-xs text-muted">{baseDurationMinutes} min</div>
-              </div>
-            </div>
-
-            {monthlyOffer && monthlyOffer.active && (
-              <div
-                data-surface
-                className="relative overflow-hidden rounded-[var(--radius-base,1rem)] border-2 border-sage/40 bg-surface p-6 sm:p-7 shadow-sm"
-              >
-                <div className="flex flex-col md:flex-row gap-6 items-center">
-                  {monthlyOffer.image_url && (
-                    <div className="w-full md:w-52 h-44 rounded-xl overflow-hidden shrink-0 shadow-inner bg-stone-100">
-                      <img src={monthlyOffer.image_url} alt={monthlyOffer.titre} className="w-full h-full object-cover" />
-                    </div>
-                  )}
-
-                  <div className="flex-1 space-y-2.5 text-left">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sage text-white text-[11px] font-bold uppercase tracking-wider">
-                      <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-                      Offre exclusive du moment
-                    </div>
-                    <h3 className="text-xl sm:text-2xl font-serif font-semibold text-stone-deep">{monthlyOffer.titre}</h3>
-                    {monthlyOffer.description && (
-                      <p className="text-muted text-xs sm:text-sm font-light leading-relaxed">{monthlyOffer.description}</p>
-                    )}
-                    <div className="text-lg font-serif font-semibold text-sage">
-                      Tarif préférentiel : {chf(Number(monthlyOffer.prix_chf))}
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 w-full md:w-auto">
-                    <button
-                      type="button"
-                      data-btn={includeMonthlyOffer ? 'primary' : 'secondary'}
-                      aria-pressed={includeMonthlyOffer}
-                      onClick={() => setIncludeMonthlyOffer(!includeMonthlyOffer)}
-                      className="w-full md:w-auto px-6 py-3.5 text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-2"
-                    >
-                      {includeMonthlyOffer ? (
-                        <>
-                          <Check className="w-4 h-4" aria-hidden="true" />
-                          Offre du moment ajoutée
-                        </>
-                      ) : (
-                        '+ Ajouter cette offre à mon soin'
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-center sm:text-left">
-                <span className="text-xs text-muted block">Total estimé de votre soin :</span>
-                <span className="text-2xl font-serif font-bold text-sage">{chf(currentPriceChf)}</span>
-                <span className="text-xs text-muted ml-2">({currentDurationMinutes} min prévues)</span>
-              </div>
-
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <button
-                  type="button"
-                  data-btn="secondary"
-                  onClick={() => setCurrentStep(1)}
-                  className="px-5 py-3 text-sm font-medium transition-all"
-                >
-                  Retour
-                </button>
-                <button
-                  type="button"
-                  data-btn="primary"
-                  onClick={() => setCurrentStep(3)}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-7 py-3 text-sm font-medium tracking-wide shadow-md transition-all"
-                >
-                  Choisir votre séance
-                  <ChevronRight className="w-4 h-4" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══ ÉTAPE 3 : JOUR + PÉRIODE ═══ */}
-        {currentStep === 3 && (
           <div className="space-y-8 animate-fadein">
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-xs flex items-start gap-4">
               <div className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage shrink-0" aria-hidden="true">
@@ -1201,7 +1060,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                 <button
                   type="button"
                   data-btn="secondary"
-                  onClick={() => setCurrentStep(monthlyOffer?.active ? 2 : 1)}
+                  onClick={() => setCurrentStep(1)}
                   className="px-5 py-3 text-sm font-medium transition-all"
                 >
                   Retour
@@ -1209,7 +1068,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                 <button
                   type="button"
                   data-btn="primary"
-                  onClick={() => setCurrentStep(4)}
+                  onClick={() => setCurrentStep(3)}
                   disabled={!calendar || !selectedPeriode || !selectedDate || loadingSlots || !!slotsError}
                   className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-8 py-3.5 font-medium text-sm sm:text-base tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1221,15 +1080,14 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
           </div>
         )}
 
-        {/* ═══ ÉTAPE 4 : COORDONNÉES ═══ */}
-        {currentStep === 4 && (
+        {/* ═══ ÉTAPE 3 : COORDONNÉES ═══ */}
+        {currentStep === 3 && (
           <form className="space-y-8 animate-fadein" onSubmit={handleSubmitBooking} noValidate>
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-xs flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
                 <span className="text-xs text-muted font-medium">Récapitulatif de votre demande :</span>
                 <div className="text-base font-serif font-semibold text-stone-deep">
                   {currentServiceName}
-                  {includeMonthlyOffer && monthlyOffer && ` + offre du moment (${monthlyOffer.titre})`}
                 </div>
                 <div className="text-xs text-muted flex flex-wrap items-center gap-x-2">
                   <span className="capitalize">{formattedDate}</span>
@@ -1524,7 +1382,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
               <button
                 type="button"
                 data-btn="secondary"
-                onClick={() => setCurrentStep(3)}
+                onClick={() => setCurrentStep(2)}
                 disabled={submitting}
                 className="px-5 py-3 text-sm font-medium transition-all"
               >
@@ -1557,8 +1415,8 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
           </form>
         )}
 
-        {/* ═══ ÉTAPE 5 : DEMANDE ENREGISTRÉE ═══ */}
-        {currentStep === 5 && confirmedBooking && (
+        {/* ═══ ÉTAPE 4 : DEMANDE ENREGISTRÉE ═══ */}
+        {currentStep === 4 && confirmedBooking && (
           <ConfirmationStep
             booking={confirmedBooking}
             prenom={submittedPrenom}
