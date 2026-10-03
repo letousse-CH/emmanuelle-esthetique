@@ -39,6 +39,7 @@ import { useInstallPrompt } from '../../components/admin/mobile/useInstallPrompt
 import MobileHeader from '../../components/admin/mobile/MobileHeader';
 import MobileTabBar from '../../components/admin/mobile/MobileTabBar';
 import CaisseSubNav from '../../components/admin/mobile/CaisseSubNav';
+import RegisterServiceWorker from '../../components/admin/mobile/RegisterServiceWorker';
 import TableStacker from '../../components/admin/mobile/TableStacker';
 
 /**
@@ -514,6 +515,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           {children}
         </main>
         <TableStacker />
+        <RegisterServiceWorker />
       </div>
 
       <MobileTabBar pathname={pathname} caisseEnabled={moduleFlags.caisse} toCallCount={toCallCount} />
