@@ -449,8 +449,8 @@ export function Tabs({
   label: string;
 }) {
   return (
-    <div className="max-w-full overflow-x-auto">
-      <div role="tablist" aria-label={label} className="inline-flex min-w-max gap-1 rounded-lg bg-stone-100 p-1">
+    <div className="max-w-full">
+      <div role="tablist" aria-label={label} className="inline-flex flex-wrap gap-1 rounded-lg bg-stone-100 p-1">
         {items.map((item) => {
           const isActive = item.id === active;
           return (
@@ -497,7 +497,7 @@ export function SideNav({
 }) {
   return (
     <nav aria-label={label} className="lg:sticky lg:top-20">
-      <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+      <div role="tablist" aria-label={label} className="grid grid-cols-2 gap-2 lg:flex lg:flex-col lg:gap-1">
         {items.map((item) => {
           const isActive = item.id === active;
           return (
@@ -507,7 +507,7 @@ export function SideNav({
               role="tab"
               aria-selected={isActive}
               onClick={() => onChange(item.id)}
-              className={`group flex w-full min-w-max items-start gap-3 rounded-lg px-3 py-3 lg:py-2.5 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-w-0 ${
+              className={`group flex w-full items-start gap-3 rounded-lg px-3 py-3 lg:py-2.5 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 lg:min-w-0 ${
                 isActive ? 'bg-accent-soft' : 'hover:bg-stone-100'
               }`}
             >

@@ -113,7 +113,7 @@ export default function BilanClient() {
       </div>
 
       {/* Onglets navigation */}
-      <div className="flex border-b border-stone-200 gap-6 text-sm font-medium overflow-x-auto pb-1">
+      <div className="flex border-b border-stone-200 gap-x-6 flex-wrap text-sm font-medium pb-1">
         <button
           onClick={() => setActiveTab('compte_resultat')}
           className={`pb-3 transition-colors cursor-pointer flex items-center gap-2 whitespace-nowrap ${

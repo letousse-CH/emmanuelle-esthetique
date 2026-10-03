@@ -405,7 +405,7 @@ export default function DepensesClient() {
 
       {/* Barre de filtres */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-stone-200">
-        <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+        <div className="flex items-center gap-1 flex-wrap w-full sm:w-auto">
           {[
             { id: 'tous', label: 'Toutes' },
             { id: 'a_payer', label: `À payer (${countAPayer})` },

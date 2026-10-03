@@ -39,6 +39,7 @@ import { useInstallPrompt } from '../../components/admin/mobile/useInstallPrompt
 import MobileHeader from '../../components/admin/mobile/MobileHeader';
 import MobileTabBar from '../../components/admin/mobile/MobileTabBar';
 import CaisseSubNav from '../../components/admin/mobile/CaisseSubNav';
+import TableStacker from '../../components/admin/mobile/TableStacker';
 
 /**
  * Shell de l'admin : barre latérale et topbar sur ordinateur (≥ lg, inchangés),
@@ -512,6 +513,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         >
           {children}
         </main>
+        <TableStacker />
       </div>
 
       <MobileTabBar pathname={pathname} caisseEnabled={moduleFlags.caisse} toCallCount={toCallCount} />

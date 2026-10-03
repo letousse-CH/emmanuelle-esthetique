@@ -467,8 +467,7 @@ export function ChipBar({ children, label, activeKey, bleed = true, className }:
       ref={ref}
       role="group"
       aria-label={label}
-      className={cx('hide-scrollbar flex gap-2 overflow-x-auto py-1', bleed && '-mx-4 px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0', className)}
-      style={{ scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch' }}
+      className={cx('flex flex-wrap gap-2 py-1', className)}
     >
       {children}
     </div>

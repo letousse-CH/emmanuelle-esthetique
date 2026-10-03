@@ -564,7 +564,7 @@ export default function BlogEdit() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex border-t border-stone-200 overflow-x-auto" role="tablist" aria-label="Sections de l'article">
+        <div className="flex flex-wrap border-t border-stone-200" role="tablist" aria-label="Sections de l'article">
           {TABS.map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;

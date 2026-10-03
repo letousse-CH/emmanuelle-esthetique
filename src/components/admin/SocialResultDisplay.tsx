@@ -153,7 +153,7 @@ export default function SocialResultDisplay({ result, brand, coverImage, onRegen
   return (
     <div className="space-y-6">
       {/* Onglets plateforme */}
-      <div role="tablist" aria-label="Réseau" className="flex gap-1 border-b border-stone-200 overflow-x-auto">
+      <div role="tablist" aria-label="Réseau" className="flex flex-wrap gap-1 border-b border-stone-200">
         {PLATFORMS.map((p) => (
           <button
             key={p.id}

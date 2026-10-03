@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, UserPlus, X, Plus, Minus, Trash2, Check, Download,
   Receipt, AlertCircle, Loader2, Pencil, Gift, Ticket, PenLine, Layers, Package,
-  Cake, Mail, MessageCircle, Target, CheckCircle2, Sparkles, CalendarCheck, ChevronRight, User,
+  Cake, Mail, MessageCircle, Target, CheckCircle2, Sparkles, CalendarCheck, ChevronRight, ChevronLeft, User,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
 import { Button, Callout, LinkButton, PageHeader } from '../../../components/admin/ui';
@@ -19,7 +19,8 @@ import {
   clearCaisseDraft, loadCaisseDraft, saveCaisseDraft, takeCaisseCorrection,
 } from '../../../utils/caissePrefill';
 import { supabase } from '../../../services/supabase';
-import { BottomSheet, Chip, ChipBar, SegmentedControl } from '../../../components/admin/mobile/ui';
+import { BottomSheet, SegmentedControl } from '../../../components/admin/mobile/ui';
+import { CategoryTile, pickPhoto, useMediaAssets } from '../../../components/admin/mobile/CategoryTile';
 import { PERIODE_LABEL } from '../../../types/booking';
 import type { Booking, BookingDetail } from '../../../types/booking';
 import {
@@ -1429,8 +1430,15 @@ function ServiceCatalog({
 
   // L'onglet actif peut disparaître (catégorie vidée pendant la session) :
   // on retombe alors sur « Tout » plutôt que d'afficher une grille vide.
-  const activeTab = tabs.some(t => t.id === tab) ? tab : 'all';
+  const hasMenu = tabs.length > 2;
   const term = search.trim().toLowerCase();
+  const activeTab = tab === 'menu' && hasMenu && !term ? 'menu'
+    : tabs.some(t => t.id === tab) ? tab : 'all';
+  const countOf = (id: string) => id === 'produits' ? products.length
+    : id === 'all' ? services.length
+    : services.filter(s => id === 'none'
+      ? (!s.category_id || !categories.some(c => c.id === s.category_id))
+      : s.category_id === id).length;
 
   const filteredServices = useMemo(() => services.filter(s => {
     if (!s.nom.toLowerCase().includes(term)) return false;
@@ -2206,9 +2214,11 @@ function MobileCatalog({ services, categories, products, loading, lines, onPickS
   onCustom: () => void;
   onSellGift: () => void;
 }) {
-  const [tab, setTab] = useState('all');
+  // 'menu' = écran intermédiaire des catégories (grosses tuiles), 'all' = tout le catalogue.
+  const [tab, setTab] = useState('menu');
   const [search, setSearch] = useState('');
   const [announce, setAnnounce] = useState('');
+  const assets = useMediaAssets();
 
   const tabs = useMemo(() => {
     const list: { id: string; label: string }[] = [{ id: 'all', label: 'Tout' }];
@@ -2222,8 +2232,15 @@ function MobileCatalog({ services, categories, products, loading, lines, onPickS
     return list;
   }, [categories, services, products]);
 
-  const activeTab = tabs.some(t => t.id === tab) ? tab : 'all';
+  const hasMenu = tabs.length > 2;
   const term = search.trim().toLowerCase();
+  const activeTab = tab === 'menu' && hasMenu && !term ? 'menu'
+    : tabs.some(t => t.id === tab) ? tab : 'all';
+  const countOf = (id: string) => id === 'produits' ? products.length
+    : id === 'all' ? services.length
+    : services.filter(s => id === 'none'
+      ? (!s.category_id || !categories.some(c => c.id === s.category_id))
+      : s.category_id === id).length;
 
   const filteredServices = useMemo(() => services.filter(s => {
     if (!s.nom.toLowerCase().includes(term)) return false;
@@ -2263,19 +2280,37 @@ function MobileCatalog({ services, categories, products, loading, lines, onPickS
         />
       </div>
 
-      {tabs.length > 2 && (
-        <ChipBar label="Catégories du catalogue" activeKey={activeTab}>
-          {tabs.map(t => (
-            <Chip key={t.id} selected={activeTab === t.id} onClick={() => setTab(t.id)} icon={t.id === 'produits' ? Package : undefined}>
-              {t.label}
-            </Chip>
-          ))}
-        </ChipBar>
+      {hasMenu && activeTab !== 'menu' && !term && (
+        <button
+          type="button" onClick={() => setTab('menu')}
+          className="flex min-h-11 items-center gap-2 rounded-xl text-[15px] font-semibold text-accent cursor-pointer"
+        >
+          <ChevronLeft size={18} aria-hidden="true" />
+          Catégories
+          <span className="font-normal text-stone-600">· {tabs.find(t => t.id === activeTab)?.label}</span>
+        </button>
       )}
 
       <p role="status" className="sr-only">{announce}</p>
 
-      {loading ? (
+      {!loading && activeTab === 'menu' ? (
+        <div className="grid grid-cols-2 gap-3">
+          {tabs.filter(t => t.id !== 'all').map(t => (
+            <CategoryTile
+              key={t.id} label={t.label} photo={pickPhoto(t.label, assets)}
+              sub={`${countOf(t.id)} ${t.id === 'produits' ? 'produit' : 'soin'}${countOf(t.id) > 1 ? 's' : ''}`}
+              icon={t.id === 'produits' ? <Package size={22} aria-hidden="true" /> : undefined}
+              onClick={() => setTab(t.id)}
+            />
+          ))}
+          <button
+            type="button" onClick={() => setTab('all')}
+            className="col-span-2 flex min-h-12 items-center justify-center rounded-xl border border-stone-300 bg-white text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
+          >
+            Voir tout le catalogue
+          </button>
+        </div>
+      ) : loading ? (
         <div className="grid grid-cols-2 gap-3">
           {[...Array(6)].map((_, i) => <div key={i} className="h-[92px] animate-pulse rounded-2xl bg-stone-200/70" />)}
         </div>
