@@ -27,6 +27,7 @@ import {
 import { useModuleFlags } from '../../hooks/useModuleFlags';
 import { SITE_CONFIG } from '../../config/site';
 import AdminOnboardingWizard from '../../components/admin/AdminOnboardingWizard';
+import MobileHome from '../../components/admin/mobile/home/MobileHome';
 
 interface DayCount { date: string; count: number }
 interface PageStat  { page: string; count: number }
@@ -69,7 +70,7 @@ function label(page: string) {
 
 function fmt(n: number) { return n.toLocaleString('fr-FR'); }
 
-export default function Dashboard() {
+function DesktopDashboard() {
   const [loading, setLoading]         = useState(true);
   const [today, setToday]             = useState(0);
   const [week, setWeek]               = useState(0);
@@ -626,4 +627,27 @@ export default function Dashboard() {
       </div>
     </div>
   );
+}
+
+/**
+ * Sous `lg` (téléphone, tablette) : l'accueil de l'application. À partir de `lg` :
+ * le tableau de bord d'origine, inchangé. Un seul des deux est monté, pour ne pas
+ * lancer les requêtes de l'autre.
+ */
+export default function Dashboard() {
+  const [desktop, setDesktop] = useState<boolean | null>(null);
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 1024px)');
+    const update = () => setDesktop(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    window.addEventListener('resize', update);
+    return () => {
+      mql.removeEventListener('change', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  if (desktop === null) return <div className="min-h-[60vh]" aria-hidden="true" />;
+  return desktop ? <DesktopDashboard /> : <MobileHome />;
 }
