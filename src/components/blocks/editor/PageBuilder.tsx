@@ -10,6 +10,7 @@ import type { ContentStructure, BlockType } from '../types';
 import { createSection } from '../types';
 import { createBlock } from '../blockMeta';
 import { BlockRenderer, type EditorSelection } from '../BlockRenderer';
+import type { PublicOffer } from '../../../types/offers';
 import { resolvePageContent } from '../pageContent';
 import { PAGE_TEMPLATES, type SectionPreset } from '../presets';
 import { useContentHistory } from './useContentHistory';
@@ -66,8 +67,19 @@ export default function PageBuilder({ pageId, mode, onClose }: Props) {
   const loadedVersion = useRef(0);
   const loadedMeta = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
+  // Offres du moment pour l'aperçu du bloc du même nom (le site les lit côté serveur).
+  const [offers, setOffers] = useState<PublicOffer[] | undefined>(undefined);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/offers', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { offers: [] }))
+      .then((j) => { if (active) setOffers(Array.isArray(j?.offers) ? j.offers : []); })
+      .catch(() => { if (active) setOffers([]); });
+    return () => { active = false; };
+  }, []);
 
   // ── Chargement ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -310,7 +322,7 @@ export default function PageBuilder({ pageId, mode, onClose }: Props) {
           ) : viewport === 'mobile' ? (
             <div className="mx-auto w-[390px] overflow-hidden rounded-[28px] border-[6px] border-stone-800 bg-white shadow-xl" style={{ height: 'calc(100% - 8px)' }}>
               <PreviewFrame width={378}>
-                <div data-site-theme><GlobalStyles /><BlockRenderer content={content} /></div>
+                <div data-site-theme><GlobalStyles /><BlockRenderer content={content} data={{ offers }} /></div>
               </PreviewFrame>
             </div>
           ) : (
@@ -333,6 +345,7 @@ export default function PageBuilder({ pageId, mode, onClose }: Props) {
               ) : (
                 <Canvas
                   content={content}
+                  data={{ offers }}
                   selection={selection}
                   onSelect={setSelection}
                   onChange={(next, key) => commit(next, key)}

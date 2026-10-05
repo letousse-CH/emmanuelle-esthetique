@@ -40,8 +40,8 @@ const SETTINGS_SECTIONS: TabItem[] = [
     description: "Modèle utilisé pour les textes générés et budget mensuel à surveiller." },
   { id: 'caisse', label: 'Caisse & TVA', icon: CreditCard,
     description: 'Taux de TVA, IBAN, mentions de facture et bons cadeaux.' },
-  { id: 'booking', label: 'Réservations & Offre du mois', icon: CalendarDays,
-    description: "Offre du mois active, synchronisation Google Agenda et alertes smartphone." },
+  { id: 'booking', label: 'Réservations', icon: CalendarDays,
+    description: "Horaires, indisponibilités, synchronisation Google Agenda et alertes smartphone." },
   { id: 'fleet', label: 'Flotte Multi-Sites', icon: Server,
     description: 'Mettre à jour les autres sites installés avec ce même outil.' },
   { id: 'security', label: 'Sécurité', icon: Lock,
@@ -2179,7 +2179,7 @@ export default function Settings() {
           </div>
         )}
 
-        {/* ── Onglet Réservations & Offre du mois ─────────────────── */}
+        {/* ── Onglet Réservations ───────────────────────────────────── */}
         {activeTab === 'booking' && <BookingSettingsPanel />}
 
         {/* ── Onglet Flotte Multi-Sites ────────────────────────────── */}

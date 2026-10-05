@@ -33,15 +33,6 @@ export interface PrivilegeOption {
   description: string;
 }
 
-export interface MonthlyOfferData {
-  id: string;
-  titre: string;
-  description: string | null;
-  prix_chf: number;
-  image_url: string | null;
-  active: boolean;
-}
-
 // ── Catalogue des Prestations Filtrées (Conforme Carte Soins & Règles Métier) ─
 
 export const PRESTATIONS_CATALOG: PrestationItem[] = [

@@ -813,6 +813,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     p_items: input.lines.map(l => ({
       service_id: l.service_id,
       product_id: l.product_id ?? null,
+      offer_id: l.offer_id ?? null,
       description: remiseLabel(l),
       prix_unitaire_ttc: l.prix_unitaire_ttc,
       quantite: l.quantite,

@@ -147,6 +147,43 @@ Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
 - Pas encore fait : rappel automatique la veille (`rappel_effectue` n'est pas écrit),
   passage « Encaisser » vers la caisse, pièce jointe .ics (`sendEmail` ne la gère pas).
 
+## Offres du moment (2026-10-05)
+
+Campagne datée, gérée sur `/admin/offres` : image paysage, titre, description,
+tarif (+ prix habituel barré), durée, conditions, période, nombre de places,
+« réservable en ligne », « publiée » (sinon brouillon). Migration :
+`supabase/migrations/20261005_offres_du_moment.sql` — elle étend la table
+`monthly_offers` de l'ancienne « offre du mois » et **remplace le corps de
+`caisse_create_transaction`** (même signature, + `offer_id` sur les lignes) :
+à appliquer après `20260802`, et ne jamais rejouer `20260802` ensuite.
+
+- **La période décide de tout.** Entre `date_debut` et `date_fin` (Zurich,
+  incluses), l'offre apparaît d'elle-même : bloc page builder `current_offer`,
+  formulaire de réservation (`/reservation?offre=<id>`), tuile en tête du
+  catalogue de caisse (bureau et téléphone), catalogue de l'agenda admin
+  (`service_id = offre:<uuid>`). C'est la **date du soin** qui doit tomber dans la
+  période ; le serveur le revérifie (`loadBookableOffer`, `services/booking.ts`).
+- **Les places se déduisent, elles ne se saisissent pas** (vue `monthly_offer_stats`) :
+  `places prises = lignes de facture non annulées portant l'offre + réservations
+  en attente ou confirmées`. Une réservation encaissée depuis l'agenda passe en
+  « terminé » et n'est donc jamais comptée deux fois. Règles pures et testées :
+  `src/types/offers.ts`.
+- **Complète = expirée pour le public** : elle quitte le site et la réservation
+  en ligne. La caisse la garde (les clientes qui ont réservé doivent pouvoir
+  être encaissées) et l'affiche « Complet », sans bloquer — comme le stock.
+- La dernière place est protégée contre deux réservations simultanées par la même
+  re-vérification déterministe que les périodes (`offerPlaceHeld`, rang
+  `created_at, id`).
+- Une offre citée par une réservation ou une facture **s'archive**, elle ne se
+  supprime pas (clé étrangère `RESTRICT` côté facture). « Relancer » crée une
+  nouvelle offre avec de nouvelles dates : chaque campagne garde ses compteurs.
+  Historique rangé par année (celle du début).
+- Le bloc ne contient que son cadre (surtitre, bouton, options) : tout le reste
+  vient de la base, lue par `BlockPage` à chaque régénération ISR. Sans offre en
+  cours, une section qui ne contient que ce bloc n'est pas rendue du tout.
+  `scripts/add-offer-section-home.mjs` (essai par défaut, `--write`) pose la
+  section sous l'en-tête de l'accueil — **après** le déploiement du code.
+
 ## Caisse, clientèle & facturation
 
 Module **interne** (rien n'est exposé au rôle `anon`), sous `/admin/caisse` :

@@ -732,6 +732,8 @@ export default function JournalClient() {
                 // Sans lui, la facture rectifiée ne ressortirait pas la
                 // marchandise du stock que l'annulation vient d'y remettre.
                 product_id: item.product_id,
+                // Et sans elle, l'offre perdrait la place que l'annulation vient de libérer.
+                offer_id: item.offer_id ?? null,
                 description: item.description,
                 prix_unitaire_ttc: Number(item.prix_unitaire_ttc),
                 quantite: Number(item.quantite),

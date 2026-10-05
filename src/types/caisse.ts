@@ -317,6 +317,8 @@ export interface TransactionItem {
   service_id: string | null;
   gift_card_id: string | null;
   product_id: string | null;
+  /** Offre du moment vendue par cette ligne : sert au décompte de ses places, jamais au prix. */
+  offer_id?: string | null;
   /** Coût d'achat figé à la vente — jamais le prix d'achat courant de la fiche. */
   prix_achat_unitaire: number | null;
   description: string;
@@ -381,6 +383,9 @@ export interface CartLine {
   /** Renseigné quand la ligne vend de la marchandise : la validation sortira
    *  la quantité du stock et figera le coût d'achat sur la facture. */
   product_id?: string | null;
+  /** Renseigné quand la ligne vend l'offre du moment : la facture la comptera
+   *  dans les places de l'offre. Le prix, lui, reste celui de la ligne. */
+  offer_id?: string | null;
   description: string;
   prix_unitaire_ttc: number;
   quantite: number;

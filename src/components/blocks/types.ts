@@ -93,6 +93,18 @@ export interface ContactBlock { id: string; type: 'contact'; title?: string; tex
 /** Formulaire de contact du site (envoi par e-mail via /api/contact). */
 export interface ContactFormBlock { id: string; type: 'contact_form' }
 export interface GoogleReviewsBlock { id: string; type: 'google_reviews'; title?: string; max?: number }
+/**
+ * Offre du moment : le contenu (image, titre, prix, dates, places) vient de
+ * l'admin « Offre du moment » (table `monthly_offers`), jamais du bloc. Le bloc
+ * ne règle que le cadre. Sans offre en cours, il ne rend rien — et la section
+ * qui ne contient que lui disparaît du site.
+ */
+export interface CurrentOfferBlock {
+  id: string; type: 'current_offer';
+  eyebrow?: string; ctaText?: string;
+  showConditions?: boolean; showPlaces?: boolean;
+  imagePosition?: 'left' | 'right';
+}
 
 /**
  * Section Studio conservée telle quelle (conversion sans perte, ou section
@@ -105,7 +117,8 @@ export type ContentBlock =
   | HeadingBlock | TextBlock | ImageBlock | ButtonBlock | QuoteBlock | VideoBlock
   | SpacerBlock | DividerBlock | HeroBlock | CardsBlock | FaqBlock | StepsBlock
   | OffersBlock | PriceListBlock | ChecklistBlock | CalloutBlock | StatsBlock | TestimonialsBlock
-  | GalleryBlock | MarqueeBlock | ContactBlock | ContactFormBlock | GoogleReviewsBlock | LegacySectionBlock;
+  | GalleryBlock | MarqueeBlock | ContactBlock | ContactFormBlock | GoogleReviewsBlock | CurrentOfferBlock
+  | LegacySectionBlock;
 
 export type BlockType = ContentBlock['type'];
 

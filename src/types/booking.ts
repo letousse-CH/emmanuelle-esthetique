@@ -154,9 +154,11 @@ export interface PublicBookingRequest {
   email?: string | null;
   code_postal?: string | null;
   ville?: string | null;
-  service_id: string;
+  /** Soin de la carte. Absent quand la cliente réserve une offre du moment. */
+  service_id?: string | null;
   /** Identifiants du catalogue uniquement : le serveur retrouve nom, prix, durée. */
   options?: Array<{ id: string }>;
+  /** Offre du moment réservée comme soin à part entière (prix, durée, période et places vérifiés par le serveur). */
   offer_of_month_id?: string | null;
   /**
    * Durée du soin choisie quand la carte en propose plusieurs (ex. massage 60 / 90 min).
@@ -314,6 +316,7 @@ export type PublicBookingErrorCode =
   | 'doublon'
   | 'trop_de_demandes'
   | 'offre_indisponible'
+  | 'offre_complete'
   | 'soin_inconnu';
 
 /** Ligne du catalogue COMPLET côté admin (GET /api/admin/services-catalog). */
@@ -321,7 +324,8 @@ export interface AdminCatalogItem {
   id: string;
   nom: string;
   categorie: string | null;
-  type: 'prestation' | 'forfait' | 'option';
+  /** `offre` : offre du moment valable aujourd'hui (id = `offre:<uuid>`). */
+  type: 'prestation' | 'forfait' | 'option' | 'offre';
   prix_chf: number;
   duree_minutes: number;
 }

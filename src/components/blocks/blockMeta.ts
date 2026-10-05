@@ -234,6 +234,18 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { id: uid(), name: 'Soin visage', price: 'CHF 130', priceNote: '· 60 minutes', description: '', bullets: ['Diagnostic de peau', 'Massage manuel'], ctaText: 'Réserver ce soin', ctaUrl: '/contact' },
     ], footnote: 'Paiement en cabine : TWINT, espèces, cartes.' }),
   },
+  current_offer: {
+    type: 'current_offer', label: 'Offre du moment', description: 'L\'offre en cours, à jour toute seule : image, prix, dates, places restantes. Masquée quand aucune offre n\'est active.', category: 'offre',
+    keywords: 'offre moment promotion promo mois remise reduction reserver places limitee',
+    fields: [
+      { ...eyebrow, help: 'Image, titre, prix, dates et places se modifient dans Admin → Offre du moment : le bloc suit tout seul.' },
+      { key: 'ctaText', label: 'Texte du bouton', kind: 'text', help: 'Le bouton mène au formulaire de réservation, offre déjà choisie.' },
+      { key: 'showPlaces', label: 'Afficher les places restantes', kind: 'toggle', help: 'Seulement si l\'offre est limitée en nombre.' },
+      { key: 'showConditions', label: 'Afficher les conditions', kind: 'toggle' },
+      { key: 'imagePosition', label: 'Image', kind: 'select', style: true, options: [{ value: 'left', label: 'À gauche' }, { value: 'right', label: 'À droite' }] },
+    ],
+    create: () => ({ id: uid(), type: 'current_offer', eyebrow: 'Offre du moment', ctaText: 'Réserver cette offre', showPlaces: true, showConditions: true, imagePosition: 'left' }),
+  },
   pricelist: {
     type: 'pricelist', label: 'Carte des tarifs', description: 'Une ligne par soin : nom, durée, prix. Idéal pour la carte complète.', category: 'offre',
     keywords: 'tarifs prix carte liste soins epilation tableau',

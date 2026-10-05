@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../../services/supabase';
 import {
   CalendarDays,
@@ -12,7 +13,6 @@ import {
   Check,
   AlertCircle,
   RefreshCw,
-  Image as ImageIcon,
   Save,
   CalendarCheck,
   ExternalLink,
@@ -28,15 +28,6 @@ import SyncClientsButton from '../../../components/admin/reservations/SyncClient
 import WeeklyHoursEditor, { normalizeHours, validateHours } from '../../../components/admin/reservations/WeeklyHoursEditor';
 import type { WeeklyHours } from '../../../components/admin/reservations/WeeklyHoursEditor';
 import { adminFetch, unwrap } from '../../../components/admin/reservations/lib';
-
-interface MonthlyOfferForm {
-  id?: string;
-  titre: string;
-  description: string;
-  prix_chf: number;
-  image_url: string;
-  active: boolean;
-}
 
 interface BookingSettingsForm {
   buffer_minutes: number;
@@ -80,18 +71,6 @@ function BookingSettingsContent() {
     if (m.type === 'success') fb.success(m.text);
     else fb.error(m.text);
   };
-  // ── État Offre du mois ──
-  const [offer, setOffer] = useState<MonthlyOfferForm>({
-    titre: '',
-    description: '',
-    prix_chf: 120,
-    image_url: '',
-    active: true,
-  });
-  const [offerLoading, setOfferLoading] = useState(true);
-  const [savingOffer, setSavingOffer] = useState(false);
-  const [offerMsg, setOfferMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
   // ── État Paramètres & Synchronisation Google / Notifications ──
   const [settings, setSettings] = useState<BookingSettingsForm>({
     buffer_minutes: 30,
@@ -120,25 +99,7 @@ function BookingSettingsContent() {
       const token = session?.access_token || '';
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
-      // 1. Offre du mois
-      setOfferLoading(true);
-      const resOffer = await fetch('/api/bookings/monthly-offer', { headers });
-      if (resOffer.ok) {
-        const jsonOffer = await resOffer.json();
-        if (jsonOffer.offer) {
-          setOffer({
-            id: jsonOffer.offer.id,
-            titre: jsonOffer.offer.titre || '',
-            description: jsonOffer.offer.description || '',
-            prix_chf: Number(jsonOffer.offer.prix_chf) || 0,
-            image_url: jsonOffer.offer.image_url || '',
-            active: Boolean(jsonOffer.offer.active),
-          });
-        }
-      }
-      setOfferLoading(false);
-
-      // 2. Paramètres de réservation
+      // Paramètres de réservation
       setSettingsLoading(true);
       try {
         const jsonSettings = await adminFetch('/api/admin/booking-settings');
@@ -178,46 +139,7 @@ function BookingSettingsContent() {
       setSettingsLoading(false);
     } catch (err) {
       console.error('[BookingSettingsPanel] Erreur chargement:', err);
-      setOfferLoading(false);
       setSettingsLoading(false);
-    }
-  };
-
-  // ── Sauvegarde Offre du mois ──
-  const handleSaveOffer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingOffer(true);
-    setOfferMsg(null);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || '';
-
-      const res = await fetch('/api/bookings/monthly-offer', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(offer),
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erreur enregistrement');
-
-      if (json.offer) {
-        setOffer((prev) => ({ ...prev, id: json.offer.id }));
-      }
-
-      const m = { type: 'success' as const, text: 'Offre du mois enregistrée avec succès.' };
-      setOfferMsg(m);
-      announce(m);
-    } catch (err: any) {
-      const m = { type: 'error' as const, text: err.message || 'Erreur lors de la sauvegarde.' };
-      setOfferMsg(m);
-      announce(m);
-    } finally {
-      setSavingOffer(false);
     }
   };
 
@@ -284,138 +206,23 @@ function BookingSettingsContent() {
 
   return (
     <div className="space-y-6 lg:space-y-12 animate-fadein">
-      {/* ═════════════════════════════════════════════════════════════════════
-          SECTION 1 : L'OFFRE DU MOIS
-          ═════════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-100 pb-5">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold">
-                <Sparkles size={16} />
-              </span>
-              <h2 className="text-xl font-bold text-stone-900">L'Offre du Mois en ligne</h2>
-            </div>
-            <p className="text-[14px] sm:text-sm text-stone-600 sm:text-stone-500 font-light">
-              Mettez en avant un soin d'exception ou un forfait saisonnier dans le module de réservation publique (Étape 2).
+      {/* L'offre du moment a sa propre page (dates, places, archives) : on y renvoie. */}
+      <section className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="flex items-start gap-3">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent">
+            <Sparkles size={16} />
+          </span>
+          <div>
+            <h2 className="text-[16px] font-semibold text-stone-900">Offre du moment</h2>
+            <p className="text-[14px] text-stone-600">
+              Création, dates, places limitées et historique se gèrent sur leur propre page. Une offre en cours est
+              proposée d&apos;elle-même dans la réservation en ligne.
             </p>
           </div>
-
-          <label className="relative inline-flex min-h-11 items-center cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={offer.active}
-              onChange={(e) => setOffer({ ...offer, active: e.target.checked })}
-              className="sr-only peer"
-            />
-            <div className="relative w-11 h-6 shrink-0 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-            <span className="ml-3 text-[14px] lg:text-xs font-semibold text-stone-700">
-              {offer.active ? 'Offre Active' : 'Offre Désactivée'}
-            </span>
-          </label>
         </div>
-
-        {offerMsg && (
-          <div
-            className={`p-4 rounded-xl text-[14px] sm:text-sm flex items-center gap-3 ${
-              offerMsg.type === 'success'
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                : 'bg-rose-50 text-rose-800 border border-rose-200'
-            }`}
-          >
-            {offerMsg.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />}
-            <span>{offerMsg.text}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSaveOffer} className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            <div className="sm:col-span-2 space-y-1">
-              <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
-                Titre de l'Offre du mois *
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Ex: Rituel Échappée Belle & Gommage Satin"
-                value={offer.titre}
-                onChange={(e) => setOffer({ ...offer, titre: e.target.value })}
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 focus:outline-none focus:ring-1 focus:ring-stone-400"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
-                Tarif Préférentiel (CHF) *
-              </label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="1"
-                placeholder="Ex: 140"
-                value={offer.prix_chf || ''}
-                onChange={(e) => setOffer({ ...offer, prix_chf: parseFloat(e.target.value) || 0 })}
-                className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 focus:outline-none focus:ring-1 focus:ring-stone-400"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
-              Description & Avantages exclusifs
-            </label>
-            <textarea
-              rows={3}
-              placeholder="Décrivez les bienfaits marins, les étapes du soin et le privilège accordé ce mois-ci..."
-              value={offer.description}
-              onChange={(e) => setOffer({ ...offer, description: e.target.value })}
-              className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 focus:outline-none focus:ring-1 focus:ring-stone-400 font-light"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
-              Visuel de l'Offre (URL de l'image)
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="https://... ou chemin de l'image"
-                value={offer.image_url}
-                onChange={(e) => setOffer({ ...offer, image_url: e.target.value })}
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-stone-200 focus:outline-none focus:ring-1 focus:ring-stone-400 font-mono"
-              />
-            </div>
-            {offer.image_url && (
-              <div className="w-48 h-28 rounded-xl overflow-hidden border border-stone-200 bg-stone-50 mt-2 shadow-inner">
-                <img
-                  src={offer.image_url}
-                  alt={offer.titre}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            )}
-          </div>
-
-          <div className={SAVE_BAR}>
-            <button
-              type="submit"
-              disabled={savingOffer}
-              className="inline-flex w-full lg:w-auto min-h-12 lg:min-h-0 items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-accent-fg hover:bg-accent-hover text-[15px] lg:text-xs font-semibold tracking-wide transition-all shadow-sm disabled:opacity-50"
-            >
-              {savingOffer ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Enregistrement...
-                </>
-              ) : (
-                <>
-                  <Save className="w-3.5 h-3.5" /> Enregistrer l'offre du mois
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+        <Link href="/admin/offres" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-stone-100 px-4 text-[14px] font-semibold text-stone-900 hover:bg-stone-200">
+          Gérer les offres <ExternalLink size={14} aria-hidden="true" />
+        </Link>
       </section>
 
       {/* ═════════════════════════════════════════════════════════════════════

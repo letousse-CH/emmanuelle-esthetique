@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import type { ContentStructure, ContentBlock } from '../types';
-import { BlockRenderer, type EditorSelection } from '../BlockRenderer';
+import { BlockRenderer, type EditorSelection, type BlockData } from '../BlockRenderer';
 import { moveBlockTo, swapColumns, insertBlock, setBlockField, findBlock, moveCardItem } from './ops';
 
 export const NEW_BLOCK_MIME = 'application/x-pb-new-block';
@@ -26,6 +26,8 @@ function cardInsertionIndex(blockEl: HTMLElement, clientX: number, clientY: numb
 
 interface Props {
   content: ContentStructure;
+  /** Données vivantes des blocs (offre du moment). */
+  data?: BlockData;
   selection: EditorSelection;
   onSelect: (sel: EditorSelection) => void;
   onChange: (next: ContentStructure, coalesceKey?: string) => void;
@@ -42,7 +44,7 @@ interface Props {
  * - glisser-déposer : déplacer un bloc (y compris vers une autre section),
  *   échanger deux colonnes, ou déposer un bloc venu de la bibliothèque.
  */
-export default function Canvas({ content, selection, onSelect, onChange, createDropped, onAddAt }: Props) {
+export default function Canvas({ content, data, selection, onSelect, onChange, createDropped, onAddAt }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragSource | null>(null);
   const [drop, setDrop] = useState<{ sectionId: string; columnId: string; index: number } | null>(null);
@@ -224,7 +226,7 @@ export default function Canvas({ content, selection, onSelect, onChange, createD
       onDrop={onDrop}
       onDragEnd={() => { setDrag(null); setDrop(null); setCardDrop(null); }}
     >
-      <BlockRenderer content={content} editor={{ selection, dropTarget: drop, cardDrop: cardDrop ? { blockId: cardDrop.blockId, index: cardDrop.index } : null }} />
+      <BlockRenderer content={content} data={data} editor={{ selection, dropTarget: drop, cardDrop: cardDrop ? { blockId: cardDrop.blockId, index: cardDrop.index } : null }} />
     </div>
   );
 }

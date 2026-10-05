@@ -12,7 +12,7 @@ import type {
   HeadingBlock, TextBlock, ImageBlock, ButtonBlock, QuoteBlock, VideoBlock,
   HeroBlock, CardsBlock, FaqBlock, StepsBlock, OffersBlock, PriceListBlock, ChecklistBlock,
   CalloutBlock, StatsBlock, TestimonialsBlock, GalleryBlock, MarqueeBlock,
-  ContactBlock, GoogleReviewsBlock,
+  ContactBlock, GoogleReviewsBlock, CurrentOfferBlock,
 } from './types';
 import { sanitizeHtml } from './sanitize';
 import LegacySection from './LegacySection';
@@ -20,6 +20,8 @@ import GoogleReviews from '../GoogleReviews';
 import ContactForm from '../ContactForm';
 import CardsCarousel from './CardsCarousel';
 import { optimizedImgProps, QUALITY, QUALITY_HERO } from '../../utils/imageOptim';
+import type { PublicOffer } from '../../types/offers';
+import { formatOfferDuration, formatOfferPeriod, formatOfferPrice } from '../../types/offers';
 
 export type EditorSelection =
   | { kind: 'section'; sectionId: string }
@@ -44,8 +46,18 @@ export interface ImageOptions {
   dims: Record<string, { w: number; h: number }>;
 }
 
+/**
+ * Données vivantes lues côté serveur par la page (BlockPage) ou par l'éditeur,
+ * pour les blocs qui affichent autre chose que leur propre contenu.
+ * `undefined` = pas encore chargées (éditeur).
+ */
+export interface BlockData {
+  offers?: PublicOffer[];
+}
+
 interface Ctx {
   editor?: EditorState;
+  data?: BlockData;
   sectionId: string;
   columnId: string;
   blockId: string;
@@ -499,6 +511,59 @@ function GoogleReviewsView({ b, ctx }: { b: GoogleReviewsBlock; ctx: Ctx }) {
   );
 }
 
+function placesLabel(n: number, max: number | null): string {
+  if (n === 1) return 'Dernière place disponible';
+  if (n <= 5) return `Plus que ${n} places`;
+  return max ? `${n} places disponibles sur ${max}` : `${n} places disponibles`;
+}
+
+function CurrentOfferView({ b, ctx }: { b: CurrentOfferBlock; ctx: Ctx }) {
+  const offers = ctx.data?.offers;
+  if (!offers) return ctx.editor ? <div className="pb-img-empty">Chargement de l&apos;offre du moment…</div> : null;
+  if (offers.length === 0) {
+    return ctx.editor
+      ? <div className="pb-img-empty pb-curoffer-empty">Aucune offre en cours aujourd&apos;hui : l&apos;encart est masqué sur le site. Les offres se créent dans Admin → Offre du moment.</div>
+      : null;
+  }
+  return (
+    <div className="pb-curoffers">
+      {offers.map((o) => {
+        const url = o.reservable_en_ligne ? `/reservation?offre=${encodeURIComponent(o.id)}` : '/contact';
+        return (
+          <article key={o.id} className={`pb-curoffer ${b.imagePosition === 'right' ? 'pb-curoffer-rev' : ''} ${o.image_url ? '' : 'pb-curoffer-noimg'}`}>
+            {o.image_url && (
+              <div className="pb-curoffer-img">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img {...imgAttrs(ctx, o.image_url, '(min-width: 900px) 50vw, 100vw')} alt={o.titre} decoding="async" />
+              </div>
+            )}
+            <div className="pb-curoffer-body">
+              {b.eyebrow && <span className="pb-eyebrow" {...f(ctx, 'eyebrow')}>{b.eyebrow}</span>}
+              <h2 className="pb-h pb-h2">{o.titre}</h2>
+              {o.description && <p className="pb-curoffer-desc">{o.description}</p>}
+              <p className="pb-curoffer-price">
+                <span>{formatOfferPrice(o.prix_chf)}</span>
+                {o.prix_normal_chf != null && o.prix_normal_chf > o.prix_chf && (
+                  <small>au lieu de <s>{formatOfferPrice(o.prix_normal_chf)}</s></small>
+                )}
+              </p>
+              <ul className="pb-curoffer-meta">
+                <li>Valable {formatOfferPeriod(o.date_debut, o.date_fin)}</li>
+                <li>{formatOfferDuration(o.duree_minutes)}</li>
+                {b.showPlaces !== false && o.places_restantes != null && (
+                  <li className="pb-curoffer-places">{placesLabel(o.places_restantes, o.places_max)}</li>
+                )}
+              </ul>
+              {b.showConditions !== false && o.conditions && <p className="pb-curoffer-cond">{o.conditions}</p>}
+              <div className="pb-btns"><Btn text={b.ctaText || 'Réserver cette offre'} url={url} ctx={ctx} field="ctaText" /></div>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 function BlockView({ block, ctx }: { block: ContentBlock; ctx: Ctx }) {
   switch (block.type) {
     case 'heading': return <HeadingView b={block} ctx={ctx} />;
@@ -524,6 +589,7 @@ function BlockView({ block, ctx }: { block: ContentBlock; ctx: Ctx }) {
     case 'contact': return <ContactView b={block} ctx={ctx} />;
     case 'contact_form': return <div className="pb-contact-form"><ContactForm /></div>;
     case 'google_reviews': return <GoogleReviewsView b={block} ctx={ctx} />;
+    case 'current_offer': return <CurrentOfferView b={block} ctx={ctx} />;
     case 'legacy_section': return <LegacySection section={block.section} />;
     default: return null;
   }
@@ -537,7 +603,7 @@ function toneClass(bg: string | undefined, tone: string | undefined): string {
   return bg === 'dark' || bg === 'accent' ? 'pb-tone-light' : '';
 }
 
-function ColumnView({ section, column, index, editor, images, lcpId }: { section: ContentSection; column: ContentColumn; index: number; editor?: EditorState; images?: ImageOptions; lcpId?: string | null }) {
+function ColumnView({ section, column, index, editor, images, data, lcpId }: { section: ContentSection; column: ContentColumn; index: number; editor?: EditorState; images?: ImageOptions; data?: BlockData; lcpId?: string | null }) {
   const colSizes = columnSizes(section.layout, section.columns.length);
   const sel = editor?.selection;
   const selected = sel?.kind === 'column' && sel.columnId === column.id;
@@ -558,7 +624,7 @@ function ColumnView({ section, column, index, editor, images, lcpId }: { section
   return (
     <div className={cls} {...edAttrs}>
       {column.blocks.map((block, i) => {
-        const ctx: Ctx = { editor, sectionId: section.id, columnId: column.id, blockId: block.id, img: images, colSizes, lcp: block.id === lcpId };
+        const ctx: Ctx = { editor, data, sectionId: section.id, columnId: column.id, blockId: block.id, img: images, colSizes, lcp: block.id === lcpId };
         const view = <BlockView block={block} ctx={ctx} />;
         if (!editor) return <React.Fragment key={block.id}>{view}</React.Fragment>;
         const isSel = sel?.kind === 'block' && sel.blockId === block.id;
@@ -594,7 +660,7 @@ function ColumnView({ section, column, index, editor, images, lcpId }: { section
   );
 }
 
-function SectionView({ section, editor, first, images, lcpId }: { section: ContentSection; editor?: EditorState; first: boolean; images?: ImageOptions; lcpId?: string | null }) {
+function SectionView({ section, editor, first, images, data, lcpId }: { section: ContentSection; editor?: EditorState; first: boolean; images?: ImageOptions; data?: BlockData; lcpId?: string | null }) {
   const bg = section.background || 'transparent';
   const sel = editor?.selection;
   const selected = sel?.kind === 'section' && sel.sectionId === section.id;
@@ -637,7 +703,7 @@ function SectionView({ section, editor, first, images, lcpId }: { section: Conte
       <div className={`pb-container pb-w-${width}`} data-container data-width={width} data-gutter={width === 'full' ? 'none' : undefined}>
         <div className={grid}>
           {section.columns.map((col, i) => (
-            <ColumnView key={col.id} section={section} column={col} index={i} editor={editor} images={images} lcpId={lcpId} />
+            <ColumnView key={col.id} section={section} column={col} index={i} editor={editor} images={images} data={data} lcpId={lcpId} />
           ))}
         </div>
       </div>
@@ -658,15 +724,35 @@ function firstSectionImageId(content: ContentStructure): string | null {
   return null;
 }
 
-export function BlockRenderer({ content, editor, images }: { content: ContentStructure; editor?: EditorState; images?: ImageOptions }) {
-  const lcpId = images ? firstSectionImageId(content) : null;
+/** Blocs qui ne rendent rien sans offre en cours, et ceux qui ne font que les entourer. */
+const OFFER_FRAME_TYPES = new Set(['current_offer', 'spacer', 'divider']);
+
+/**
+ * Section qui n'existe que pour l'offre du moment (bloc « Offre du moment »,
+ * éventuellement espaces et séparateurs) alors qu'aucune offre n'est en cours :
+ * on ne la rend pas, plutôt que de laisser une bande de couleur vide.
+ */
+function isIdleOfferSection(section: ContentSection, data?: BlockData): boolean {
+  if (data?.offers?.length) return false;
+  const blocks = section.columns.flatMap((c) => c.blocks);
+  return blocks.some((b) => b.type === 'current_offer') && blocks.every((b) => OFFER_FRAME_TYPES.has(b.type));
+}
+
+export function BlockRenderer({ content, editor, images, data }: { content: ContentStructure; editor?: EditorState; images?: ImageOptions; data?: BlockData }) {
+  const visible = editor ? content : content.filter((s) => !isIdleOfferSection(s, data));
+  const lcpId = images ? firstSectionImageId(visible) : null;
   return (
     <div className={`pb-page ${editor ? 'pb-editing' : ''}`}>
-      {content.map((section, i) => (
-        <SectionView key={section.id} section={section} editor={editor} first={i === 0} images={images} lcpId={i === 0 ? lcpId : null} />
+      {visible.map((section, i) => (
+        <SectionView key={section.id} section={section} editor={editor} first={i === 0} images={images} data={data} lcpId={i === 0 ? lcpId : null} />
       ))}
     </div>
   );
+}
+
+/** La page contient-elle un bloc « Offre du moment » ? (évite une requête inutile) */
+export function hasCurrentOfferBlock(content: ContentStructure): boolean {
+  return content.some((s) => s.columns.some((c) => c.blocks.some((b) => b.type === 'current_offer')));
 }
 
 /** Questions/réponses de la page, pour le JSON-LD FAQPage (une seule fois par page). */

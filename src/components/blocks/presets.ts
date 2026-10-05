@@ -98,6 +98,11 @@ export const SECTION_PRESETS: SectionPreset[] = [
     build: () => withProps(createSection('1-col', [createBlock('pricelist')]), { width: 'narrow' }),
   },
   {
+    id: 'current-offer', label: 'Offre du moment', hint: 'L\'offre en cours, à jour toute seule — masquée sans offre active', category: 'offre',
+    keywords: 'offre moment promotion promo mois remise reserver',
+    build: () => withProps(createSection('1-col', [createBlock('current_offer')]), { background: 'warm', paddingY: 'medium', width: 'wide' }),
+  },
+  {
     id: 'faq', label: 'Questions fréquentes', hint: 'Accordéon, compris par Google', category: 'confiance',
     keywords: 'faq questions reponses',
     build: () => withProps(createSection('1-col', [createBlock('faq')]), {}),

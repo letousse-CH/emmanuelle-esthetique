@@ -19,6 +19,7 @@ import {
   Scissors,
   Sun,
   Sunset,
+  BadgePercent,
 } from 'lucide-react';
 import {
   PERIODE_LABEL,
@@ -41,6 +42,8 @@ import { chf } from './format';
 import { validateContact, type ContactErrors } from './validation';
 import DayCalendar from './DayCalendar';
 import ConfirmationStep from './ConfirmationStep';
+import type { PublicOffer } from '../../../types/offers';
+import { formatOfferDuration, formatOfferPeriod } from '../../../types/offers';
 
 // Exports conservés : l'ancienne page admin des réservations les importe encore
 // (période de transition). `TimeSlot` est désormais celui des types partagés.
@@ -104,9 +107,22 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const [selectedService, setSelectedService] = useState<PrestationItem | null>(PRESTATIONS_CATALOG[0]);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState<number>(0);
 
+  // Offre du moment : réservée comme un soin à part entière. Quand elle est
+  // choisie, elle prime sur `selectedService` (gardé pour revenir en arrière).
+  const [offers, setOffers] = useState<PublicOffer[]>([]);
+  const [selectedOffer, setSelectedOffer] = useState<PublicOffer | null>(null);
+  const offerParamApplied = useRef(false);
+
   // Étape 2 : jour + période
   const today = useMemo(() => todayZurich(), []);
-  const calendarRange = useMemo(() => ({ from: today, to: addDays(today, CALENDAR_DAYS - 1) }), [today]);
+  // Avec une offre, seuls les jours de sa période sont proposés (le serveur le vérifie aussi).
+  const calendarRange = useMemo(() => {
+    const base = { from: today, to: addDays(today, CALENDAR_DAYS - 1) };
+    if (!selectedOffer) return base;
+    const from = selectedOffer.date_debut > today ? selectedOffer.date_debut : today;
+    const to = selectedOffer.date_fin < base.to ? selectedOffer.date_fin : base.to;
+    return { from, to: to < from ? from : to };
+  }, [today, selectedOffer]);
   const [calendar, setCalendar] = useState<PublicCalendar | null>(null);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
@@ -226,8 +242,40 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
     };
   }, [searchParams, catalogKey]);
 
+  // ── Offres du moment (GET /api/offers) + paramètre `?offre=` ──
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/offers', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        const list: PublicOffer[] = Array.isArray(data?.offers)
+          ? data.offers.filter((o: PublicOffer) => o.reservable_en_ligne)
+          : [];
+        setOffers(list);
+        // L'offre choisie a pu expirer ou se remplir entre-temps.
+        setSelectedOffer((prev) => (prev ? list.find((o) => o.id === prev.id) ?? null : prev));
+        if (!offerParamApplied.current) {
+          offerParamApplied.current = true;
+          const paramOffre = searchParams?.get('offre');
+          const match = paramOffre ? list.find((o) => o.id === paramOffre) : undefined;
+          if (match) setSelectedOffer(match);
+          else if (paramOffre) {
+            setCatalogNotice('Cette offre n’est plus disponible : elle a pris fin ou toutes ses places sont réservées. Choisissez un autre soin ci-dessous.');
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setOffers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, catalogKey]);
+
   const handleCategoryChange = (catId: CategoryId) => {
     setSelectedCategory(catId);
+    setSelectedOffer(null);
     const firstInCat = servicesCatalog.find((p) => p.category === catId);
     if (firstInCat) {
       setSelectedService(firstInCat);
@@ -237,6 +285,14 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
 
   // ── Totaux (estimation d'affichage : le serveur recalcule prix et durée) ──
   const { currentDurationMinutes, baseDurationMinutes, currentPriceChf, currentServiceName } = useMemo(() => {
+    if (selectedOffer) {
+      return {
+        currentDurationMinutes: selectedOffer.duree_minutes,
+        baseDurationMinutes: selectedOffer.duree_minutes,
+        currentPriceChf: selectedOffer.prix_chf,
+        currentServiceName: selectedOffer.titre,
+      };
+    }
     if (!selectedService) {
       return { currentDurationMinutes: 60, baseDurationMinutes: 60, currentPriceChf: 0, currentServiceName: '' };
     }
@@ -252,7 +308,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
       currentPriceChf: price,
       currentServiceName: selectedService.name,
     };
-  }, [selectedService, selectedVariantIndex]);
+  }, [selectedService, selectedVariantIndex, selectedOffer]);
 
   // ── Calendrier des jours (GET /api/bookings/calendar) ──
   const atSlotsStep = currentStep >= 2;
@@ -395,7 +451,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
       focusFirstError(errors);
       return;
     }
-    if (!selectedService || !selectedDate || !selectedPeriode) {
+    if ((!selectedService && !selectedOffer) || !selectedDate || !selectedPeriode) {
       setSubmitError('Veuillez choisir un soin, un jour et le matin ou l’après-midi.');
       return;
     }
@@ -404,7 +460,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
     setSubmitting(true);
     setSubmitError(null);
 
-    const variant = selectedService.variants?.[selectedVariantIndex];
+    const variant = selectedOffer ? undefined : selectedService?.variants?.[selectedVariantIndex];
     const email = formData.email.trim();
 
     // Le navigateur n'envoie que des identifiants : nom, prix et durée sont
@@ -416,7 +472,9 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
       email: email || null,
       code_postal: formData.codePostal.trim() || null,
       ville: formData.ville.trim() || null,
-      service_id: selectedService.id,
+      service_id: selectedOffer ? null : selectedService?.id ?? null,
+      // Offre du moment : prix, durée, période et places sont contrôlés par le serveur.
+      offer_of_month_id: selectedOffer?.id ?? null,
       options: [], // pas d'options choisies en ligne : Emmanuelle les propose au téléphone
       variante_duree_minutes: variant ? variant.durationMinutes : null,
       date_rdv: selectedDate,
@@ -455,6 +513,14 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
           setSubmitError(
             serverMessage || `Trop de demandes pour le moment. Patientez un peu avant de réessayer${phoneHint}.`
           );
+        } else if (code === 'offre_complete' || code === 'offre_indisponible') {
+          setCatalogNotice(
+            serverMessage ||
+              'Cette offre n’est plus disponible : elle a pris fin ou toutes ses places sont réservées. Choisissez un autre soin.'
+          );
+          setSelectedOffer(null);
+          setCatalogKey((k) => k + 1);
+          setCurrentStep(1);
         } else if (code === 'soin_inconnu') {
           setCatalogNotice(
             'Ce soin n’est plus disponible à la réservation en ligne. Choisissez-en un autre, ou contactez l’institut.'
@@ -634,9 +700,87 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
               </div>
             )}
 
+            {offers.length > 0 && (
+              <fieldset className="space-y-3 min-w-0">
+                <legend className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-sage mb-3">
+                  <BadgePercent className="w-4 h-4" aria-hidden="true" />
+                  {offers.length > 1 ? 'Offres du moment' : 'Offre du moment'}
+                </legend>
+                {offers.map((o) => {
+                  const isSel = selectedOffer?.id === o.id;
+                  return (
+                    <label
+                      key={o.id}
+                      data-surface
+                      className={`group block cursor-pointer overflow-hidden rounded-[var(--radius-base,1rem)] border transition-all bg-surface focus-within:ring-2 focus-within:ring-sage/40 ${
+                        isSel ? 'border-sage ring-2 ring-sage/20 shadow-md bg-sage/5' : 'border-sage/40 hover:border-sage hover:shadow-xs'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="soin"
+                        value={`offre-${o.id}`}
+                        checked={isSel}
+                        onChange={() => setSelectedOffer(o)}
+                        aria-labelledby={`rf-offre-${o.id}-nom`}
+                        aria-describedby={`rf-offre-${o.id}-desc`}
+                        className="sr-only"
+                      />
+                      <div className="flex flex-col sm:flex-row">
+                        {o.image_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={o.image_url} alt="" className="w-full sm:w-56 aspect-video sm:aspect-auto object-cover shrink-0" />
+                        )}
+                        <div className="flex-1 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <span id={`rf-offre-${o.id}-nom`} className="block text-lg font-serif font-medium text-stone-deep group-hover:text-sage transition-colors">
+                              {o.titre}
+                            </span>
+                            <p id={`rf-offre-${o.id}-desc`} className="text-muted text-xs sm:text-sm leading-relaxed font-light">
+                              {o.description ? `${o.description} ` : ''}
+                              Valable {formatOfferPeriod(o.date_debut, o.date_fin)}.
+                            </p>
+                            {o.places_restantes != null && (
+                              <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sage/10 text-sage border border-sage/20">
+                                {o.places_restantes === 1 ? 'Dernière place' : `Plus que ${o.places_restantes} places`}
+                              </span>
+                            )}
+                            {o.conditions && <p className="text-[11px] text-muted leading-relaxed whitespace-pre-line">{o.conditions}</p>}
+                          </div>
+                          <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-border">
+                            <div className="text-right">
+                              <div className="text-xl font-serif font-semibold text-sage">{chf(o.prix_chf)}</div>
+                              {o.prix_normal_chf != null && o.prix_normal_chf > o.prix_chf && (
+                                <div className="text-xs text-muted">
+                                  au lieu de <s>{chf(o.prix_normal_chf)}</s>
+                                </div>
+                              )}
+                              <div className="inline-flex items-center gap-1 text-xs text-muted">
+                                <Clock className="w-3.5 h-3.5 text-muted" aria-hidden="true" />
+                                {formatOfferDuration(o.duree_minutes)}
+                              </div>
+                            </div>
+                            <div
+                              aria-hidden="true"
+                              className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all ${
+                                isSel ? 'bg-sage border-sage text-white' : 'border-border text-transparent'
+                              }`}
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+                <p className="text-xs text-muted pt-1">Ou choisissez un soin de la carte :</p>
+              </fieldset>
+            )}
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3" role="group" aria-label="Catégories de soins">
               {CATEGORIES.map((cat) => {
-                const isCatActive = selectedCategory === cat.id;
+                const isCatActive = !selectedOffer && selectedCategory === cat.id;
                 const IconComponent = cat.icon;
                 return (
                   <button
@@ -668,7 +812,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
               {servicesCatalog
                 .filter((p) => p.category === selectedCategory)
                 .map((item) => {
-                  const isSelected = selectedService?.id === item.id;
+                  const isSelected = !selectedOffer && selectedService?.id === item.id;
                   const shownVariant = item.variants && isSelected ? item.variants[selectedVariantIndex] : undefined;
                   return (
                     <div
@@ -691,6 +835,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                           onChange={() => {
                             setSelectedService(item);
                             setSelectedVariantIndex(0);
+                            setSelectedOffer(null);
                           }}
                           className="sr-only"
                         />
@@ -779,7 +924,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                   {currentServiceName || 'Veuillez choisir un soin'}
                 </span>
                 <div className="text-xs text-sage font-medium mt-0.5">
-                  {chf(selectedService ? currentPriceChf : 0)} · Durée : {baseDurationMinutes} min
+                  {chf(selectedService || selectedOffer ? currentPriceChf : 0)} · Durée : {baseDurationMinutes} min
                 </div>
               </div>
 
@@ -790,7 +935,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                   setCatalogNotice(null);
                   setCurrentStep(2);
                 }}
-                disabled={!selectedService}
+                disabled={!selectedService && !selectedOffer}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 font-medium tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Choisir votre séance
@@ -816,6 +961,17 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                 </p>
               </div>
             </div>
+
+            {selectedOffer && (
+              <div className="p-4 rounded-xl bg-sage/5 border border-sage/30 text-stone-deep text-sm flex items-start gap-3">
+                <BadgePercent className="w-5 h-5 shrink-0 text-sage" aria-hidden="true" />
+                <span>
+                  <strong className="font-semibold">{selectedOffer.titre}</strong> est valable{' '}
+                  {formatOfferPeriod(selectedOffer.date_debut, selectedOffer.date_fin)} : seuls les jours de cette période
+                  sont proposés.
+                </span>
+              </div>
+            )}
 
             {slotsNotice && (
               <div

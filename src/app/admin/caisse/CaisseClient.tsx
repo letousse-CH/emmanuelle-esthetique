@@ -28,6 +28,11 @@ import {
   giftCardStatusLabel, isGiftCardUsable, isVenteProduct, stockLevel,
 } from '../../../types/caisse';
 import { toWhatsAppNumber } from '../../../types/promotions';
+import { listCurrentOffers } from '../../../services/offers';
+import { offerLineLabel } from '../../../types/offers';
+import type { Offer, OfferStats } from '../../../types/offers';
+import { todayZurich } from '../../(public)/reservation/dates';
+import OfferStrip from './OfferStrip';
 import { notifyAutomationEvent } from '../../../utils/automationEvent';
 import type {
   CartLine, Client, GiftCard, ModePaiement, Product, Service, ServiceCategory, Transaction,
@@ -48,18 +53,21 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 function linesFromBooking(b: Booking, services: Service[], tauxDefaut: number): CartLine[] {
   const out: CartLine[] = [];
-  const push = (id: string | null | undefined, nom: string, prix: number) => {
+  const push = (id: string | null | undefined, nom: string, prix: number, offerId: string | null = null) => {
     const svc = id && UUID_RE.test(id) ? services.find(s => s.id === id) : undefined;
     out.push({
       key: newKey(),
       service_id: svc?.id ?? null,
+      offer_id: offerId,
       description: nom || svc?.nom || 'Prestation',
       prix_unitaire_ttc: Number.isFinite(prix) && prix >= 0 ? prix : Number(svc?.prix_chf ?? 0),
       quantite: 1,
       taux_tva: Number(svc?.taux_tva_defaut ?? tauxDefaut),
     });
   };
-  push(b.service_id, b.service_nom, Number(b.service_prix_chf));
+  // Rendez-vous pris sur l'offre du moment : la facture occupera sa place,
+  // et le rendez-vous, marqué « terminé », cessera de la compter.
+  push(b.service_id, b.service_nom, Number(b.service_prix_chf), b.offer_of_month_id ?? null);
   for (const o of b.options ?? []) push(o.id, o.nom, Number(o.prix_chf));
   return out;
 }
@@ -100,6 +108,8 @@ export default function CaisseClient() {
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [offerStats, setOfferStats] = useState<Map<string, OfferStats>>(new Map());
   const [loading, setLoading]   = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -236,11 +246,13 @@ export default function CaisseClient() {
       const [c, s] = await Promise.all([listClients(), listServices(false)]);
       setClients(c); setServices(s);
 
-      const [cats, prod] = await Promise.all([
+      const [cats, prod, current] = await Promise.all([
         listServiceCategories().catch(() => [] as ServiceCategory[]),
         listProducts(false).catch(() => [] as Product[]),
+        listCurrentOffers(todayZurich()).catch(() => ({ offers: [] as Offer[], stats: new Map<string, OfferStats>() })),
       ]);
       setCategories(cats); setProducts(prod.filter(isVenteProduct));
+      setOffers(current.offers); setOfferStats(current.stats);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Erreur inconnue.');
     } finally {
@@ -380,6 +392,37 @@ export default function CaisseClient() {
       }];
     });
   };
+
+  /**
+   * Ajoute l'offre du moment. La ligne porte `offer_id` : c'est ce qui la fera
+   * compter dans les places de l'offre. Libellé et prix sont figés comme ceux
+   * de n'importe quelle prestation.
+   */
+  const addOffer = (o: Offer) => {
+    setLines(prev => {
+      const existing = prev.findIndex(l => l.offer_id === o.id && l.prix_unitaire_ttc === Number(o.prix_chf));
+      if (existing >= 0) {
+        const next = [...prev];
+        next[existing] = { ...next[existing], quantite: next[existing].quantite + 1 };
+        return next;
+      }
+      return [...prev, {
+        key: newKey(),
+        service_id: null,
+        offer_id: o.id,
+        description: offerLineLabel(o),
+        prix_unitaire_ttc: Number(o.prix_chf),
+        quantite: 1,
+        taux_tva: tauxDefaut,
+      }];
+    });
+  };
+
+  const cartQtyByOffer = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const l of lines) if (l.offer_id) map.set(l.offer_id, (map.get(l.offer_id) ?? 0) + Number(l.quantite || 0));
+    return map;
+  }, [lines]);
 
   const addCustomLine = (description: string, prix: number) => {
     setLines(prev => [...prev, {
@@ -583,6 +626,7 @@ export default function CaisseClient() {
             categories={categories}
             products={products}
             cartQtyByProduct={cartQtyByProduct}
+            offers={offers} offerStats={offerStats} cartQtyByOffer={cartQtyByOffer} onPickOffer={addOffer}
             loading={loading}
             onPick={addService}
             onPickProduct={addProduct}
@@ -803,6 +847,7 @@ export default function CaisseClient() {
       <MobileCheckout
         banners={banners}
         services={services} categories={categories} products={products} loading={loading}
+        offers={offers} offerStats={offerStats} onPickOffer={addOffer}
         lines={lines} tvaActive={tvaActive}
         totals={totals} montantBon={montantBon} resteAPayer={resteAPayer}
         giftCard={giftCard}
@@ -1396,12 +1441,17 @@ function Field({ label, value, onChange, type = 'text', required, autoFocus }: {
  */
 function ServiceCatalog({
   services, categories, products, cartQtyByProduct, loading,
+  offers, offerStats, cartQtyByOffer, onPickOffer,
   onPick, onPickProduct, onCustom, onSellGiftCard,
 }: {
   services: Service[];
   categories: ServiceCategory[];
   products: Product[];
   cartQtyByProduct: Map<string, number>;
+  offers: Offer[];
+  offerStats: Map<string, OfferStats>;
+  cartQtyByOffer: Map<string, number>;
+  onPickOffer: (o: Offer) => void;
   loading: boolean;
   onPick: (s: Service) => void;
   onPickProduct: (p: Product) => void;
@@ -1500,6 +1550,10 @@ function ServiceCatalog({
           </div>
         )}
       </div>
+
+      {!loading && !term && (
+        <OfferStrip offers={offers} stats={offerStats} inCart={cartQtyByOffer} today={todayZurich()} onPick={onPickOffer} />
+      )}
 
       {tabs.length > 2 && (
         <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
@@ -1917,6 +1971,9 @@ export interface MobileCheckoutProps {
   services: Service[];
   categories: ServiceCategory[];
   products: Product[];
+  offers: Offer[];
+  offerStats: Map<string, OfferStats>;
+  onPickOffer: (o: Offer) => void;
   loading: boolean;
   lines: CartLine[];
   tvaActive: boolean;
@@ -2040,6 +2097,7 @@ export function MobileCheckout(p: MobileCheckoutProps) {
 
       <MobileCatalog
         services={p.services} categories={p.categories} products={p.products} loading={p.loading}
+        offers={p.offers} offerStats={p.offerStats} onPickOffer={p.onPickOffer}
         lines={p.lines}
         onPickService={p.onPickService} onPickProduct={p.onPickProduct}
         onCustom={() => setCustomSheet(true)} onSellGift={p.onSellGift}
@@ -2261,10 +2319,13 @@ function BasketTarget({ reste }: { reste: number }) {
 }
 
 // Catalogue : pastilles de catégories défilantes, grosses tuiles avec prix.
-function MobileCatalog({ services, categories, products, loading, lines, onPickService, onPickProduct, onCustom, onSellGift }: {
+function MobileCatalog({ services, categories, products, offers, offerStats, onPickOffer, loading, lines, onPickService, onPickProduct, onCustom, onSellGift }: {
   services: Service[];
   categories: ServiceCategory[];
   products: Product[];
+  offers: Offer[];
+  offerStats: Map<string, OfferStats>;
+  onPickOffer: (o: Offer) => void;
   loading: boolean;
   lines: CartLine[];
   onPickService: (s: Service) => void;
@@ -2323,6 +2384,11 @@ function MobileCatalog({ services, categories, products, loading, lines, onPickS
     for (const l of lines) if (l.product_id) m.set(l.product_id, (m.get(l.product_id) ?? 0) + Number(l.quantite || 0));
     return m;
   }, [lines]);
+  const qtyOffer = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of lines) if (l.offer_id) m.set(l.offer_id, (m.get(l.offer_id) ?? 0) + Number(l.quantite || 0));
+    return m;
+  }, [lines]);
 
   const tileCls = 'relative flex min-h-[92px] w-full flex-col justify-between gap-2 rounded-2xl border border-stone-200 bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(28,25,23,0.04)] cursor-pointer transition-transform duration-150 active:scale-[0.97] active:bg-accent/5';
 
@@ -2350,6 +2416,13 @@ function MobileCatalog({ services, categories, products, loading, lines, onPickS
       )}
 
       <p role="status" className="sr-only">{announce}</p>
+
+      {!loading && !term && (activeTab === 'menu' || activeTab === 'all') && (
+        <OfferStrip
+          mobile offers={offers} stats={offerStats} inCart={qtyOffer} today={todayZurich()}
+          onPick={(o) => { onPickOffer(o); setAnnounce(`${o.titre} ajouté`); }}
+        />
+      )}
 
       {!loading && activeTab === 'menu' ? (
         <div className="grid grid-cols-2 gap-3">

@@ -1,5 +1,5 @@
 /**
- * Service de Réservations & Offre du Mois — Emmanuelle Esthétique
+ * Service de Réservations — Emmanuelle Esthétique
  *
  * Modèle (PLAN-RESERVATIONS.md) : la cliente dépose une DEMANDE = date + période
  * (matin / après-midi). Emmanuelle la rappelle, fait l'upselling puis FIXE
@@ -13,7 +13,7 @@
  *    navigateur), la saisie admin, le déplacement, l'annulation, la suppression ;
  *  - le rapprochement avec la fiche cliente CRM (règles : PLAN §5) ;
  *  - les e-mails (tout texte interpolé est échappé) et Google Agenda ;
- *  - l'offre du mois.
+ *  - la réservation d'une offre du moment (règles : `types/offers.ts`).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -24,6 +24,16 @@ import { SITE_CONFIG, getBusinessInfoServer } from '../config/site';
 import { getSecret } from './secrets';
 import { emitAutomationEvent } from './automationRunner';
 import { flatCarte, getItem } from '../constants/carteSoins';
+import { fetchOffer, fetchOfferStats, getCurrentOffersForAdmin } from './offersServer';
+import {
+  EMPTY_STATS,
+  isDateInOffer,
+  offerIdFromServiceId,
+  offerLineLabel,
+  offerServiceId,
+  placesRestantes,
+  type Offer,
+} from '../types/offers';
 import {
   ACTIVE_STATUSES,
   PERIODE_LABEL,
@@ -146,25 +156,6 @@ function adminDb(): SupabaseClient {
 
 // ── Types propres au service ─────────────────────────────────────────────────
 
-export interface MonthlyOffer {
-  id: string;
-  titre: string;
-  description: string | null;
-  prix_chf: number;
-  image_url: string | null;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface MonthlyOfferInput {
-  titre: string;
-  description?: string | null;
-  prix_chf: number;
-  image_url?: string | null;
-  active?: boolean;
-}
-
 export interface BookingListFilter {
   /** jour précis (YYYY-MM-DD) */
   date?: string;
@@ -212,9 +203,6 @@ export const DEFAULT_BOOKING_SETTINGS: BookingSettings = {
   gcal_calendar_id: null,
   notification_email: null,
 };
-
-/** L'offre du moment est un complément de 30 minutes (comme dans le formulaire public). */
-export const MONTHLY_OFFER_DURATION_MINUTES = 30;
 
 const PAS_VALIDES = [5, 10, 15, 20, 30, 60];
 const MAX_DURATION_MINUTES = 600;
@@ -384,7 +372,9 @@ export interface CatalogEntry {
   prix_chf: number;
   duree_minutes: number;
   kind: CatalogClassification['kind'];
-  origine: 'services' | 'carte' | 'repli';
+  origine: 'services' | 'carte' | 'repli' | 'offre';
+  /** Renseigné quand l'entrée est une offre du moment (`service_id` = `offre:<uuid>`). */
+  offer_id?: string;
 }
 
 /**
@@ -426,6 +416,18 @@ async function lookupCatalogEntry(
   id: string,
   opts: { onlyActive: boolean; variantMinutes?: number | null },
 ): Promise<CatalogEntry | null> {
+  // Offre du moment choisie dans l'agenda : pas de contrôle de période ni de
+  // places ici, c'est Emmanuelle qui décide (la réservation en ligne, elle, les
+  // vérifie dans `createPublicBooking`).
+  const offerId = offerIdFromServiceId(id);
+  if (offerId) {
+    const offer = await fetchOffer(db, offerId).catch(() => {
+      throw new BookingError(503, 'Offres du moment momentanément indisponibles.');
+    });
+    if (!offer || (opts.onlyActive && (offer.archived_at || !offer.active))) return null;
+    return offerCatalogEntry(offer);
+  }
+
   if (UUID_RE.test(id)) {
     const { rows, categories } = await fetchCatalogRows(db, [id], opts.onlyActive);
     const row = rows[0];
@@ -469,19 +471,46 @@ async function lookupCatalogEntry(
   }
 }
 
+/** Une offre du moment vue comme un soin du catalogue (nom figé, prix et durée de l'offre). */
+function offerCatalogEntry(offer: Offer): CatalogEntry {
+  return {
+    id: offerServiceId(offer.id),
+    nom: offerLineLabel(offer),
+    prix_chf: offer.prix_chf,
+    duree_minutes: offer.duree_minutes,
+    kind: 'service',
+    origine: 'offre',
+    offer_id: offer.id,
+  };
+}
+
 // ── Catalogue complet (admin) ────────────────────────────────────────────────
 
-/** Tous les services actifs, sans filtre « réservable en ligne » (GET /api/admin/services-catalog). */
+export const OFFER_CATALOG_CATEGORY = 'Offre du moment';
+
+/**
+ * Tous les services actifs, sans filtre « réservable en ligne », précédés des
+ * offres du moment valables aujourd'hui (GET /api/admin/services-catalog).
+ */
 export async function getAdminCatalog(): Promise<AdminCatalogItem[]> {
   const db = adminDb();
-  const [rowsRes, catsRes] = await Promise.all([
+  const [rowsRes, catsRes, offers] = await Promise.all([
     db.from('services').select('*').eq('active', true).order('ordre', { ascending: true }),
     db.from('service_categories').select('id, nom'),
+    getCurrentOffersForAdmin(db),
   ]);
   if (rowsRes.error) throw new BookingError(503, 'Catalogue des soins momentanément indisponible.');
   const cats = new Map<string, string>();
   for (const c of catsRes.data ?? []) cats.set(c.id, c.nom || '');
-  return (rowsRes.data ?? []).map((row: any) => {
+  const offerItems: AdminCatalogItem[] = offers.map((o) => ({
+    id: offerServiceId(o.id),
+    nom: offerLineLabel(o),
+    categorie: OFFER_CATALOG_CATEGORY,
+    type: 'offre',
+    prix_chf: o.prix_chf,
+    duree_minutes: o.duree_minutes,
+  }));
+  return [...offerItems, ...(rowsRes.data ?? []).map((row: any) => {
     const categorie = row.category_id ? cats.get(row.category_id) ?? null : null;
     const c = classifyCatalogRow(row, categorie || '');
     const type: AdminCatalogItem['type'] =
@@ -494,7 +523,7 @@ export async function getAdminCatalog(): Promise<AdminCatalogItem[]> {
       prix_chf: Number(row.prix_chf) || 0,
       duree_minutes: c.durationMinutes,
     };
-  });
+  })];
 }
 
 // ── Normalisation des lignes de base ─────────────────────────────────────────
@@ -1674,7 +1703,14 @@ function validatePublicRequest(raw: unknown): ValidatedPublicRequest {
   if (!isPlainObject(raw)) fail('Requête invalide.');
   const r = raw as Record<string, unknown>;
 
-  if (typeof r.service_id !== 'string' || !r.service_id.trim() || r.service_id.length > 80) fail('Choisissez un soin.');
+  let offer: string | null = null;
+  if (r.offer_of_month_id !== undefined && r.offer_of_month_id !== null && r.offer_of_month_id !== '') {
+    if (typeof r.offer_of_month_id !== 'string' || !UUID_RE.test(r.offer_of_month_id)) fail('Offre invalide.');
+    offer = r.offer_of_month_id as string;
+  }
+
+  // Une offre du moment se réserve comme un soin : `service_id` n'est alors pas requis.
+  if (!offer && (typeof r.service_id !== 'string' || !r.service_id.trim() || r.service_id.length > 80)) fail('Choisissez un soin.');
   if (!isValidDateStr(r.date_rdv)) fail('Date invalide.');
   if (!PERIODES.includes(r.periode as BookingPeriode)) fail('Choisissez le matin ou l\'après-midi.');
 
@@ -1686,12 +1722,6 @@ function validatePublicRequest(raw: unknown): ValidatedPublicRequest {
       if (typeof id !== 'string' || !id.trim() || id.length > 80) fail('Option invalide.');
       if (!optionIds.includes(id as string)) optionIds.push(id as string);
     }
-  }
-
-  let offer: string | null = null;
-  if (r.offer_of_month_id !== undefined && r.offer_of_month_id !== null && r.offer_of_month_id !== '') {
-    if (typeof r.offer_of_month_id !== 'string' || !UUID_RE.test(r.offer_of_month_id)) fail('Offre invalide.');
-    offer = r.offer_of_month_id as string;
   }
 
   let variantMinutes: number | null = null;
@@ -1709,8 +1739,8 @@ function validatePublicRequest(raw: unknown): ValidatedPublicRequest {
     email: cleanEmail(r.email),
     code_postal: cleanText(r.code_postal, 10, 'Code postal') || null,
     ville: cleanText(r.ville, 80, 'Localité') || null,
-    service_id: (r.service_id as string).trim(),
-    optionIds,
+    service_id: offer ? '' : (r.service_id as string).trim(),
+    optionIds: offer ? [] : optionIds,
     offer_of_month_id: offer,
     variantMinutes,
     date_rdv: r.date_rdv as string,
@@ -1731,6 +1761,68 @@ export function toPublicView(b: Booking): PublicBookingView {
     service_duree_minutes: b.service_duree_minutes,
     total_chf: b.total_chf ?? bookingTotal(b),
   };
+}
+
+/**
+ * Offre du moment réservable en ligne pour un soin le `dateRdv` : publiée, non
+ * archivée, ouverte à la réservation, en cours (« présente dans les dates
+ * imparties »), soin dans la période, et encore une place. 503 si les compteurs
+ * ne répondent pas — on ne vend pas une place qu'on ne sait pas compter.
+ */
+async function loadBookableOffer(db: SupabaseClient, id: string, dateRdv: string, today: string): Promise<Offer> {
+  let offer: Offer | null;
+  try {
+    offer = await fetchOffer(db, id);
+  } catch {
+    throw new BookingError(503, 'Les offres du moment sont momentanément indisponibles. Merci de réessayer dans quelques instants.');
+  }
+  if (!offer || !offer.active || offer.archived_at || !offer.reservable_en_ligne || today < offer.date_debut || today > offer.date_fin) {
+    throw new BookingError(422, 'Cette offre du moment n\'est plus disponible.', undefined, 'offre_indisponible');
+  }
+  if (!isDateInOffer(offer, dateRdv)) {
+    throw new BookingError(
+      422,
+      `Cette offre est valable jusqu'au ${formatDateLong(offer.date_fin)} : choisissez une date dans cette période.`,
+      undefined,
+      'offre_indisponible',
+    );
+  }
+  if (offer.places_max != null) {
+    let stats;
+    try {
+      stats = await fetchOfferStats(db, [offer.id]);
+    } catch {
+      throw new BookingError(503, 'Les offres du moment sont momentanément indisponibles. Merci de réessayer dans quelques instants.');
+    }
+    if (placesRestantes(offer, stats.get(offer.id) ?? { offer_id: offer.id, ...EMPTY_STATS }) === 0) {
+      throw new BookingError(409, 'Toutes les places de cette offre ont été réservées.', undefined, 'offre_complete');
+    }
+  }
+  return offer;
+}
+
+/**
+ * Après insertion : la demande tient-elle dans les places de l'offre ? Calcul
+ * déterministe (factures + rang de la demande parmi les réservations à venir,
+ * ordre `created_at, id`), donc deux requêtes simultanées tranchent pareil.
+ * Lève une erreur si la base ne répond pas : l'appelant retire alors la ligne.
+ */
+async function offerPlaceHeld(db: SupabaseClient, offer: Offer, bookingId: string): Promise<boolean> {
+  if (offer.places_max == null) return true;
+  const [rowsRes, stats] = await Promise.all([
+    db
+      .from('bookings')
+      .select('id')
+      .eq('offer_of_month_id', offer.id)
+      .in('statut', ['en_attente', 'confirme'])
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }),
+    fetchOfferStats(db, [offer.id]),
+  ]);
+  if (rowsRes.error) throw new Error(rowsRes.error.message);
+  const rank = (rowsRes.data ?? []).findIndex((r: { id: string }) => r.id === bookingId) + 1;
+  const facturations = stats.get(offer.id)?.facturations ?? 0;
+  return rank > 0 && facturations + rank <= offer.places_max;
 }
 
 /**
@@ -1755,32 +1847,26 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
   if (bounds) fail(bounds);
 
   // Soin, options, offre : tout vient du serveur
-  const service = await lookupCatalogEntry(db, input.service_id, { onlyActive: true, variantMinutes: input.variantMinutes });
-  if (!service) throw new BookingError(422, 'Ce soin n\'est pas disponible. Merci d\'en choisir un autre.', undefined, 'soin_inconnu');
-  if (service.kind !== 'service') throw new BookingError(422, 'Ce soin ne se réserve pas en ligne : contactez directement l\'institut.', undefined, 'soin_inconnu');
-
+  let service: CatalogEntry;
+  let offer: Offer | null = null;
   const options: BookingOption[] = [];
-  for (const id of input.optionIds) {
-    const opt = await lookupCatalogEntry(db, id, { onlyActive: true });
-    if (!opt || opt.kind !== 'option') throw new BookingError(422, 'Une des options choisies n\'est plus disponible.', undefined, 'soin_inconnu');
-    options.push({ id: opt.id, nom: opt.nom, prix_chf: opt.prix_chf, duree_minutes: opt.duree_minutes, ajoute_par: 'cliente' });
-  }
-
   if (input.offer_of_month_id) {
-    const { data: offer } = await db
-      .from('monthly_offers')
-      .select('*')
-      .eq('id', input.offer_of_month_id)
-      .eq('active', true)
-      .maybeSingle();
-    if (!offer) throw new BookingError(422, 'Cette offre du moment n\'est plus disponible.', undefined, 'offre_indisponible');
-    options.push({
-      id: offer.id,
-      nom: `Offre du moment : ${offer.titre}`,
-      prix_chf: Number(offer.prix_chf) || 0,
-      duree_minutes: MONTHLY_OFFER_DURATION_MINUTES,
-      ajoute_par: 'cliente',
-    });
+    // L'offre EST le soin : son prix, sa durée, sa période et ses places font foi.
+    offer = await loadBookableOffer(db, input.offer_of_month_id, input.date_rdv, now.date);
+    service = offerCatalogEntry(offer);
+  } else {
+    const entry = await lookupCatalogEntry(db, input.service_id, { onlyActive: true, variantMinutes: input.variantMinutes });
+    if (!entry) throw new BookingError(422, 'Ce soin n\'est pas disponible. Merci d\'en choisir un autre.', undefined, 'soin_inconnu');
+    if (entry.kind !== 'service') throw new BookingError(422, 'Ce soin ne se réserve pas en ligne : contactez directement l\'institut.', undefined, 'soin_inconnu');
+    // Une offre passée par `service_id` (`offre:<uuid>`) contournerait le contrôle des places.
+    if (entry.origine === 'offre') throw new BookingError(422, 'Cette offre du moment n\'est plus disponible.', undefined, 'offre_indisponible');
+    service = entry;
+
+    for (const id of input.optionIds) {
+      const opt = await lookupCatalogEntry(db, id, { onlyActive: true });
+      if (!opt || opt.kind !== 'option') throw new BookingError(422, 'Une des options choisies n\'est plus disponible.', undefined, 'soin_inconnu');
+      options.push({ id: opt.id, nom: opt.nom, prix_chf: opt.prix_chf, duree_minutes: opt.duree_minutes, ajoute_par: 'cliente' });
+    }
   }
 
   const duree = service.duree_minutes + sumOptionDurations(options);
@@ -1871,6 +1957,12 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
     if (!verif.ouvert || !placement) {
       await db.from('bookings').delete().eq('id', booking.id);
       throw new BookingError(409, 'Cette période vient d\'être prise par une autre demande. Merci d\'en choisir une autre.', undefined, 'periode_complete');
+    }
+    // Même principe pour les places d'une offre limitée : deux clientes qui
+    // prennent la dernière place à la même seconde ne la gardent pas toutes les deux.
+    if (offer && !(await offerPlaceHeld(db, offer, booking.id))) {
+      await db.from('bookings').delete().eq('id', booking.id);
+      throw new BookingError(409, 'La dernière place de cette offre vient d\'être réservée. Choisissez un autre soin ou contactez l\'institut.', undefined, 'offre_complete');
     }
     if (placement.heure !== booking.heure_rdv) {
       const { data: upd } = await db.from('bookings').update({ heure_rdv: placement.heure }).eq('id', booking.id).select().single();
@@ -1982,7 +2074,8 @@ export async function createAdminBooking(patch: BookingPatch): Promise<{ booking
     ville: p.ville ?? null,
     service_id: p.service_id ?? null,
     ...fields,
-    offer_of_month_id: null,
+    // Offre du moment choisie dans l'agenda : elle compte dans ses places.
+    offer_of_month_id: offerIdFromServiceId(p.service_id),
     date_rdv: next.date_rdv,
     heure_rdv: next.heure_rdv,
     periode,
@@ -2083,6 +2176,7 @@ export async function updateBooking(
       }
     }
     next.service_id = p.service_id;
+    next.offer_of_month_id = offerIdFromServiceId(p.service_id);
   }
   if (p.service_nom !== undefined) baseNom = p.service_nom;
   if (p.service_prix_chf !== undefined) basePrix = p.service_prix_chf;
@@ -2154,6 +2248,7 @@ export async function updateBooking(
   track('ville', 'coordonnées');
   track('client_id');
   track('service_id', 'soin');
+  track('offer_of_month_id');
   track('service_nom', 'soin');
   track('service_prix_chf', 'soin');
   track('service_duree_minutes', 'soin');
@@ -2554,143 +2649,6 @@ async function sendNewRequestMails(db: SupabaseClient, booking: Booking, setting
     html,
   });
   await logEvent(db, booking.id, 'email', { template: 'notification_institut', destinataire: 'institut', ok: res.success }, 'systeme');
-}
-
-// ── Offres du Mois (Monthly Offers) ──────────────────────────────────────────
-
-/**
- * Récupère l'offre du mois active pour le site public (Hero, bannière, formulaire).
- */
-export async function getActiveMonthlyOffer(): Promise<MonthlyOffer | null> {
-  const admin = getSupabaseAdmin();
-  const client = admin || supabase;
-
-  try {
-    const { data, error } = await client
-      .from('monthly_offers')
-      .select('*')
-      .eq('active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data) return null;
-    return data as MonthlyOffer;
-  } catch (err) {
-    console.warn('[getActiveMonthlyOffer] Erreur lecture offre du mois:', err);
-    return null;
-  }
-}
-
-/**
- * Récupère l'ensemble des offres du mois (Admin).
- */
-export async function getAllMonthlyOffers(): Promise<MonthlyOffer[]> {
-  const admin = getSupabaseAdmin();
-  const client = admin || supabase;
-
-  const { data, error } = await client
-    .from('monthly_offers')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('[getAllMonthlyOffers] Erreur lecture:', error);
-    return [];
-  }
-  return (data || []) as MonthlyOffer[];
-}
-
-/**
- * Crée une nouvelle offre du mois. Si elle est active, désactive les précédentes.
- */
-export async function createMonthlyOffer(input: MonthlyOfferInput): Promise<MonthlyOffer> {
-  const admin = getSupabaseAdmin();
-  if (!admin) throw new Error('Accès admin requis');
-
-  const active = input.active ?? true;
-
-  if (active) {
-    // Désactiver les autres offres actives
-    await admin.from('monthly_offers').update({ active: false }).eq('active', true);
-  }
-
-  const { data, error } = await admin
-    .from('monthly_offers')
-    .insert({
-      titre: input.titre.trim(),
-      description: input.description?.trim() || null,
-      prix_chf: input.prix_chf,
-      image_url: input.image_url?.trim() || null,
-      active,
-    })
-    .select()
-    .single();
-
-  if (error || !data) {
-    throw new Error(`Erreur création offre du mois : ${error?.message}`);
-  }
-
-  return data as MonthlyOffer;
-}
-
-/**
- * Met à jour une offre du mois existante.
- */
-export async function updateMonthlyOffer(
-  id: string,
-  input: Partial<MonthlyOfferInput>,
-): Promise<MonthlyOffer> {
-  const admin = getSupabaseAdmin();
-  if (!admin) throw new Error('Accès admin requis');
-
-  if (input.active) {
-    await admin.from('monthly_offers').update({ active: false }).neq('id', id);
-  }
-
-  const updates: Record<string, any> = {
-    updated_at: new Date().toISOString(),
-  };
-  if (input.titre !== undefined) updates.titre = input.titre.trim();
-  if (input.description !== undefined) updates.description = input.description?.trim() || null;
-  if (input.prix_chf !== undefined) updates.prix_chf = input.prix_chf;
-  if (input.image_url !== undefined) updates.image_url = input.image_url?.trim() || null;
-  if (input.active !== undefined) updates.active = input.active;
-
-  const { data, error } = await admin
-    .from('monthly_offers')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error || !data) {
-    throw new Error(`Erreur mise à jour offre : ${error?.message}`);
-  }
-
-  return data as MonthlyOffer;
-}
-
-/**
- * Active une offre du mois et désactive les autres.
- */
-export async function setActiveMonthlyOffer(id: string): Promise<void> {
-  const admin = getSupabaseAdmin();
-  if (!admin) throw new Error('Accès admin requis');
-
-  await admin.from('monthly_offers').update({ active: false }).neq('id', id);
-  await admin.from('monthly_offers').update({ active: true }).eq('id', id);
-}
-
-/**
- * Supprime une offre du mois.
- */
-export async function deleteMonthlyOffer(id: string): Promise<void> {
-  const admin = getSupabaseAdmin();
-  if (!admin) throw new Error('Accès admin requis');
-
-  const { error } = await admin.from('monthly_offers').delete().eq('id', id);
-  if (error) throw new Error(`Erreur suppression offre : ${error.message}`);
 }
 
 // ── Google Agenda (REST, sans dépendance) — toujours non bloquant ────────────

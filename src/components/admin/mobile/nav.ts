@@ -34,6 +34,7 @@ import {
   Target,
   Package,
   FlaskConical,
+  BadgePercent,
 } from 'lucide-react';
 import type { ModuleFlags } from '../../../config/moduleFlags';
 
@@ -65,6 +66,7 @@ export function isUnder(pathname: string, base: string) {
 const I = {
   dashboard: { name: 'Tableau de bord', path: '/admin', icon: LayoutDashboard, exact: true },
   reservations: { name: 'Réservations', path: '/admin/reservations', icon: CalendarDays },
+  offres: { name: 'Offre du moment', path: '/admin/offres', icon: BadgePercent },
   pages: { name: 'Pages', path: '/admin/pages', icon: Layers },
   medias: { name: 'Médiathèque', path: '/admin/medias', icon: ImageIcon },
   menu: { name: 'Menu', path: '/admin/menu', icon: Menu },
@@ -106,7 +108,7 @@ export const SETTINGS_ITEM: NavItem = I.settings;
 export function buildNavGroups(flags: ModuleFlags, toCallCount = 0): NavGroup[] {
   const groups: NavGroup[] = [
     {
-      items: [I.dashboard, { ...I.reservations, badge: toCallCount }],
+      items: [I.dashboard, { ...I.reservations, badge: toCallCount }, I.offres],
     },
     {
       label: 'Site',
@@ -190,6 +192,7 @@ export function buildPlusGroups(flags: ModuleFlags, toCallCount = 0): PlusGroup[
               entry(I.journal, { description: 'Les ventes passées' }),
               entry(I.bons, { name: 'Bons cadeaux', description: 'Vendre et utiliser' }),
               entry(I.cockpit, { name: 'Cockpit hebdo', description: 'La semaine en un coup d’œil' }),
+              entry(I.offres, { description: 'Site, réservation et caisse' }),
               entry(I.promotions, { description: 'Offres par e-mail ou WhatsApp' }),
             ],
           },
@@ -212,7 +215,10 @@ export function buildPlusGroups(flags: ModuleFlags, toCallCount = 0): PlusGroup[
       : [
           {
             label: 'Au quotidien',
-            entries: [entry(I.reservations, { name: 'Agenda', description: 'Rendez-vous et demandes', badge: toCallCount })],
+            entries: [
+              entry(I.reservations, { name: 'Agenda', description: 'Rendez-vous et demandes', badge: toCallCount }),
+              entry(I.offres, { description: 'Site et réservation' }),
+            ],
           },
         ]),
     {

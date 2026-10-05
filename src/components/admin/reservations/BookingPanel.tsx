@@ -429,7 +429,11 @@ export default function BookingPanel({
             <span className="font-semibold text-stone-950">{cap(formatDateLong(demandedDate))}</span> · {PERIODE_LABEL[demandedPer]}
           </p>
           {b.notes_cliente && <p className="mt-1 italic text-stone-700">« {b.notes_cliente} »</p>}
-          {b.offer_of_month_id && <p className="mt-1 text-[14px] text-stone-700">Elle a choisi l’offre du mois.</p>}
+          {b.offer_of_month_id && (
+            <p className="mt-1 text-[14px] text-stone-700">
+              Réservation sur l’offre du moment : elle compte dans ses places tant qu’elle n’est ni annulée ni refusée.
+            </p>
+          )}
         </div>
 
         {conflicts && (
