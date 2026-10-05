@@ -351,6 +351,11 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
                 {link.name}
               </Link>
             ))}
+            {/* Accès à l'administration (page de connexion si personne n'est connecté).
+                `nofollow` + lien simple : /admin est exclu de l'indexation (robots.txt). */}
+            <a href="/admin" rel="nofollow" className="hover:text-[color:var(--footer-ink)] transition-colors">
+              Administration
+            </a>
             {variant === 'simple' && socials.map(({ label, href, icon: Icon }) => (
               <a
                 key={label}

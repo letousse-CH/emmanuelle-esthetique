@@ -20,9 +20,10 @@ export const SITE_CONFIG = {
   //
   // Ordre de résolution, et pourquoi il compte :
   //  1. NEXT_PUBLIC_SITE_URL — le seul injecté AUSSI dans le bundle navigateur
-  //     (préfixe NEXT_PUBLIC_). C'est celui à définir.
-  //  2. URL — injecté automatiquement par Netlify, mais côté serveur
-  //     uniquement : dans le navigateur il vaut undefined.
+  //     (préfixe NEXT_PUBLIC_). C'est celui à définir. À défaut, next.config.ts
+  //     y recopie au build l'`URL` fournie par Netlify : le navigateur connaît
+  //     donc l'URL de production même sans variable définie.
+  //  2. URL — injecté automatiquement par Netlify, côté serveur.
   //  3. Le repli local, qui n'a de sens qu'en développement.
   url: process.env.NEXT_PUBLIC_SITE_URL ||
        process.env.URL ||

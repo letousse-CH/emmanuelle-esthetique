@@ -25,7 +25,6 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useModuleFlags } from '../../hooks/useModuleFlags';
-import { SITE_CONFIG } from '../../config/site';
 import AdminOnboardingWizard from '../../components/admin/AdminOnboardingWizard';
 import MobileHome from '../../components/admin/mobile/home/MobileHome';
 
@@ -243,9 +242,9 @@ function DesktopDashboard() {
             <CalendarCheck size={16} /> Planning complet
           </Link>
           <a
-            href={SITE_CONFIG.url}
+            href="/"
             target="_blank"
-            rel="noopener noreferrer"
+            rel="noopener"
             className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-stone-100 text-[14px] font-semibold text-stone-900 hover:bg-stone-200 transition-colors"
           >
             Voir le site <ArrowUpRight size={16} />

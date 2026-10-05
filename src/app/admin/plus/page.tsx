@@ -3,7 +3,6 @@
 import React, { useMemo, useState } from 'react';
 import { ExternalLink, LogOut, Search, SearchX, Settings, X } from 'lucide-react';
 import { useModuleFlags } from '../../../hooks/useModuleFlags';
-import { SITE_CONFIG } from '../../../config/site';
 import { buildPlusGroups, type PlusEntry } from '../../../components/admin/mobile/nav';
 import { useAdminShell } from '../../../components/admin/mobile/shellContext';
 import { ActionTile, EmptyState, PageSection } from '../../../components/admin/mobile/ui';
@@ -81,7 +80,7 @@ export default function PlusPage() {
         <PageSection title="Réglages">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <ActionTile icon={Settings} title="Paramètres" subtitle="Entreprise, design, modules" href="/admin/settings" />
-            <ActionTile icon={ExternalLink} title="Voir le site" subtitle="S’ouvre dans un nouvel onglet" href={SITE_CONFIG.url} external />
+            <ActionTile icon={ExternalLink} title="Voir le site" subtitle="S’ouvre dans un nouvel onglet" href="/" external />
             <ActionTile icon={LogOut} title="Se déconnecter" tone="danger" onClick={() => void logout()} />
           </div>
         </PageSection>

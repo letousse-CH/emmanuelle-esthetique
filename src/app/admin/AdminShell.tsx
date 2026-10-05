@@ -24,7 +24,6 @@ import {
   Users,
 } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
-import { SITE_CONFIG } from '../../config/site';
 import { CommandMenu, Kbd } from '../../components/admin/ui';
 import {
   buildCommandItems,
@@ -354,18 +353,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         {/* Pied de barre */}
         <div className="px-3 py-3 space-y-0.5 border-t border-stone-200">
           {navLink(settingsItem)}
-          <a
-            href={SITE_CONFIG.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={collapsed ? 'Voir le site' : undefined}
-            className={`flex items-center gap-3 rounded-lg px-3 h-10 text-[15px] font-medium text-stone-900 hover:bg-stone-200/60 transition-colors ${
-              collapsed ? 'lg:justify-center lg:px-0' : ''
-            }`}
-          >
-            <ExternalLink size={17} strokeWidth={1.9} className="shrink-0 text-stone-700" />
-            <span className={collapsed ? 'lg:hidden' : ''}>Voir le site</span>
-          </a>
           <button
             onClick={handleLogout}
             title={collapsed ? 'Déconnexion' : undefined}
@@ -395,7 +382,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <div className="flex-1 min-w-0 flex flex-col bg-stone-50 lg:bg-white">
         {/* En-tête mobile (+ sous-navigation de la caisse) : collé en haut */}
         <div className="sticky top-0 z-30 lg:hidden">
-          <MobileHeader pathname={pathname} title={pageTitle} siteUrl={SITE_CONFIG.url} />
+          <MobileHeader pathname={pathname} title={pageTitle} siteUrl="/" />
           {inCaisse && <CaisseSubNav pathname={pathname} />}
         </div>
 
@@ -419,6 +406,18 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             </button>
 
             <SystemHealthPill />
+
+            {/* Lien relatif : le site est servi par la même origine que l'admin,
+                donc c'est toujours le bon domaine (production comme local). */}
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener"
+              className="inline-flex shrink-0 items-center gap-1.5 h-9 px-3 rounded-lg whitespace-nowrap text-[14px] font-medium text-stone-800 hover:bg-stone-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <ExternalLink size={15} strokeWidth={1.9} className="text-stone-700" aria-hidden="true" />
+              Voir le site
+            </a>
 
             <div className="relative" ref={quickCreateRef}>
               <button
