@@ -149,8 +149,11 @@ Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
 
 ## Offres du moment (2026-10-05)
 
-Campagne datée, gérée sur `/admin/offres` : image paysage, titre, description,
-tarif (+ prix habituel barré), durée, conditions, période, nombre de places,
+Campagne datée, gérée sur `/admin/offres` : visuel **carré** (1:1, cadré pareil
+sur le site, en réservation, en caisse et dans l'admin), titre, description en
+texte riche (éditeur Tiptap des blocs texte ; HTML nettoyé par
+`offerDescriptionHtml`, les anciennes descriptions en texte brut deviennent des
+paragraphes), tarif (+ prix habituel barré), durée, conditions, période, nombre de places,
 « réservable en ligne », « publiée » (sinon brouillon). Migration :
 `supabase/migrations/20261005_offres_du_moment.sql` — elle étend la table
 `monthly_offers` de l'ancienne « offre du mois » et **remplace le corps de
@@ -183,6 +186,20 @@ tarif (+ prix habituel barré), durée, conditions, période, nombre de places,
   cours, une section qui ne contient que ce bloc n'est pas rendue du tout.
   `scripts/add-offer-section-home.mjs` (essai par défaut, `--write`) pose la
   section sous l'en-tête de l'accueil — **après** le déploiement du code.
+
+## Puces du site : l'algue
+
+Toutes les listes à puces du site public ont pour puce l'algue de la charte
+(`public/images/algue.webp`) : règle unique dans `src/index.css` pour `.pb-prose`
+(blocs texte), `.prose` (articles), `.rich-text` (description d'offre),
+`.algue-bullets` (anciennes sections) et `ul.algue-list` ; la liste cochée
+`.pb-check` (blocks.css) utilise la même image. Les listes numérotées gardent
+leurs chiffres.
+
+⚠️ GlobalStyles impose `[data-site-theme] p, li { font-size }` (CSS non
+superposé, il bat les utilitaires Tailwind) : un `<p className="text-xs">` du site
+public s'affiche à la taille du corps de texte. Utiliser un `<div>`, ou un
+sélecteur `[data-site-theme] .pb-page .classe` comme dans blocks.css.
 
 ## Caisse, clientèle & facturation
 

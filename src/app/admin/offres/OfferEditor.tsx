@@ -7,11 +7,16 @@ import { Button, Callout, Field, Input, Textarea, ToggleRow } from '../../../com
 import { createOffer, updateOffer } from '../../../services/offers';
 import type { Offer, OfferErrors, OfferInput, OfferStats } from '../../../types/offers';
 import {
-  OFFER_STATUS_LABEL, formatOfferPeriod, offerStatus, placesPrises, validateOffer,
+  OFFER_STATUS_LABEL, formatOfferPeriod, offerDescriptionHtml, offerStatus, placesPrises, validateOffer,
 } from '../../../types/offers';
 import { addDays, todayZurich } from '../../(public)/reservation/dates';
 
 const MediaPickerModal = dynamic(() => import('../../../components/pagebuilder/MediaPickerModal'), { ssr: false });
+// Même éditeur que les blocs texte du page builder : gras, intertitres, listes à puces (l'algue sur le site), liens.
+const RichTextEditor = dynamic(() => import('../../../components/blocks/editor/RichTextEditor'), {
+  ssr: false,
+  loading: () => <div className="min-h-[140px] rounded-lg border border-stone-200 bg-stone-50" />,
+});
 
 /** Formulaire vierge : une offre de quinze jours qui commence aujourd'hui. */
 export function blankOffer(): OfferInput {
@@ -38,7 +43,7 @@ export function relaunchFrom(o: Offer): OfferInput {
   const span = Math.max(0, Math.round((new Date(`${o.date_fin}T12:00:00Z`).getTime() - new Date(`${o.date_debut}T12:00:00Z`).getTime()) / 86_400_000));
   return {
     titre: o.titre,
-    description: o.description ?? '',
+    description: offerDescriptionHtml(o.description),
     prix_chf: o.prix_chf,
     prix_normal_chf: o.prix_normal_chf,
     duree_minutes: o.duree_minutes,
@@ -55,7 +60,8 @@ export function relaunchFrom(o: Offer): OfferInput {
 function toInput(o: Offer): OfferInput {
   return {
     titre: o.titre,
-    description: o.description ?? '',
+    // Une ancienne description en texte brut arrive en paragraphes dans l'éditeur.
+    description: offerDescriptionHtml(o.description),
     prix_chf: o.prix_chf,
     prix_normal_chf: o.prix_normal_chf,
     duree_minutes: o.duree_minutes,
@@ -97,17 +103,20 @@ export default function OfferEditor({ offer, initial, stats, onClose, onSaved }:
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [imgShape, setImgShape] = useState<'paysage' | 'autre' | null>(null);
+  const [imgShape, setImgShape] = useState<'carre' | 'autre' | null>(null);
 
   const set = <K extends keyof OfferInput>(k: K, v: OfferInput[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Format de l'image : on prévient si elle n'est pas en paysage (le site la recadre en 16:9).
+  // Format de l'image : on prévient si elle n'est pas carrée (le site la recadre en 1:1).
   useEffect(() => {
     setImgShape(null);
     const url = form.image_url?.trim();
     if (!url) return;
     const img = new window.Image();
-    img.onload = () => setImgShape(img.naturalWidth > img.naturalHeight * 1.15 ? 'paysage' : 'autre');
+    img.onload = () => {
+      const r = img.naturalWidth / Math.max(1, img.naturalHeight);
+      setImgShape(r > 0.95 && r < 1.05 ? 'carre' : 'autre');
+    };
     img.src = url;
   }, [form.image_url]);
 
@@ -198,20 +207,20 @@ export default function OfferEditor({ offer, initial, stats, onClose, onSaved }:
           {/* ── Image ─────────────────────────────────────────────────── */}
           <section className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
             <h2 className="text-[15px] font-semibold text-stone-900">Image</h2>
-            <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-dashed border-stone-300 bg-stone-100">
+            <div className="relative aspect-square w-full max-w-xs overflow-hidden rounded-lg border border-dashed border-stone-300 bg-stone-100">
               {form.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={form.image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
               ) : (
                 <div className="absolute inset-0 grid place-items-center text-center text-[13px] text-stone-600 px-6">
-                  <span><ImageIcon size={22} className="mx-auto mb-2 text-stone-500" aria-hidden="true" />Format paysage (16:9) conseillé, par exemple 1600 × 900 px.</span>
+                  <span><ImageIcon size={22} className="mx-auto mb-2 text-stone-500" aria-hidden="true" />Visuel carré, par exemple 1200 × 1200 px.</span>
                 </div>
               )}
             </div>
             {imgShape === 'autre' && (
               <p className="flex items-start gap-1.5 text-[13px] text-amber-800">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                Cette image n’est pas au format paysage : le site la recadrera en 16:9 et pourra couper le haut ou le bas.
+                Cette image n’est pas carrée : le site, la réservation et la caisse la recadreront en carré, et ses bords pourront être coupés.
               </p>
             )}
             <div className="flex flex-wrap gap-2">
@@ -235,8 +244,8 @@ export default function OfferEditor({ offer, initial, stats, onClose, onSaved }:
                 placeholder="Rituel d’automne : soin visage + massage du dos"
               />
             </Field>
-            <Field label="Description" htmlFor="of-desc" hint="Deux ou trois phrases : ce que comprend le soin, ce qu’il apporte.">
-              <Textarea id="of-desc" rows={4} value={form.description ?? ''} onChange={(e) => set('description', e.target.value)} />
+            <Field label="Description" hint="Ce que comprend le soin, ce qu’il apporte. Les listes à puces s’affichent avec l’algue sur le site.">
+              <RichTextEditor value={form.description ?? ''} onChange={(html) => set('description', html)} />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Tarif de l’offre (CHF)" htmlFor="of-prix" required error={errors.prix_chf}>

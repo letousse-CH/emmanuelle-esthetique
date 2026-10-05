@@ -283,8 +283,8 @@ function CurrentCard({ offer: o, stats, status, today, actions }: {
   const pct = o.places_max ? Math.min(100, Math.round((prises / o.places_max) * 100)) : 0;
   return (
     <article className="overflow-hidden rounded-xl border border-stone-200 bg-white">
-      <div className="grid md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="relative aspect-video bg-stone-100 md:aspect-auto md:min-h-full">
+      <div className="grid md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:items-start">
+        <div className="relative aspect-square bg-stone-100 md:m-5 md:self-start md:overflow-hidden md:rounded-lg">
           {o.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={o.image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
@@ -372,7 +372,7 @@ function OfferList({ offers, statsOf, statusOf, actions, flush = false }: {
         return (
           <li key={o.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <div className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-stone-100">
+              <div className="relative aspect-square w-14 shrink-0 overflow-hidden rounded-md bg-stone-100">
                 {o.image_url && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={o.image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />

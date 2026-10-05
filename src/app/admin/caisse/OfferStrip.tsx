@@ -49,7 +49,7 @@ export default function OfferStrip({ offers, stats, inCart, today, onPick, mobil
             >
               {o.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={o.image_url} alt="" className={`shrink-0 object-cover ${mobile ? 'w-28' : 'w-24'} aspect-video self-center rounded-lg ml-2.5`} />
+                <img src={o.image_url} alt="" className={`shrink-0 object-cover ${mobile ? 'w-[72px]' : 'w-16'} aspect-square self-center rounded-lg ml-2.5`} />
               )}
               <span className={`flex min-w-0 flex-1 flex-col justify-between gap-1.5 py-3 ${o.image_url ? 'pr-3' : 'px-3.5'}`}>
                 <span className={`block font-semibold leading-snug text-stone-950 line-clamp-2 ${mobile ? 'text-[15px] pr-7' : 'text-sm pr-6'}`}>

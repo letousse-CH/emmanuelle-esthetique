@@ -7,6 +7,9 @@
  * formulaire de réservation et en caisse entre `date_debut` et `date_fin`
  * (dates de Zurich, bornes incluses), tant qu'il reste des places.
  *
+ * Le visuel est CARRÉ (1:1) partout : site, réservation, caisse et admin le
+ * cadrent de la même façon, rien n'est rogné d'un écran à l'autre.
+ *
  * Le compteur de places se DÉDUIT des réservations et des factures :
  *
  *   places prises = lignes de facture non annulées portant l'offre
@@ -16,16 +19,19 @@
  * le second terme quand elle entre dans le premier.
  */
 
+import { htmlToText, sanitizeHtml } from '../components/blocks/sanitize';
+
 export interface Offer {
   id: string;
   titre: string;
+  /** Texte riche (HTML de l'éditeur, nettoyé au rendu) — ou texte brut pour les offres antérieures. */
   description: string | null;
   prix_chf: number;
   /** Prix habituel, affiché barré. */
   prix_normal_chf: number | null;
   duree_minutes: number;
   conditions: string | null;
-  /** Image au format paysage (16:9 conseillé). */
+  /** Visuel carré (1:1), par exemple 1200 × 1200 px. */
   image_url: string | null;
   date_debut: string;
   date_fin: string;
@@ -198,6 +204,32 @@ export function formatOfferPrice(n: number | null | undefined): string {
   const v = Number(n) || 0;
   if (Number.isInteger(v)) return `CHF ${new Intl.NumberFormat('de-CH').format(v)}.–`;
   return `CHF ${new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)}`;
+}
+
+function escapeHtml(t: string): string {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+const HTML_RE = /<\/?(p|ul|ol|li|br|strong|em|b|i|h[2-4]|blockquote|a)\b/i;
+
+/**
+ * Description prête à afficher : le HTML de l'éditeur, nettoyé (liste blanche
+ * de `sanitize.ts`). Une description en texte brut (offres créées avant
+ * l'éditeur) devient des paragraphes : une ligne vide sépare deux paragraphes.
+ */
+export function offerDescriptionHtml(desc: string | null | undefined): string {
+  const d = (desc ?? '').trim();
+  if (!d) return '';
+  if (HTML_RE.test(d)) return sanitizeHtml(d);
+  return d
+    .split(/\n\s*\n/)
+    .map((para) => `<p>${escapeHtml(para.trim()).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+/** Vrai si la description ne contient aucun texte (l'éditeur vide renvoie `<p></p>`). */
+export function isDescriptionEmpty(desc: string | null | undefined): boolean {
+  return htmlToText(desc ?? '').trim() === '';
 }
 
 /** « 1 h 30 », « 45 min ». */

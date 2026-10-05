@@ -43,7 +43,7 @@ import { validateContact, type ContactErrors } from './validation';
 import DayCalendar from './DayCalendar';
 import ConfirmationStep from './ConfirmationStep';
 import type { PublicOffer } from '../../../types/offers';
-import { formatOfferDuration, formatOfferPeriod } from '../../../types/offers';
+import { formatOfferDuration, formatOfferPeriod, offerDescriptionHtml } from '../../../types/offers';
 
 // Exports conservés : l'ancienne page admin des réservations les importe encore
 // (période de transition). `TimeSlot` est désormais celui des types partagés.
@@ -728,24 +728,36 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                       />
                       <div className="flex flex-col sm:flex-row">
                         {o.image_url && (
+                          // Visuel carré, comme partout ailleurs : il n'est jamais rogné différemment ici.
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={o.image_url} alt="" className="w-full sm:w-56 aspect-video sm:aspect-auto object-cover shrink-0" />
+                          <img
+                            src={o.image_url}
+                            alt=""
+                            className="w-full sm:w-44 aspect-square object-cover shrink-0 sm:self-start sm:m-5 sm:mr-0 sm:rounded-[var(--radius-base,0.75rem)]"
+                          />
                         )}
                         <div className="flex-1 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                           <div className="space-y-1.5 flex-1 min-w-0">
                             <span id={`rf-offre-${o.id}-nom`} className="block text-lg font-serif font-medium text-stone-deep group-hover:text-sage transition-colors">
                               {o.titre}
                             </span>
-                            <p id={`rf-offre-${o.id}-desc`} className="text-muted text-xs sm:text-sm leading-relaxed font-light">
-                              {o.description ? `${o.description} ` : ''}
-                              Valable {formatOfferPeriod(o.date_debut, o.date_fin)}.
-                            </p>
+                            {/* `div` et non `p` : la charte du site impose sa taille à tout paragraphe. */}
+                            <div id={`rf-offre-${o.id}-desc`} className="text-muted text-xs sm:text-sm leading-relaxed font-light space-y-2">
+                              {o.description && (
+                                <div className="rich-text" dangerouslySetInnerHTML={{ __html: offerDescriptionHtml(o.description) }} />
+                              )}
+                              <div className="font-medium text-stone-deep">Valable {formatOfferPeriod(o.date_debut, o.date_fin)}.</div>
+                            </div>
                             {o.places_restantes != null && (
                               <span className="inline-block text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sage/10 text-sage border border-sage/20">
-                                {o.places_restantes === 1 ? 'Dernière place' : `Plus que ${o.places_restantes} places`}
+                                {o.places_restantes === 1
+                                  ? 'Dernière place'
+                                  : o.places_restantes <= 5
+                                    ? `Plus que ${o.places_restantes} places`
+                                    : `${o.places_restantes} places disponibles`}
                               </span>
                             )}
-                            {o.conditions && <p className="text-[11px] text-muted leading-relaxed whitespace-pre-line">{o.conditions}</p>}
+                            {o.conditions && <div className="text-[11px] text-muted leading-snug whitespace-pre-line">{o.conditions}</div>}
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-border">
                             <div className="text-right">

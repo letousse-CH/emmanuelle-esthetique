@@ -92,6 +92,41 @@
 .legal-page p:last-child { margin-bottom: 0; }
 .legal-page ul, .legal-page ol { margin-bottom: 1.1rem; }
 
+/* ── Puces du site : l'algue de la charte (public/images/algue.webp) ──────
+   Toute liste à puces du site public : blocs texte du page builder
+   (.pb-prose), articles (.prose), textes riches (.rich-text : description de
+   l'offre du moment…), anciennes sections (.algue-bullets) et listes écrites
+   à la main (ul.algue-list). Les listes numérotées gardent leurs chiffres.
+   La liste cochée du page builder (.pb-check) suit la même algue dans blocks.css. */
+:is(.pb-prose, .prose, .rich-text, .algue-bullets) ul,
+ul.algue-list {
+  list-style: none;
+  padding-left: 0;
+}
+:is(.pb-prose, .prose, .rich-text, .algue-bullets) ul > li,
+ul.algue-list > li {
+  position: relative;
+  padding-left: 1.75em;
+}
+:is(.pb-prose, .prose, .rich-text, .algue-bullets) ul > li + li,
+ul.algue-list > li + li { margin-top: .45em; }
+:is(.pb-prose, .prose, .rich-text, .algue-bullets) ul > li::before,
+ul.algue-list > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .15em;
+  width: 1.2em;
+  height: 1.2em;
+  background: url("/images/algue.webp") center / contain no-repeat;
+}
+
+/* Texte riche : ses paragraphes et puces prennent la taille du conteneur.
+   Sans cela, `[data-site-theme] p, li { font-size }` (GlobalStyles) les
+   remettrait tous à la taille du corps de texte. */
+[data-site-theme] .rich-text :is(p, li) { font-size: inherit; line-height: inherit; }
+.rich-text > * + * { margin-top: .75em; }
+
 /* .ql-editor (Quill) : voir app/admin/admin.css */
 
 /* ── Lisibilité des articles de blog ──

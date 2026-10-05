@@ -1680,7 +1680,8 @@ export function TextImage1({ data, sectionIndex }: { data: TextImage1Data, secti
   const prose = [
     '[&_h2]:font-serif [&_h2]:text-2xl [&_h2]:md:text-3xl [&_h2]:font-bold [&_h2]:leading-tight [&_h2]:mt-8 [&_h2]:mb-4',
     '[&_h3]:font-serif [&_h3]:text-xl [&_h3]:font-bold [&_h3]:mt-6 [&_h3]:mb-3',
-    '[&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_li]:mb-1',
+    // Puces : l'algue de la charte (`.algue-bullets`, voir index.css).
+    'algue-bullets [&_p]:mb-4 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_li]:mb-1',
     '[&_strong]:font-bold [&_em]:italic [&_a]:text-sage [&_a]:underline hover:[&_a]:text-sage/80',
     dark ? '[&_h2]:text-white [&_h3]:text-white' : '[&_h2]:text-stone-900 [&_h3]:text-stone-900',
   ].join(' ');

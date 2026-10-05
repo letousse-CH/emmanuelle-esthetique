@@ -21,7 +21,7 @@ import ContactForm from '../ContactForm';
 import CardsCarousel from './CardsCarousel';
 import { optimizedImgProps, QUALITY, QUALITY_HERO } from '../../utils/imageOptim';
 import type { PublicOffer } from '../../types/offers';
-import { formatOfferDuration, formatOfferPeriod, formatOfferPrice } from '../../types/offers';
+import { formatOfferDuration, formatOfferPeriod, formatOfferPrice, offerDescriptionHtml } from '../../types/offers';
 
 export type EditorSelection =
   | { kind: 'section'; sectionId: string }
@@ -534,13 +534,15 @@ function CurrentOfferView({ b, ctx }: { b: CurrentOfferBlock; ctx: Ctx }) {
             {o.image_url && (
               <div className="pb-curoffer-img">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img {...imgAttrs(ctx, o.image_url, '(min-width: 900px) 50vw, 100vw')} alt={o.titre} decoding="async" />
+                <img {...imgAttrs(ctx, o.image_url, '(min-width: 900px) 45vw, 100vw')} alt={o.titre} decoding="async" />
               </div>
             )}
             <div className="pb-curoffer-body">
               {b.eyebrow && <span className="pb-eyebrow" {...f(ctx, 'eyebrow')}>{b.eyebrow}</span>}
               <h2 className="pb-h pb-h2">{o.titre}</h2>
-              {o.description && <p className="pb-curoffer-desc">{o.description}</p>}
+              {o.description && (
+                <div className="pb-curoffer-desc rich-text" dangerouslySetInnerHTML={{ __html: offerDescriptionHtml(o.description) }} />
+              )}
               <p className="pb-curoffer-price">
                 <span>{formatOfferPrice(o.prix_chf)}</span>
                 {o.prix_normal_chf != null && o.prix_normal_chf > o.prix_chf && (

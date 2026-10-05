@@ -64,7 +64,7 @@ export default async function LegalPage() {
               <p className="leading-7">
                 Conformément à la nouvelle Loi fédérale sur la Protection des Données (nLPD) en vigueur en Suisse :
               </p>
-              <ul className="list-disc pl-6 space-y-3 mt-5 leading-7">
+              <ul className="algue-list space-y-3 mt-5 leading-7">
                 <li>Les données collectées via le formulaire de contact sont utilisées exclusivement pour répondre à vos demandes de consultation.</li>
                 <li>Aucune donnée n'est transmise à des tiers sans votre consentement explicite.</li>
                 <li>Vous disposez d'un droit d'accès, de rectification et de suppression de vos données personnelles sur simple demande par e-mail.</li>

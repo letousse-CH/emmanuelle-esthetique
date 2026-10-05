@@ -5,7 +5,7 @@
  */
 import { supabase } from './supabase';
 import type { Offer, OfferInput, OfferStats } from '../types/offers';
-import { isOfferInPeriod } from '../types/offers';
+import { isDescriptionEmpty, isOfferInPeriod, offerDescriptionHtml } from '../types/offers';
 
 function normalize(row: Record<string, unknown>): Offer {
   return {
@@ -22,7 +22,8 @@ function normalize(row: Record<string, unknown>): Offer {
 function clean(input: OfferInput): Record<string, unknown> {
   return {
     titre: input.titre.trim(),
-    description: input.description?.trim() || null,
+    // HTML de l'éditeur, nettoyé avant d'être stocké ; un éditeur vide donne `null`.
+    description: isDescriptionEmpty(input.description) ? null : offerDescriptionHtml(input.description),
     prix_chf: Math.round(input.prix_chf * 100) / 100,
     prix_normal_chf: input.prix_normal_chf == null ? null : Math.round(input.prix_normal_chf * 100) / 100,
     duree_minutes: input.duree_minutes,
