@@ -411,7 +411,16 @@
 .pb-co-cta:hover { background: color-mix(in srgb, var(--pb-primary) 78%, var(--co-lagon)); transform: translateY(-2px); }
 .pb-co-cta:hover svg { transform: translateX(4px); }
 .pb-co-cta:focus-visible { outline: 2px solid var(--co-lagon-ink); outline-offset: 3px; }
-.pb-co-meta { display: flex; flex-wrap: wrap; gap: .35rem 1rem; font-size: .82rem; color: var(--pb-fg-muted); }
+/* Partager : bouton contour, à côté de « Réserver ». */
+.pb-co-share {
+  display: inline-flex; align-items: center; justify-content: center; gap: .55rem;
+  padding: calc(1.05rem - 1px) 1.35rem; border: 1px solid color-mix(in srgb, var(--pb-fg) 35%, transparent); border-radius: 2px;
+  background: transparent; color: var(--pb-fg); font: inherit; font-size: .95rem; font-weight: 600; cursor: pointer;
+  transition: border-color .25s, background-color .25s;
+}
+.pb-co-share:hover { border-color: var(--pb-fg); background: color-mix(in srgb, var(--pb-fg) 6%, transparent); }
+.pb-co-share:focus-visible { outline: 2px solid var(--co-lagon-ink); outline-offset: 3px; }
+.pb-co-meta { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: .35rem 1rem; font-size: .82rem; color: var(--pb-fg-muted); }
 .pb-co-meta span + span::before { content: "·"; margin-right: 1rem; opacity: .6; }
 .pb-co-places { font-weight: 700; color: var(--pb-primary); }
 .pb-co-cond { font-size: .75rem; line-height: 1.55; color: var(--pb-fg-muted); white-space: pre-line; }
@@ -422,7 +431,7 @@
   .pb-co { padding: 0 0 .5rem; }
   .pb-co-card { margin: 4.25rem .25rem 0; padding: 1.4rem 1.15rem 1.5rem; gap: 1rem; }
   .pb-co-actions { flex-direction: column; align-items: stretch; }
-  .pb-co-cta { width: 100%; white-space: nowrap; }
+  .pb-co-cta, .pb-co-share { width: 100%; white-space: nowrap; }
   .pb-co-meta { flex-direction: column; gap: .2rem; }
   .pb-co-meta span + span::before { content: none; }
   .pb-co-seal, .pb-co-rev .pb-co-seal { left: auto; right: .5rem; transform: translateY(65%); }

@@ -12,11 +12,13 @@ import { deleteOffer, listOfferStats, listOffers, setOfferArchived } from '../..
 import type { Offer, OfferInput, OfferStats, OfferStatus } from '../../../types/offers';
 import {
   EMPTY_STATS, OFFER_STATUS_LABEL, daysLeft, formatOfferDuration, formatOfferPeriod, isOfferUsed,
-  offerStatus, offerYear, placesPrises, placesRestantes,
+  offerPagePath, offerStatus, offerToPublic, offerYear, placesPrises, placesRestantes,
 } from '../../../types/offers';
 import { formatCHF } from '../../../types/caisse';
 import { todayZurich } from '../../(public)/reservation/dates';
 import OfferEditor, { blankOffer, relaunchFrom } from './OfferEditor';
+import OfferShareButton from '../../../components/OfferShare';
+import { useSettings } from '../../../hooks/useSettings';
 
 const STATUS_TONE: Record<OfferStatus, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
   en_cours: 'success',
@@ -277,6 +279,7 @@ export default function OffresClient() {
 function CurrentCard({ offer: o, stats, status, today, actions }: {
   offer: Offer; stats: OfferStats; status: OfferStatus; today: string; actions: React.ReactNode;
 }) {
+  const { business_name } = useSettings(['business_name']);
   const prises = placesPrises(stats);
   const restantes = placesRestantes(o, stats);
   const jours = daysLeft(o.date_fin, today);
@@ -332,11 +335,24 @@ function CurrentCard({ offer: o, stats, status, today, actions }: {
             {!o.reservable_en_ligne && <span className="text-stone-500"> Non réservable en ligne.</span>}
           </p>
 
+          {/* Partager : la page de l'offre porte l'aperçu (visuel, titre, prix) affiché par WhatsApp et Facebook. */}
+          {status === 'en_cours' && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-accent/5 p-2.5">
+              <OfferShareButton
+                offer={offerToPublic(o, placesRestantes(o, stats))}
+                brand={business_name}
+                label="Partager l’offre"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 text-[14px] font-semibold text-accent-fg hover:bg-accent-hover cursor-pointer lg:min-h-10"
+              />
+              <span className="text-[13px] text-stone-700">WhatsApp, Facebook, Instagram, e-mail… avec le visuel et un message prêt à envoyer.</span>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-stone-100 pt-3">
             {actions}
-            {status === 'en_cours' && o.reservable_en_ligne && (
-              <Link href={`/reservation?offre=${o.id}`} target="_blank" className="inline-flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-accent hover:underline">
-                Voir sur le site <ExternalLink size={13} aria-hidden="true" />
+            {status === 'en_cours' && (
+              <Link href={offerPagePath(o.id)} target="_blank" className="inline-flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-accent hover:underline">
+                Voir la page de l’offre <ExternalLink size={13} aria-hidden="true" />
               </Link>
             )}
           </div>

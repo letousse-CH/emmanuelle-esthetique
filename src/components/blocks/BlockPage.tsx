@@ -10,6 +10,7 @@ import { isOptimizable } from '../../utils/imageOptim';
 import { resolvePageContent } from './pageContent';
 import PageEditGate from './PageEditGate';
 import { getPublicOffers } from '../../services/offersServer';
+import { getSettingsServer } from '../../services/settingsServer';
 
 export default async function BlockPage({ page }: { page: DynamicPage }) {
   const content = resolvePageContent(page);
@@ -20,6 +21,7 @@ export default async function BlockPage({ page }: { page: DynamicPage }) {
     // apparaît et disparaît d'elle-même aux dates prévues.
     hasCurrentOfferBlock(content) ? getPublicOffers() : Promise.resolve(undefined),
   ]);
+  const brand = offers?.length ? (await getSettingsServer(['business_name'])).business_name || undefined : undefined;
   const faq = collectFaq(content);
   const faqLd = faq.length
     ? {
@@ -34,7 +36,7 @@ export default async function BlockPage({ page }: { page: DynamicPage }) {
       {faqLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />}
       {/* `admin-exclude` : l'éditeur de textes générique (UniversalPageEditor) ne touche pas au contenu des pages en blocs. */}
       <div className="admin-exclude" data-page-id={page.id}>
-        <BlockRenderer content={content} images={{ dims }} data={{ offers }} />
+        <BlockRenderer content={content} images={{ dims }} data={{ offers, brand }} />
       </div>
       <PageEditGate pageId={page.id} />
     </>

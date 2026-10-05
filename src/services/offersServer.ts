@@ -11,7 +11,8 @@ import { supabase } from './supabase';
 import { getSupabaseAdmin } from '../utils/supabaseAdmin';
 import { zurichNow } from './bookingEngine';
 import type { Offer, OfferStats, PublicOffer } from '../types/offers';
-import { EMPTY_STATS, isOfferInPeriod, placesRestantes } from '../types/offers';
+import type { OfferStatus } from '../types/offers';
+import { EMPTY_STATS, isOfferInPeriod, offerStatus, offerToPublic, placesRestantes } from '../types/offers';
 
 function normalize(row: Record<string, unknown>): Offer {
   return {
@@ -25,23 +26,7 @@ function normalize(row: Record<string, unknown>): Offer {
   };
 }
 
-export function toPublicOffer(o: Offer, restantes: number | null): PublicOffer {
-  return {
-    id: o.id,
-    titre: o.titre,
-    description: o.description,
-    prix_chf: o.prix_chf,
-    prix_normal_chf: o.prix_normal_chf,
-    duree_minutes: o.duree_minutes,
-    conditions: o.conditions,
-    image_url: o.image_url,
-    date_debut: o.date_debut,
-    date_fin: o.date_fin,
-    places_max: o.places_max,
-    places_restantes: restantes,
-    reservable_en_ligne: o.reservable_en_ligne,
-  };
-}
+const toPublicOffer = offerToPublic;
 
 /** Compteurs d'une liste d'offres. Lève une erreur si la base ne répond pas. */
 export async function fetchOfferStats(db: SupabaseClient, ids: string[]): Promise<Map<string, OfferStats>> {
@@ -101,6 +86,29 @@ export async function getPublicOffers(today: string = zurichNow().date): Promise
   } catch (err) {
     console.warn('[getPublicOffers] Lecture impossible:', err);
     return [];
+  }
+}
+
+/**
+ * Offre d'une page de partage (`/offre/<id>`), avec son statut du jour. `null`
+ * si elle n'existe pas ou n'est qu'un brouillon (jamais exposé au public). Une
+ * offre terminée, complète ou archivée revient avec son statut : la page dit
+ * alors qu'elle est terminée plutôt que de répondre 404 à un lien déjà partagé.
+ */
+export async function getOfferForPage(id: string, today: string = zurichNow().date): Promise<{ offer: PublicOffer; status: OfferStatus } | null> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
+  const admin = getSupabaseAdmin();
+  const db = admin || supabase;
+  try {
+    const { data, error } = await db.from('monthly_offers').select('*').eq('id', id).maybeSingle();
+    if (error || !data) return null;
+    const o = normalize(data);
+    if (!o.active) return null;
+    const stats = admin ? await fetchOfferStats(admin, [o.id]).catch(() => null) : null;
+    const s = stats?.get(o.id) ?? (stats ? { offer_id: o.id, ...EMPTY_STATS } : null);
+    return { offer: toPublicOffer(o, s ? placesRestantes(o, s) : null), status: offerStatus(o, s, today) };
+  } catch {
+    return null;
   }
 }
 

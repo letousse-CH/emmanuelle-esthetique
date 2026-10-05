@@ -19,6 +19,7 @@ import LegacySection from './LegacySection';
 import GoogleReviews from '../GoogleReviews';
 import ContactForm from '../ContactForm';
 import CardsCarousel from './CardsCarousel';
+import OfferShareButton from '../OfferShare';
 import { optimizedImgProps, QUALITY, QUALITY_HERO } from '../../utils/imageOptim';
 import type { PublicOffer } from '../../types/offers';
 import {
@@ -55,6 +56,8 @@ export interface ImageOptions {
  */
 export interface BlockData {
   offers?: PublicOffer[];
+  /** Nom de l'institut, repris dans le message de partage d'une offre. */
+  brand?: string;
 }
 
 interface Ctx {
@@ -622,6 +625,10 @@ function CurrentOfferView({ b, ctx }: { b: CurrentOfferBlock; ctx: Ctx }) {
                   <span {...f(ctx, 'ctaText')}>{b.ctaText || 'Réserver cette offre'}</span>
                   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                 </a>
+                {/* Dans l'éditeur, simple aperçu : un clic sélectionne le bloc au lieu d'ouvrir la fenêtre. */}
+                {ctx.editor
+                  ? <span className="pb-co-share"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" /></svg><span>Partager</span></span>
+                  : <OfferShareButton offer={o} brand={ctx.data?.brand} className="pb-co-share" />}
                 <div className="pb-co-meta">
                   <span>Valable {formatOfferPeriod(o.date_debut, o.date_fin)}</span>
                   <span>{formatOfferDuration(o.duree_minutes)} de soin</span>

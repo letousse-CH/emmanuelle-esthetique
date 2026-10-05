@@ -245,6 +245,87 @@ export function formatOfferDuration(min: number): string {
   return m ? `${h} h ${String(m).padStart(2, '0')}` : `${h} h`;
 }
 
+// ── Partage ──────────────────────────────────────────────────────────────────
+
+/** Adresse publique d'une offre : sa page porte l'aperçu de partage (visuel, titre, prix). */
+export function offerPagePath(id: string): string {
+  return `/offre/${id}`;
+}
+
+/** Vue publique d'une offre, à partir de la ligne complète (admin) et de ses places restantes. */
+export function offerToPublic(o: Offer, restantes: number | null): PublicOffer {
+  return {
+    id: o.id,
+    titre: o.titre,
+    description: o.description,
+    prix_chf: o.prix_chf,
+    prix_normal_chf: o.prix_normal_chf,
+    duree_minutes: o.duree_minutes,
+    conditions: o.conditions,
+    image_url: o.image_url,
+    date_debut: o.date_debut,
+    date_fin: o.date_fin,
+    places_max: o.places_max,
+    places_restantes: restantes,
+    reservable_en_ligne: o.reservable_en_ligne,
+  };
+}
+
+function decodeEntities(t: string): string {
+  return t
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+function truncate(t: string, max: number): string {
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const sp = cut.lastIndexOf(' ');
+  return `${(sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:.–-]+$/, '')}…`;
+}
+
+/** Phrase d'accroche : l'intertitre de la description s'il y en a un, sinon son premier paragraphe. */
+export function offerAccroche(desc: string | null | undefined, max = 180): string {
+  const html = offerDescriptionHtml(desc);
+  if (!html) return '';
+  const h3 = html.match(/<h3>([\s\S]*?)<\/h3>/i)?.[1];
+  const p = html.match(/<p>([\s\S]*?)<\/p>/i)?.[1];
+  const raw = decodeEntities((h3 ?? p ?? htmlToText(html)).replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
+  return truncate(raw, max);
+}
+
+function offerPriceLine(o: Pick<PublicOffer, 'prix_chf' | 'prix_normal_chf' | 'date_debut' | 'date_fin'>): string {
+  const prix = o.prix_normal_chf != null && o.prix_normal_chf > o.prix_chf
+    ? `${formatOfferPrice(o.prix_chf)} au lieu de ${formatOfferPrice(o.prix_normal_chf)}`
+    : formatOfferPrice(o.prix_chf);
+  return `${prix} · valable ${formatOfferPeriod(o.date_debut, o.date_fin)}`;
+}
+
+/** Description de l'aperçu de partage (balises Open Graph). */
+export function offerShareSummary(o: PublicOffer): string {
+  const accroche = offerAccroche(o.description, 150);
+  return truncate(`${accroche ? `${accroche} — ` : ''}${offerPriceLine(o)}`, 230);
+}
+
+/**
+ * Message prêt à partager (WhatsApp, e-mail, réseaux) : titre, accroche, prix,
+ * période, première condition, lien de réservation. Modifiable avant envoi.
+ */
+export function offerShareMessage(o: PublicOffer, url: string, brand?: string | null): string {
+  const lines = [`✨ ${o.titre}${brand ? ` — ${brand}` : ''}`];
+  const accroche = offerAccroche(o.description);
+  if (accroche && accroche !== o.titre) lines.push('', accroche);
+  lines.push('', offerPriceLine(o));
+  const condition = o.conditions?.split('\n').map((l) => l.trim()).find(Boolean);
+  if (condition) lines.push(condition);
+  lines.push('', `Réserver : ${url}`);
+  return lines.join('\n');
+}
+
 // ── Validation (admin) ───────────────────────────────────────────────────────
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
