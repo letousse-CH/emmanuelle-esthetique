@@ -11,7 +11,7 @@ import { getSettingsServer } from '../../../../services/settingsServer';
 import { getImageDims } from '../../../../utils/imageDims';
 import { SITE_CONFIG } from '../../../../config/site';
 import type { OfferStatus, PublicOffer } from '../../../../types/offers';
-import { formatOfferPeriod, offerAccroche, offerPagePath, offerShareSummary } from '../../../../types/offers';
+import { formatOfferPeriod, offerAccroche, offerPagePath, offerShareSummary, offerShareTitle } from '../../../../types/offers';
 
 /**
  * Page d'une offre du moment : c'est le lien partagé sur WhatsApp, Facebook…
@@ -72,6 +72,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const brand = await brandName();
   const url = `${SITE_CONFIG.url}${offerPagePath(offer.id)}`;
   const description = offerShareSummary(offer);
+  const shareTitle = offerShareTitle(offer);
   const dims = offer.image_url ? await getImageDims(offer.image_url).catch(() => null) : null;
   const images = offer.image_url
     ? [{ url: offer.image_url, alt: offer.titre, ...(dims ? { width: dims.w, height: dims.h } : {}) }]
@@ -88,11 +89,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url,
       siteName: brand,
       locale: 'fr_CH',
-      title: offer.titre,
+      title: shareTitle,
       description,
       images,
     },
-    twitter: { card: 'summary_large_image', title: offer.titre, description, images: images?.map((i) => i.url) },
+    twitter: { card: 'summary_large_image', title: shareTitle, description, images: images?.map((i) => i.url) },
   };
 }
 

@@ -342,6 +342,7 @@ function CurrentCard({ offer: o, stats, status, today, actions }: {
                 offer={offerToPublic(o, placesRestantes(o, stats))}
                 brand={business_name}
                 label="Partager l’offre"
+                variant="admin"
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 text-[14px] font-semibold text-accent-fg hover:bg-accent-hover cursor-pointer lg:min-h-10"
               />
               <span className="text-[13px] text-stone-700">WhatsApp, Facebook, Instagram, e-mail… avec le visuel et un message prêt à envoyer.</span>

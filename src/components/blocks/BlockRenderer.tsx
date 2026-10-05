@@ -627,8 +627,8 @@ function CurrentOfferView({ b, ctx }: { b: CurrentOfferBlock; ctx: Ctx }) {
                 </a>
                 {/* Dans l'éditeur, simple aperçu : un clic sélectionne le bloc au lieu d'ouvrir la fenêtre. */}
                 {ctx.editor
-                  ? <span className="pb-co-share"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" /></svg><span>Partager</span></span>
-                  : <OfferShareButton offer={o} brand={ctx.data?.brand} className="pb-co-share" />}
+                  ? <span className="pb-co-share" title="Partager l’offre"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" /></svg></span>
+                  : <OfferShareButton offer={o} brand={ctx.data?.brand} className="pb-co-share" label="Partager l’offre" iconOnly />}
                 <div className="pb-co-meta">
                   <span>Valable {formatOfferPeriod(o.date_debut, o.date_fin)}</span>
                   <span>{formatOfferDuration(o.duree_minutes)} de soin</span>

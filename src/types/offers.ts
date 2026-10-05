@@ -247,9 +247,13 @@ export function formatOfferDuration(min: number): string {
 
 // ── Partage ──────────────────────────────────────────────────────────────────
 
-/** Adresse publique d'une offre : sa page porte l'aperçu de partage (visuel, titre, prix). */
+/**
+ * Adresse publique d'une offre : sa page porte l'aperçu de partage (visuel,
+ * titre, prix). Lien court : les 8 premiers caractères de l'identifiant
+ * suffisent (la page accepte aussi l'identifiant complet des liens déjà partagés).
+ */
 export function offerPagePath(id: string): string {
-  return `/offre/${id}`;
+  return `/offre/${id.slice(0, 8)}`;
 }
 
 /** Vue publique d'une offre, à partir de la ligne complète (admin) et de ses places restantes. */
@@ -305,10 +309,25 @@ function offerPriceLine(o: Pick<PublicOffer, 'prix_chf' | 'prix_normal_chf' | 'd
   return `${prix} · valable ${formatOfferPeriod(o.date_debut, o.date_fin)}`;
 }
 
-/** Description de l'aperçu de partage (balises Open Graph). */
+/** Titre de l'aperçu de partage : c'est la ligne en gras de WhatsApp et Facebook, le prix y figure. */
+export function offerShareTitle(o: Pick<PublicOffer, 'titre' | 'prix_chf' | 'prix_normal_chf'>): string {
+  const prix = o.prix_normal_chf != null && o.prix_normal_chf > o.prix_chf
+    ? `${formatOfferPrice(o.prix_chf)} au lieu de ${formatOfferPrice(o.prix_normal_chf)}`
+    : formatOfferPrice(o.prix_chf);
+  return `${o.titre} · ${prix}`;
+}
+
+/**
+ * Description de l'aperçu de partage (balises Open Graph). Facebook interdit de
+ * pré-remplir le texte d'une publication : seul cet aperçu s'affiche à coup sûr,
+ * il porte donc l'essentiel — accroche, période, première condition.
+ */
 export function offerShareSummary(o: PublicOffer): string {
-  const accroche = offerAccroche(o.description, 150);
-  return truncate(`${accroche ? `${accroche} — ` : ''}${offerPriceLine(o)}`, 230);
+  const accroche = offerAccroche(o.description, 140);
+  const condition = o.conditions?.split('\n').map((l) => l.trim()).find(Boolean);
+  const phrase = (t: string) => (/[.!?…]$/.test(t) ? t : `${t}.`);
+  const parts = [accroche, `Valable ${formatOfferPeriod(o.date_debut, o.date_fin)}`, condition].filter(Boolean) as string[];
+  return truncate(parts.map(phrase).join(' '), 280);
 }
 
 /**
@@ -316,7 +335,7 @@ export function offerShareSummary(o: PublicOffer): string {
  * période, première condition, lien de réservation. Modifiable avant envoi.
  */
 export function offerShareMessage(o: PublicOffer, url: string, brand?: string | null): string {
-  const lines = [`✨ ${o.titre}${brand ? ` — ${brand}` : ''}`];
+  const lines = [`${o.titre}${brand ? ` — ${brand}` : ''}`];
   const accroche = offerAccroche(o.description);
   if (accroche && accroche !== o.titre) lines.push('', accroche);
   lines.push('', offerPriceLine(o));

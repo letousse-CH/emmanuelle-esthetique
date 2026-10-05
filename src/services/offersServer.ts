@@ -96,13 +96,25 @@ export async function getPublicOffers(today: string = zurichNow().date): Promise
  * alors qu'elle est terminée plutôt que de répondre 404 à un lien déjà partagé.
  */
 export async function getOfferForPage(id: string, today: string = zurichNow().date): Promise<{ offer: PublicOffer; status: OfferStatus } | null> {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
+  const full = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const short = /^[0-9a-f]{8}$/i.test(id);
+  if (!full && !short) return null;
   const admin = getSupabaseAdmin();
   const db = admin || supabase;
   try {
-    const { data, error } = await db.from('monthly_offers').select('*').eq('id', id).maybeSingle();
-    if (error || !data) return null;
-    const o = normalize(data);
+    let row: Record<string, unknown> | null = null;
+    if (full) {
+      const { data, error } = await db.from('monthly_offers').select('*').eq('id', id).maybeSingle();
+      if (error) return null;
+      row = data;
+    } else {
+      // Lien court : la table ne compte que quelques dizaines d'offres, on cherche le préfixe ici.
+      const { data, error } = await db.from('monthly_offers').select('*').order('created_at', { ascending: false }).limit(500);
+      if (error) return null;
+      row = (data ?? []).find((r) => String(r.id).toLowerCase().startsWith(id.toLowerCase())) ?? null;
+    }
+    if (!row) return null;
+    const o = normalize(row);
     if (!o.active) return null;
     const stats = admin ? await fetchOfferStats(admin, [o.id]).catch(() => null) : null;
     const s = stats?.get(o.id) ?? (stats ? { offer_id: o.id, ...EMPTY_STATS } : null);

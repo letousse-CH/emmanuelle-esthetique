@@ -15,24 +15,32 @@ import { formatOfferPeriod, formatOfferPrice, offerPagePath, offerShareMessage }
  * Le lien partagé est la page de l'offre (`/offre/<id>`) : c'est elle qui
  * fournit l'aperçu (visuel, titre, prix) que WhatsApp et Facebook affichent.
  */
-export default function OfferShareButton({ offer, brand, className, label = 'Partager' }: {
+export default function OfferShareButton({ offer, brand, className, label = 'Partager', iconOnly = false, variant = 'site' }: {
   offer: PublicOffer;
   brand?: string | null;
   className?: string;
   label?: string;
+  /** Icône seule (libellé gardé pour les lecteurs d'écran et en infobulle). */
+  iconOnly?: boolean;
+  /** `site` (clientes) : WhatsApp et Facebook seulement. `admin` (institut) : tous les outils. */
+  variant?: 'site' | 'admin';
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <button ref={triggerRef} type="button" className={className} onClick={() => setOpen(true)} aria-haspopup="dialog">
-        <Share2 size={17} strokeWidth={1.9} aria-hidden />
-        <span>{label}</span>
+      <button
+        ref={triggerRef} type="button" className={className} onClick={() => setOpen(true)} aria-haspopup="dialog"
+        aria-label={iconOnly ? label : undefined} title={iconOnly ? label : undefined}
+      >
+        <Share2 size={iconOnly ? 20 : 17} strokeWidth={1.9} aria-hidden />
+        {!iconOnly && <span>{label}</span>}
       </button>
       {open && (
         <ShareDialog
           offer={offer}
           brand={brand}
+          full={variant === 'admin'}
           onClose={() => {
             setOpen(false);
             triggerRef.current?.focus();
@@ -82,13 +90,13 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-function ShareDialog({ offer, brand, onClose }: { offer: PublicOffer; brand?: string | null; onClose: () => void }) {
+function ShareDialog({ offer, brand, full, onClose }: { offer: PublicOffer; brand?: string | null; full: boolean; onClose: () => void }) {
   const titleId = useId();
   const [url] = useState(() => `${window.location.origin}${offerPagePath(offer.id)}`);
   const [message, setMessage] = useState(() => offerShareMessage(offer, url, brand));
   const [toast, setToast] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [canNative] = useState(() => typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  const [canNative] = useState(() => full && typeof navigator !== 'undefined' && typeof navigator.share === 'function');
   const panelRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -145,7 +153,7 @@ function ShareDialog({ offer, brand, onClose }: { offer: PublicOffer; brand?: st
   // Facebook ne reprend que le lien (aperçu : visuel + titre) : le texte est copié pour être collé.
   const facebook = async () => {
     const ok = await copyText(message);
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank', 'noopener,width=640,height=640');
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(message)}`, '_blank', 'noopener,width=640,height=640');
     say(ok ? 'Message copié : collez-le dans votre publication Facebook.' : 'Facebook s’ouvre avec l’aperçu de l’offre.');
   };
 
@@ -211,14 +219,22 @@ function ShareDialog({ offer, brand, onClose }: { offer: PublicOffer; brand?: st
           <button type="button" onClick={facebook} className={`${tile} border-[#1877F2]/35 bg-[#1877F2]/10 text-[#0d4fa8] hover:bg-[#1877F2]/20`}>
             <FacebookIcon /> Facebook
           </button>
-          <button type="button" onClick={email} className={`${tile} border-[#E7EBEE] bg-white text-[#12283A] hover:bg-[#F6F8F9]`}>
-            <Mail size={18} aria-hidden /> E-mail
-          </button>
-          <button type="button" onClick={() => copy('lien')} className={`${tile} border-[#E7EBEE] bg-white text-[#12283A] hover:bg-[#F6F8F9]`}>
-            <Link2 size={18} aria-hidden /> Copier le lien
-          </button>
+          {full && (
+            <>
+              <button type="button" onClick={email} className={`${tile} border-[#E7EBEE] bg-white text-[#12283A] hover:bg-[#F6F8F9]`}>
+                <Mail size={18} aria-hidden /> E-mail
+              </button>
+              <button type="button" onClick={() => copy('lien')} className={`${tile} border-[#E7EBEE] bg-white text-[#12283A] hover:bg-[#F6F8F9]`}>
+                <Link2 size={18} aria-hidden /> Copier le lien
+              </button>
+            </>
+          )}
         </div>
+        {!full && (
+          <div className="mt-2.5 text-center text-[12.5px] text-[#5F676E]">Pour Facebook, le message est copié : collez-le dans votre publication.</div>
+        )}
 
+        {full && <>
         <label className="mt-5 block">
           <span className="mb-1.5 flex items-baseline justify-between gap-2">
             <span className="text-[14px] font-semibold text-[#12283A]">Message</span>
@@ -242,6 +258,7 @@ function ShareDialog({ offer, brand, onClose }: { offer: PublicOffer; brand?: st
             </a>
           ) : <span />}
         </div>
+        </>}
 
         <div role="status" aria-live="polite" className={`mt-3 flex min-h-6 items-center justify-center gap-1.5 text-[13.5px] font-medium text-[#0f6b3a] transition-opacity ${toast ? 'opacity-100' : 'opacity-0'}`}>
           {toast && <Check size={15} aria-hidden />}
