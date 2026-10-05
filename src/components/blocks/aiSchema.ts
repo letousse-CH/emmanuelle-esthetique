@@ -6,6 +6,7 @@ function fieldSig(f: FieldDef): string {
     case 'select': return `${f.key}: ${f.options?.map((o) => JSON.stringify(o.value)).join('|')}`;
     case 'toggle': return `${f.key}?: boolean`;
     case 'number': return `${f.key}?: number`;
+    case 'color': return `${f.key}?: "#RRGGBB ou chaîne vide"`;
     case 'stringlist': return `${f.key}: string[]`;
     case 'richtext': return `${f.key}: "<p>HTML simple : p, strong, em, a, ul, ol, li, h2, h3</p>"`;
     case 'image': return `${f.key}: "URL d'image ou chaîne vide"`;

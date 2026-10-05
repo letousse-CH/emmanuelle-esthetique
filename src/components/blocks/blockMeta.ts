@@ -10,7 +10,7 @@ import { uid } from './types';
 
 export type FieldKind =
   | 'text' | 'textarea' | 'richtext' | 'image' | 'url'
-  | 'select' | 'toggle' | 'number' | 'list' | 'stringlist';
+  | 'select' | 'toggle' | 'number' | 'list' | 'stringlist' | 'color';
 
 export interface FieldDef {
   key: string;
@@ -25,6 +25,8 @@ export interface FieldDef {
   itemLabel?: string;
   /** Pour `list` : fabrique d'un nouvel élément. */
   newItem?: () => Record<string, unknown>;
+  /** Pour `color` : pastilles proposées (couleurs de la charte). Valeur vide = couleur par défaut du bloc. */
+  swatches?: { value: string; label: string }[];
   min?: number;
   max?: number;
 }
@@ -242,6 +244,18 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { key: 'ctaText', label: 'Texte du bouton', kind: 'text', help: 'Le bouton mène au formulaire de réservation, offre déjà choisie.' },
       { key: 'showPlaces', label: 'Afficher les places restantes', kind: 'toggle', help: 'Seulement si l\'offre est limitée en nombre.' },
       { key: 'showConditions', label: 'Afficher les conditions', kind: 'toggle' },
+      {
+        key: 'cardColor', label: 'Couleur de fond de la carte', kind: 'color',
+        help: 'La carte de texte posée sur l\'image. Sur une couleur foncée, le texte passe en blanc tout seul.',
+        swatches: [
+          { value: '', label: 'Crème (par défaut)' },
+          { value: '#FFFFFF', label: 'Blanc' },
+          { value: '#F1EAE0', label: 'Sable' },
+          { value: '#F6F8F9', label: 'Écume' },
+          { value: '#E2F2F4', label: 'Lagon clair' },
+          { value: '#12283A', label: 'Marine' },
+        ],
+      },
       { key: 'imagePosition', label: 'Image', kind: 'select', style: true, options: [{ value: 'left', label: 'À gauche' }, { value: 'right', label: 'À droite' }] },
     ],
     create: () => ({ id: uid(), type: 'current_offer', eyebrow: 'Offre du moment', ctaText: 'Réserver cette offre', showPlaces: true, showConditions: true, imagePosition: 'left' }),

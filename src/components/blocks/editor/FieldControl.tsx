@@ -45,6 +45,34 @@ export function ImageField({ value, onChange }: { value: string; onChange: (v: s
   );
 }
 
+/** Couleur : pastilles de la charte, nuancier libre et code hexadécimal. Vide = couleur par défaut du bloc. */
+function ColorField({ field, value, onChange }: { field: FieldDef; value: string; onChange: (v: string) => void }) {
+  const current = typeof value === 'string' ? value : '';
+  const [hex, setHex] = useState(current);
+  const valid = (x: string) => /^#[0-9a-f]{6}$/i.test(x);
+  const pick = (x: string) => { setHex(x); onChange(x); };
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {(field.swatches ?? []).map((s) => {
+          const active = current.toLowerCase() === s.value.toLowerCase();
+          return (
+            <button key={s.label} type="button" title={s.label} aria-label={s.label} aria-pressed={active} onClick={() => pick(s.value)}
+              className={`h-8 w-8 rounded-full border shadow-sm transition ${active ? 'ring-2 ring-sky-500 ring-offset-2' : 'border-stone-300 hover:scale-105'}`}
+              style={{ background: s.value || 'linear-gradient(135deg, #FAF7F2 50%, #e7dfd2 50%)' }} />
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2">
+        <input type="color" aria-label="Choisir une autre couleur" value={valid(current) ? current : '#faf7f2'}
+          onChange={(e) => pick(e.target.value)} className="h-9 w-11 cursor-pointer rounded border border-stone-200 bg-white p-0.5" />
+        <input className={input} value={hex} placeholder="Par défaut (crème)" maxLength={7}
+          onChange={(e) => { const x = e.target.value.trim(); setHex(x); if (x === '' || valid(x)) onChange(x); }} />
+      </div>
+    </div>
+  );
+}
+
 function StringList({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const list = Array.isArray(value) ? value : [];
   return (
@@ -159,6 +187,9 @@ export default function FieldControl({ field, value, onChange, showStyle }: { fi
       break;
     case 'stringlist':
       control = <StringList value={v as string[]} onChange={onChange} />;
+      break;
+    case 'color':
+      control = <ColorField field={field} value={(v as string) ?? ''} onChange={onChange} />;
       break;
     case 'list':
       control = <ListField field={field} value={v as Record<string, unknown>[]} onChange={onChange} showStyle={showStyle} />;

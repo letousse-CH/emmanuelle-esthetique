@@ -104,6 +104,8 @@ export interface CurrentOfferBlock {
   eyebrow?: string; ctaText?: string;
   showConditions?: boolean; showPlaces?: boolean;
   imagePosition?: 'left' | 'right';
+  /** Fond de la carte de texte (`#RRGGBB`) ; vide = crème. Le texte s'inverse sur un fond foncé. */
+  cardColor?: string;
 }
 
 /**

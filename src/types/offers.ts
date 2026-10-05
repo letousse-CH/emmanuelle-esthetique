@@ -194,6 +194,11 @@ export function formatOfferPeriod(debut: string, fin: string): string {
   return `du ${dayLabel(debut, !sameYear)} au ${dayLabel(fin, true)}`;
 }
 
+/** Aujourd'hui à Palézieux (`YYYY-MM-DD`), quel que soit le fuseau de la machine. */
+export function todayInZurich(at: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+}
+
 /** Nombre de jours restants jusqu'à `fin` inclus (0 = dernier jour). */
 export function daysLeft(fin: string, today: string): number {
   return Math.round((noon(fin).getTime() - noon(today).getTime()) / 86_400_000);

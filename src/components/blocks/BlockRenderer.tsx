@@ -21,7 +21,9 @@ import ContactForm from '../ContactForm';
 import CardsCarousel from './CardsCarousel';
 import { optimizedImgProps, QUALITY, QUALITY_HERO } from '../../utils/imageOptim';
 import type { PublicOffer } from '../../types/offers';
-import { formatOfferDuration, formatOfferPeriod, formatOfferPrice, offerDescriptionHtml } from '../../types/offers';
+import {
+  daysLeft, formatOfferDuration, formatOfferPeriod, formatOfferPrice, offerDescriptionHtml, todayInZurich,
+} from '../../types/offers';
 
 export type EditorSelection =
   | { kind: 'section'; sectionId: string }
@@ -514,54 +516,146 @@ function GoogleReviewsView({ b, ctx }: { b: GoogleReviewsBlock; ctx: Ctx }) {
 function placesLabel(n: number, max: number | null): string {
   if (n === 1) return 'Dernière place disponible';
   if (n <= 5) return `Plus que ${n} places`;
-  return max ? `${n} places disponibles sur ${max}` : `${n} places disponibles`;
+  return max ? `${n} places sur ${max}` : `${n} places disponibles`;
 }
 
+/** « Plus que 12 jours », « Plus que 2 jours », « Dernier jour ». `jours` = jours après aujourd'hui. */
+function countdownLabel(jours: number): string {
+  if (jours <= 0) return 'Dernier jour';
+  return `Plus que ${jours + 1} jours`;
+}
+
+/** Montant sans le préfixe « CHF » : « 140.– », « 99.50 ». */
+const amountOnly = (n: number) => formatOfferPrice(n).replace(/^CHF\s+/, '');
+
+/** Couleur `#RRGGBB` choisie dans l'éditeur, sinon `null` (fond crème par défaut). */
+function cardHex(v: string | undefined): string | null {
+  return v && /^#[0-9a-f]{6}$/i.test(v) ? v : null;
+}
+
+/**
+ * Fond foncé ? Le texte de la carte passe alors en blanc. Le seuil (luminance
+ * WCAG 0.22) est le point où le blanc contraste mieux que le marine du site :
+ * en dessous, blanc ; au-dessus, marine.
+ */
+function isDarkHex(hex: string): boolean {
+  const lin = (c: number) => { const x = c / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) < 0.22;
+}
+
+/**
+ * Offre du moment — « édition limitée » : un écrin lagon → marine propre au
+ * bloc (il se détache du site quel que soit le fond de la section), le visuel
+ * carré encadré, un sceau qui annonce l'économie, et une carte crème qui
+ * chevauche l'image pour une lecture contrastée.
+ *
+ * La carte redéfinit --pb-fg / --pb-fg-muted : les règles qui éclaircissent le
+ * texte des sections sombres (plus bas dans blocks.css) s'appuient sur ces
+ * variables, elles laissent donc la carte lisible même posée sur fond nuit.
+ */
 function CurrentOfferView({ b, ctx }: { b: CurrentOfferBlock; ctx: Ctx }) {
   const offers = ctx.data?.offers;
   if (!offers) return ctx.editor ? <div className="pb-img-empty">Chargement de l&apos;offre du moment…</div> : null;
   if (offers.length === 0) {
     return ctx.editor
-      ? <div className="pb-img-empty pb-curoffer-empty">Aucune offre en cours aujourd&apos;hui : l&apos;encart est masqué sur le site. Les offres se créent dans Admin → Offre du moment.</div>
+      ? <div className="pb-img-empty pb-co-empty">Aucune offre en cours aujourd&apos;hui : l&apos;encart est masqué sur le site. Les offres se créent dans Admin → Offre du moment.</div>
       : null;
   }
+  const today = todayInZurich();
+  const eyebrow = b.eyebrow || 'Offre du moment';
+  const hex = cardHex(b.cardColor);
+  const cardCls = `pb-co-card${hex && isDarkHex(hex) ? ' pb-co-card-dark' : ''}`;
+  const cardStyle = hex ? ({ ['--co-card' as string]: hex } as React.CSSProperties) : undefined;
   return (
-    <div className="pb-curoffers">
+    <div className="pb-cos">
       {offers.map((o) => {
         const url = o.reservable_en_ligne ? `/reservation?offre=${encodeURIComponent(o.id)}` : '/contact';
+        const saving = o.prix_normal_chf != null && o.prix_normal_chf > o.prix_chf
+          ? Math.round((o.prix_normal_chf - o.prix_chf) * 100) / 100
+          : null;
+        const jours = daysLeft(o.date_fin, today);
+        const ring = `${eyebrow} · Édition limitée · `.toUpperCase();
+        const cls = ['pb-co', b.imagePosition === 'right' ? 'pb-co-rev' : '', o.image_url ? '' : 'pb-co-noimg'].filter(Boolean).join(' ');
         return (
-          <article key={o.id} className={`pb-curoffer ${b.imagePosition === 'right' ? 'pb-curoffer-rev' : ''} ${o.image_url ? '' : 'pb-curoffer-noimg'}`}>
+          <article key={o.id} className={cls}>
             {o.image_url && (
-              <div className="pb-curoffer-img">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img {...imgAttrs(ctx, o.image_url, '(min-width: 900px) 45vw, 100vw')} alt={o.titre} decoding="async" />
+              <div className="pb-co-visual">
+                <div className="pb-co-img">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img {...imgAttrs(ctx, o.image_url, '(min-width: 900px) 42vw, 100vw')} alt={o.titre} decoding="async" />
+                </div>
+                <Seal ring={ring} id={o.id} />
               </div>
             )}
-            <div className="pb-curoffer-body">
-              {b.eyebrow && <span className="pb-eyebrow" {...f(ctx, 'eyebrow')}>{b.eyebrow}</span>}
-              <h2 className="pb-h pb-h2">{o.titre}</h2>
+
+            <div className={cardCls} style={cardStyle}>
+              {!o.image_url && <Seal ring={ring} id={o.id} />}
+              <div className="pb-co-top">
+                <span className="pb-co-eyebrow" {...f(ctx, 'eyebrow')}>{eyebrow}</span>
+                <span className={`pb-co-count ${jours <= 2 ? 'pb-co-count-hot' : ''}`}>
+                  {countdownLabel(jours)} · jusqu&apos;au {formatOfferPeriod(o.date_fin, o.date_fin).replace(/^le /, '').replace(/ \d{4}$/, '')}
+                </span>
+              </div>
+
+              <h2 className="pb-co-title">{o.titre}</h2>
+
               {o.description && (
-                <div className="pb-curoffer-desc rich-text" dangerouslySetInnerHTML={{ __html: offerDescriptionHtml(o.description) }} />
+                <div className="pb-co-desc rich-text" dangerouslySetInnerHTML={{ __html: offerDescriptionHtml(o.description) }} />
               )}
-              <p className="pb-curoffer-price">
-                <span>{formatOfferPrice(o.prix_chf)}</span>
-                {o.prix_normal_chf != null && o.prix_normal_chf > o.prix_chf && (
-                  <small>au lieu de <s>{formatOfferPrice(o.prix_normal_chf)}</s></small>
+
+              <div className="pb-co-deal">
+                <div className="pb-co-price" aria-label={`Prix de l'offre : ${formatOfferPrice(o.prix_chf)}`}>
+                  <span className="pb-co-cur" aria-hidden>CHF</span>
+                  <span className="pb-co-amount" aria-hidden>{amountOnly(o.prix_chf)}</span>
+                </div>
+                {saving != null && (
+                  <div className="pb-co-was">
+                    <span>au lieu de <s>{formatOfferPrice(o.prix_normal_chf)}</s></span>
+                    <strong>Vous économisez {formatOfferPrice(saving)}</strong>
+                  </div>
                 )}
-              </p>
-              <ul className="pb-curoffer-meta">
-                <li>Valable {formatOfferPeriod(o.date_debut, o.date_fin)}</li>
-                <li>{formatOfferDuration(o.duree_minutes)}</li>
-                {b.showPlaces !== false && o.places_restantes != null && (
-                  <li className="pb-curoffer-places">{placesLabel(o.places_restantes, o.places_max)}</li>
-                )}
-              </ul>
-              {b.showConditions !== false && o.conditions && <p className="pb-curoffer-cond">{o.conditions}</p>}
-              <div className="pb-btns"><Btn text={b.ctaText || 'Réserver cette offre'} url={url} ctx={ctx} field="ctaText" /></div>
+              </div>
+
+              <div className="pb-co-actions">
+                <a href={url} className="pb-co-cta">
+                  <span {...f(ctx, 'ctaText')}>{b.ctaText || 'Réserver cette offre'}</span>
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                </a>
+                <div className="pb-co-meta">
+                  <span>Valable {formatOfferPeriod(o.date_debut, o.date_fin)}</span>
+                  <span>{formatOfferDuration(o.duree_minutes)} de soin</span>
+                  {b.showPlaces !== false && o.places_restantes != null && (
+                    <span className="pb-co-places">{placesLabel(o.places_restantes, o.places_max)}</span>
+                  )}
+                </div>
+              </div>
+
+              {b.showConditions !== false && o.conditions && <div className="pb-co-cond">{o.conditions}</div>}
             </div>
           </article>
         );
       })}
+    </div>
+  );
+}
+
+/** Sceau rond, décoratif : texte circulaire qui tourne lentement, l'algue de la charte au centre. */
+function Seal({ ring, id }: { ring: string; id: string }) {
+  const pathId = `pbco-ring-${id}`;
+  return (
+    <div className="pb-co-seal" aria-hidden>
+      <svg className="pb-co-ring" viewBox="0 0 120 120">
+        <defs>
+          <path id={pathId} d="M60,60 m-45,0 a45,45 0 1,1 90,0 a45,45 0 1,1 -90,0" />
+        </defs>
+        <text>
+          <textPath href={`#${pathId}`} textLength="281" lengthAdjust="spacing">{ring}</textPath>
+        </text>
+      </svg>
+      <span className="pb-co-core">
+        <span className="pb-co-core-algue" />
+      </span>
     </div>
   );
 }
@@ -666,10 +760,13 @@ function SectionView({ section, editor, first, images, data, lcpId }: { section:
   const bg = section.background || 'transparent';
   const sel = editor?.selection;
   const selected = sel?.kind === 'section' && sel.sectionId === section.id;
+  // Section de l'offre du moment : l'effet lagon → marine couvre toute la largeur
+  // (il remplace le fond choisi) et le texte de la section passe en clair.
+  const offer = section.columns.some((c) => c.blocks.some((b) => b.type === 'current_offer'));
   const cls = [
     'pb-section',
     `pb-bg-${bg}`,
-    toneClass(bg, section.textTone),
+    offer ? 'pb-section-offer pb-tone-light' : toneClass(bg, section.textTone),
     `pb-pad-${section.paddingY || 'medium'}`,
     section.minHeight && section.minHeight !== 'auto' ? `pb-minh-${section.minHeight}` : '',
     section.animation && section.animation !== 'none' ? `pb-anim-${section.animation}` : '',
@@ -688,6 +785,9 @@ function SectionView({ section, editor, first, images, data, lcpId }: { section:
 
   return (
     <section className={cls} {...edAttrs} data-section data-density={section.paddingY}>
+      {/* Décor de la section offre : ondes et grande algue (les pseudo-éléments de la
+          section sont pris par la ligne guide de MotionLayer). */}
+      {offer && <div className="pb-offer-bg" aria-hidden />}
       {section.bgImage?.url && (
         <div className="pb-bgimg" aria-hidden>
           {/* eslint-disable-next-line @next/next/no-img-element */}

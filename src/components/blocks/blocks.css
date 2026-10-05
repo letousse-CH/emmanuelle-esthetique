@@ -281,34 +281,181 @@
 .pb-offer .pb-btn { margin-top: auto; align-self: flex-start; }
 .pb-foot { font-size: .85rem; color: var(--pb-fg-muted); margin-top: 1.25rem; }
 
-/* Offre du moment : visuel CARRÉ + texte, côte à côte au-delà de 900 px. Le carré
-   s'affiche pareil partout (site, réservation, caisse, admin) : rien n'est rogné. */
-.pb-curoffers { display: grid; gap: clamp(1.5rem, 4vw, 3rem); }
-.pb-curoffer { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(1.25rem, 3vw, 2.5rem); padding: clamp(1rem, 3vw, 2rem); background: var(--pb-card); border: 1px solid var(--pb-line); border-radius: var(--pb-radius); }
-@media (min-width: 900px) {
-  .pb-curoffer { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: center; }
-  .pb-curoffer-rev .pb-curoffer-img { order: 2; }
-  .pb-curoffer-noimg { grid-template-columns: minmax(0, 1fr); max-width: 46rem; }
+/* ── Offre du moment : « édition limitée » ───────────────────────────────────
+   L'effet couvre TOUTE la section, bord à bord (dégradé lagon → marine, ondes,
+   grande algue vectorielle) ; le contenu reste centré dans le conteneur. Il
+   remplace le fond choisi pour la section, qui passe en texte clair. Visuel
+   carré encadré posé PAR-DESSUS la carte crème, sceau tournant au coin bas.
+   La carte redéfinit --pb-fg / --pb-fg-muted / --pb-line : les règles « texte
+   clair sur fond sombre » plus bas reposent sur ces variables et la laissent
+   donc lisible. */
+.pb-section.pb-section-offer {
+  --pb-section-bg: var(--pb-primary);
+  background:
+    radial-gradient(70% 90% at 0% 0%, color-mix(in srgb, var(--pb-accent) 55%, transparent) 0%, transparent 60%),
+    radial-gradient(55% 75% at 100% 100%, color-mix(in srgb, var(--pb-accent) 26%, transparent) 0%, transparent 65%),
+    linear-gradient(135deg, color-mix(in srgb, var(--pb-accent) 40%, #0b3a44) 0%, var(--pb-primary) 70%);
 }
-.pb-curoffer-img { position: relative; aspect-ratio: 1 / 1; overflow: hidden; background: var(--pb-line); border-radius: var(--pb-radius); }
-.pb-curoffer-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.pb-curoffer-body { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; padding: clamp(.25rem, 1.5vw, 1rem); }
-.pb-curoffer-desc { color: var(--pb-fg-muted); font-size: 1.0625rem; line-height: 1.75; font-weight: 300; }
-.pb-curoffer-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .75rem; font-family: var(--font-serif); font-size: clamp(1.9rem, 3.6vw, 2.5rem); font-weight: 700; line-height: 1; color: var(--pb-primary); }
-.pb-tone-light .pb-curoffer-price { color: var(--pb-fg); }
-.pb-curoffer-price small { font-family: var(--font-sans); font-size: .95rem; font-weight: 400; color: var(--pb-fg-muted); }
-.pb-curoffer-meta { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
-.pb-curoffer-meta li { font-size: .85rem; color: var(--pb-fg); padding: .35rem .75rem; border: 1px solid var(--pb-line); border-radius: 999px; }
-.pb-curoffer-places { font-weight: 600; border-color: color-mix(in srgb, var(--pb-accent) 60%, transparent) !important; background: color-mix(in srgb, var(--pb-accent) 14%, transparent); }
-.pb-curoffer-cond { font-size: .75rem; line-height: 1.55; color: var(--pb-fg-muted); white-space: pre-line; }
-.pb-curoffer-body .pb-btns { margin-top: .25rem; }
-.pb-curoffer-empty { min-height: 7rem; padding: 1.25rem; text-align: center; }
-/* GlobalStyles impose la taille du corps de texte à tout `p` et `li` : on reprend la main ici. */
-[data-site-theme] .pb-page .pb-curoffer-desc { font-size: 1.0625rem; }
-[data-site-theme] .pb-page .pb-curoffer-meta li { font-size: .85rem; line-height: 1.3; }
-[data-site-theme] .pb-page .pb-curoffer-cond { font-size: .75rem; line-height: 1.55; }
-[data-site-theme] .pb-page .pb-curoffer-price { font-size: clamp(1.9rem, 3.6vw, 2.5rem); line-height: 1; }
-[data-site-theme] .pb-page .pb-curoffer-price small { font-size: .95rem; }
+.pb-offer-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+/* Ondes en filigrane (même tracé que la ligne guide du site) */
+.pb-offer-bg::before {
+  content: ""; position: absolute; inset: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 48'%3E%3Cpath d='M0 24C30 6 90 6 120 24S210 42 240 24' fill='none' stroke='%23fff' stroke-width='1'/%3E%3C/svg%3E") 0 0 / 240px 48px repeat;
+  opacity: .08;
+  -webkit-mask-image: linear-gradient(105deg, transparent 12%, #000 72%); mask-image: linear-gradient(105deg, transparent 12%, #000 72%);
+}
+/* Grande algue, en SVG pour rester nette à toutes les tailles */
+.pb-offer-bg::after {
+  content: ""; position: absolute;
+  right: max(-4rem, -4vw); bottom: -12%; width: min(62vw, 38rem); aspect-ratio: 1;
+  background: url("/images/algue.svg") center / contain no-repeat;
+  opacity: .15; transform: rotate(-14deg);
+}
+.pb-cos { display: grid; gap: clamp(2.5rem, 6vw, 5rem); max-width: 78rem; margin-inline: auto; }
+.pb-co {
+  --co-lagon: var(--pb-accent);
+  --co-lagon-ink: color-mix(in srgb, var(--pb-accent) 55%, #0b3a44);
+  --co-cream: var(--pb-warm);
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1fr); align-items: center;
+}
+
+/* Visuel carré, encadré d'un filet */
+.pb-co-visual { position: relative; z-index: 1; }
+.pb-co-img { position: relative; aspect-ratio: 1 / 1; overflow: hidden; background: rgba(255, 255, 255, .08); outline: 1px solid rgba(255, 255, 255, .28); outline-offset: clamp(6px, 1vw, 12px); box-shadow: 0 34px 60px -30px rgba(0, 0, 0, .6); }
+.pb-co-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: scale 1.2s var(--pb-ease-soft, ease); }
+.pb-page:not(.pb-editing) .pb-co:hover .pb-co-img img { scale: 1.04; }
+
+/* Sceau : texte circulaire + économie */
+/* En bas de l'image, côté opposé à la carte, centré sur le coin : il déborde dans la
+   marge de l'écrin et laisse le visuel dégagé. */
+.pb-co-seal {
+  position: absolute; z-index: 3; bottom: 0; left: 0; transform: translate(-45%, 45%);
+  width: clamp(6.25rem, 10vw, 8.75rem); aspect-ratio: 1; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--co-cream); color: var(--pb-primary);
+  box-shadow: 0 18px 36px -16px rgba(4, 20, 32, .65), inset 0 0 0 4px var(--co-cream), inset 0 0 0 5px color-mix(in srgb, var(--co-lagon) 55%, transparent);
+}
+.pb-co-rev .pb-co-seal { left: auto; right: 0; transform: translate(45%, 45%); }
+.pb-co-ring { position: absolute; inset: 0; width: 100%; height: 100%; animation: pb-co-spin 40s linear infinite; }
+.pb-co-ring text { font-family: var(--font-sans); font-size: 9.5px; font-weight: 700; letter-spacing: .06em; fill: var(--co-lagon-ink); }
+.pb-co-core { position: relative; display: grid; place-items: center; width: 56%; aspect-ratio: 1; border-radius: 50%; border: 1px dashed color-mix(in srgb, var(--pb-primary) 25%, transparent); }
+/* L'algue de la charte, teintée bleu clair (l'image sert de masque). */
+.pb-co-core-algue {
+  width: 74%; aspect-ratio: 1; background-color: var(--co-seal-algue, #7cc8dd);
+  -webkit-mask: url("/images/algue.svg") center / contain no-repeat; mask: url("/images/algue.svg") center / contain no-repeat;
+}
+@keyframes pb-co-spin { to { transform: rotate(360deg); } }
+
+/* Carte crème */
+.pb-co-card {
+  --pb-fg: var(--pb-primary);
+  --pb-fg-muted: color-mix(in srgb, var(--pb-primary) 72%, #fff);
+  --pb-line: color-mix(in srgb, var(--pb-primary) 14%, transparent);
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem;
+  margin: -2.75rem clamp(.5rem, 3vw, 1.5rem) 0;
+  padding: clamp(1.5rem, 3.6vw, 3.25rem);
+  background: var(--co-card, var(--co-cream)); color: var(--pb-fg);
+  border-top: 3px solid var(--co-lagon);
+  border-radius: var(--pb-radius);
+  box-shadow: 0 36px 70px -36px rgba(4, 20, 32, .7);
+}
+.pb-co-noimg .pb-co-card { margin: 0 auto; max-width: 48rem; width: 100%; }
+.pb-co-noimg .pb-co-card .pb-co-seal { top: -1.5rem; bottom: auto; left: auto; right: -1rem; transform: none; }
+@media (min-width: 900px) {
+  /* De l'air de chaque côté : le sceau déborde du visuel sans être rogné par la section. */
+  .pb-co { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); padding-inline: clamp(2rem, 4vw, 4rem); }
+  /* Le visuel passe PAR-DESSUS la carte : il reste entier et lisible, la carte glisse
+     dessous et rallonge sa marge intérieure d'autant, son texte n'est jamais masqué. */
+  .pb-co-visual { z-index: 3; }
+  .pb-co-card { margin: 0 0 0 -3.5rem; padding-left: calc(clamp(1.5rem, 3.6vw, 3.25rem) + 3.5rem); }
+  .pb-co-rev { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); }
+  .pb-co-rev .pb-co-visual { order: 2; }
+  .pb-co-rev .pb-co-card { margin: 0 -3.5rem 0 0; padding-left: clamp(1.5rem, 3.6vw, 3.25rem); padding-right: calc(clamp(1.5rem, 3.6vw, 3.25rem) + 3.5rem); }
+  .pb-co-noimg .pb-co-card { padding: clamp(1.5rem, 3.6vw, 3.25rem); }
+  .pb-co-noimg { grid-template-columns: minmax(0, 1fr); }
+  .pb-co-noimg .pb-co-card { margin: 0 auto; }
+}
+
+.pb-co-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; width: 100%; }
+.pb-co-eyebrow { display: inline-flex; align-items: center; gap: .55rem; font-size: .7rem; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; color: var(--co-lagon-ink); }
+.pb-co-eyebrow::before { content: ""; width: 1.35rem; height: 1.35rem; background: url("/images/algue.webp") center / contain no-repeat; }
+.pb-co-count { display: inline-flex; align-items: center; gap: .5rem; padding: .4rem .8rem; border-radius: 999px; font-size: .78rem; font-weight: 600; color: var(--pb-primary); background: color-mix(in srgb, var(--co-lagon) 20%, #fff); }
+.pb-co-count::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--co-lagon-ink); box-shadow: 0 0 0 0 color-mix(in srgb, var(--co-lagon) 70%, transparent); animation: pb-co-pulse 2.4s ease-out infinite; }
+.pb-co-count-hot { background: var(--pb-primary); color: #fff; }
+.pb-co-count-hot::before { background: var(--co-lagon); }
+@keyframes pb-co-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--co-lagon) 70%, transparent); } 70%, 100% { box-shadow: 0 0 0 .55rem transparent; } }
+
+.pb-co-title { font-family: var(--font-serif); font-weight: 700; color: var(--pb-fg); letter-spacing: -.02em; text-wrap: balance; }
+.pb-co-desc { max-width: 40rem; color: var(--pb-fg-muted); font-size: 1rem; }
+.pb-co-desc h3 { font-family: var(--font-serif); color: var(--pb-fg); font-weight: 600; text-wrap: balance; }
+.pb-co-desc > h3:first-child + * { margin-top: .9em; }
+
+.pb-co-deal { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1.5rem; width: 100%; padding-top: 1.25rem; border-top: 1px solid var(--pb-line); }
+.pb-co-price { display: flex; align-items: flex-start; gap: .35rem; color: var(--pb-primary); line-height: .9; }
+.pb-co-cur { margin-top: .45em; font-size: .95rem; font-weight: 700; letter-spacing: .1em; }
+.pb-co-amount { font-family: var(--font-serif); font-weight: 700; font-size: clamp(3rem, 6.5vw, 4.5rem); letter-spacing: -.035em; }
+.pb-co-was { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; padding-bottom: .35rem; font-size: .9rem; color: var(--pb-fg-muted); }
+.pb-co-was strong { padding: .25rem .6rem; font-size: .82rem; font-weight: 700; color: var(--pb-primary); background: color-mix(in srgb, var(--co-lagon) 24%, transparent); }
+
+.pb-co-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem; width: 100%; }
+.pb-co-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: .75rem;
+  padding: 1.05rem 1.75rem; background: var(--pb-primary); color: #fff; text-decoration: none;
+  font-size: .95rem; font-weight: 600; letter-spacing: .02em; border-radius: 2px;
+  box-shadow: 0 16px 30px -18px color-mix(in srgb, var(--pb-primary) 90%, transparent);
+  transition: background-color .25s, transform .25s, box-shadow .25s;
+}
+.pb-co-cta svg { transition: transform .25s; }
+.pb-co-cta:hover { background: color-mix(in srgb, var(--pb-primary) 78%, var(--co-lagon)); transform: translateY(-2px); }
+.pb-co-cta:hover svg { transform: translateX(4px); }
+.pb-co-cta:focus-visible { outline: 2px solid var(--co-lagon-ink); outline-offset: 3px; }
+.pb-co-meta { display: flex; flex-wrap: wrap; gap: .35rem 1rem; font-size: .82rem; color: var(--pb-fg-muted); }
+.pb-co-meta span + span::before { content: "·"; margin-right: 1rem; opacity: .6; }
+.pb-co-places { font-weight: 700; color: var(--pb-primary); }
+.pb-co-cond { font-size: .75rem; line-height: 1.55; color: var(--pb-fg-muted); white-space: pre-line; }
+.pb-co-empty { min-height: 7rem; padding: 1.25rem; text-align: center; }
+
+@media (max-width: 899px) {
+  /* Téléphone : marges resserrées, la carte garde toute la largeur utile pour le texte. */
+  .pb-co { padding: 0 0 .5rem; }
+  .pb-co-card { margin: 4.25rem .25rem 0; padding: 1.4rem 1.15rem 1.5rem; gap: 1rem; }
+  .pb-co-actions { flex-direction: column; align-items: stretch; }
+  .pb-co-cta { width: 100%; white-space: nowrap; }
+  .pb-co-meta { flex-direction: column; gap: .2rem; }
+  .pb-co-meta span + span::before { content: none; }
+  .pb-co-seal, .pb-co-rev .pb-co-seal { left: auto; right: .5rem; transform: translateY(65%); }
+  .pb-co-noimg .pb-co-card { margin-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pb-co-ring, .pb-co-count::before { animation: none; }
+  .pb-co-img img, .pb-co-cta, .pb-co-cta svg { transition: none; }
+}
+
+/* Carte sur fond foncé (couleur choisie dans l'éditeur) : tout s'inverse. */
+.pb-co-card-dark {
+  --pb-fg: #fff;
+  --pb-fg-muted: rgba(255, 255, 255, .84);
+  --pb-line: rgba(255, 255, 255, .22);
+  --co-lagon-ink: color-mix(in srgb, var(--pb-accent) 70%, #fff);
+}
+.pb-co-card-dark .pb-co-count { background: rgba(255, 255, 255, .12); color: #fff; }
+.pb-co-card-dark .pb-co-count-hot { background: #fff; color: var(--pb-primary); }
+.pb-co-card-dark .pb-co-price, .pb-co-card-dark .pb-co-places { color: #fff; }
+.pb-co-card-dark .pb-co-was strong { color: #fff; background: color-mix(in srgb, var(--pb-accent) 34%, transparent); }
+.pb-co-card-dark .pb-co-cta { background: #fff; color: var(--pb-primary); box-shadow: 0 16px 30px -18px rgba(0, 0, 0, .7); }
+.pb-co-card-dark .pb-co-cta:hover { background: color-mix(in srgb, #fff 82%, var(--pb-accent)); }
+.pb-co-card-dark .pb-co-cta:focus-visible { outline-color: #fff; }
+
+/* GlobalStyles impose taille et couleur des titres, `p` et `li` : on reprend la main ici. */
+[data-site-theme] .pb-page .pb-co-title { font-size: clamp(2.1rem, 4.4vw, 3.4rem); }
+[data-site-theme] .pb-page .pb-co-desc { font-size: 1rem; }
+[data-site-theme] .pb-page .pb-co-desc h3 { font-size: clamp(1.15rem, 1.8vw, 1.35rem); line-height: 1.35 !important; }
+[data-site-theme] .pb-page .pb-co-cta, [data-site-theme] .pb-page .pb-co-cta:hover { color: #fff; }
+[data-site-theme] .pb-page .pb-co-card-dark .pb-co-cta, [data-site-theme] .pb-page .pb-co-card-dark .pb-co-cta:hover { color: var(--pb-primary); }
+[data-site-theme] .pb-co-card-dark :is(h1, h2, h3, h4) { color: #fff !important; }
+[data-site-theme] .pb-co-card-dark :is(p, li) { color: var(--pb-fg-muted) !important; }
 
 .pb-prices { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
 .pb-price-row { padding: 1rem 0; border-bottom: 1px solid var(--pb-line); }

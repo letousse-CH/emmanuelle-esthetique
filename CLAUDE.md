@@ -181,6 +181,16 @@ paragraphes), tarif (+ prix habituel barré), durée, conditions, période, nomb
   supprime pas (clé étrangère `RESTRICT` côté facture). « Relancer » crée une
   nouvelle offre avec de nouvelles dates : chaque campagne garde ses compteurs.
   Historique rangé par année (celle du début).
+- Rendu « édition limitée » (classes `pb-co-*`, blocks.css) : la section qui
+  contient le bloc reçoit `pb-section-offer` (SectionView) — dégradé lagon → marine
+  bord à bord, ondes et grande algue `public/images/algue.svg` (vectorielle, nette à
+  toute taille) dans `.pb-offer-bg` ; ce décor remplace le fond choisi pour la
+  section. Contenu centré. Visuel carré encadré posé PAR-DESSUS la carte (jamais masqué),
+  sceau tournant décoratif (algue bleu clair, aucun montant) au coin bas du visuel,
+  compte à rebours. Fond de la carte réglable dans le bloc (champ `color` du page
+  builder : pastilles de la charte + nuancier) ; sous une luminance de 0.22 le
+  texte passe en blanc. La carte redéfinit `--pb-fg` / `--pb-fg-muted` pour rester
+  lisible dans une section sombre.
 - Le bloc ne contient que son cadre (surtitre, bouton, options) : tout le reste
   vient de la base, lue par `BlockPage` à chaque régénération ISR. Sans offre en
   cours, une section qui ne contient que ce bloc n'est pas rendue du tout.
