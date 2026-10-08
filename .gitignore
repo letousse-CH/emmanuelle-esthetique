@@ -20,3 +20,6 @@ backups/
 
 # Généré par Next à chaque dev/build (son contenu dépend du dossier de build : .next ou .next-drafts)
 next-env.d.ts
+
+# Documents générés depuis la base (tarifs imprimables, extractions)
+/exports/
