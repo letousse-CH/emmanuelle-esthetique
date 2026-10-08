@@ -65,7 +65,10 @@ export async function saveClientCredentials(clientId: string, clientSecret: stri
   if (!/\.apps\.googleusercontent\.com$/.test(clientId.trim())) {
     throw new DriveError("L'ID client doit se terminer par .apps.googleusercontent.com.", 400);
   }
-  if (clientSecret.trim().length < 10) throw new DriveError('Code secret client invalide.', 400);
+  // Les codes secrets actuels font 35 caractères et commencent par GOCSPX-.
+  if (clientSecret.trim().length < 20) {
+    throw new DriveError('Code secret client trop court : copiez celui qui commence par GOCSPX- (Clients → votre client → Code secret).', 400);
+  }
   await storeSecret('google_client_id', clientId.trim());
   await storeSecret('google_client_secret', clientSecret.trim());
 }
@@ -125,6 +128,12 @@ export async function completeAuth(code: string, state: string, origin: string):
     }),
   });
   const json = (await res.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string };
+  if (json.error === 'invalid_client') {
+    throw new DriveError('Google refuse l’ID client ou le code secret : recopiez-les depuis Google Cloud (le code secret commence par GOCSPX-).', 400);
+  }
+  if (json.error === 'redirect_uri_mismatch') {
+    throw new DriveError(`URI de redirection non autorisée : ajoutez ${redirectUri(origin)} au client OAuth dans Google Cloud.`, 400);
+  }
   if (!res.ok || !json.access_token) throw new DriveError(`Google a refusé la connexion (${json.error ?? res.status}).`, 400);
   if (!json.refresh_token) throw new DriveError('Google n’a pas fourni d’accès durable : retirez l’accès de l’app dans votre compte Google puis reconnectez-la.', 400);
 
@@ -238,6 +247,13 @@ export async function driveStatus(): Promise<DriveStatus> {
   const base: DriveStatus = { configured: !!creds, connected: !!creds && !!refresh, account, folderUrl: null, sharedWith: [] };
   if (!base.connected) return base;
   try {
+    // Connexion interrompue après l'accord Google (API Drive pas encore
+    // activée…) : le compte et le dossier se complètent ici, sans reconnexion.
+    if (!base.account) {
+      const about = await drive<{ user?: { emailAddress?: string } }>('about?fields=user(emailAddress)');
+      base.account = about.user?.emailAddress ?? 'compte Google';
+      await storeSecret(KEYS.account, base.account);
+    }
     const folderId = await rootFolderId();
     const perms = await drive<{ permissions?: { id: string; emailAddress?: string; displayName?: string; role: string }[] }>(
       `files/${folderId}/permissions?fields=permissions(id,emailAddress,displayName,role)`,

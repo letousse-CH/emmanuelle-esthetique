@@ -31,6 +31,7 @@ export default function DrivePanel({ onNotice }: { onNotice: (message: string) =
   const [clientSecret, setClientSecret] = useState('');
   const [email, setEmail] = useState('');
   const [origin, setOrigin] = useState('');
+  const [editCredentials, setEditCredentials] = useState(false);
 
   const run = useCallback(async (fn: () => Promise<DriveStatus | void>, done?: string) => {
     setBusy(true);
@@ -48,7 +49,8 @@ export default function DrivePanel({ onNotice }: { onNotice: (message: string) =
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    // Retour de Google après la connexion.
+    // Retour de Google après la connexion. L'état est chargé à part : passer
+    // par `run` effacerait le message d'erreur qui vient d'être posé.
     const params = new URLSearchParams(window.location.search);
     const drive = params.get('drive');
     if (drive) {
@@ -57,8 +59,10 @@ export default function DrivePanel({ onNotice }: { onNotice: (message: string) =
       setOpen(drive !== 'ok');
       window.history.replaceState(null, '', window.location.pathname);
     }
-    run(() => call('GET', '/api/admin/google-drive'));
-  }, [run, onNotice]);
+    call('GET', '/api/admin/google-drive')
+      .then(setStatus)
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [onNotice]);
 
   if (!status) return null;
   const ready = status.connected && !status.error;
@@ -108,7 +112,7 @@ export default function DrivePanel({ onNotice }: { onNotice: (message: string) =
         <div className="border-t border-stone-100 px-4 py-4 space-y-4">
           {(error || status.error) && <Callout tone="danger">{error || status.error}</Callout>}
 
-          {!status.configured && (
+          {(!status.configured || editCredentials) && (
             <div className="space-y-3">
               <ol className="list-decimal pl-5 space-y-1 text-stone-700">
                 <li>
@@ -140,14 +144,19 @@ export default function DrivePanel({ onNotice }: { onNotice: (message: string) =
                 variant="primary"
                 loading={busy}
                 disabled={!clientId.trim() || !clientSecret.trim()}
-                onClick={() => run(() => call('POST', '/api/admin/google-drive', { clientId, clientSecret }))}
+                onClick={() => run(async () => {
+                  const next = await call('POST', '/api/admin/google-drive', { clientId, clientSecret });
+                  setEditCredentials(false);
+                  setClientSecret('');
+                  return next;
+                })}
               >
                 Enregistrer les identifiants
               </Button>
             </div>
           )}
 
-          {status.configured && !status.connected && (
+          {status.configured && !status.connected && !editCredentials && (
             <div className="space-y-2">
               <p className="text-stone-700">
                 Connectez le compte Google qui recevra le dossier « Justificatifs ». L’app ne verra que les fichiers qu’elle y dépose, jamais le reste du Drive.
@@ -162,6 +171,9 @@ export default function DrivePanel({ onNotice }: { onNotice: (message: string) =
                 })}
               >
                 Connecter Google Drive
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditCredentials(true)}>
+                Changer l’ID client ou le code secret
               </Button>
             </div>
           )}
