@@ -62,6 +62,26 @@ export interface ExpenseCategory {
   updated_at?: string;
 }
 
+/** Plan comptable par défaut, repli quand la table `expense_categories` est vide ou absente. */
+export const DEFAULT_SWISS_CATEGORIES: ExpenseCategory[] = [
+  { id: 'cat-4000', code: '4000', nom: 'Achats marchandises boutique (revente)', description: 'Produits cosmétiques destinés à la revente (PHY.V)', groupe: 'marchandises_matieres', ordre: 10, deductible_fiscal: true },
+  { id: 'cat-4200', code: '4200', nom: 'Achats produits cabine & matières premières', description: 'Produits professionnels grands formats pour soins (PHY.C)', groupe: 'marchandises_matieres', ordre: 20, deductible_fiscal: true },
+  { id: 'cat-4400', code: '4400', nom: 'Consommables & fournitures de soin', description: 'Draps d\'examen, bandes, papier parathermique, sacs (PHY.A)', groupe: 'charges_exploitation', ordre: 30, deductible_fiscal: true },
+  { id: 'cat-5000', code: '5000', nom: 'Cotisations sociales AVS / AI / APG', description: 'Cotisations pour indépendants (Caisse de compensation vaudoise)', groupe: 'personnel_avs', ordre: 40, deductible_fiscal: true },
+  { id: 'cat-5100', code: '5100', nom: 'Prélèvements privés de l\'exploitante', description: 'Rémunération / retraits personnels de l\'indépendante (compte privé)', groupe: 'prelevements_prives', ordre: 50, deductible_fiscal: false },
+  { id: 'cat-6000', code: '6000', nom: 'Loyer & quote-part local professionnel', description: 'Loyer ou quote-part professionnelle du domicile à Palézieux', groupe: 'charges_exploitation', ordre: 60, deductible_fiscal: true },
+  { id: 'cat-6100', code: '6100', nom: 'Petit matériel, linge & entretien', description: 'Ustensiles, petits appareils, serviettes et linge de cabine, réparations. Un appareil coûteux (au-delà d\'environ CHF 1\'000) s\'amortit : voir avec la fiduciaire.', groupe: 'charges_exploitation', ordre: 62, deductible_fiscal: true },
+  { id: 'cat-6200', code: '6200', nom: 'Assurances professionnelles', description: 'RC professionnelle institut, perte de gain maladie', groupe: 'charges_exploitation', ordre: 70, deductible_fiscal: true },
+  { id: 'cat-6210', code: '6210', nom: 'Frais de déplacement & véhicule', description: 'Carburant, parking, transports publics, péages pour les trajets professionnels (fournisseur, formation, banque, poste).', groupe: 'charges_exploitation', ordre: 72, deductible_fiscal: true },
+  { id: 'cat-6500', code: '6500', nom: 'Marketing, publicité & réseaux sociaux', description: 'Instagram, Meta Ads, Google Ads, flyers, cartes', groupe: 'charges_exploitation', ordre: 80, deductible_fiscal: true },
+  { id: 'cat-6570', code: '6570', nom: 'Informatique, logiciels & télécoms', description: 'Site internet, logiciel de caisse, mobile, fibre', groupe: 'charges_exploitation', ordre: 90, deductible_fiscal: true },
+  { id: 'cat-6580', code: '6580', nom: 'Formation continue & documentation', description: 'Formations, salons professionnels, livres et abonnements métier.', groupe: 'charges_exploitation', ordre: 92, deductible_fiscal: true },
+  { id: 'cat-6640', code: '6640', nom: 'Frais de représentation', description: 'Repas d\'affaires, café, thé et boissons offerts aux clientes, petits cadeaux clientèle. Noter le motif et les personnes concernées.', groupe: 'charges_exploitation', ordre: 96, deductible_fiscal: true },
+  { id: 'cat-6800', code: '6800', nom: 'Frais bancaires & commissions d\'encaissement', description: 'Commissions TWINT, cartes bancaires, tenue de compte', groupe: 'charges_exploitation', ordre: 100, deductible_fiscal: true },
+  { id: 'cat-6900', code: '6900', nom: 'Électricité, eau & blanchissage', description: 'Quote-part énergie, nettoyage des serviettes de soin', groupe: 'charges_exploitation', ordre: 110, deductible_fiscal: true },
+  { id: 'cat-6990', code: '6990', nom: 'Autres charges d\'exploitation', description: 'Frais postaux, papeterie, entretien divers', groupe: 'charges_exploitation', ordre: 120, deductible_fiscal: true },
+];
+
 export type ExpenseStatus = 'a_payer' | 'payee' | 'annulee';
 
 export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, { label: string; color: string }> = {
@@ -120,10 +140,30 @@ export interface Expense {
   notes: string | null;
   document_url: string | null;
   is_stock_invoice: boolean;
+  /** Absents des dépenses saisies avant la migration 20261008. */
+  type_piece?: ExpenseDocumentType;
+  fournisseur_adresse?: string | null;
+  /** N° IDE / TVA du fournisseur (CHE-123.456.789 TVA). */
+  fournisseur_ide?: string | null;
+  tva_details?: ExpenseTvaLine[];
+  /** Chemin de la pièce dans le coffre privé `justificatifs` (Supabase Storage). */
+  justificatif_path?: string | null;
+  /** Lecture brute de l'IA, gardée pour la traçabilité. */
+  extraction_ia?: unknown;
   created_at: string;
   updated_at: string;
   category?: ExpenseCategory | null;
   items?: ExpenseItem[];
+}
+
+export type ExpenseDocumentType = 'facture' | 'ticket' | 'autre';
+
+/** TVA d'une pièce, taux par taux : base de l'impôt préalable le jour de l'assujettissement. */
+export interface ExpenseTvaLine {
+  taux: number;
+  montant_ht: number;
+  montant_tva: number;
+  montant_ttc: number;
 }
 
 export interface ServiceSupply {

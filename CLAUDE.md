@@ -362,6 +362,34 @@ et « Marge » ne sont renseignées que sur les lignes de marchandise ; la marge
 n'entre pas dans le chiffre d'affaires. En modifiant l'export, vérifier que les
 lignes de synthèse gardent le bon nombre de colonnes — elles sont positionnelles.
 
+## Dépenses : ticket de caisse photographié (2026-10-08)
+
+`/admin/caisse/depenses` → « Photographier un ticket » (photo ou PDF). Migration
+`20261008_depenses_tickets_justificatifs.sql`, **après**
+`20260927_finances_depenses_cabine_avs.sql` — appliquées toutes deux en
+production le 2026-10-08. Avant cette date, le module Dépenses écrivait dans le
+navigateur seulement (`localStorage`) ; `listExpenses` n'affiche plus ces
+anciennes saisies locales dès que la base contient une dépense.
+
+- L'IA (`services/receiptScan.ts`, route `/api/admin/expenses/scan`, mode rapide)
+  **lit seulement** : fournisseur, adresse, n° IDE, n° de pièce, date, TVA taux par
+  taux, mode de paiement, articles, compte proposé. Rien n'est écrit avant que
+  l'exploitante ait relu le formulaire (`TicketScanModal`).
+- Règles pures et testées dans `src/types/receipts.ts`
+  (`npx tsx scripts/test-receipts.ts`) : montants, dates, chiffre de contrôle IDE
+  (eCH-0097), ventilation qui tombe juste, alertes.
+- **Un ticket ventilé = une dépense par compte**, toutes avec le même
+  `justificatif_path`. Les rapports gardent leur règle « une dépense = un compte ».
+  Ce qui reste du total est la part privée : **non comptabilisée** (mentionnée
+  dans la remarque de la première ligne).
+- La photo (JPEG réduit à 2200 px) va dans le bucket Supabase **privé**
+  `justificatifs`, lu par lien signé de 5 min. Pas de policy UPDATE/DELETE : une
+  pièce n'est jamais réécrite ni effacée (CO art. 958f). Aucun repli
+  `localStorage` pour les tickets : une pièce qui n'arrive pas en base doit le dire.
+- Export fiduciaire (CSV `;` + BOM, `utils/expensesExport.ts`) : une ligne par
+  dépense avec adresse, IDE, compte, TVA 8.1 / 2.6 / 3.8, justificatif, puis un
+  total par compte (lignes de synthèse positionnelles, à la largeur de l'en-tête).
+
 ## CRM : fiche cliente, suivi, promotions
 
 Migration : `supabase/migrations/20260803_crm_clients_promotions.sql`, après

@@ -5,7 +5,11 @@ import {
   Receipt, Plus, UploadCloud, FileText, CheckCircle2, Clock, Trash2,
   Sparkles, Package, FlaskConical, AlertCircle, ArrowRight, ShieldCheck,
   Building, Megaphone, Smartphone, HelpCircle, Eye, RefreshCw,
+  Camera, Paperclip, Download,
 } from 'lucide-react';
+import TicketScanModal from './TicketScanModal';
+import { openJustificatif } from '../../../../services/receipts';
+import { downloadExpensesCsv } from '../../../../utils/expensesExport';
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
 import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import {
@@ -53,6 +57,9 @@ export default function DepensesClient() {
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [viewExpense, setViewExpense] = useState<Expense | null>(null);
   const [importProcessing, setImportProcessing] = useState(false);
+  // Ticket photographié en cours de lecture / relecture.
+  const [ticketFile, setTicketFile] = useState<File | null>(null);
+  const [exportYear, setExportYear] = useState(() => new Date().getFullYear());
 
   // Formulaire importation facture
   const [parsedPreview, setParsedPreview] = useState<{
@@ -255,6 +262,27 @@ export default function DepensesClient() {
     }
   };
 
+  const handleTicketPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Remis à zéro pour pouvoir reprendre la même photo après une annulation.
+    e.target.value = '';
+    if (file) setTicketFile(file);
+  };
+
+  const handleOpenJustificatif = async (path: string) => {
+    try {
+      await openJustificatif(path);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const exportYears = useMemo(() => {
+    const years = new Set(expenses.map(e => Number(e.date_facture.slice(0, 4))).filter(Boolean));
+    years.add(new Date().getFullYear());
+    return [...years].sort((a, b) => b - a);
+  }, [expenses]);
+
   const handleTogglePaid = async (exp: Expense) => {
     const nextStatus = exp.statut === 'payee' ? 'a_payer' : 'payee';
     await updateExpense(exp.id, {
@@ -331,9 +359,20 @@ export default function DepensesClient() {
 
       <PageHeader
         title="Factures & Dépenses"
-        description="Téléversez vos bons de commande et factures d'exploitation (Coskyn Phytomer, assurances, loyer, marketing). Les articles se ventilent automatiquement dans votre stock boutique ou cabine."
+        description="Photographiez un ticket de caisse : l'IA lit le fournisseur, le montant et la TVA, propose le compte, et la photo est archivée avec la dépense. Les bons de commande Coskyn se ventilent dans le stock boutique ou cabine."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={handleTicketPicked}
+              />
+              <span className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13.5px] font-medium hover:bg-accent-hover transition-colors shadow-xs">
+                <Camera size={16} /> Photographier un ticket
+              </span>
+            </label>
             <Button
               variant="secondary"
               icon={Sparkles}
@@ -427,13 +466,31 @@ export default function DepensesClient() {
           ))}
         </div>
 
-        <input
-          type="search"
-          placeholder="Rechercher fournisseur, n°..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="w-full sm:w-64 px-3 py-1.5 text-xs rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-accent"
-        />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <input
+            type="search"
+            placeholder="Rechercher fournisseur, n°..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="flex-1 sm:w-56 px-3 py-1.5 text-xs rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          <select
+            value={exportYear}
+            onChange={e => setExportYear(Number(e.target.value))}
+            aria-label="Année à exporter"
+            className="px-2 py-1.5 text-xs rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            {exportYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={() => downloadExpensesCsv(expenses, exportYear)}
+            title="Export CSV pour la fiduciaire : fournisseur, adresse, n° IDE, compte, TVA par taux, justificatif"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-stone-100 text-stone-700 hover:bg-stone-200 whitespace-nowrap cursor-pointer"
+          >
+            <Download size={13} /> Export fiduciaire
+          </button>
+        </div>
       </div>
 
       {/* Liste des factures */}
@@ -483,7 +540,15 @@ export default function DepensesClient() {
                               Stock lié
                             </span>
                           )}
+                          {exp.type_piece === 'ticket' && (
+                            <span className="text-[10.5px] px-1.5 py-0.5 rounded-sm font-normal bg-stone-100 text-stone-700">
+                              Ticket
+                            </span>
+                          )}
                         </div>
+                        {exp.fournisseur_adresse && (
+                          <div className="text-[11.5px] text-stone-500 truncate max-w-[260px]">{exp.fournisseur_adresse}</div>
+                        )}
                         <div className="text-[11.5px] text-stone-500">
                           {exp.numero_facture ? `Facture n° ${exp.numero_facture}` : 'Sans n°'}
                           {exp.items && exp.items.length > 0 && ` · ${exp.items.length} références`}
@@ -540,6 +605,15 @@ export default function DepensesClient() {
                       </td>
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
+                          {exp.justificatif_path && (
+                            <button
+                              onClick={() => handleOpenJustificatif(exp.justificatif_path!)}
+                              title="Voir le justificatif archivé"
+                              className="p-1.5 rounded-lg text-stone-600 hover:text-stone-900 hover:bg-stone-100 cursor-pointer"
+                            >
+                              <Paperclip size={15} />
+                            </button>
+                          )}
                           {exp.items && exp.items.length > 0 && (
                             <button
                               onClick={() => setViewExpense(exp)}
@@ -954,6 +1028,19 @@ export default function DepensesClient() {
             </div>
           </div>
         </div>
+      )}
+
+      {ticketFile && (
+        <TicketScanModal
+          file={ticketFile}
+          categories={categories}
+          onClose={() => setTicketFile(null)}
+          onSaved={async (message) => {
+            setTicketFile(null);
+            setNotice(message);
+            await loadData();
+          }}
+        />
       )}
 
       {/* Modale de saisie manuelle d'une charge d'exploitation */}

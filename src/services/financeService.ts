@@ -12,6 +12,7 @@ import {
   ServiceSupply,
   ServiceSupplyCost,
   computeAvsIndependant,
+  DEFAULT_SWISS_CATEGORIES,
 } from '../types/finance';
 import { Product, Service, Transaction, TransactionItem } from '../types/caisse';
 import { createProduct, listProducts, stockMovement, updateProduct } from './caisse';
@@ -86,20 +87,8 @@ export function getInvoiceVentilation(exp: Expense): InvoiceVentilation {
 
 // ── Catégories de dépenses ──────────────────────────────────────────────────
 
-export const DEFAULT_SWISS_CATEGORIES: ExpenseCategory[] = [
-  { id: 'cat-4000', code: '4000', nom: 'Achats marchandises boutique (revente)', description: 'Produits cosmétiques destinés à la revente (PHY.V)', groupe: 'marchandises_matieres', ordre: 10, deductible_fiscal: true },
-  { id: 'cat-4200', code: '4200', nom: 'Achats produits cabine & matières premières', description: 'Produits professionnels grands formats pour soins (PHY.C)', groupe: 'marchandises_matieres', ordre: 20, deductible_fiscal: true },
-  { id: 'cat-4400', code: '4400', nom: 'Consommables & fournitures de soin', description: 'Draps d\'examen, bandes, papier parathermique, sacs (PHY.A)', groupe: 'charges_exploitation', ordre: 30, deductible_fiscal: true },
-  { id: 'cat-5000', code: '5000', nom: 'Cotisations sociales AVS / AI / APG', description: 'Cotisations pour indépendants (Caisse de compensation vaudoise)', groupe: 'personnel_avs', ordre: 40, deductible_fiscal: true },
-  { id: 'cat-5100', code: '5100', nom: 'Prélèvements privés de l\'exploitante', description: 'Rémunération / retraits personnels de l\'indépendante (compte privé)', groupe: 'prelevements_prives', ordre: 50, deductible_fiscal: false },
-  { id: 'cat-6000', code: '6000', nom: 'Loyer & quote-part local professionnel', description: 'Loyer ou quote-part professionnelle du domicile à Palézieux', groupe: 'charges_exploitation', ordre: 60, deductible_fiscal: true },
-  { id: 'cat-6200', code: '6200', nom: 'Assurances professionnelles', description: 'RC professionnelle institut, perte de gain maladie', groupe: 'charges_exploitation', ordre: 70, deductible_fiscal: true },
-  { id: 'cat-6500', code: '6500', nom: 'Marketing, publicité & réseaux sociaux', description: 'Instagram, Meta Ads, Google Ads, flyers, cartes', groupe: 'charges_exploitation', ordre: 80, deductible_fiscal: true },
-  { id: 'cat-6570', code: '6570', nom: 'Informatique, logiciels & télécoms', description: 'Site internet, logiciel de caisse, mobile, fibre', groupe: 'charges_exploitation', ordre: 90, deductible_fiscal: true },
-  { id: 'cat-6800', code: '6800', nom: 'Frais bancaires & commissions d\'encaissement', description: 'Commissions TWINT, cartes bancaires, tenue de compte', groupe: 'charges_exploitation', ordre: 100, deductible_fiscal: true },
-  { id: 'cat-6900', code: '6900', nom: 'Électricité, eau & blanchissage', description: 'Quote-part énergie, nettoyage des serviettes de soin', groupe: 'charges_exploitation', ordre: 110, deductible_fiscal: true },
-  { id: 'cat-6990', code: '6990', nom: 'Autres charges d\'exploitation', description: 'Frais postaux, papeterie, entretien divers', groupe: 'charges_exploitation', ordre: 120, deductible_fiscal: true },
-];
+// Plan comptable par défaut : défini dans types/finance (partagé avec le serveur).
+export { DEFAULT_SWISS_CATEGORIES };
 
 export async function listExpenseCategories(): Promise<ExpenseCategory[]> {
   try {
