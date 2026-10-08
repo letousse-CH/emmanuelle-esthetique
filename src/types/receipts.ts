@@ -384,6 +384,12 @@ export function validateTicketDraft(draft: TicketDraft, codes: string[]): string
 
 export type TicketExpenseRow = Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'category' | 'items'>;
 
+/** Pièce déposée : `gdrive:<id>` + lien Drive, ou chemin du coffre privé (sans lien). */
+export interface TicketJustificatif {
+  path: string;
+  url: string | null;
+}
+
 /**
  * Une dépense par part du ticket, toutes rattachées à la même photo. Une pièce
  * imputée à un seul compte garde la TVA exacte de son récapitulatif ; une pièce
@@ -392,7 +398,7 @@ export type TicketExpenseRow = Omit<Expense, 'id' | 'created_at' | 'updated_at' 
 export function buildTicketExpenseRows(
   draft: TicketDraft,
   categories: Pick<ExpenseCategory, 'id' | 'code'>[],
-  justificatifPath: string | null,
+  justificatif: TicketJustificatif | null,
   extraction: unknown,
 ): TicketExpenseRow[] {
   const n = draft.ventilation.length;
@@ -429,8 +435,8 @@ export function buildTicketExpenseRows(
       tva_details: tvaLines,
       category_id: categories.find((c) => c.code === part.compte)?.id ?? null,
       notes: notes || null,
-      document_url: null,
-      justificatif_path: justificatifPath,
+      document_url: justificatif?.url ?? null,
+      justificatif_path: justificatif?.path ?? null,
       extraction_ia: extraction ?? null,
       is_stock_invoice: false,
     };

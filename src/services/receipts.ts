@@ -1,15 +1,20 @@
 /**
  * Tickets de caisse côté navigateur : préparation de la photo, lecture IA,
- * dépôt du justificatif dans le coffre privé et création des dépenses.
+ * dépôt du justificatif et création des dépenses.
+ *
+ * La pièce va dans le dossier Google Drive partagé avec la fiduciaire
+ * (services/googleDrive.ts) ; tant que Drive n'est pas connecté, elle reste
+ * dans le coffre privé Supabase `justificatifs`.
  *
  * Contrairement au reste du module Dépenses, rien ne se replie sur le
  * stockage du navigateur : une pièce comptable qui n'arrive pas en base doit
  * le dire, pas disparaître au prochain changement d'appareil.
  */
 import { supabase } from './supabase';
-import type { ExpenseCategory } from '../types/finance';
+import type { Expense, ExpenseCategory } from '../types/finance';
 import {
   buildTicketExpenseRows,
+  type TicketJustificatif,
   type ReceiptExtraction,
   type TicketDraft,
 } from '../types/receipts';
@@ -115,8 +120,38 @@ function explain(error: { message?: string } | null, what: string): Error {
 }
 
 /**
- * Dépose la pièce dans le coffre et crée une dépense par compte imputé.
- * Les parts partagent le même justificatif. Retourne le nombre de dépenses créées.
+ * Dépose la pièce : Google Drive si connecté, sinon coffre privé Supabase.
+ * `path` vaut `gdrive:<id>` pour Drive, le chemin du coffre sinon ; `url` est
+ * le lien Drive (null pour le coffre, lu par lien signé).
+ */
+export async function storeJustificatif(
+  file: File,
+  meta: { date: string; fournisseur: string; montant: number; description?: string },
+): Promise<TicketJustificatif> {
+  const res = await fetch('/api/admin/expenses/justificatif', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await bearer()}` },
+    body: JSON.stringify({ fileBase64: await readAsBase64(file), mediaType: file.type, ...meta }),
+  });
+  const json = await res.json().catch(() => null);
+  if (res.ok && json?.id) return { path: `gdrive:${json.id}`, url: json.url };
+  if (!(res.status === 409 && (json?.code === 'not_connected' || json?.code === 'not_configured'))) {
+    throw new Error(json?.error || `Dépôt de la pièce impossible (HTTP ${res.status}).`);
+  }
+
+  const ext = file.type === 'application/pdf' ? 'pdf' : 'jpg';
+  const [year, month] = meta.date.split('-');
+  const path = `${year}/${month}/${meta.date}-${crypto.randomUUID()}.${ext}`;
+  const upload = await supabase.storage
+    .from(JUSTIFICATIFS_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (upload.error) throw explain(upload.error, 'Dépôt de la pièce impossible');
+  return { path, url: null };
+}
+
+/**
+ * Dépose la pièce puis crée une dépense par compte imputé ; les parts
+ * partagent le même justificatif. Retourne le nombre de dépenses créées.
  */
 export async function saveTicket(params: {
   draft: TicketDraft;
@@ -125,33 +160,56 @@ export async function saveTicket(params: {
   extraction: ReceiptExtraction | null;
 }): Promise<number> {
   const { draft, file } = params;
-  const ext = file.type === 'application/pdf' ? 'pdf' : 'jpg';
-  const [year, month] = draft.date.split('-');
-  const path = `${year}/${month}/${draft.date}-${crypto.randomUUID()}.${ext}`;
 
   // Les comptes par défaut (`cat-4000`…) ne servent qu'à l'affichage : sans
   // table en base, inutile de déposer une pièce qu'aucune dépense ne citerait.
-  const rows = buildTicketExpenseRows(draft, params.categories, path, params.extraction);
-  if (rows.some((r) => !r.category_id || r.category_id.startsWith('cat-'))) {
+  const probe = buildTicketExpenseRows(draft, params.categories, null, null);
+  if (probe.some((r) => !r.category_id || r.category_id.startsWith('cat-'))) {
     throw explain({ message: 'relation "expense_categories" does not exist' }, 'Comptes introuvables');
   }
 
-  const upload = await supabase.storage
-    .from(JUSTIFICATIFS_BUCKET)
-    .upload(path, file, { contentType: file.type, upsert: false });
-  if (upload.error) throw explain(upload.error, 'Dépôt de la pièce impossible');
+  const comptes = draft.ventilation.map((v) => v.compte).join(', ');
+  const justificatif = await storeJustificatif(file, {
+    date: draft.date,
+    fournisseur: draft.fournisseur.trim(),
+    montant: draft.montant_ttc,
+    description: [draft.numero_piece && `Pièce n° ${draft.numero_piece}`, `Compte(s) ${comptes}`].filter(Boolean).join(' — '),
+  });
 
   // Une seule instruction : toutes les parts du ticket entrent ensemble, ou aucune.
+  const rows = buildTicketExpenseRows(draft, params.categories, justificatif, params.extraction);
   const { error } = await supabase.from('expenses').insert(rows);
   if (error) throw explain(error, 'Enregistrement de la dépense impossible');
   return rows.length;
 }
 
-/**
- * Ouvre la pièce par un lien signé de cinq minutes. La fenêtre est ouverte
- * avant l'attente : Safari bloque un `window.open` lancé après un `await`.
- */
-export async function openJustificatif(path: string): Promise<void> {
+/** Joint une pièce à une dépense saisie sans (facture fournisseur, saisie manuelle). */
+export async function attachJustificatif(expense: Expense, picked: File): Promise<void> {
+  const prepared = await prepareReceiptFile(picked);
+  const justificatif = await storeJustificatif(prepared.file, {
+    date: expense.date_facture,
+    fournisseur: expense.fournisseur,
+    montant: Number(expense.montant_ttc),
+    description: [expense.numero_facture && `Pièce n° ${expense.numero_facture}`, expense.category?.code && `Compte ${expense.category.code}`]
+      .filter(Boolean)
+      .join(' — '),
+  });
+  const { error } = await supabase
+    .from('expenses')
+    .update({ justificatif_path: justificatif.path, document_url: justificatif.url, updated_at: new Date().toISOString() })
+    .eq('id', expense.id);
+  if (error) throw explain(error, 'Rattachement de la pièce impossible');
+}
+
+/** Lien Drive ouvert tel quel ; une pièce du coffre privé, par lien signé de cinq minutes. */
+export async function openJustificatif(expense: Pick<Expense, 'document_url' | 'justificatif_path'>): Promise<void> {
+  if (expense.document_url && /^https?:\/\//.test(expense.document_url)) {
+    window.open(expense.document_url, '_blank', 'noopener');
+    return;
+  }
+  const path = expense.justificatif_path;
+  if (!path) return;
+  // Fenêtre ouverte avant l'attente : Safari bloque un `window.open` lancé après un `await`.
   const win = window.open('', '_blank');
   const { data, error } = await supabase.storage.from(JUSTIFICATIFS_BUCKET).createSignedUrl(path, 300);
   if (error || !data?.signedUrl) {

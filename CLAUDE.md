@@ -382,10 +382,22 @@ anciennes saisies locales dès que la base contient une dépense.
   `justificatif_path`. Les rapports gardent leur règle « une dépense = un compte ».
   Ce qui reste du total est la part privée : **non comptabilisée** (mentionnée
   dans la remarque de la première ligne).
-- La photo (JPEG réduit à 2200 px) va dans le bucket Supabase **privé**
-  `justificatifs`, lu par lien signé de 5 min. Pas de policy UPDATE/DELETE : une
-  pièce n'est jamais réécrite ni effacée (CO art. 958f). Aucun repli
-  `localStorage` pour les tickets : une pièce qui n'arrive pas en base doit le dire.
+- **Justificatifs dans Google Drive** (`services/googleDrive.ts`) : dossier
+  « Justificatifs — <institut> » / année / année-mois du compte Google connecté
+  depuis le panneau Drive de la page Dépenses (OAuth, portée `drive.file` : l'app
+  ne voit que ses propres fichiers ; jeton dans `app_secrets`). Le dossier se
+  partage **en lecture, personne par personne** avec la fiduciaire — jamais de
+  lien public (un dépôt sur le CDN R2 public a été écarté pour cette raison).
+  L'app OAuth doit être **publiée en production** dans Google Cloud, sinon le
+  jeton expire au bout de 7 jours. `justificatif_path = gdrive:<id>`,
+  `document_url` = lien Drive.
+- Tant que Drive n'est pas connecté, la pièce (JPEG réduit à 2200 px) va dans le
+  bucket Supabase **privé** `justificatifs`, lu par lien signé de 5 min.
+  `scripts/move-justificatifs-to-drive.ts` (essai, puis `--write`) transfère ces
+  pièces vers Drive. Aucune pièce n'est effacée nulle part (CO art. 958f), et
+  aucun repli `localStorage` : une pièce qui n'arrive pas en base doit le dire.
+- Bouton « Joindre la pièce » sur une dépense sans justificatif (facture
+  fournisseur, saisie manuelle).
 - Export fiduciaire (CSV `;` + BOM, `utils/expensesExport.ts`) : une ligne par
   dépense avec adresse, IDE, compte, TVA 8.1 / 2.6 / 3.8, justificatif, puis un
   total par compte (lignes de synthèse positionnelles, à la largeur de l'en-tête).

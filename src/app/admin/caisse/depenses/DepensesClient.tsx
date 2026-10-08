@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Receipt, Plus, UploadCloud, FileText, CheckCircle2, Clock, Trash2,
   Sparkles, Package, FlaskConical, AlertCircle, ArrowRight, ShieldCheck,
   Building, Megaphone, Smartphone, HelpCircle, Eye, RefreshCw,
-  Camera, Paperclip, Download,
+  Camera, Paperclip, Download, FilePlus2,
 } from 'lucide-react';
 import TicketScanModal from './TicketScanModal';
-import { openJustificatif } from '../../../../services/receipts';
+import DrivePanel from './DrivePanel';
+import { attachJustificatif, openJustificatif } from '../../../../services/receipts';
 import { downloadExpensesCsv } from '../../../../utils/expensesExport';
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
 import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
@@ -60,6 +61,10 @@ export default function DepensesClient() {
   // Ticket photographié en cours de lecture / relecture.
   const [ticketFile, setTicketFile] = useState<File | null>(null);
   const [exportYear, setExportYear] = useState(() => new Date().getFullYear());
+  // Pièce à joindre à une dépense saisie sans justificatif.
+  const attachInput = useRef<HTMLInputElement>(null);
+  const [attachTarget, setAttachTarget] = useState<Expense | null>(null);
+  const [attaching, setAttaching] = useState<string | null>(null);
 
   // Formulaire importation facture
   const [parsedPreview, setParsedPreview] = useState<{
@@ -269,11 +274,29 @@ export default function DepensesClient() {
     if (file) setTicketFile(file);
   };
 
-  const handleOpenJustificatif = async (path: string) => {
+  const handleOpenJustificatif = async (exp: Expense) => {
     try {
-      await openJustificatif(path);
+      await openJustificatif(exp);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleAttachPicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const target = attachTarget;
+    if (!file || !target) return;
+    setAttaching(target.id);
+    try {
+      await attachJustificatif(target, file);
+      setNotice(`Pièce jointe à « ${target.fournisseur} »${target.numero_facture ? ` n° ${target.numero_facture}` : ''}.`);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAttaching(null);
+      setAttachTarget(null);
     }
   };
 
@@ -403,6 +426,9 @@ export default function DepensesClient() {
           </div>
         }
       />
+
+      <DrivePanel onNotice={setNotice} />
+      <input ref={attachInput} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleAttachPicked} />
 
       {notice && (
         <Callout tone="info" actions={<Button size="sm" variant="ghost" onClick={() => setNotice(null)}>Masquer</Button>}>
@@ -605,13 +631,22 @@ export default function DepensesClient() {
                       </td>
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
-                          {exp.justificatif_path && (
+                          {exp.justificatif_path || exp.document_url?.startsWith('http') ? (
                             <button
-                              onClick={() => handleOpenJustificatif(exp.justificatif_path!)}
+                              onClick={() => handleOpenJustificatif(exp)}
                               title="Voir le justificatif archivé"
                               className="p-1.5 rounded-lg text-stone-600 hover:text-stone-900 hover:bg-stone-100 cursor-pointer"
                             >
                               <Paperclip size={15} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => { setAttachTarget(exp); attachInput.current?.click(); }}
+                              disabled={attaching === exp.id}
+                              title="Joindre la pièce (photo ou PDF)"
+                              className="p-1.5 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-50 cursor-pointer disabled:opacity-50"
+                            >
+                              <FilePlus2 size={15} className={attaching === exp.id ? 'animate-pulse' : ''} />
                             </button>
                           )}
                           {exp.items && exp.items.length > 0 && (

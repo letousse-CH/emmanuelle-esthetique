@@ -79,7 +79,10 @@ export function buildExpensesCsv(expenses: Expense[], year: number): string {
       e.mode_paiement ? EXPENSE_PAYMENT_MODE_LABELS[e.mode_paiement] : '',
       EXPENSE_STATUS_LABELS[e.statut]?.label ?? e.statut,
       frDate(e.date_paiement),
-      e.justificatif_path ? `Archivé (${e.justificatif_path})` : e.document_url ? e.document_url : 'Aucun',
+      // Lien Google Drive : il s'ouvre pour qui a reçu l'accès au dossier.
+      e.document_url && /^https?:\/\//.test(e.document_url)
+        ? e.document_url
+        : e.justificatif_path ? 'Coffre privé de l’admin' : 'Aucun',
       e.notes ?? '',
     ];
   });
@@ -93,7 +96,7 @@ export function buildExpensesCsv(expenses: Expense[], year: number): string {
   synthese.push(row({ 0: `Total des dépenses ${year}`, 9: total.ttc.toFixed(2), 14: total.tva.toFixed(2), 15: total.ht.toFixed(2) }));
   synthese.push(row({
     0: 'Note pour la fiducie',
-    20: "Un ticket imputé à plusieurs comptes figure sur plusieurs lignes qui partagent le même justificatif ; la part privée d'un ticket n'est pas reprise. Les dépenses annulées sont exclues. La TVA est indiquée pour information : l'activité n'est pas assujettie tant que le chiffre d'affaires reste sous CHF 100'000.",
+    20: "Les liens de la colonne Justificatif ouvrent la pièce dans le dossier Google Drive partagé avec la fiducie. Un ticket imputé à plusieurs comptes figure sur plusieurs lignes qui partagent le même justificatif ; la part privée d'un ticket n'est pas reprise. Les dépenses annulées sont exclues. La TVA est indiquée pour information : l'activité n'est pas assujettie tant que le chiffre d'affaires reste sous CHF 100'000.",
   }));
 
   return [HEADER, ...lines, ...synthese]

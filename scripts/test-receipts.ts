@@ -139,10 +139,10 @@ const DRAFT: TicketDraft = {
 const CATS = CODES.map((code) => ({ id: `uuid-${code}`, code }));
 
 test('enregistrement : une dépense par compte, même justificatif, TVA par part', () => {
-  const rows = buildTicketExpenseRows(DRAFT, CATS, '2026/10/x.jpg', null);
+  const rows = buildTicketExpenseRows(DRAFT, CATS, { path: 'gdrive:abc', url: 'https://drive.google.com/file/d/abc/view' }, null);
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((r) => r.category_id), ['uuid-4400', 'uuid-6640']);
-  assert.ok(rows.every((r) => r.justificatif_path === '2026/10/x.jpg' && r.statut === 'payee'));
+  assert.ok(rows.every((r) => r.justificatif_path === 'gdrive:abc' && r.document_url?.includes('/abc/') && r.statut === 'payee'));
   assert.equal(rows[0].montant_tva, 1.45);
   assert.equal(rows[0].montant_ht, 17.85);
   assert.equal(rows[1].montant_tva, 0.33);
@@ -175,7 +175,7 @@ test('validation : parts au-delà du total, compte manquant', () => {
 });
 
 test('export : colonnes alignées, TVA par taux, synthèse par compte', () => {
-  const rows = buildTicketExpenseRows(DRAFT, CATS, '2026/10/x.jpg', null);
+  const rows = buildTicketExpenseRows(DRAFT, CATS, { path: 'gdrive:abc', url: 'https://drive.google.com/file/d/abc/view' }, null);
   const expenses = rows.map((r, i) => ({
     ...r,
     id: String(i),

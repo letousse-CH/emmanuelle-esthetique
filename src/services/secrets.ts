@@ -56,6 +56,9 @@ export const MANAGED_SECRETS = {
   r2_access_key_id:     { env: ['R2_ACCESS_KEY_ID'],     secret: true },
   r2_secret_access_key: { env: ['R2_SECRET_ACCESS_KEY'], secret: true },
   r2_bucket_name:       { env: ['R2_BUCKET_NAME'],       secret: false },
+  // Client OAuth Google (archivage des justificatifs dans Google Drive).
+  google_client_id:     { env: ['GOOGLE_CLIENT_ID'],     secret: false },
+  google_client_secret: { env: ['GOOGLE_CLIENT_SECRET'], secret: true },
 } as const satisfies Record<string, { env: readonly string[]; secret: boolean }>;
 
 export type ManagedSecretKey = keyof typeof MANAGED_SECRETS;
