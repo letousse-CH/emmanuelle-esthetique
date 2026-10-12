@@ -144,6 +144,13 @@ Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
   par défaut sur le formulaire.
 - E-mails à la cliente : confirmation, déplacement, annulation seulement (jamais de
   renvoi si rien de pertinent n'a changé). Tout texte interpolé est échappé.
+- **Notification push** à l'institut pour chaque demande en ligne (2026-10-12) :
+  Web Push vers les appareils activés dans Réglages › Réservations
+  (`PushNotificationsCard`), affichée par `/admin/sw.js`, envoyée par
+  `services/pushNotifications.ts`. Clés VAPID et abonnements dans `app_secrets`
+  (générées au premier usage — ne jamais les régénérer, les abonnements
+  deviendraient muets). Aucune migration ni variable d'environnement. Vise un
+  navigateur, pas un numéro : pour un SMS, il faudrait un fournisseur payant.
 - Pas encore fait : rappel automatique la veille (`rappel_effectue` n'est pas écrit),
   passage « Encaisser » vers la caisse, pièce jointe .ics (`sendEmail` ne la gère pas).
 

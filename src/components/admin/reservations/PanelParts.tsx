@@ -65,6 +65,7 @@ const EVENT_LABEL: Record<BookingEvent['type'], string> = {
   modification: 'Modification',
   contact: 'Appel / contact',
   email: 'E-mail envoyé',
+  notification: 'Notification téléphone',
   crm: 'Clientèle',
   note: 'Note',
 };

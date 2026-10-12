@@ -23,6 +23,7 @@ import { sendEmail } from './email';
 import { SITE_CONFIG, getBusinessInfoServer } from '../config/site';
 import { getSecret } from './secrets';
 import { emitAutomationEvent } from './automationRunner';
+import { sendPushToAll } from './pushNotifications';
 import { flatCarte, getItem } from '../constants/carteSoins';
 import { fetchOffer, fetchOfferStats, getCurrentOffersForAdmin } from './offersServer';
 import {
@@ -1991,8 +1992,11 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
   );
   if (clientId) booking = { ...booking, client_id: clientId };
 
-  // E-mails : attendus avant de répondre (une fonction serverless est gelée dès la réponse envoyée).
-  await sendNewRequestMails(db, booking, settings).catch((err) => console.warn('[createPublicBooking] E-mails:', err));
+  // E-mails et notification : attendus avant de répondre (une fonction serverless est gelée dès la réponse envoyée).
+  await Promise.all([
+    sendNewRequestMails(db, booking, settings).catch((err) => console.warn('[createPublicBooking] E-mails:', err)),
+    sendNewRequestPush(db, booking).catch((err) => console.warn('[createPublicBooking] Notification:', err)),
+  ]);
 
   try {
     await emitAutomationEvent('booking.created', SITE_CONFIG.url);
@@ -2607,6 +2611,28 @@ async function sendClientMail(
   if (template !== 'confirmation' && template !== 'deplacement') return { ok: true, at: null };
   await db.from('bookings').update({ confirmation_envoyee_at: at }).eq('id', booking.id);
   return { ok: true, at };
+}
+
+/** Notification push sur le(s) téléphone(s) de l'institut (demandes EN LIGNE uniquement). */
+async function sendNewRequestPush(db: SupabaseClient, booking: Booking): Promise<void> {
+  if (booking.source !== 'en_ligne') return;
+  const [y, m, d] = booking.date_rdv.split('-').map((x) => parseInt(x, 10));
+  const jour = new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('fr-CH', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Zurich',
+  });
+  const periode = PERIODE_LABEL[booking.periode ?? 'matin'].toLowerCase();
+  const r = await sendPushToAll({
+    title: `Nouvelle demande — ${booking.prenom} ${booking.nom}`.trim(),
+    body: `${booking.service_nom}\n${jour.charAt(0).toUpperCase()}${jour.slice(1)}, ${periode} · ${booking.telephone}`,
+    url: `/admin/reservations?id=${encodeURIComponent(booking.id)}`,
+    tag: `rdv-${booking.id}`,
+  });
+  if (r.devices > 0) {
+    const message = r.sent > 0
+      ? `Envoyée sur ${r.sent} appareil${r.sent > 1 ? 's' : ''}${r.failed ? ` (${r.failed} en échec)` : ''}`
+      : 'Non délivrée (aucun appareil joignable)';
+    await logEvent(db, booking.id, 'notification', { message, envoyees: r.sent, echecs: r.failed }, 'systeme');
+  }
 }
 
 /** Accusé de réception à la cliente + notification à l'institut (demandes EN LIGNE uniquement). */

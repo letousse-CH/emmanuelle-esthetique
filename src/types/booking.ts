@@ -77,7 +77,7 @@ export interface Booking {
 export interface BookingEvent {
   id: string;
   booking_id: string;
-  type: 'creation' | 'statut' | 'deplacement' | 'modification' | 'contact' | 'email' | 'crm' | 'note';
+  type: 'creation' | 'statut' | 'deplacement' | 'modification' | 'contact' | 'email' | 'notification' | 'crm' | 'note';
   detail: Record<string, unknown>;
   actor: 'cliente' | 'admin' | 'systeme';
   created_at: string;

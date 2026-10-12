@@ -24,6 +24,7 @@ import { timeToMinutes } from '../../../types/booking';
 import BlocksSection from '../../../components/admin/reservations/BlocksSection';
 import { FeedbackProvider, useFeedback } from '../../../components/admin/reservations/Feedback';
 import { useIsLgSync } from '../../../components/admin/reservations/hooks';
+import PushNotificationsCard from '../../../components/admin/reservations/PushNotificationsCard';
 import SyncClientsButton from '../../../components/admin/reservations/SyncClientsButton';
 import WeeklyHoursEditor, { normalizeHours, validateHours } from '../../../components/admin/reservations/WeeklyHoursEditor';
 import type { WeeklyHours } from '../../../components/admin/reservations/WeeklyHoursEditor';
@@ -331,6 +332,8 @@ function BookingSettingsContent() {
               </p>
             </div>
           </div>
+
+          <PushNotificationsCard />
 
           {/* Règles de cabine & Battement */}
           <div className="border-t border-stone-100 pt-5 space-y-4">
