@@ -21,7 +21,8 @@ import { supabase } from './supabase';
 import { getSupabaseAdmin } from '../utils/supabaseAdmin';
 import { sendEmail } from './email';
 import { SITE_CONFIG, getBusinessInfoServer } from '../config/site';
-import { getSecret } from './secrets';
+import { DriveError } from './googleDrive';
+import { gcal, isCalendarConnected } from './googleCalendar';
 import { emitAutomationEvent } from './automationRunner';
 import { sendPushToAll } from './pushNotifications';
 import { getSettingsServer } from './settingsServer';
@@ -2633,17 +2634,19 @@ async function sendNewRequestMails(db: SupabaseClient, booking: Booking, setting
 }
 
 // ── Google Agenda (REST, sans dépendance) — toujours non bloquant ────────────
+// Connexion OAuth et appels : services/googleCalendar.ts.
 
-interface GCalCredentials {
-  calendarId: string;
-  accessToken: string;
+/** Statuts qui ont un événement dans l'agenda (avec un horaire arrêté). */
+const GCAL_STATUSES: BookingStatus[] = ['confirme', 'termine', 'en_attente'];
+
+function shouldHaveGoogleEvent(b: Booking): boolean {
+  return b.horaire_fixe && GCAL_STATUSES.includes(b.statut);
 }
 
-async function getGoogleCalendarCredentials(): Promise<GCalCredentials | null> {
-  const calendarId = (await getSecret('google_calendar_id')) || process.env.GOOGLE_CALENDAR_ID || '';
-  const accessToken = (await getSecret('google_calendar_access_token')) || process.env.GOOGLE_CALENDAR_ACCESS_TOKEN || '';
-  if (!calendarId || !accessToken) return null;
-  return { calendarId: encodeURIComponent(calendarId), accessToken };
+/** Agenda visé : celui réglé dans Réservations, sinon l'agenda principal du compte connecté. */
+async function gcalCalendarId(): Promise<string> {
+  const settings = await getBookingSettings();
+  return settings.gcal_calendar_id?.trim() || 'primary';
 }
 
 function gcalWindow(booking: Booking): { start: string; end: string } {
@@ -2656,90 +2659,83 @@ function gcalWindow(booking: Booking): { start: string; end: string } {
   };
 }
 
+/** Contenu de l'événement : sert à la création, à la mise à jour et à savoir s'il a changé. */
+function gcalEventBody(booking: Booking, location: string) {
+  const { start, end } = gcalWindow(booking);
+  const description = [
+    `Soin : ${booking.service_nom} (${booking.service_duree_minutes} min)`,
+    booking.options.length ? `Options : ${booking.options.map((o) => o.nom).join(', ')}` : null,
+    `Tarif : ${chfMail(booking.total_chf ?? bookingTotal(booking))}`,
+    `Cliente : ${booking.prenom} ${booking.nom}`,
+    `Téléphone : ${booking.telephone}`,
+    booking.email ? `E-mail : ${booking.email}` : null,
+    booking.notes_cliente ? `Message de la cliente : ${booking.notes_cliente}` : null,
+    '',
+    `${SITE_CONFIG.url}/admin/reservations?id=${encodeURIComponent(booking.id)}`,
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+  return {
+    summary: `${booking.statut === 'en_attente' ? '[À confirmer] ' : ''}${booking.prenom} ${booking.nom} — ${booking.service_nom}`.trim(),
+    description,
+    location,
+    start: { dateTime: start, timeZone: 'Europe/Zurich' },
+    end: { dateTime: end, timeZone: 'Europe/Zurich' },
+    // Remet en place un événement retiré à la main dans Google (il y reste « annulé »).
+    status: 'confirmed',
+  };
+}
+
+async function gcalLocation(): Promise<string> {
+  const biz = await getBiz();
+  return [biz.name, biz.address].filter(Boolean).join(', ');
+}
+
 /**
  * Crée un événement. Seuls les rendez-vous à horaire ARRÊTÉ ont un événement :
  * une demande souple n'a pas d'heure et fausserait les occupations lues en retour.
  */
 export async function createGoogleCalendarEvent(booking: Booking): Promise<string | null> {
-  const creds = await getGoogleCalendarCredentials();
-  if (!creds) return null;
-
+  if (!(await isCalendarConnected())) return null;
   try {
-    const { start, end } = gcalWindow(booking);
-    const summary = `RDV Soin: ${booking.service_nom} — ${booking.prenom} ${booking.nom}`;
-    const description = [
-      `Prestation : ${booking.service_nom} (${booking.service_duree_minutes} min)`,
-      `Tarif : ${chfMail(booking.total_chf ?? bookingTotal(booking))}`,
-      `Cliente : ${booking.prenom} ${booking.nom}`,
-      `Téléphone : ${booking.telephone}`,
-      booking.email ? `Email : ${booking.email}` : '',
-      booking.notes_cliente ? `Note cliente : ${booking.notes_cliente}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${creds.calendarId}/events`, {
+    const calendarId = encodeURIComponent(await gcalCalendarId());
+    const json = await gcal<{ id?: string }>(`calendars/${calendarId}/events?fields=id`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        summary,
-        description,
-        start: { dateTime: start, timeZone: 'Europe/Zurich' },
-        end: { dateTime: end, timeZone: 'Europe/Zurich' },
-        location: 'Emmanuelle Esthétique, Palézieux-Gare',
-      }),
+      body: JSON.stringify(gcalEventBody(booking, await gcalLocation())),
     });
-    if (!res.ok) {
-      console.warn('[GCal] Échec création événement HTTP:', res.status);
-      return null;
-    }
-    const json = await res.json();
     return json.id || null;
   } catch (err) {
-    console.warn('[GCal] Erreur création événement:', err);
+    console.warn('[GCal] Création de l’événement impossible:', err);
     return null;
   }
 }
 
-export async function updateGoogleCalendarEvent(booking: Booking): Promise<boolean> {
-  if (!booking.gcal_event_id) return false;
-  const creds = await getGoogleCalendarCredentials();
-  if (!creds) return false;
-
+/** Met l'événement à jour ; `gone` s'il n'existe plus dans Google (à recréer). */
+export async function updateGoogleCalendarEvent(booking: Booking): Promise<'ok' | 'gone' | 'error'> {
+  if (!booking.gcal_event_id || !(await isCalendarConnected())) return 'error';
   try {
-    const { start, end } = gcalWindow(booking);
-    const prefix = booking.statut === 'confirme' ? '[Confirmé]' : `[${booking.statut}]`;
-    const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${creds.calendarId}/events/${encodeURIComponent(booking.gcal_event_id)}`,
-      {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          summary: `${prefix} RDV Soin: ${booking.service_nom} — ${booking.prenom} ${booking.nom}`,
-          start: { dateTime: start, timeZone: 'Europe/Zurich' },
-          end: { dateTime: end, timeZone: 'Europe/Zurich' },
-        }),
-      },
-    );
-    return res.ok;
+    const calendarId = encodeURIComponent(await gcalCalendarId());
+    await gcal(`calendars/${calendarId}/events/${encodeURIComponent(booking.gcal_event_id)}?fields=id`, {
+      method: 'PATCH',
+      body: JSON.stringify(gcalEventBody(booking, await gcalLocation())),
+    });
+    return 'ok';
   } catch (err) {
-    console.warn('[GCal] Erreur mise à jour événement:', err);
-    return false;
+    if (err instanceof DriveError && err.status === 404) return 'gone';
+    console.warn('[GCal] Mise à jour de l’événement impossible:', err);
+    return 'error';
   }
 }
 
 export async function deleteGoogleCalendarEvent(gcalEventId: string): Promise<boolean> {
-  const creds = await getGoogleCalendarCredentials();
-  if (!creds) return false;
-
+  if (!(await isCalendarConnected())) return false;
   try {
-    const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${creds.calendarId}/events/${encodeURIComponent(gcalEventId)}`,
-      { method: 'DELETE', headers: { Authorization: `Bearer ${creds.accessToken}` } },
-    );
-    return res.ok || res.status === 404 || res.status === 410;
+    const calendarId = encodeURIComponent(await gcalCalendarId());
+    await gcal(`calendars/${calendarId}/events/${encodeURIComponent(gcalEventId)}`, { method: 'DELETE' });
+    return true;
   } catch (err) {
-    console.warn('[GCal] Erreur suppression événement:', err);
+    if (err instanceof DriveError && err.status === 404) return true;
+    console.warn('[GCal] Suppression de l’événement impossible:', err);
     return false;
   }
 }
@@ -2753,22 +2749,27 @@ export async function getGoogleCalendarBusyInstants(
   fromDate: string,
   toDate: string,
 ): Promise<Array<{ start: string; end: string }>> {
-  const creds = await getGoogleCalendarCredentials();
-  if (!creds) return [];
+  if (!(await isCalendarConnected())) return [];
 
-  const timeMin = zurichInstant(fromDate, 0).toISOString();
-  const timeMax = zurichInstant(addDays(toDate, 1), 0).toISOString();
-  const calendarId = decodeURIComponent(creds.calendarId);
-
-  const res = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+  const calendarId = await gcalCalendarId();
+  const data = await gcal<{ calendars?: Record<string, { busy?: Array<{ start?: string; end?: string }> }> }>('freeBusy', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ timeMin, timeMax, timeZone: 'Europe/Zurich', items: [{ id: calendarId }] }),
+    body: JSON.stringify({
+      timeMin: zurichInstant(fromDate, 0).toISOString(),
+      timeMax: zurichInstant(addDays(toDate, 1), 0).toISOString(),
+      timeZone: 'Europe/Zurich',
+      items: [{ id: calendarId }],
+    }),
   });
-  if (!res.ok) throw new Error(`FreeBusy HTTP ${res.status}`);
-  const data = await res.json();
-  const busy: Array<{ start?: string; end?: string }> = data?.calendars?.[calendarId]?.busy || [];
+  const busy = data?.calendars?.[calendarId]?.busy || [];
   return busy.filter((b): b is { start: string; end: string } => Boolean(b.start && b.end));
+}
+
+async function attachGoogleEvent(db: SupabaseClient, booking: Booking): Promise<Booking> {
+  const eventId = await createGoogleCalendarEvent(booking);
+  if (!eventId) return booking;
+  await db.from('bookings').update({ gcal_event_id: eventId }).eq('id', booking.id);
+  return { ...booking, gcal_event_id: eventId };
 }
 
 /**
@@ -2784,32 +2785,54 @@ async function syncGoogleEventAfterWrite(
 ): Promise<Booking> {
   if (!settings.gcal_sync_enabled) return after;
   try {
-    const shouldExist = after.horaire_fixe && (after.statut === 'confirme' || after.statut === 'termine' || after.statut === 'en_attente');
+    const shouldExist = shouldHaveGoogleEvent(after);
     if (after.gcal_event_id && !shouldExist) {
       await deleteGoogleCalendarEvent(after.gcal_event_id);
       await db.from('bookings').update({ gcal_event_id: null }).eq('id', after.id);
       return { ...after, gcal_event_id: null };
     }
-    if (shouldExist && !after.gcal_event_id) {
-      const eventId = await createGoogleCalendarEvent(after);
-      if (eventId) {
-        await db.from('bookings').update({ gcal_event_id: eventId }).eq('id', after.id);
-        return { ...after, gcal_event_id: eventId };
-      }
-      return after;
-    }
+    if (shouldExist && !after.gcal_event_id) return await attachGoogleEvent(db, after);
     if (shouldExist && after.gcal_event_id) {
-      const relevant =
-        !before ||
-        before.date_rdv !== after.date_rdv ||
-        before.heure_rdv !== after.heure_rdv ||
-        before.service_duree_minutes !== after.service_duree_minutes ||
-        before.statut !== after.statut ||
-        before.service_nom !== after.service_nom;
-      if (relevant) await updateGoogleCalendarEvent(after);
+      const relevant = !before || JSON.stringify(gcalEventBody(before, '')) !== JSON.stringify(gcalEventBody(after, ''));
+      if (relevant && (await updateGoogleCalendarEvent(after)) === 'gone') {
+        return await attachGoogleEvent(db, { ...after, gcal_event_id: null });
+      }
     }
   } catch (err) {
     console.warn('[booking] Synchronisation Google Agenda non bloquante:', err);
   }
   return after;
+}
+
+/**
+ * Envoie dans Google Agenda les rendez-vous à venir qui n'y sont pas encore :
+ * après la connexion de l'agenda, ou à la demande depuis les réglages.
+ */
+export async function syncUpcomingGoogleEvents(): Promise<{ created: number; failed: number }> {
+  const result = { created: 0, failed: 0 };
+  const settings = await getBookingSettings();
+  if (!settings.gcal_sync_enabled || !(await isCalendarConnected())) return result;
+
+  const db = adminDb();
+  const { data, error } = await db
+    .from('bookings')
+    .select('*')
+    .gte('date_rdv', zurichToday())
+    .eq('horaire_fixe', true)
+    .in('statut', GCAL_STATUSES)
+    .is('gcal_event_id', null)
+    .order('date_rdv')
+    .limit(60);
+  if (error) throw new BookingError(503, `Lecture des rendez-vous impossible : ${error.message}`);
+
+  // Par paquets de 5 : une fonction Netlify s'arrête à dix secondes.
+  const rows = (data ?? []).map(normalizeBookingRow);
+  for (let i = 0; i < rows.length; i += 5) {
+    const done = await Promise.all(rows.slice(i, i + 5).map((b) => attachGoogleEvent(db, b)));
+    for (const b of done) {
+      if (b.gcal_event_id) result.created++;
+      else result.failed++;
+    }
+  }
+  return result;
 }

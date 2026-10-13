@@ -14,7 +14,15 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getSupabaseAdmin } from '../utils/supabaseAdmin';
 import { getSecret, getSecretOrEnv, invalidateSecret } from './secrets';
 
-const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+/**
+ * Un même client OAuth sert deux connexions distinctes (chacune son jeton) :
+ * Drive pour les justificatifs, Agenda pour les rendez-vous (services/googleCalendar.ts).
+ */
+export type GooglePurpose = 'drive' | 'calendar';
+const SCOPES: Record<GooglePurpose, string> = {
+  drive: 'https://www.googleapis.com/auth/drive.file',
+  calendar: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy',
+};
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const KEYS = {
   refresh: 'google_drive_refresh_token',
@@ -22,6 +30,7 @@ const KEYS = {
   account: 'google_drive_account',
 } as const;
 
+/** Erreur d'un service Google (Drive ou Agenda), avec le statut HTTP à renvoyer à l'admin. */
 export class DriveError extends Error {
   constructor(message: string, public status = 502, public code?: 'not_configured' | 'not_connected') {
     super(message);
@@ -46,7 +55,7 @@ export interface DriveStatus {
 
 // ── Secrets ─────────────────────────────────────────────────────────────────
 
-async function storeSecret(key: string, value: string | null): Promise<void> {
+export async function storeSecret(key: string, value: string | null): Promise<void> {
   const admin = getSupabaseAdmin();
   if (!admin) throw new DriveError('Clé de service Supabase absente côté serveur.', 500);
   const { error } = value
@@ -56,7 +65,7 @@ async function storeSecret(key: string, value: string | null): Promise<void> {
   if (error) throw new DriveError(`Enregistrement impossible : ${error.message}`, 500);
 }
 
-async function clientCredentials(): Promise<{ id: string; secret: string } | null> {
+export async function clientCredentials(): Promise<{ id: string; secret: string } | null> {
   const [id, secret] = await Promise.all([getSecretOrEnv('google_client_id'), getSecretOrEnv('google_client_secret')]);
   return id && secret ? { id, secret } : null;
 }
@@ -86,17 +95,18 @@ function sign(payload: string, key: string): string {
 /**
  * Adresse de consentement Google. Le `state` est signé avec le secret client
  * et expire en 15 minutes : la page de retour, qui ne reçoit pas la session
- * de l'admin, sait ainsi que la demande vient bien d'elle.
+ * de l'admin, sait ainsi que la demande vient bien d'elle. Il porte aussi la
+ * connexion visée, la page de retour étant commune à Drive et à l'Agenda.
  */
-export async function buildAuthUrl(origin: string): Promise<string> {
+export async function buildAuthUrl(origin: string, purpose: GooglePurpose = 'drive'): Promise<string> {
   const creds = await clientCredentials();
   if (!creds) throw new DriveError('Identifiants Google à saisir d’abord.', 501, 'not_configured');
-  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 15 * 60_000, n: randomBytes(8).toString('hex') })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 15 * 60_000, n: randomBytes(8).toString('hex'), p: purpose })).toString('base64url');
   const params = new URLSearchParams({
     client_id: creds.id,
     redirect_uri: redirectUri(origin),
     response_type: 'code',
-    scope: SCOPE,
+    scope: SCOPES[purpose],
     // Hors ligne + consentement forcé : Google renvoie un jeton de rafraîchissement.
     access_type: 'offline',
     prompt: 'consent',
@@ -105,16 +115,36 @@ export async function buildAuthUrl(origin: string): Promise<string> {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
-export async function completeAuth(code: string, state: string, origin: string): Promise<void> {
+function readState(state: string): { exp: number; p: GooglePurpose } {
+  try {
+    const json = JSON.parse(Buffer.from(state.split('.')[0] ?? '', 'base64url').toString());
+    return { exp: Number(json.exp) || 0, p: json.p === 'calendar' ? 'calendar' : 'drive' };
+  } catch {
+    return { exp: 0, p: 'drive' };
+  }
+}
+
+/** Connexion visée par un `state`, lue SANS vérification : ne sert qu'à choisir la page de retour. */
+export function statePurpose(state: string): GooglePurpose {
+  return readState(state).p;
+}
+
+export interface GoogleTokens {
+  access_token: string;
+  refresh_token: string;
+  expires_in?: number;
+}
+
+/** Vérifie le `state` (signature, expiration, connexion visée) puis échange le code contre les jetons. */
+export async function exchangeCode(code: string, state: string, origin: string, purpose: GooglePurpose): Promise<GoogleTokens> {
   const creds = await clientCredentials();
   if (!creds) throw new DriveError('Identifiants Google absents.', 501, 'not_configured');
 
   const [payload, mac] = state.split('.');
   const expected = sign(payload ?? '', creds.secret);
   const valid = !!mac && mac.length === expected.length && timingSafeEqual(Buffer.from(mac), Buffer.from(expected));
-  let exp = 0;
-  try { exp = Number(JSON.parse(Buffer.from(payload, 'base64url').toString()).exp); } catch { /* état illisible */ }
-  if (!valid || exp < Date.now()) throw new DriveError('Lien de connexion expiré ou invalide : recommencez depuis la page Dépenses.', 400);
+  const { exp, p } = readState(state);
+  if (!valid || exp < Date.now() || p !== purpose) throw new DriveError('Lien de connexion expiré ou invalide : recommencez la connexion.', 400);
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -136,9 +166,13 @@ export async function completeAuth(code: string, state: string, origin: string):
   }
   if (!res.ok || !json.access_token) throw new DriveError(`Google a refusé la connexion (${json.error ?? res.status}).`, 400);
   if (!json.refresh_token) throw new DriveError('Google n’a pas fourni d’accès durable : retirez l’accès de l’app dans votre compte Google puis reconnectez-la.', 400);
+  return { access_token: json.access_token, refresh_token: json.refresh_token, expires_in: json.expires_in };
+}
 
-  await storeSecret(KEYS.refresh, json.refresh_token);
-  cachedToken = { token: json.access_token, exp: Date.now() + (json.expires_in ?? 3600) * 1000 };
+export async function completeAuth(code: string, state: string, origin: string): Promise<void> {
+  const tokens = await exchangeCode(code, state, origin, 'drive');
+  await storeSecret(KEYS.refresh, tokens.refresh_token);
+  cachedToken = { token: tokens.access_token, exp: Date.now() + (tokens.expires_in ?? 3600) * 1000 };
 
   const about = await drive<{ user?: { emailAddress?: string } }>('about?fields=user(emailAddress)');
   await storeSecret(KEYS.account, about.user?.emailAddress ?? 'compte Google');

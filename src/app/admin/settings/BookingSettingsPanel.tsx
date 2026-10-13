@@ -24,6 +24,7 @@ import { timeToMinutes } from '../../../types/booking';
 import BlocksSection from '../../../components/admin/reservations/BlocksSection';
 import { FeedbackProvider, useFeedback } from '../../../components/admin/reservations/Feedback';
 import { useIsLgSync } from '../../../components/admin/reservations/hooks';
+import GoogleCalendarCard from '../../../components/admin/reservations/GoogleCalendarCard';
 import ClientEmailsSection from '../../../components/admin/reservations/ClientEmailsSection';
 import PushNotificationsCard from '../../../components/admin/reservations/PushNotificationsCard';
 import SyncClientsButton from '../../../components/admin/reservations/SyncClientsButton';
@@ -263,7 +264,7 @@ function BookingSettingsContent() {
               <div className="space-y-0.5">
                 <h3 className="text-sm font-bold text-stone-900">Synchronisation Google Calendar</h3>
                 <p className="text-[13.5px] lg:text-xs text-stone-600 font-light">
-                  Chaque rendez-vous confirmé créera instantanément un événement dans l'agenda de votre téléphone.
+                  Chaque rendez-vous à horaire fixé apparaît dans l'agenda de votre téléphone.
                 </p>
               </div>
 
@@ -278,20 +279,23 @@ function BookingSettingsContent() {
               </label>
             </div>
 
+            <GoogleCalendarCard enabled={settings.gcal_sync_enabled} />
+
             {settings.gcal_sync_enabled && (
               <div className="space-y-1 pt-2 border-t border-blue-100 animate-fadein">
-                <label className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
-                  Identifiant de votre agenda Google (Calendar ID)
+                <label htmlFor="bs-gcal-id" className="text-[14px] lg:text-xs font-semibold text-stone-700 block">
+                  Agenda à remplir (facultatif)
                 </label>
                 <input
+                  id="bs-gcal-id"
                   type="text"
-                  placeholder="Ex: emmanuelle.esthetique@gmail.com ou identifiant d'agenda"
+                  placeholder="Agenda principal du compte connecté"
                   value={settings.gcal_calendar_id}
                   onChange={(e) => setSettings({ ...settings, gcal_calendar_id: e.target.value })}
                   className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 font-mono"
                 />
                 <p className="text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 font-light">
-                  Trouvable dans les paramètres de votre Google Agenda (Rubrique « Intégrer l'agenda »).
+                  Laissez vide pour l'agenda principal. Pour un autre agenda du compte : paramètres de l'agenda › « Intégrer l'agenda » › ID de l'agenda.
                 </p>
               </div>
             )}

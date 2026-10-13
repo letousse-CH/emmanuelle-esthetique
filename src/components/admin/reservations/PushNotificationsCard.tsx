@@ -198,15 +198,15 @@ export default function PushNotificationsCard() {
               <span className="inline-flex items-center gap-1.5 text-[14px] lg:text-xs font-semibold text-emerald-700">
                 <Bell size={14} /> Activées sur cet appareil
               </span>
-              <Button size="sm" icon={Send} loading={busy === 'test'} disabled={!!busy} onClick={test}>
+              <Button type="button" size="sm" icon={Send} loading={busy === 'test'} disabled={!!busy} onClick={test}>
                 Envoyer un essai
               </Button>
-              <Button size="sm" variant="ghost" icon={BellOff} loading={busy === 'disable'} disabled={!!busy} onClick={() => hereEndpoint && remove(hereEndpoint)}>
+              <Button type="button" size="sm" variant="ghost" icon={BellOff} loading={busy === 'disable'} disabled={!!busy} onClick={() => hereEndpoint && remove(hereEndpoint)}>
                 Désactiver ici
               </Button>
             </>
           ) : (
-            <Button variant="primary" icon={Bell} loading={busy === 'enable'} disabled={!!busy || !publicKey} onClick={enable}>
+            <Button type="button" variant="primary" icon={Bell} loading={busy === 'enable'} disabled={!!busy || !publicKey} onClick={enable}>
               Activer sur cet appareil
             </Button>
           )}
@@ -234,7 +234,7 @@ export default function PushNotificationsCard() {
                   </div>
                 </div>
                 {d.endpoint !== hereEndpoint && (
-                  <Button size="sm" variant="ghost" icon={Trash2} loading={busy === d.endpoint} disabled={!!busy} onClick={() => remove(d.endpoint)} aria-label={`Retirer ${d.label}`}>
+                  <Button type="button" size="sm" variant="ghost" icon={Trash2} loading={busy === d.endpoint} disabled={!!busy} onClick={() => remove(d.endpoint)} aria-label={`Retirer ${d.label}`}>
                     Retirer
                   </Button>
                 )}

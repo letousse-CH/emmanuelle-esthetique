@@ -168,6 +168,16 @@ Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
   `sendDayBeforeReminders`). `rappel_effectue` est réservé avant l'envoi (jamais
   deux rappels), rendu si l'envoi échoue, remis à faux quand le rendez-vous est
   déplacé. Sans e-mail, pas de rappel (WhatsApp/SMS : pas encore branchés).
+- **Google Agenda** (2026-10-13) : chaque rendez-vous à horaire fixé (confirmé, en
+  attente ou terminé) a un événement dans l'agenda, déplacé ou retiré avec lui ; les
+  occupations de cet agenda grisent les créneaux en ligne (FreeBusy). Connexion OAuth
+  dans Réglages › Réservations (`GoogleCalendarCard`, `services/googleCalendar.ts`) :
+  même client Google que Drive, mais jeton à part (`google_calendar_refresh_token`).
+  Le retour de Google est commun (`/api/admin/google-drive/callback`, le `state` signé
+  porte la connexion visée) : aucune URI à ajouter dans Google Cloud, seulement l'API
+  Google Calendar à activer. Connecter active la synchro et envoie les rendez-vous à
+  venir ; le dernier refus de Google s'affiche dans la carte. Avant ce jour, le code
+  attendait un jeton d'accès figé jamais saisi : rien n'arrivait dans l'agenda.
 - Pas encore fait : passage « Encaisser » vers la caisse, pièce jointe .ics
   (`sendEmail` ne la gère pas).
 

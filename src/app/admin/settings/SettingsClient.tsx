@@ -310,7 +310,7 @@ export default function Settings() {
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get('tab') ?? null;
   useEffect(() => {
-    if (tabParam && ['general', 'business', 'editorial', 'modules', 'caisse', 'ai', 'style', 'fleet', 'security', 'keys'].includes(tabParam)) {
+    if (tabParam && ['general', 'business', 'editorial', 'modules', 'caisse', 'booking', 'ai', 'style', 'fleet', 'security', 'keys'].includes(tabParam)) {
       setActiveTab(tabParam as typeof activeTab);
     }
   }, [tabParam]);
