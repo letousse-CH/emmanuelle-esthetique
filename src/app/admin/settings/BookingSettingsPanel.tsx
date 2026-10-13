@@ -24,6 +24,7 @@ import { timeToMinutes } from '../../../types/booking';
 import BlocksSection from '../../../components/admin/reservations/BlocksSection';
 import { FeedbackProvider, useFeedback } from '../../../components/admin/reservations/Feedback';
 import { useIsLgSync } from '../../../components/admin/reservations/hooks';
+import ClientEmailsSection from '../../../components/admin/reservations/ClientEmailsSection';
 import PushNotificationsCard from '../../../components/admin/reservations/PushNotificationsCard';
 import SyncClientsButton from '../../../components/admin/reservations/SyncClientsButton';
 import WeeklyHoursEditor, { normalizeHours, validateHours } from '../../../components/admin/reservations/WeeklyHoursEditor';
@@ -466,6 +467,19 @@ function BookingSettingsContent() {
             </button>
           </div>
         </form>
+      </section>
+
+      {/* ═════════════════════════════════════════════════════════════════════
+          E-MAILS AUX CLIENTES (accusé, confirmation, rappel…)
+          ═════════════════════════════════════════════════════════════════════ */}
+      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-4">
+        <div className="space-y-1 border-b border-stone-100 pb-5">
+          <h2 className="text-xl font-bold text-stone-900">E-mails aux clientes</h2>
+          <p className="text-[14px] sm:text-sm text-stone-600 sm:text-stone-500 font-light">
+            Modifiez le texte de chaque e-mail envoyé automatiquement. Le changement vaut pour les prochains envois.
+          </p>
+        </div>
+        <ClientEmailsSection />
       </section>
 
       {/* ═════════════════════════════════════════════════════════════════════

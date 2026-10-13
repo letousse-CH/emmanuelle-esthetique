@@ -24,6 +24,20 @@ import { SITE_CONFIG, getBusinessInfoServer } from '../config/site';
 import { getSecret } from './secrets';
 import { emitAutomationEvent } from './automationRunner';
 import { sendPushToAll } from './pushNotifications';
+import { getSettingsServer } from './settingsServer';
+import {
+  chfMail,
+  escapeHtml,
+  formatDateLong,
+  mailRow,
+  mailShell,
+  mailTextFor,
+  parseMailOverrides,
+  renderClientMail,
+  type Biz,
+  type ClientMailKind,
+  type MailTextOverrides,
+} from '../utils/bookingEmails';
 import { flatCarte, getItem } from '../constants/carteSoins';
 import { fetchOffer, fetchOfferStats, getCurrentOffersForAdmin } from './offersServer';
 import {
@@ -80,6 +94,7 @@ import {
   periodeOfTime,
   zurichInstant,
   zurichNow,
+  zurichToday,
   type EngineBooking,
   type Interval,
 } from './bookingEngine';
@@ -2265,6 +2280,10 @@ export async function updateBooking(
   track('statut');
   track('notes_admin');
   track('contacte_at');
+  // Rendez-vous déplacé : le rappel de la veille doit repartir pour la nouvelle date.
+  if (existing.rappel_effectue && (updates.date_rdv !== undefined || updates.heure_rdv !== undefined)) {
+    updates.rappel_effectue = false;
+  }
   if (!existing.date_demandee) updates.date_demandee = existing.date_rdv;
   if (!existing.periode_demandee) updates.periode_demandee = existing.periode;
 
@@ -2354,7 +2373,7 @@ export async function updateBooking(
   return { booking, warnings };
 }
 
-export type MailTemplate = 'accuse' | 'confirmation' | 'deplacement' | 'annulation' | 'refus';
+export type MailTemplate = ClientMailKind;
 
 /**
  * Politique d'envoi (PLAN §4). Par défaut, e-mail seulement pour : première
@@ -2409,50 +2428,15 @@ export async function deleteBooking(id: string): Promise<void> {
 }
 
 // ── E-mails ──────────────────────────────────────────────────────────────────
+// Textes et mise en forme des e-mails aux clientes : utils/bookingEmails.ts
+// (modifiables dans Réglages › Réservations › « E-mails aux clientes »).
 
-/** Échappe tout texte interpolé dans du HTML (nom, notes, soin, ville…). */
-export function escapeHtml(value: unknown): string {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+export { escapeHtml, chfMail, formatDateLong };
+export type { Biz };
 
 /** Pas de saut de ligne dans un objet d'e-mail (injection d'en-tête). */
 function oneLine(s: unknown): string {
   return String(s ?? '').replace(/[\r\n]+/g, ' ').trim();
-}
-
-/** `CHF 1'234.50` : convention suisse (de-CH), centimes affichés dès qu'il y en a. */
-export function chfMail(n: number): string {
-  const v = Math.round((Number(n) || 0) * 100) / 100;
-  const fraction = Number.isInteger(v) ? 0 : 2;
-  return `CHF ${new Intl.NumberFormat('de-CH', { minimumFractionDigits: fraction, maximumFractionDigits: 2 }).format(v)}`;
-}
-
-/** « lundi 5 octobre 2026 », calculé en Zurich quel que soit le fuseau du serveur. */
-export function formatDateLong(date: string): string {
-  const [y, m, d] = date.split('-').map((x) => parseInt(x, 10));
-  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('fr-CH', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'Europe/Zurich',
-  });
-}
-
-function periodeText(p: BookingPeriode | null): string {
-  return p === 'apres_midi' ? 'l\'après-midi' : 'le matin';
-}
-
-export interface Biz {
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
 }
 
 async function getBiz(): Promise<Biz> {
@@ -2461,6 +2445,7 @@ async function getBiz(): Promise<Biz> {
     const ville = [b.addressPostal, b.addressCity].filter(Boolean).join(' ');
     return {
       name: b.name || 'Emmanuelle Esthétique',
+      owner: (b.owner || '').trim(),
       phone: (b.phone || '').trim(),
       email: (b.email || '').trim(),
       address: [b.addressStreet, ville].filter(Boolean).join(', ') || 'Palézieux-Gare',
@@ -2470,31 +2455,10 @@ async function getBiz(): Promise<Biz> {
   }
 }
 
-function mailRow(label: string, valueHtml: string): string {
-  return `<p style="margin:0 0 6px;"><strong>${escapeHtml(label)}</strong> ${valueHtml}</p>`;
-}
-
-function mailShell(innerHtml: string): string {
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1c1917;max-width:560px;">${innerHtml}</div>`;
-}
-
-function summaryBlock(b: Booking, rows: string[]): string {
-  const opts = b.options.length
-    ? `<p style="margin:0 0 6px;"><strong>Options :</strong> ${b.options.map((o) => escapeHtml(o.nom)).join(', ')}</p>`
-    : '';
-  return `<div style="background:#fafaf9;border:1px solid #e7e5e4;border-radius:8px;padding:16px;margin:16px 0;">
-    ${rows.join('\n')}
-    <p style="margin:0 0 6px;"><strong>Soin :</strong> ${escapeHtml(b.service_nom)}</p>
-    ${opts}
-    <p style="margin:0 0 6px;"><strong>Durée :</strong> ${b.service_duree_minutes} minutes</p>
-    <p style="margin:0;"><strong>Tarif :</strong> ${escapeHtml(chfMail(b.total_chf ?? bookingTotal(b)))}</p>
-  </div>`;
-}
-
-function phoneSentence(biz: Biz): string {
-  return biz.phone
-    ? `au <a href="tel:${escapeHtml(biz.phone.replace(/\s+/g, ''))}">${escapeHtml(biz.phone)}</a>`
-    : 'en répondant à ce message';
+/** Textes modifiés dans les réglages ; ceux qui ne l'ont pas été gardent leur version d'origine. */
+async function loadMailOverrides(): Promise<MailTextOverrides> {
+  const s = await getSettingsServer(['booking_email_templates']).catch(() => null);
+  return parseMailOverrides(s?.booking_email_templates);
 }
 
 export interface BuiltMail {
@@ -2507,78 +2471,9 @@ export function buildClientMail(
   b: Booking,
   biz: Biz,
   previous: Booking | undefined,
+  overrides?: MailTextOverrides,
 ): BuiltMail {
-  const first = escapeHtml(b.prenom);
-  const dateLong = formatDateLong(b.date_rdv);
-  const signature = `<p style="margin-top:24px;color:#57534e;">À bientôt,<br/><strong>${escapeHtml(biz.name)}</strong><br/>${escapeHtml(biz.address)}</p>`;
-
-  if (template === 'accuse') {
-    const periode = b.periode ?? 'matin';
-    return {
-      subject: `Votre demande de rendez-vous — ${dateLong} (${PERIODE_LABEL[periode].toLowerCase()})`,
-      html: mailShell(`
-        <p>Bonjour ${first},</p>
-        <p>Nous avons bien reçu votre demande de rendez-vous pour le <strong>${escapeHtml(dateLong)}, ${escapeHtml(periodeText(periode))}</strong>.</p>
-        ${summaryBlock(b, [mailRow('Date souhaitée :', `${escapeHtml(dateLong)} — ${escapeHtml(PERIODE_LABEL[periode].toLowerCase())}`)])}
-        <p><strong>Votre rendez-vous n'est pas encore confirmé.</strong> Emmanuelle vous rappelle prochainement pour confirmer l'horaire exact.</p>
-        ${signature}`),
-    };
-  }
-
-  if (template === 'confirmation') {
-    return {
-      subject: `Rendez-vous confirmé le ${dateLong} à ${b.heure_rdv}`,
-      html: mailShell(`
-        <h2 style="font-size:18px;margin:0 0 12px;">Votre rendez-vous est confirmé</h2>
-        <p>Bonjour ${first},</p>
-        <p>Je me réjouis de vous accueillir.</p>
-        ${summaryBlock(b, [
-          mailRow('Date :', escapeHtml(dateLong)),
-          mailRow('Heure :', `<strong>${escapeHtml(b.heure_rdv)}</strong>`),
-          mailRow('Lieu :', escapeHtml(biz.address)),
-        ])}
-        <p style="font-size:14px;color:#57534e;">Prévoyez quelques minutes d'avance pour vous installer sereinement. En cas d'imprévu, merci de me prévenir au moins 24 heures à l'avance ${phoneSentence(biz)}.</p>
-        <p style="margin-top:24px;">À très bientôt,<br/><strong>Emmanuelle</strong></p>`),
-    };
-  }
-
-  if (template === 'deplacement') {
-    const old = previous ?? b;
-    return {
-      subject: `Votre rendez-vous est déplacé au ${dateLong} à ${b.heure_rdv}`,
-      html: mailShell(`
-        <h2 style="font-size:18px;margin:0 0 12px;">Votre rendez-vous a changé de date ou d'heure</h2>
-        <p>Bonjour ${first},</p>
-        <p>Votre rendez-vous initialement prévu le ${escapeHtml(formatDateLong(old.date_rdv))} à ${escapeHtml(old.heure_rdv)} est <strong>déplacé</strong>.</p>
-        ${summaryBlock(b, [
-          mailRow('Nouvelle date :', escapeHtml(dateLong)),
-          mailRow('Nouvelle heure :', `<strong>${escapeHtml(b.heure_rdv)}</strong>`),
-          mailRow('Lieu :', escapeHtml(biz.address)),
-        ])}
-        <p style="font-size:14px;color:#57534e;">Si ce nouvel horaire ne vous convient pas, appelez-moi ${phoneSentence(biz)} pour que nous trouvions une autre date.</p>
-        <p style="margin-top:24px;">Avec mes excuses pour le changement,<br/><strong>Emmanuelle</strong></p>`),
-    };
-  }
-
-  if (template === 'annulation') {
-    return {
-      subject: `Votre rendez-vous du ${dateLong} est annulé`,
-      html: mailShell(`
-        <p>Bonjour ${first},</p>
-        <p>Votre rendez-vous du <strong>${escapeHtml(dateLong)}${b.horaire_fixe ? ` à ${escapeHtml(b.heure_rdv)}` : ''}</strong> (${escapeHtml(b.service_nom)}) est annulé.</p>
-        <p>Pour convenir d'une nouvelle date, vous pouvez me joindre ${phoneSentence(biz)} ou réserver à nouveau en ligne.</p>
-        <p style="margin-top:24px;">Avec mes salutations,<br/><strong>Emmanuelle</strong></p>`),
-    };
-  }
-
-  return {
-    subject: 'À propos de votre demande de rendez-vous',
-    html: mailShell(`
-      <p>Bonjour ${first},</p>
-      <p>Je n'ai malheureusement pas la possibilité de vous accueillir le <strong>${escapeHtml(dateLong)}</strong> (${escapeHtml(b.service_nom)}).</p>
-      <p>Je serais ravie de trouver avec vous une autre date : vous pouvez me joindre ${phoneSentence(biz)} ou réserver à nouveau en ligne.</p>
-      <p style="margin-top:24px;">Avec mes salutations,<br/><strong>Emmanuelle</strong></p>`),
-  };
+  return renderClientMail(template, mailTextFor(template, overrides), b, biz, previous);
 }
 
 /** Envoie un e-mail à la cliente, journalise (`email`) et date `confirmation_envoyee_at`. */
@@ -2590,8 +2485,8 @@ async function sendClientMail(
   actor: BookingEvent['actor'],
 ): Promise<{ ok: true; at: string | null } | { ok: false; error: string }> {
   if (!booking.email) return { ok: false, error: 'aucune adresse e-mail' };
-  const biz = await getBiz();
-  const mail = buildClientMail(template, booking, biz, ctx.previous);
+  const [biz, overrides] = await Promise.all([getBiz(), loadMailOverrides()]);
+  const mail = buildClientMail(template, booking, biz, ctx.previous, overrides);
   const res = await sendEmail({
     to: booking.email,
     subject: oneLine(mail.subject),
@@ -2611,6 +2506,65 @@ async function sendClientMail(
   if (template !== 'confirmation' && template !== 'deplacement') return { ok: true, at: null };
   await db.from('bookings').update({ confirmation_envoyee_at: at }).eq('id', booking.id);
   return { ok: true, at };
+}
+
+// ── Rappel de la veille ──────────────────────────────────────────────────────
+
+export interface ReminderRunResult {
+  date: string;
+  sent: number;
+  failed: number;
+  sans_email: number;
+}
+
+/**
+ * E-mail de rappel aux clientes dont le rendez-vous CONFIRMÉ (horaire fixé) a
+ * lieu demain, heure de Zurich. Appelé une fois par jour par la tâche planifiée
+ * `cron-booking-reminders`.
+ *
+ * Chaque rendez-vous est d'abord « réservé » (`rappel_effectue` passe à vrai
+ * seulement s'il était faux) : deux exécutions simultanées n'envoient jamais
+ * deux rappels. Si l'envoi échoue, le drapeau est rendu pour que l'exécution
+ * suivante réessaie. Un déplacement le remet à faux (`updateBooking`).
+ */
+export async function sendDayBeforeReminders(now: Date = new Date()): Promise<ReminderRunResult> {
+  const db = adminDb();
+  const date = addDays(zurichToday(now), 1);
+  const { data, error } = await db
+    .from('bookings')
+    .select('*')
+    .eq('date_rdv', date)
+    .eq('statut', 'confirme')
+    .eq('horaire_fixe', true)
+    .eq('rappel_effectue', false)
+    .limit(50);
+  if (error) throw new BookingError(500, `Rappels : lecture impossible (${error.message})`);
+
+  const result: ReminderRunResult = { date, sent: 0, failed: 0, sans_email: 0 };
+  for (const row of data ?? []) {
+    const booking = normalizeBookingRow(row);
+    if (!booking.email) {
+      result.sans_email++;
+      continue;
+    }
+    const { data: claimed } = await db
+      .from('bookings')
+      .update({ rappel_effectue: true })
+      .eq('id', booking.id)
+      .eq('rappel_effectue', false)
+      .select('id');
+    if (!claimed || claimed.length === 0) continue; // déjà pris par une autre exécution
+
+    const sent = await sendClientMail(db, booking, 'rappel', {}, 'systeme');
+    if (sent.ok) {
+      result.sent++;
+    } else {
+      result.failed++;
+      await db.from('bookings').update({ rappel_effectue: false }).eq('id', booking.id);
+      console.warn('[rappels] Rappel non envoyé:', booking.id, sent.error);
+    }
+  }
+  return result;
 }
 
 /** Notification push sur le(s) téléphone(s) de l'institut (demandes EN LIGNE uniquement). */

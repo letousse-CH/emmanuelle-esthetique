@@ -149,6 +149,12 @@ Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
   par défaut sur le formulaire.
 - E-mails à la cliente : confirmation, déplacement, annulation seulement (jamais de
   renvoi si rien de pertinent n'a changé). Tout texte interpolé est échappé.
+- **Textes modifiables** (2026-10-13) : Réglages › Réservations › « E-mails aux
+  clientes » (`ClientEmailsSection`). Objet + message par e-mail, mots-clés
+  `{prenom}`, `{date}`, `{recapitulatif}`…, `**gras**`, `# titre`. Rangés en JSON
+  dans le réglage `booking_email_templates` (seuls les textes modifiés) ; textes
+  d'origine, mots-clés et rendu dans `utils/bookingEmails.ts`, partagé par l'envoi
+  et l'aperçu. Tout texte saisi est échappé : aucun HTML ne passe.
 - **Notification push** à l'institut pour chaque demande en ligne (2026-10-12) :
   Web Push vers les appareils activés dans Réglages › Réservations
   (`PushNotificationsCard`), affichée par `/admin/sw.js`, envoyée par
@@ -156,8 +162,14 @@ Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
   (générées au premier usage — ne jamais les régénérer, les abonnements
   deviendraient muets). Aucune migration ni variable d'environnement. Vise un
   navigateur, pas un numéro : pour un SMS, il faudrait un fournisseur payant.
-- Pas encore fait : rappel automatique la veille (`rappel_effectue` n'est pas écrit),
-  passage « Encaisser » vers la caisse, pièce jointe .ics (`sendEmail` ne la gère pas).
+- **Rappel de la veille** (2026-10-13) : e-mail aux clientes dont le rendez-vous
+  confirmé à horaire fixé a lieu le lendemain, chaque jour à 8 h UTC
+  (`cron-booking-reminders` → `/api/cron/booking-reminders` →
+  `sendDayBeforeReminders`). `rappel_effectue` est réservé avant l'envoi (jamais
+  deux rappels), rendu si l'envoi échoue, remis à faux quand le rendez-vous est
+  déplacé. Sans e-mail, pas de rappel (WhatsApp/SMS : pas encore branchés).
+- Pas encore fait : passage « Encaisser » vers la caisse, pièce jointe .ics
+  (`sendEmail` ne la gère pas).
 
 ## Offres du moment (2026-10-05)
 

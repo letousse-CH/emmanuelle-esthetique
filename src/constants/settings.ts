@@ -91,6 +91,9 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   // Adresse d'expédition des e-mails du site (Admin > Clés API). Vide :
   // <prénom de la gérante>@<domaine du site> — voir services/email.ts.
   resend_from_email: '',
+  // E-mails aux clientes (réservations) modifiés dans Réglages › Réservations :
+  // JSON { accuse: { subject, body }, … } — voir utils/bookingEmails.ts.
+  booking_email_templates: '',
   business_phone: '',
   business_address_street:  '',
   business_address_postal:  '',
