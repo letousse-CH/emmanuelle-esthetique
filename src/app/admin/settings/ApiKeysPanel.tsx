@@ -407,9 +407,13 @@ export default function ApiKeysPanel() {
                 type="email"
                 value={resendFromEmail}
                 onChange={(e) => setResendFromEmail(e.target.value)}
-                placeholder="contact@votre-domaine.ch"
+                placeholder="prenom@votre-domaine.ch"
                 className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900"
               />
+              <p className="text-[13px] text-stone-700">
+                Sur le domaine vérifié chez Resend ; aucune boîte mail n&apos;est nécessaire, les réponses
+                arrivent à l&apos;e-mail de l&apos;onglet Entreprise. Vide : le prénom de la gérante sur le domaine du site.
+              </p>
             </div>
           </div>
 

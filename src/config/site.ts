@@ -33,15 +33,11 @@ export const SITE_CONFIG = {
   // fictive ferait échouer les envois en silence.
   receiverEmail: process.env.CONTACT_EMAIL || "",
 
-  // Resend exige un domaine vérifié pour l'expéditeur. Tant qu'il n'existe
-  // pas, laisser vide (les envois échouent proprement) ou utiliser
-  // onboarding@resend.dev pour les tests.
+  // Resend exige un domaine vérifié pour l'expéditeur (pas de boîte mail).
+  // Vide : `contact@<domaine du site>`, au nom de l'institut (services/email.ts).
   emailSender: {
     name: "",
     email: process.env.RESEND_FROM_EMAIL || "",
-    get full() {
-      return `${this.name} <${this.email}>`;
-    }
   },
 
   // Indexation IndexNow (Bing). À définir par site.

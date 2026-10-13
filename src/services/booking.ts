@@ -2673,6 +2673,7 @@ async function sendNewRequestMails(db: SupabaseClient, booking: Booking, setting
     to,
     subject: oneLine(`Nouvelle demande — ${booking.prenom} ${booking.nom} — ${booking.service_nom}`),
     html,
+    replyTo: booking.email || undefined, // « Répondre » écrit à la cliente
   });
   await logEvent(db, booking.id, 'email', { template: 'notification_institut', destinataire: 'institut', ok: res.success }, 'systeme');
 }

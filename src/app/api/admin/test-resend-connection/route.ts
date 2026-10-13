@@ -32,6 +32,10 @@ export async function POST(req: NextRequest) {
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
+      // Une clé « Sending access » (recommandée) n'a pas le droit de lister les domaines : elle est valide.
+      if (errData.name === 'restricted_api_key') {
+        return NextResponse.json({ success: true, message: 'Clé Resend valide (envoi seulement).' });
+      }
       return NextResponse.json({
         success: false,
         error: `Clé Resend invalide ou refusée : ${errData.message || res.statusText}`,

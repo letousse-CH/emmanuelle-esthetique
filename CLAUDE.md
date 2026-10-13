@@ -94,13 +94,18 @@ nouveau projet Supabase.
 
 ## Nom de domaine & stockage des médias
 
-**Domaine.** Pas encore de domaine définitif : le site tourne sur
-`emmanuelle-esthetique.netlify.app`. `SITE_CONFIG.url` (`src/config/site.ts`)
+**Domaine.** `emmanuelle-esthetique.ch`, DNS gérés par Netlify (NS1). Aucune
+boîte mail sur le domaine (pas de MX) : les e-mails du site partent par Resend
+de `emmanuelle@emmanuelle-esthetique.ch` (champ « Adresse d'expédition » d'Admin ›
+Clés API, sinon prénom de la gérante sur le domaine ; jamais contact@, mal vu des
+filtres anti-spam), au nom de l'institut ; domaine à vérifier chez Resend (sous-domaine
+`send.`). Les réponses vont à l'e-mail de l'onglet Entreprise (`defaultSender`,
+`services/email.ts`). `SITE_CONFIG.url` (`src/config/site.ts`)
 résout dans cet ordre : `NEXT_PUBLIC_SITE_URL` → `URL` (injecté par Netlify,
 **serveur uniquement**) → repli sur l'URL Netlify.
 
 Seul `NEXT_PUBLIC_SITE_URL` est injecté aussi dans le bundle navigateur — c'est
-donc lui qu'il faut définir. Le jour où le domaine est choisi :
+donc lui qu'il faut définir. Pour changer de domaine :
 
 ```bash
 netlify env:set NEXT_PUBLIC_SITE_URL "https://le-vrai-domaine.ch"

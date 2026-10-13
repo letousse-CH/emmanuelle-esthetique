@@ -88,6 +88,9 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   // Vide tant qu'il n'y a pas de domaine : le footer et la page contact
   // masquent l'e-mail s'il est absent, plutôt que d'afficher une adresse morte.
   business_email: '',
+  // Adresse d'expédition des e-mails du site (Admin > Clés API). Vide :
+  // <prénom de la gérante>@<domaine du site> — voir services/email.ts.
+  resend_from_email: '',
   business_phone: '',
   business_address_street:  '',
   business_address_postal:  '',
