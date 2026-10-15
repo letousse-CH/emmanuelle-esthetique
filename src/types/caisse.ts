@@ -369,6 +369,37 @@ export function recetteEncaissee(t: Pick<Transaction, 'status' | 'total_ttc' | '
   return round2(Number(t.total_ttc) - Number(t.montant_bon ?? 0));
 }
 
+/**
+ * Recettes d'un ensemble de factures, ventilées par nature : prestations,
+ * marchandise, bons cadeaux vendus. Chaque ligne reçoit la part encaissée de
+ * sa facture (un soin réglé par bon pèse 0) ; les prestations sont calculées
+ * par différence, pour que les trois postes se somment au centime au total.
+ */
+export function ventilerRecettes(
+  txs: (Pick<Transaction, 'status' | 'total_ttc' | 'montant_bon'> & {
+    transaction_items?: Pick<TransactionItem, 'total_ttc' | 'product_id' | 'gift_card_id'>[] | null;
+  })[],
+): { total: number; prestations: number; produits: number; bons: number } {
+  let total = 0;
+  let produits = 0;
+  let bons = 0;
+  for (const t of txs) {
+    const recette = recetteEncaissee(t);
+    if (recette === 0) continue;
+    total += recette;
+    const part = recette / Number(t.total_ttc);
+    for (const it of t.transaction_items ?? []) {
+      const montant = Number(it.total_ttc || 0) * part;
+      if (it.gift_card_id) bons += montant;
+      else if (it.product_id) produits += montant;
+    }
+  }
+  total = round2(total);
+  produits = round2(produits);
+  bons = round2(bons);
+  return { total, prestations: round2(total - produits - bons), produits, bons };
+}
+
 /** Détail d'un bon cadeau à émettre, porté par une ligne du panier. */
 export interface GiftCardDraft {
   beneficiaire: string;

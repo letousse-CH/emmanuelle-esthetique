@@ -8,9 +8,9 @@ import {
   HelpCircle, RefreshCw, Layers, Calendar, ChevronRight
 } from 'lucide-react';
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
-import { Button, PageHeader } from '../../../../components/admin/ui';
+import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import { listProducts, listTransactions } from '../../../../services/caisse';
-import { Product, TransactionWithItems, formatCHF, stockLevel, isVenteProduct } from '../../../../types/caisse';
+import { Product, TransactionWithItems, formatCHF, stockLevel, isVenteProduct, recetteEncaissee } from '../../../../types/caisse';
 import { computeAvsIndependant } from '../../../../types/finance';
 
 export default function CockpitClient() {
@@ -18,8 +18,10 @@ export default function CockpitClient() {
   const [transactions, setTransactions] = useState<TransactionWithItems[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Mode simulation si aucune transaction réelle n'a encore été enregistrée cette semaine
+  // Simulation affichée à la demande seulement : un lundi matin sans vente doit
+  // montrer 0, jamais des chiffres inventés à la place des vrais.
   const [demoMode, setDemoMode] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Paramètres du simulateur interactif
   const [simClientesJour, setSimClientesJour] = useState(2);
@@ -31,33 +33,27 @@ export default function CockpitClient() {
   }, []);
 
   const loadData = async () => {
-    setLoading(true);
+    setLoading(true); setLoadError(null);
     try {
-      // Période de la semaine en cours (lundi au samedi)
-      const now = new Date();
-      const day = now.getDay();
-      const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(now.setDate(diffToMonday));
+      // Semaine en cours, du lundi 00:00 au dimanche 23:59 : une vente faite
+      // un dimanche compte aussi.
+      const monday = new Date();
       monday.setHours(0, 0, 0, 0);
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
 
-      const saturday = new Date(monday);
-      saturday.setDate(monday.getDate() + 5);
-      saturday.setHours(23, 59, 59, 999);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
 
       const [prods, txs] = await Promise.all([
         listProducts(true),
-        listTransactions(monday.toISOString(), saturday.toISOString()).catch(() => []),
+        listTransactions(monday.toISOString(), sunday.toISOString()),
       ]);
 
       setProducts(prods.filter(isVenteProduct));
       setTransactions(txs);
-
-      // Si pas encore de transactions réelles sur la semaine, activer le mode démonstration
-      if (txs.length === 0) {
-        setDemoMode(true);
-      }
     } catch (e) {
-      console.error('Erreur chargement cockpit:', e);
+      setLoadError(e instanceof Error ? e.message : 'Chargement impossible.');
     } finally {
       setLoading(false);
     }
@@ -113,9 +109,20 @@ export default function CockpitClient() {
     }
 
     const validTxs = transactions.filter(t => t.status !== 'annulee');
-    const clientesCount = validTxs.length;
-    const caTotal = validTxs.reduce((acc, t) => acc + Number(t.total_ttc || 0), 0);
-    const panierMoyen = clientesCount > 0 ? Math.round((caTotal / clientesCount) * 10) / 10 : 0;
+    // CA = recettes encaissées (règle du module) : un soin réglé par bon cadeau
+    // a été encaissé à la vente du bon, il ne compte pas une seconde fois.
+    const caTotal = Math.round(validTxs.reduce((acc, t) => acc + recetteEncaissee(t), 0) * 100) / 100;
+    // Une cliente accueillie = un passage avec soin ou produit ; acheter
+    // seulement un bon cadeau n'est pas une visite. Le panier mesure ce qu'elle
+    // a reçu (soins + produits), quelle que soit la façon dont elle a payé.
+    const visites = validTxs
+      .map(t => t.transaction_items.filter(i => !i.gift_card_id))
+      .filter(items => items.length > 0)
+      .map(items => items.reduce((acc, i) => acc + Number(i.total_ttc || 0), 0));
+    const clientesCount = visites.length;
+    const panierMoyen = clientesCount > 0
+      ? Math.round((visites.reduce((a, v) => a + v, 0) / clientesCount) * 10) / 10
+      : 0;
 
     return {
       clientesCount,
@@ -205,6 +212,21 @@ export default function CockpitClient() {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <Callout
+          tone="danger"
+          title="Les ventes de la semaine n'ont pas pu être lues"
+          actions={<Button size="sm" onClick={loadData}>Réessayer</Button>}
+        >
+          Les jauges ci-dessous restent à zéro tant que la lecture échoue. Détail : {loadError}
+        </Callout>
+      )}
+      {demoMode && (
+        <Callout tone="warning">
+          Chiffres de démonstration : ce ne sont pas vos ventes. Cliquez sur « Données démo actives » pour revenir aux vrais chiffres.
+        </Callout>
+      )}
 
       {/* ── 1. OBJECTIFS DE LA SEMAINE (Jauges 2 clientes/jour & Panier 250-450 CHF) ── */}
       <div>
@@ -407,7 +429,7 @@ export default function CockpitClient() {
           <div className="bg-white min-w-0 p-4 rounded-xl border border-blue-200/60 shadow-2xs">
             <span className="text-[11.5px] text-stone-500 font-medium block">Potentiel en Clientes Équipées</span>
             <span className="text-xl sm:text-2xl font-black break-words text-blue-900 mt-1 block">
-              ~{Math.max(1, Math.round(stockStats.totalUnites / 2))} clientes
+              ~{Math.round(stockStats.totalUnites / 2)} clientes
             </span>
             <span className="text-[11px] text-blue-700 mt-0.5 block">
               à 2 produits par routine beauté

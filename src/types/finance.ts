@@ -192,12 +192,17 @@ export interface ServiceSupplyCost {
   supplies: ServiceSupply[];
 }
 
+/** Revenu dès lequel le taux plein de 10 % s'applique (2025–2026). */
+export const AVS_BORNE_HAUTE = 60500;
+
 /**
- * Calculateur AVS Vaudois pour Indépendants (Barème légal suisse 2024–2026).
+ * Calculateur AVS Vaudois pour Indépendants (barème 2025–2026, notice de la
+ * Caisse cantonale vaudoise de compensation 01.2026).
  *
  * - Moins de CHF 10'100 de revenu net : cotisation minimale de CHF 530 / an.
- * - Entre CHF 10'100 et CHF 58'800 : échelle dégressive de 5.371 % à 10.0 %.
- * - Au-delà de CHF 58'800 : taux plein de 10.0 % (AVS 8.1% + AI 1.4% + APG 0.5%).
+ * - Entre CHF 10'100 et CHF 60'500 : échelle dégressive de 5.371 % à 10.0 %.
+ * - Dès CHF 60'500 : taux plein de 10.0 % (AVS 8.1% + AI 1.4% + APG 0.5%).
+ *   (58'800 était la borne de 2023–2024 ; les bornes suivent les rentes.)
  * - Frais d'administration caisse de compensation vaudoise : env. 2.0 %.
  */
 export function computeAvsIndependant(revenuAnnuelNet: number): {
@@ -218,12 +223,12 @@ export function computeAvsIndependant(revenuAnnuelNet: number): {
   if (r < 10100) {
     cotis = 530;
     taux = (cotis / r) * 100;
-  } else if (r >= 58800) {
+  } else if (r >= AVS_BORNE_HAUTE) {
     taux = 10.0;
     cotis = r * 0.10;
   } else {
-    // Barème dégressif linéaire d'interpolation entre 10'100 (5.371%) et 58'800 (10.0%)
-    const alpha = (r - 10100) / (58800 - 10100);
+    // Barème dégressif linéaire d'interpolation entre 10'100 (5.371%) et 60'500 (10.0%)
+    const alpha = (r - 10100) / (AVS_BORNE_HAUTE - 10100);
     taux = 5.371 + alpha * (10.0 - 5.371);
     cotis = r * (taux / 100);
   }
@@ -246,6 +251,8 @@ export interface FinancialDashboardStats {
   chiffreAffairesTotal: number;
   caPrestations: number;
   caProduitsVente: number;
+  /** Bons cadeaux vendus : encaissés à la vente, la prestation viendra plus tard. */
+  caBonsCadeaux: number;
   nombreFacturesCaisse: number;
   // Achats & Matières
   achatsMarchandisesBoutique: number;

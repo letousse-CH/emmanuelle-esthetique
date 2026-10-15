@@ -334,6 +334,11 @@ export function ClientDetailView({
                         : formatCHF(recetteEncaissee(t))}
                     </p>
                   </div>
+                  {t.status !== 'annulee' && Number(t.montant_bon) > 0 && (
+                    <p className="mt-0.5 text-[13px] lg:text-xs text-stone-600 tabular-nums">
+                      + {formatCHF(t.montant_bon)} réglés par bon cadeau
+                    </p>
+                  )}
                   <ul className="mt-2 space-y-1">
                     {t.transaction_items.map(item => (
                       <li key={item.id} className="flex items-baseline justify-between gap-3 text-[14px] lg:text-xs">

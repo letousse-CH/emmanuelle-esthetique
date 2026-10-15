@@ -7,7 +7,7 @@ import {
   Download, RefreshCw, Loader2, FileText, Ban,
   ChevronDown, ChevronRight, ChevronLeft, TrendingUp, Check, PenLine, Ticket, Package, CalendarDays, Receipt,
 } from 'lucide-react';
-import { cancelTransaction, listTransactions } from '../../../../services/caisse';
+import { cancelTransaction, listGiftCardsForSale, listTransactions } from '../../../../services/caisse';
 import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import {
   BottomSheet, Chip, EmptyState, ListGroup, ListRow, SegmentedControl, Skeleton, StatTile,
@@ -17,7 +17,7 @@ import { setCaisseCorrection } from '../../../../utils/caissePrefill';
 import {
   MODES_PAIEMENT, MODE_PAIEMENT_LABELS, formatAmount, formatCHF, ligneMarge, recetteEncaissee,
 } from '../../../../types/caisse';
-import type { ModePaiement, TransactionWithItems } from '../../../../types/caisse';
+import type { GiftCard, ModePaiement, TransactionWithItems } from '../../../../types/caisse';
 
 type PeriodMode = 'mois' | 'annee';
 
@@ -36,6 +36,13 @@ function periodBounds(mode: PeriodMode, year: number, month: number) {
 }
 
 function startOfDay(d: Date) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+
+/** Durée de validité d'un bon, en mois, retrouvée depuis ses dates. */
+function dureeBonMois(card: Pick<GiftCard, 'emis_le' | 'expire_le'>): number {
+  const emis = new Date(card.emis_le);
+  const fin = new Date(`${card.expire_le}T00:00:00`);
+  return Math.max(1, (fin.getFullYear() - emis.getFullYear()) * 12 + (fin.getMonth() - emis.getMonth()));
+}
 
 /** Quantités d'articles : entières la plupart du temps, donc sans centimes forcés. */
 function qteLabel(n: number): string {
@@ -303,7 +310,7 @@ export default function JournalClient() {
           encaisse.toFixed(2),
           (Math.round((valeur - encaisse) * 100) / 100).toFixed(2),
           valeur.toFixed(2),
-          item.product_id ? 'Marchandise' : 'Prestation',
+          item.gift_card_id ? 'Bon cadeau' : item.product_id ? 'Marchandise' : 'Prestation',
           item.prix_achat_unitaire === null || item.prix_achat_unitaire === undefined
             ? ''
             : Number(item.prix_achat_unitaire).toFixed(2),
@@ -716,9 +723,12 @@ export default function JournalClient() {
           intent={dialog.intent}
           onClose={() => setDialog(null)}
           onDone={() => { setDialog(null); load(); }}
-          onCorrected={(tx) => {
+          onCorrected={(tx, bons) => {
             // La facture fautive vient d'être annulée : on repart sur la caisse
             // avec son contenu pré-rempli, et le lien vers l'ancienne.
+            // L'annulation a aussi annulé les bons qu'elle avait vendus : leurs
+            // lignes en réémettent un (nouveau code, même bénéficiaire, même
+            // durée), sinon la cliente paierait un bon qui n'existe plus.
             setCaisseCorrection({
               corrigeTransactionId: tx.id,
               numero: tx.numero,
@@ -726,19 +736,25 @@ export default function JournalClient() {
               clientLabel: tx.client_label,
               modePaiement: tx.mode_paiement,
               note: tx.note ?? '',
-              lines: tx.transaction_items.map(item => ({
-                key: item.id,
-                service_id: item.service_id,
-                // Sans lui, la facture rectifiée ne ressortirait pas la
-                // marchandise du stock que l'annulation vient d'y remettre.
-                product_id: item.product_id,
-                // Et sans elle, l'offre perdrait la place que l'annulation vient de libérer.
-                offer_id: item.offer_id ?? null,
-                description: item.description,
-                prix_unitaire_ttc: Number(item.prix_unitaire_ttc),
-                quantite: Number(item.quantite),
-                taux_tva: Number(item.taux_tva),
-              })),
+              lines: tx.transaction_items.map(item => {
+                const bon = item.gift_card_id ? bons.find(g => g.id === item.gift_card_id) : undefined;
+                return {
+                  key: item.id,
+                  service_id: item.service_id,
+                  // Sans lui, la facture rectifiée ne ressortirait pas la
+                  // marchandise du stock que l'annulation vient d'y remettre.
+                  product_id: item.product_id,
+                  // Et sans elle, l'offre perdrait la place que l'annulation vient de libérer.
+                  offer_id: item.offer_id ?? null,
+                  description: item.description,
+                  prix_unitaire_ttc: Number(item.prix_unitaire_ttc),
+                  quantite: Number(item.quantite),
+                  taux_tva: Number(item.taux_tva),
+                  gift_card: bon
+                    ? { beneficiaire: bon.beneficiaire ?? '', validiteMois: dureeBonMois(bon) }
+                    : undefined,
+                };
+              }),
             });
             router.push('/admin/caisse');
           }}
@@ -996,9 +1012,10 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
   intent: 'cancel' | 'correct';
   onClose: () => void;
   onDone: () => void;
-  onCorrected: (tx: TransactionWithItems) => void;
+  onCorrected: (tx: TransactionWithItems, bons: GiftCard[]) => void;
 }) {
   const isCorrection = intent === 'correct';
+  const venteDeBon = tx.transaction_items.some(i => i.gift_card_id);
   const [reason, setReason] = useState(isCorrection ? 'Erreur de saisie' : '');
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
@@ -1008,8 +1025,10 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
     if (!reason.trim()) return;
     setSaving(true); setError(null);
     try {
+      // Lus AVANT l'annulation : si la lecture échoue, rien n'est annulé.
+      const bons = isCorrection && venteDeBon ? await listGiftCardsForSale(tx.id) : [];
       await cancelTransaction(tx.id, reason.trim());
-      if (isCorrection) onCorrected(tx);
+      if (isCorrection) onCorrected(tx, bons);
       else onDone();
     } catch (err) {
       setError(`La facture n'a pas été modifiée${err instanceof Error ? ` (${err.message})` : ''}. Réessayez dans un instant.`);
@@ -1061,6 +1080,14 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
         {Number(tx.montant_bon ?? 0) > 0 && (
           <p className="text-[14px] text-accent bg-accent/5 border border-accent/20 rounded-lg px-3.5 py-2.5">
             Les {formatCHF(tx.montant_bon)} réglés par bon cadeau seront recrédités sur le bon.
+          </p>
+        )}
+
+        {venteDeBon && (
+          <p className="text-[14px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3.5 py-2.5">
+            {isCorrection
+              ? 'Le bon cadeau vendu par cette facture sera annulé. La facture rectifiée en émettra un nouveau, avec un nouveau code : remettez ce nouveau bon à la cliente.'
+              : 'Le bon cadeau vendu par cette facture sera annulé : son code ne pourra plus servir.'}
           </p>
         )}
 

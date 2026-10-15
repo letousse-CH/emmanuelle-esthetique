@@ -202,6 +202,9 @@ export default function DepensesClient() {
       if (parsedPreview.updateStock && parsedPreview.items.length > 0) {
         const stockRes = await applyInvoiceToStock(created.id, parsedPreview.items);
         stockMsg = ` Stock actualisé : +${stockRes.totalQuantityAdded} unités (+${stockRes.updatedCount} stocks existants ajustés avec le bon, +${stockRes.createdCount} nouvelles fiches créées).`;
+        if (stockRes.erreurs.length > 0) {
+          setError(`${stockRes.erreurs.length} article(s) ne sont PAS entrés en stock — à saisir à la main (Produits › Stock › Réception) : ${stockRes.erreurs.join(' · ')}`);
+        }
       }
 
       setNotice(`Facture « ${parsedPreview.fournisseur} » n° ${parsedPreview.numero_facture} enregistrée avec succès.${stockMsg}`);

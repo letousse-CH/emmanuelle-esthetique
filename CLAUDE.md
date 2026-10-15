@@ -278,8 +278,25 @@ l'impose (art. 957a « intégralité, chronologie, traçabilité » et art. 958f
   aucune facture déjà émise. C'est aussi pourquoi une fiche cliente citée sur
   une facture est *archivée* et non supprimée.
 
+**Version en vigueur de `caisse_create_transaction` : `20261015_caisse_bons_tva_produits.sql`**
+(après `20261005`). Elle émet les bons AVANT les lignes de facture : jusque-là,
+la ligne était modifiée après coup pour y lier le bon, ce que
+`caisse_items_guard` refuse — aucune vente de bon n'avait jamais abouti. Elle
+force aussi le 0 % de TVA tant que `caisse_tva_assujetti` ≠ `'true'`, et accorde
+à `authenticated` l'écriture de `products.usage_type`/`contenance`. Tests :
+`npx tsx scripts/test-caisse.ts` (règles pures : recette, ventilation du CA, AVS).
+
+⚠️ Sur Supabase, `REVOKE EXECUTE … FROM public` ne retire rien à `anon`, qui
+reçoit EXECUTE explicitement par défaut. `20261015_caisse_droits_execution.sql`
+a fermé les fonctions SECURITY DEFINER de la caisse à `anon` (avant, la clé
+publique suffisait pour créer ou annuler une facture). Toute nouvelle fonction
+SECURITY DEFINER doit révoquer `anon` nommément.
+
 **TVA.** 0 % par défaut : l'activité n'est pas assujettie tant que le chiffre
-d'affaires reste sous CHF 100'000/an (LTVA art. 10). La structure gère déjà un
+d'affaires reste sous CHF 100'000/an (LTVA art. 10). Les produits gardent un
+taux par défaut (8.1 %) pour le jour de l'assujettissement, mais tant qu'elle
+ne l'est pas, Postgres facture toutes les lignes à 0 % : une TVA écrite sur une
+quittance serait due quand même (LTVA art. 27 al. 2). La structure gère déjà un
 taux par ligne — le jour de l'assujettissement, il suffit d'activer la TVA et de
 choisir le taux (8.1 / 3.8 / 2.6 %) dans `/admin/settings` → onglet **Caisse**.
 Les factures antérieures gardent le leur, elles ne sont jamais recalculées.

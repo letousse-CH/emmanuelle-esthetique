@@ -14,8 +14,9 @@ import {
   computeAvsIndependant,
   DEFAULT_SWISS_CATEGORIES,
 } from '../types/finance';
-import { Product, Service, Transaction, TransactionItem } from '../types/caisse';
+import { Product, Service, Transaction, TransactionItem, ventilerRecettes } from '../types/caisse';
 import { createProduct, listProducts, stockMovement, updateProduct } from './caisse';
+import { zurichMidnightISO } from '../components/admin/mobile/home/zurich';
 import { COSKYN_FACTURE_139079 } from './invoiceParser';
 
 // ── Ventilation multi-lignes d'une facture mixte ────────────────────────────
@@ -60,12 +61,13 @@ export function getInvoiceVentilation(exp: Expense): InvoiceVentilation {
     }
     const lineHT = Number(it.total_ttc || (it.quantite * it.prix_unitaire) || 0);
     const usage = it.usage_type || 'vente';
-    if (usage === 'cabine') {
-      cHT += lineHT;
+    if (usage === 'vente') {
+      vHT += lineHT;
     } else if (usage === 'consommable') {
       aHT += lineHT;
     } else {
-      vHT += lineHT;
+      // Cabine, testeurs, échantillons : rien de tout cela n'est revendu.
+      cHT += lineHT;
     }
   }
 
@@ -280,6 +282,8 @@ export interface StockImportSummary {
   createdCount: number;
   totalQuantityAdded: number;
   totalCostCHF: number;
+  /** Articles qui n'ont PAS pu entrer en stock, avec la raison. */
+  erreurs: string[];
 }
 
 export interface InvoiceItemStockMatch {
@@ -339,6 +343,7 @@ export async function applyInvoiceToStock(
   let createdCount = 0;
   let totalQuantityAdded = 0;
   let totalCostCHF = 0;
+  const erreurs: string[] = [];
 
   for (const it of items) {
     if (it.quantite <= 0) continue;
@@ -347,7 +352,7 @@ export async function applyInvoiceToStock(
     const itNomClean = (it.designation || '').trim().toLowerCase();
 
     // Cherche le produit par référence normalisée ou nom
-    let prod = existingProducts.find(p => {
+    const prod = existingProducts.find(p => {
       if (itRefClean && p.reference) {
         const pRefClean = p.reference.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
         if (pRefClean && pRefClean === itRefClean) return true;
@@ -358,86 +363,55 @@ export async function applyInvoiceToStock(
     const isFree = it.rabais_pct === 100;
     const prixAchat = isFree ? 0 : it.prix_unitaire;
     const usage = it.usage_type || 'vente';
+    const quantite = Number(it.quantite || 0);
 
-    if (prod) {
-      // Produit existant : incrémente le stock existant avec la quantité du bon de commande
-      const currentStock = Number(prod.stock || 0);
-      const incomingQty = Number(it.quantite || 0);
-      const targetStock = currentStock + incomingQty;
-
-      try {
-        await stockMovement({
-          productId: prod.id,
-          type: 'reception',
-          quantite: incomingQty,
-          prixAchatUnitaire: prixAchat,
-          motif: `Bon de commande / Facture [${it.reference || prod.nom}] - Réception réassort (+${incomingQty})`,
-        });
-      } catch (err) {
-        console.warn('stockMovement fallback to direct update:', err);
-      }
-
-      // Garantit l'ajustement exact du stock et du prix d'achat
-      try {
-        await updateProduct(prod.id, {
-          stock: targetStock,
-          prix_achat_chf: isFree ? prod.prix_achat_chf : prixAchat,
-          usage_type: prod.usage_type || usage,
-        });
-      } catch (e) {
-        console.warn('Update fallback failed:', e);
-      }
-
-      // Met à jour la référence locale en mémoire pour le reste de la boucle
-      prod.stock = targetStock;
-      updatedCount++;
-    } else {
-      // Nouvelle référence : création automatique avec la quantité initiale du bon
-      const prixVenteSuggere = usage === 'vente' ? Math.round(prixAchat * 2.1 * 10) / 10 : 0;
-
-      try {
-        const contenanceMatch = it.designation.match(/(\d+\s*(?:ml|l|kg|g|rlx|rouleaux))/i);
-        const autoContenance = it.contenance || (contenanceMatch ? contenanceMatch[1] : null);
-
-          const created = await createProduct({
-            nom: it.designation,
-            marque: 'Phytomer',
-            reference: it.reference || null,
-            description: `Produit ${usage === 'cabine' ? 'professionnel cabine' : 'vente boutique'}`,
-            prix_achat_chf: isFree ? 0 : prixAchat,
-            prix_vente_chf: prixVenteSuggere,
-            taux_tva_defaut: it.taux_tva,
-            seuil_alerte: usage === 'cabine' ? 1 : 2,
-            active: true,
-            ordre: 99,
-            usage_type: usage,
-            contenance: autoContenance,
-            stock: it.quantite,
-          });
-
-        // Entrée en stock initiale dans le journal
-        if (created?.id) {
-          try {
-            await stockMovement({
-              productId: created.id,
-              type: 'reception',
-              quantite: it.quantite,
-              prixAchatUnitaire: isFree ? 0 : prixAchat,
-              motif: `Facture réception création ${it.reference || ''}`,
-            });
-          } catch {
-            // silent
-          }
-          existingProducts.push(created);
+    try {
+      let productId: string;
+      if (prod) {
+        productId = prod.id;
+        // Le tarif de la facture devient le prix d'achat de référence (un
+        // article offert ne l'écrase pas).
+        if (!isFree && Number(prod.prix_achat_chf) !== prixAchat) {
+          await updateProduct(prod.id, { prix_achat_chf: prixAchat });
         }
-        createdCount++;
-      } catch (err) {
-        console.warn('Erreur création automatique produit:', err);
+      } else {
+        // Nouvelle référence : la fiche naît sans stock, la réception
+        // ci-dessous l'alimente — une seule entrée, jamais deux.
+        const prixVenteSuggere = usage === 'vente' ? Math.round(prixAchat * 2.1 * 10) / 10 : 0;
+        const contenanceMatch = it.designation.match(/(\d+\s*(?:ml|l|kg|g|rlx|rouleaux))/i);
+        const created = await createProduct({
+          nom: it.designation,
+          marque: 'Phytomer',
+          reference: it.reference || null,
+          description: `Produit ${usage === 'cabine' ? 'professionnel cabine' : 'vente boutique'}`,
+          prix_achat_chf: prixAchat,
+          prix_vente_chf: prixVenteSuggere,
+          taux_tva_defaut: it.taux_tva,
+          seuil_alerte: usage === 'cabine' ? 1 : 2,
+          active: true,
+          ordre: 99,
+          usage_type: usage,
+          contenance: it.contenance || (contenanceMatch ? contenanceMatch[1] : null),
+        });
+        existingProducts.push(created);
+        productId = created.id;
       }
-    }
 
-    totalQuantityAdded += it.quantite;
-    totalCostCHF += isFree ? 0 : it.quantite * prixAchat;
+      // Le stock ne se saisit pas : il entre par un mouvement de réception.
+      await stockMovement({
+        productId,
+        type: 'reception',
+        quantite,
+        prixAchatUnitaire: prixAchat,
+        motif: `Facture ${it.reference || it.designation}`,
+      });
+
+      if (prod) updatedCount++; else createdCount++;
+      totalQuantityAdded += quantite;
+      totalCostCHF += quantite * prixAchat;
+    } catch (err) {
+      erreurs.push(`${it.designation} : ${err instanceof Error ? err.message : 'erreur inconnue'}`);
+    }
   }
 
   // Marquer la dépense comme entrée en stock
@@ -448,6 +422,7 @@ export async function applyInvoiceToStock(
     createdCount,
     totalQuantityAdded,
     totalCostCHF: Math.round(totalCostCHF * 100) / 100,
+    erreurs,
   };
 }
 
@@ -519,41 +494,27 @@ export async function computeFinancialStats(
   const debut = `${annee}-01-01`;
   const fin = `${annee}-12-31`;
 
-  // 1. Chiffre d'affaires via transactions de caisse
-  let caTotal = 0;
-  let caPresta = 0;
-  let caProd = 0;
-  let nbTx = 0;
-  let encaissementsReels = 0;
+  // 1. Chiffre d'affaires : recettes de caisse de l'exercice, bornées en heure
+  //    de Zurich (une vente du 31 décembre à 23 h 30 appartient à cet exercice).
+  //    Même règle que le journal : recette = total_ttc − montant_bon, la part
+  //    réglée par bon ayant été encaissée le jour de la vente du bon
+  //    (ventilation par nature : `ventilerRecettes`).
+  const { data: txs, error: txError } = await supabase
+    .from('transactions')
+    .select('status, total_ttc, montant_bon, transaction_items(total_ttc, product_id, gift_card_id)')
+    .eq('status', 'payee')
+    .gte('created_at', zurichMidnightISO(debut))
+    .lt('created_at', zurichMidnightISO(`${annee + 1}-01-01`))
+    .limit(10000);
+  if (txError) throw new Error(`Les encaissements n'ont pas pu être lus (${txError.message}).`);
 
-  try {
-    const { data: txs } = await supabase
-      .from('transactions')
-      .select('*, items:transaction_items(*)')
-      .gte('created_at', `${debut}T00:00:00`)
-      .lte('created_at', `${fin}T23:59:59`)
-      .eq('statut', 'payee');
-
-    if (txs && txs.length > 0) {
-      nbTx = txs.length;
-      for (const t of txs) {
-        caTotal += Number(t.total_ttc || 0);
-        encaissementsReels += Number(t.total_ttc || 0) - Number(t.montant_bon_utilise || 0);
-
-        if (t.items && Array.isArray(t.items)) {
-          for (const it of t.items) {
-            if (it.product_id) {
-              caProd += Number(it.total_ttc || 0);
-            } else {
-              caPresta += Number(it.total_ttc || 0);
-            }
-          }
-        }
-      }
-    }
-  } catch {
-    // Si pas de transactions en base, garde 0
-  }
+  const ventilation = ventilerRecettes(txs ?? []);
+  const caTotal = ventilation.total;
+  const caPresta = ventilation.prestations;
+  const caProd = ventilation.produits;
+  const caBons = ventilation.bons;
+  const nbTx = (txs ?? []).length;
+  const encaissementsReels = caTotal;
 
   // 2. Dépenses & Achats
   const allExpenses = await listExpenses();
@@ -577,7 +538,9 @@ export async function computeFinancialStats(
       decaissementsReels += montant;
     }
 
-    if (exp.items && exp.items.length > 0) {
+    // Ventilation par article réservée aux achats de matières (comptes 4xxx) :
+    // une charge détaillée article par article reste une charge.
+    if (exp.items && exp.items.length > 0 && (!code || code.startsWith('4'))) {
       const vent = getInvoiceVentilation(exp);
       achatsMarchandises += vent.partVenteTTC;
       achatsCabine += vent.partCabineTTC;
@@ -619,8 +582,9 @@ export async function computeFinancialStats(
   return {
     periode: { debut, fin },
     chiffreAffairesTotal: Math.round(caTotal * 100) / 100,
-    caPrestations: Math.round(caPresta * 100) / 100,
-    caProduitsVente: Math.round(caProd * 100) / 100,
+    caPrestations: caPresta,
+    caProduitsVente: caProd,
+    caBonsCadeaux: caBons,
     nombreFacturesCaisse: nbTx,
     achatsMarchandisesBoutique: Math.round(achatsMarchandises * 100) / 100,
     achatsCabineMatieres: Math.round(achatsCabine * 100) / 100,

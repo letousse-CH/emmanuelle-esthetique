@@ -25,7 +25,7 @@ import { PERIODE_LABEL } from '../../../types/booking';
 import type { Booking, BookingDetail } from '../../../types/booking';
 import {
   CLIENT_DE_PASSAGE, MODES_PAIEMENT, TAUX_TVA_CH, cartTotals, clientFullName, formatCHF, remisePatch,
-  giftCardStatusLabel, isGiftCardUsable, isVenteProduct, stockLevel,
+  giftCardStatusLabel, isGiftCardUsable, isVenteProduct, recetteEncaissee, stockLevel,
 } from '../../../types/caisse';
 import { toWhatsAppNumber } from '../../../types/promotions';
 import { listCurrentOffers } from '../../../services/offers';
@@ -321,7 +321,16 @@ export default function CaisseClient() {
     });
   }, [ready, receipt, lines, client, pendingClientId, pendingClientLabel, mode, note, giftCard, pendingGiftCode, correction, rdv]);
 
-  const totals = useMemo(() => cartTotals(lines), [lines]);
+  // Activité non assujettie : toutes les lignes partent à 0 %, quel que soit le
+  // taux par défaut d'un produit (prévu pour le jour de l'assujettissement).
+  // Une TVA écrite sur une quittance serait due (LTVA art. 27 al. 2). C'est
+  // Postgres qui l'impose (`caisse_create_transaction` lit le réglage) ; on la
+  // reproduit ici pour que l'aperçu corresponde à la facture émise.
+  const linesTva = useMemo(
+    () => (tvaActive ? lines : lines.map(l => (Number(l.taux_tva) === 0 ? l : { ...l, taux_tva: 0 }))),
+    [lines, tvaActive],
+  );
+  const totals = useMemo(() => cartTotals(linesTva), [linesTva]);
 
   // Quantité de chaque article déjà dans le panier : le catalogue affiche le
   // stock qu'il RESTERA une fois la vente validée, pas le stock en base. C'est
@@ -875,6 +884,10 @@ export default function CaisseClient() {
     {showGiftSale && !loading && (
       <GiftCardSaleDialog
         services={services}
+        clients={clients}
+        buyer={client}
+        onBuyer={setClient}
+        onNewClient={(initial) => setShowQuickClient({ initial })}
         validiteMois={bonValiditeMois}
         onClose={() => setShowGiftSale(false)}
         onAdd={addGiftCardLine}
@@ -969,8 +982,45 @@ function GiftCardUseDialog({ onClose, onFound }: {
 
 // ── Vendre un bon cadeau ────────────────────────────────────────────────────
 
-function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
+/**
+ * Clientes inscrites qui correspondent à la saisie (nom, prénom, e-mail ou
+ * téléphone), pour ne pas retaper un nom déjà connu — et ne pas l'écrire
+ * autrement que sur sa fiche.
+ */
+function ClientSuggestions({ clients, term, onPick }: {
+  clients: Client[];
+  term: string;
+  onPick: (c: Client) => void;
+}) {
+  const results = useMemo(
+    () => (term.trim() ? clients.filter(c => matchClient(c, term)).slice(0, 6) : []),
+    [clients, term],
+  );
+  if (results.length === 0) return null;
+  return (
+    <ul aria-label="Clientes inscrites" className="mt-1 rounded-lg border border-stone-200 bg-white divide-y divide-stone-100 max-h-48 overflow-y-auto">
+      {results.map(c => (
+        <li key={c.id}>
+          <button
+            type="button" onClick={() => onPick(c)}
+            className="w-full min-h-11 text-left px-3 py-2 hover:bg-stone-50 transition-colors cursor-pointer"
+          >
+            <span className="block text-sm text-stone-800">{clientFullName(c)}</span>
+            {c.telephone && <span className="block text-[12.5px] text-stone-600">{c.telephone}</span>}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function GiftCardSaleDialog({ services, clients, buyer, onBuyer, onNewClient, validiteMois, onClose, onAdd }: {
   services: Service[];
+  clients: Client[];
+  /** Cliente du panier : c'est elle qui achète le bon et figure sur la facture. */
+  buyer: Client | null;
+  onBuyer: (c: Client | null) => void;
+  onNewClient: (initial: string) => void;
   validiteMois: number;
   onClose: () => void;
   onAdd: (montant: number, libelle: string, beneficiaire: string) => void;
@@ -979,7 +1029,11 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
   const [montant, setMontant] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [beneficiaire, setBeneficiaire] = useState('');
+  // Les suggestions se ferment dès qu'un nom est choisi, et rouvrent à la frappe.
+  const [benefSuggest, setBenefSuggest] = useState(false);
+  const [acheteuse, setAcheteuse] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const acheteuseConnue = acheteuse.trim() !== '' && clients.some(c => matchClient(c, acheteuse));
 
   const pickedServices = services.filter(s => picked.includes(s.id));
   const soinsTotal = pickedServices.reduce((acc, s) => acc + Number(s.prix_chf), 0);
@@ -1087,13 +1141,63 @@ function GiftCardSaleDialog({ services, validiteMois, onClose, onAdd }: {
           )}
 
           <div>
+            <label htmlFor="gift-acheteuse" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+              Offert par <span className="text-stone-600">(l&apos;acheteuse, au nom de qui la facture est établie)</span>
+            </label>
+            {buyer ? (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2">
+                <span className="text-sm font-medium text-stone-900 truncate">{clientFullName(buyer)}</span>
+                <button
+                  type="button" onClick={() => onBuyer(null)}
+                  aria-label="Retirer l'acheteuse"
+                  className="shrink-0 grid size-9 place-items-center text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  id="gift-acheteuse" type="text" value={acheteuse} autoComplete="off"
+                  onChange={e => setAcheteuse(e.target.value)}
+                  placeholder="Nom, prénom ou téléphone…"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+                />
+                <ClientSuggestions
+                  clients={clients} term={acheteuse}
+                  onPick={c => { onBuyer(c); setAcheteuse(''); }}
+                />
+                {acheteuse.trim() !== '' && !acheteuseConnue && (
+                  <button
+                    type="button" onClick={() => onNewClient(acheteuse.trim())}
+                    className="mt-1.5 flex items-center gap-1.5 text-[13px] text-accent hover:underline font-semibold cursor-pointer"
+                  >
+                    <UserPlus size={14} /> Créer la fiche « {acheteuse.trim()} »
+                  </button>
+                )}
+                <p className="mt-1 text-[12.5px] text-stone-600">
+                  Sans acheteuse choisie, le bon est vendu à « {CLIENT_DE_PASSAGE} ».
+                </p>
+              </>
+            )}
+          </div>
+
+          <div>
             <label htmlFor="gift-benef" className="block text-[12.5px] font-medium text-stone-700 mb-1">
               Bénéficiaire <span className="text-stone-600">(facultatif — la personne à qui il est offert)</span>
             </label>
             <input
-              id="gift-benef" type="text" value={beneficiaire} onChange={e => setBeneficiaire(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+              id="gift-benef" type="text" value={beneficiaire} autoComplete="off"
+              onChange={e => { setBeneficiaire(e.target.value); setBenefSuggest(true); }}
+              placeholder="Nom, ou cliente déjà inscrite…"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
             />
+            {benefSuggest && (
+              <ClientSuggestions
+                clients={clients} term={beneficiaire}
+                onPick={c => { setBeneficiaire(clientFullName(c)); setBenefSuggest(false); }}
+              />
+            )}
           </div>
 
           <div className="rounded-lg bg-stone-50 border border-stone-200 px-4 py-3 text-[13px] text-stone-600 leading-relaxed">
@@ -1709,6 +1813,8 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
+        {/* Un bon = une ligne : pour en vendre deux, on ajoute un second bon. */}
+        {!line.gift_card && (
         <div className="flex items-center border border-stone-200 rounded-lg overflow-hidden">
           <button
             onClick={() => onPatch({ quantite: Math.max(1, line.quantite - 1) })}
@@ -1726,6 +1832,7 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
             <Plus size={12} />
           </button>
         </div>
+        )}
 
         {editingPrice ? (
           <input
@@ -1751,7 +1858,7 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
           </button>
         )}
 
-        {tvaActive && (
+        {tvaActive && !line.gift_card && (
           <>
             <label htmlFor={`tva-${line.key}`} className="sr-only">Taux de TVA</label>
             <select
@@ -1880,6 +1987,11 @@ export function ReceiptPanel({ transaction, onNew, rdvId = null, rdvOutcome = nu
         <div>
           <p className="text-[14px] font-medium text-stone-700 mb-1">Encaissement enregistré</p>
           <p className="text-3xl font-semibold text-stone-900 tabular-nums">{formatCHF(transaction.total_ttc)}</p>
+          {Number(transaction.montant_bon) > 0 && (
+            <p className="text-[13px] text-stone-700 mt-1 tabular-nums">
+              dont {formatCHF(transaction.montant_bon)} réglés par bon cadeau · encaissé : {formatCHF(recetteEncaissee(transaction))}
+            </p>
+          )}
           <p className="text-sm text-stone-700 mt-2">
             Facture <span className="font-medium text-stone-700">{transaction.numero}</span> · {transaction.client_label}
           </p>
@@ -2564,6 +2676,7 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
       </div>
 
       <div className="flex items-center justify-between gap-3">
+        {line.gift_card ? <span /> : (
         <div className="flex items-center gap-1 rounded-2xl bg-stone-100 p-1" role="group" aria-label={`Quantité de ${line.description}`}>
           <button
             type="button" aria-label="Diminuer la quantité" disabled={line.quantite <= 1}
@@ -2581,6 +2694,7 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
             <Plus size={20} aria-hidden="true" />
           </button>
         </div>
+        )}
 
         <div className="text-right">
           <p className="text-[19px] font-semibold tabular-nums text-stone-950">{formatCHF(total)}</p>
@@ -2607,7 +2721,7 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
         </div>
       </div>
 
-      {tvaActive && (
+      {tvaActive && !line.gift_card && (
         <div>
           <label htmlFor={`m-tva-${line.key}`} className="sr-only">Taux de TVA</label>
           <select

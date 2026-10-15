@@ -242,8 +242,10 @@ export default function ProduitsClient() {
           <ul className="divide-y divide-stone-50">
             {products.map((p, i) => {
               const niveau = stockLevel(p);
-              const marge = margeCHF(Number(p.prix_vente_chf), Number(p.taux_tva_defaut), Number(p.prix_achat_chf));
-              const pct = margePct(Number(p.prix_vente_chf), Number(p.taux_tva_defaut), Number(p.prix_achat_chf));
+              // Non assujettie : la vente est facturée à 0 %, tout le prix est une recette.
+              const tauxVente = tvaActive ? Number(p.taux_tva_defaut) : 0;
+              const marge = margeCHF(Number(p.prix_vente_chf), tauxVente, Number(p.prix_achat_chf));
+              const pct = margePct(Number(p.prix_vente_chf), tauxVente, Number(p.prix_achat_chf));
               return (
                 <li key={p.id} className={`px-5 py-4 hover:bg-stone-50/50 transition-colors ${!p.active ? 'bg-stone-50/60' : ''}`}>
                   <div className="flex items-center gap-3">
@@ -437,8 +439,8 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
   const venteRaw = num(vente);
   const achatNum = Number.isFinite(achatRaw) ? achatRaw : 0;
   const venteNum = Number.isFinite(venteRaw) ? venteRaw : 0;
-  const marge = margeCHF(venteNum, taux, achatNum);
-  const pct = margePct(venteNum, taux, achatNum);
+  const marge = margeCHF(venteNum, tvaActive ? taux : 0, achatNum);
+  const pct = margePct(venteNum, tvaActive ? taux : 0, achatNum);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

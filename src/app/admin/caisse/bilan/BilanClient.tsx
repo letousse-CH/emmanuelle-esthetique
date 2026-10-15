@@ -10,30 +10,52 @@ import {
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
 import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import { computeFinancialStats } from '../../../../services/financeService';
-import { FinancialDashboardStats } from '../../../../types/finance';
+import { AVS_BORNE_HAUTE, FinancialDashboardStats } from '../../../../types/finance';
 import { formatCHF } from '../../../../types/caisse';
 
 export default function BilanClient() {
   const [annee, setAnnee] = useState<number>(new Date().getFullYear());
   const [stats, setStats] = useState<FinancialDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'compte_resultat' | 'tresorerie' | 'avs' | 'impots_vaud'>('compte_resultat');
 
   useEffect(() => {
     loadStats();
   }, [annee]);
 
+  // Exercices proposés : de l'année en cours jusqu'à 2026, premier exercice de la caisse.
+  const annees = Array.from({ length: Math.max(1, new Date().getFullYear() - 2026 + 1) }, (_, i) => new Date().getFullYear() - i);
+
   const loadStats = async () => {
-    setLoading(true);
+    setLoading(true); setError(null);
     try {
       const data = await computeFinancialStats(annee);
       setStats(data);
     } catch (err) {
-      console.error(err);
+      // Jamais de bilan à zéro faute de lecture : on le dit.
+      setStats(null);
+      setError(err instanceof Error ? err.message : 'Calcul impossible.');
     } finally {
       setLoading(false);
     }
   };
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <CaisseCatalogNav />
+        <Callout
+          tone="danger"
+          title="Le bilan n'a pas pu être calculé"
+          actions={<Button size="sm" onClick={loadStats}>Réessayer</Button>}
+        >
+          <p>Vérifiez la connexion internet puis réessayez. Aucun chiffre n&apos;est affiché plutôt qu&apos;un chiffre faux.</p>
+          <p className="mt-1 text-[13px] text-red-800/80 break-words">Détail technique : {error}</p>
+        </Callout>
+      </div>
+    );
+  }
 
   if (loading || !stats) {
     return (
@@ -61,9 +83,7 @@ export default function BilanClient() {
               aria-label="Sélectionner l'exercice fiscal"
               className="h-9 px-3 text-xs font-semibold rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-accent"
             >
-              <option value="2026">Exercice 2026</option>
-              <option value="2025">Exercice 2025</option>
-              <option value="2024">Exercice 2024</option>
+              {annees.map(a => <option key={a} value={a}>Exercice {a}</option>)}
             </select>
             <Button variant="secondary" icon={Printer} onClick={() => window.print()}>
               Imprimer le bilan
@@ -82,6 +102,7 @@ export default function BilanClient() {
           <p className="text-2xl font-bold text-stone-900 mt-1">{formatCHF(stats.chiffreAffairesTotal)}</p>
           <p className="text-[12px] text-stone-500 mt-1">
             Prestations : {formatCHF(stats.caPrestations)} · Boutique : {formatCHF(stats.caProduitsVente)}
+            {stats.caBonsCadeaux > 0 && <> · Bons : {formatCHF(stats.caBonsCadeaux)}</>}
           </p>
         </div>
 
@@ -182,6 +203,13 @@ export default function BilanClient() {
                   <span>· Ventes de produits boutique (cosmétiques revente)</span>
                   <span>{formatCHF(stats.caProduitsVente)}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span>· Bons cadeaux vendus (encaissés à la vente, soins à venir)</span>
+                  <span>{formatCHF(stats.caBonsCadeaux)}</span>
+                </div>
+                <p className="text-[11px] text-stone-500 pt-1">
+                  Recettes réellement encaissées : un soin réglé par bon cadeau n&apos;y figure pas une seconde fois.
+                </p>
               </div>
             </div>
 
@@ -330,8 +358,8 @@ export default function BilanClient() {
               <p className="font-medium text-stone-500 uppercase tracking-wide text-[11px]">Taux AVS/AI/APG applicable</p>
               <p className="text-3xl font-extrabold text-stone-900 mt-1">{stats.estimationAvs.tauxPct} %</p>
               <p className="text-[11.5px] text-stone-500 mt-1">
-                {stats.resultatExploitationAvantAvs >= 58800
-                  ? 'Taux plein (dès CHF 58\'800)'
+                {stats.resultatExploitationAvantAvs >= AVS_BORNE_HAUTE
+                  ? 'Taux plein (dès CHF 60\'500)'
                   : stats.resultatExploitationAvantAvs <= 10100
                   ? 'Cotisation minimale (sous CHF 10\'100)'
                   : 'Barème dégressif progressif'}
