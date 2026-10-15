@@ -22,6 +22,9 @@ import {
   planReclassement, situationPaiement, splitEcheances, type Expense, type ExpensePayment,
 } from '../src/types/finance';
 import { buildExpensesCsv } from '../src/utils/expensesExport';
+import {
+  controlerFactureAchat, normalizeFactureAchat, totalLigneHT, trouverFiche, type FactureAchatLue,
+} from '../src/types/factureAchat';
 
 let passed = 0;
 let failed = 0;
@@ -273,6 +276,74 @@ test('reclassement : la facture corrige les fiches restées « vente », relie s
   const plan = planReclassement(produits, lignes);
   assert.deepEqual(plan.produits, [{ id: 'lait', nom: 'Lait Démaquillant - 1 l', de: 'vente', vers: 'cabine', contenance: '1 l' }]);
   assert.deepEqual(plan.liens, [{ itemId: 'l1', productId: 'lait' }, { itemId: 'l2', productId: 'serum' }]);
+});
+
+// ── Facture d'achat → stock : lecture et contrôles ─────────────────────────
+
+const lue = normalizeFactureAchat({
+  fournisseur: 'COSKYN SA', numero_facture: '140500', date_facture: '10.10.2026',
+  montant_ht: "206.50", montant_tva: 16.73, montant_ttc: 223.23, taux_tva: 8.1,
+  echeances: [{ date: '2026-10-29', montant: 700 }, { date: 'n/a', montant: 1 }],
+  lignes: [
+    { reference: 'PHY-100.101', designation: 'Lotion 250 ml', quantite: 3, prix_unitaire_ht: 17, rabais_pct: 10, taux_tva: 8.1, usage: 'vente' },
+    { reference: '100999', designation: 'Sérum neuf 30 ml', quantite: 2, prix_unitaire_ht: '50.00', taux_tva: 8.1, usage: 'vente', prix_public_ttc: 90 },
+    { reference: '111331', designation: 'Huile cabine 2 l', quantite: 1, prix_unitaire_ht: 60.6, taux_tva: 8.1, usage: 'cabine' },
+    { reference: '120999', designation: 'Testeur sérum', quantite: 1, prix_unitaire_ht: 50, rabais_pct: 100, usage: 'testeur' },
+  ],
+  confiance: 'haute', remarques: [],
+});
+const fiches = [
+  { id: 'lotion', nom: 'Lotion 250 ml', reference: '100101', active: true },
+  { id: 'vieux', nom: 'Lotion 250 ml', reference: null, active: false },
+];
+const relue = (f: FactureAchatLue): FactureAchatLue => ({
+  ...f, lignes: f.lignes.map(l => ({ ...l, product_id: trouverFiche(l, fiches)?.id ?? null })),
+});
+const ctrl = (f: FactureAchatLue, o: Partial<Parameters<typeof controlerFactureAchat>[1]> = {}) =>
+  controlerFactureAchat(f, { today: '2026-10-15', ecartJustifie: false, categorieCode: '4200', existantes: [], ...o });
+
+test('lecture : dates suisses, montants texte, usage inconnu → vente, échéance illisible écartée', () => {
+  assert.equal(lue.date_facture, '2026-10-10');
+  assert.equal(lue.montant_ht, 206.5);
+  assert.equal(lue.lignes[1].prix_unitaire, 50);
+  assert.equal(lue.lignes[1].prix_vente, 90, 'prix public imprimé repris');
+  assert.equal(normalizeFactureAchat({ lignes: [{ designation: 'x', usage: 'inconnu' }] }).lignes[0].usage_type, 'vente',
+    'usage illisible → vente, qui exige un prix : prudent');
+  assert.deepEqual(lue.echeances, [{ date: '2026-10-29', montant: 700 }]);
+});
+
+test('lignes : total HT au centime, rabais déduit ; fiche par référence normalisée', () => {
+  assert.equal(totalLigneHT(lue.lignes[0]), 45.9);
+  assert.equal(trouverFiche(lue.lignes[0], fiches)?.id, 'lotion');
+  assert.equal(trouverFiche({ reference: null, designation: 'lotion 250 ml ' }, fiches)?.id, 'lotion', 'fiche active d’abord');
+  assert.equal(trouverFiche(lue.lignes[2], fiches), null);
+});
+
+test('contrôles : facture juste → aucun bloquant (testeur offert signalé)', () => {
+  const c = ctrl(relue(lue));
+  assert.deepEqual(c.bloquants, []);
+  assert.equal(c.sommeLignes, 206.5);
+  assert.ok(c.avertissements.some(a => /offert/.test(a)));
+});
+
+test('contrôles : doublon, total des lignes faux, compte de charges, date future', () => {
+  const f = relue(lue);
+  assert.ok(ctrl(f, { existantes: [{ fournisseur: ' coskyn sa', numero_facture: '140500', statut: 'a_payer', date_facture: '2026-10-10' }] })
+    .bloquants.some(b => /déjà enregistrée/.test(b)));
+  assert.equal(ctrl(f, { existantes: [{ fournisseur: 'COSKYN SA', numero_facture: '140500', statut: 'annulee', date_facture: '2026-10-10' }] })
+    .bloquants.length, 0, 'une facture annulée peut être réimportée');
+  const sansLigne = { ...f, lignes: f.lignes.slice(0, 2) };
+  assert.ok(ctrl(sansLigne).bloquants.some(b => /totalisent/.test(b)));
+  assert.ok(!ctrl(sansLigne, { ecartJustifie: true }).bloquants.some(b => /totalisent/.test(b)));
+  assert.ok(ctrl(f, { categorieCode: '6100' }).bloquants.some(b => /compte d'achat/.test(b)));
+  assert.ok(ctrl({ ...f, date_facture: '2026-11-01' }).bloquants.some(b => /futur/.test(b)));
+});
+
+test('contrôles : nouveau produit de revente sans prix bloqué, HT + TVA ≠ TTC bloqué', () => {
+  const f = relue(lue);
+  const sansPrix = { ...f, lignes: f.lignes.map((l, i) => (i === 1 ? { ...l, prix_vente: null } : l)) };
+  assert.ok(ctrl(sansPrix).bloquants.some(b => /prix de vente/.test(b)));
+  assert.ok(ctrl({ ...f, montant_ttc: 300 }).bloquants.some(b => /TTC/.test(b)));
 });
 
 console.log(`\n${passed} test(s) réussi(s), ${failed} échec(s).`);

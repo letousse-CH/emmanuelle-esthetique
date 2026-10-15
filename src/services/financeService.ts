@@ -23,7 +23,8 @@ import {
   DEFAULT_SWISS_CATEGORIES,
 } from '../types/finance';
 import { Product, Service, StockMovement, Transaction, TransactionItem, valeurStock, ventilerRecettes } from '../types/caisse';
-import { createProduct, listProducts, stockMovement, updateProduct } from './caisse';
+import { listProducts, updateProduct } from './caisse';
+import type { FactureAchatLue } from '../types/factureAchat';
 import { zurichDate, zurichMidnightISO } from '../components/admin/mobile/home/zurich';
 
 // ── Ventilation multi-lignes d'une facture mixte ────────────────────────────
@@ -332,161 +333,85 @@ export async function annulerVersement(id: string, motif: string): Promise<void>
   if (error) throw new Error(error.message);
 }
 
-// ── Entrée en stock automatique depuis une facture fournisseur (Coskyn) ─────
+// ── Facture d'achat qui fait entrer du stock ───────────────────────────────
 
-export interface StockImportSummary {
-  updatedCount: number;
-  createdCount: number;
-  totalQuantityAdded: number;
-  totalCostCHF: number;
-  /** Articles qui n'ont PAS pu entrer en stock, avec la raison. */
-  erreurs: string[];
+export interface ImportFactureResultat {
+  expense_id: string;
+  crees: number;
+  mis_a_jour: number;
+  unites: number;
 }
 
-export interface InvoiceItemStockMatch {
-  item: ExpenseItem;
-  existingProduct: Product | null;
-  isExisting: boolean;
-  stockActuel: number;
-  quantiteBon: number;
-  nouveauStock: number;
-  prixAchatUnitaire: number;
-  prixVenteSuggere: number;
-}
-
-export function matchInvoiceItemsWithStock(
-  items: ExpenseItem[],
-  existingProducts: Product[]
-): InvoiceItemStockMatch[] {
-  return items.map(it => {
-    const itRefClean = (it.reference || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const itNomClean = (it.designation || '').trim().toLowerCase();
-
-    const matched = existingProducts.find(p => {
-      if (itRefClean && p.reference) {
-        const pRefClean = p.reference.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (pRefClean && pRefClean === itRefClean) return true;
-      }
-      return p.nom.trim().toLowerCase() === itNomClean;
-    }) || null;
-
-    const stockActuel = matched ? Number(matched.stock || 0) : 0;
-    const quantiteBon = Number(it.quantite || 0);
-    const nouveauStock = stockActuel + quantiteBon;
-    const isFree = it.rabais_pct === 100;
-    const prixAchat = isFree ? 0 : it.prix_unitaire;
-    const usage = it.usage_type || 'vente';
-    const prixVenteSuggere = usage === 'vente' ? Math.round(it.prix_unitaire * 2.1 * 10) / 10 : 0;
-
-    return {
-      item: it,
-      existingProduct: matched,
-      isExisting: !!matched,
-      stockActuel,
-      quantiteBon,
-      nouveauStock,
-      prixAchatUnitaire: prixAchat,
-      prixVenteSuggere,
-    };
+/**
+ * Importe une facture fournisseur relue : dépense, lignes, fiches produits et
+ * réceptions en UNE transaction Postgres (`stock_importer_facture`). Tout ou
+ * rien : une facture ne peut plus entrer à moitié en stock, ni deux fois.
+ */
+export async function importerFactureStock(
+  facture: FactureAchatLue,
+  opts: {
+    categoryId: string;
+    statut: 'a_payer' | 'payee';
+    datePaiement?: string | null;
+    modePaiement: Expense['mode_paiement'];
+    notes?: string | null;
+    justificatif?: { path: string; url: string | null } | null;
+    ecartJustifie: boolean;
+  },
+): Promise<ImportFactureResultat> {
+  const { data, error } = await supabase.rpc('stock_importer_facture', {
+    p_facture: {
+      fournisseur: facture.fournisseur,
+      fournisseur_adresse: facture.fournisseur_adresse,
+      fournisseur_ide: facture.fournisseur_ide,
+      numero_facture: facture.numero_facture,
+      date_facture: facture.date_facture,
+      date_echeance: facture.date_echeance,
+      montant_ht: facture.montant_ht,
+      montant_tva: facture.montant_tva,
+      montant_ttc: facture.montant_ttc,
+      taux_tva: facture.taux_tva,
+      category_id: opts.categoryId,
+      statut: opts.statut,
+      date_paiement: opts.datePaiement ?? null,
+      mode_paiement: opts.modePaiement,
+      notes: opts.notes ?? null,
+      justificatif_path: opts.justificatif?.path ?? null,
+      document_url: opts.justificatif?.url ?? null,
+    },
+    p_lignes: facture.lignes.map(l => ({
+      designation: l.designation.trim(),
+      reference: l.reference,
+      quantite: l.quantite,
+      prix_unitaire: l.prix_unitaire,
+      rabais_pct: l.rabais_pct,
+      taux_tva: l.taux_tva,
+      usage_type: l.usage_type,
+      contenance: l.contenance,
+      marque: l.marque,
+      product_id: l.product_id,
+      prix_vente: l.product_id ? null : l.prix_vente,
+    })),
+    p_ecart_justifie: opts.ecartJustifie,
   });
+  if (error) throw new Error(error.message);
+  return data as ImportFactureResultat;
 }
 
-export async function applyInvoiceToStock(
-  expenseId: string,
-  items: ExpenseItem[]
-): Promise<StockImportSummary> {
-  const existingProducts = await listProducts(true);
-  let updatedCount = 0;
-  let createdCount = 0;
-  let totalQuantityAdded = 0;
-  let totalCostCHF = 0;
-  const erreurs: string[] = [];
-
-  for (const it of items) {
-    if (it.quantite <= 0) continue;
-
-    const itRefClean = (it.reference || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const itNomClean = (it.designation || '').trim().toLowerCase();
-
-    // Cherche le produit par référence normalisée ou nom
-    const prod = existingProducts.find(p => {
-      if (itRefClean && p.reference) {
-        const pRefClean = p.reference.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (pRefClean && pRefClean === itRefClean) return true;
-      }
-      return p.nom.trim().toLowerCase() === itNomClean;
-    });
-
-    const isFree = it.rabais_pct === 100;
-    const prixAchat = isFree ? 0 : it.prix_unitaire;
-    const usage = it.usage_type || 'vente';
-    const quantite = Number(it.quantite || 0);
-
-    try {
-      let productId: string;
-      if (prod) {
-        productId = prod.id;
-        // Le tarif de la facture devient le prix d'achat de référence (un
-        // article offert ne l'écrase pas).
-        if (!isFree && Number(prod.prix_achat_chf) !== prixAchat) {
-          await updateProduct(prod.id, { prix_achat_chf: prixAchat });
-        }
-      } else {
-        // Nouvelle référence : la fiche naît sans stock, la réception
-        // ci-dessous l'alimente — une seule entrée, jamais deux.
-        const prixVenteSuggere = usage === 'vente' ? Math.round(prixAchat * 2.1 * 10) / 10 : 0;
-        const contenanceMatch = it.designation.match(/(\d+\s*(?:ml|l|kg|g|rlx|rouleaux))/i);
-        const created = await createProduct({
-          nom: it.designation,
-          marque: 'Phytomer',
-          reference: it.reference || null,
-          description: `Produit ${usage === 'cabine' ? 'professionnel cabine' : 'vente boutique'}`,
-          prix_achat_chf: prixAchat,
-          prix_vente_chf: prixVenteSuggere,
-          taux_tva_defaut: it.taux_tva,
-          seuil_alerte: usage === 'cabine' ? 1 : 2,
-          active: true,
-          ordre: 99,
-          usage_type: usage,
-          contenance: it.contenance || (contenanceMatch ? contenanceMatch[1] : null),
-        });
-        existingProducts.push(created);
-        productId = created.id;
-      }
-
-      // Le stock ne se saisit pas : il entre par un mouvement de réception.
-      await stockMovement({
-        productId,
-        type: 'reception',
-        quantite,
-        prixAchatUnitaire: prixAchat,
-        motif: `Facture ${it.reference || it.designation}`,
-      });
-
-      // La ligne de facture pointe vers sa fiche : la traçabilité va dans les deux sens.
-      let lien = supabase.from('expense_items').update({ product_id: productId }).eq('expense_id', expenseId);
-      lien = it.reference ? lien.eq('reference', it.reference) : lien.eq('designation', it.designation);
-      const { error: lienError } = await lien;
-      if (lienError) erreurs.push(`${it.designation} : entré en stock, mais pas relié à sa ligne de facture (${lienError.message})`);
-
-      if (prod) updatedCount++; else createdCount++;
-      totalQuantityAdded += quantite;
-      totalCostCHF += quantite * prixAchat;
-    } catch (err) {
-      erreurs.push(`${it.designation} : ${err instanceof Error ? err.message : 'erreur inconnue'}`);
-    }
-  }
-
-  // Marquer la dépense comme entrée en stock
-  await updateExpense(expenseId, { is_stock_invoice: true });
-
-  return {
-    updatedCount,
-    createdCount,
-    totalQuantityAdded,
-    totalCostCHF: Math.round(totalCostCHF * 100) / 100,
-    erreurs,
-  };
+/** Factures d'achat (comptes 4xxx, non annulées) auxquelles rattacher une réception. */
+export async function listFacturesAchat(): Promise<
+  (Pick<Expense, 'id' | 'fournisseur' | 'numero_facture' | 'date_facture' | 'montant_ttc'> & { code: string })[]
+> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('id, fournisseur, numero_facture, date_facture, montant_ttc, statut, category:expense_categories(code)')
+    .neq('statut', 'annulee')
+    .order('date_facture', { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as (Pick<Expense, 'id' | 'fournisseur' | 'numero_facture' | 'date_facture' | 'montant_ttc'> & { category: { code: string } | null })[])
+    .filter(e => (e.category?.code ?? '').startsWith('4'))
+    .map(({ category, ...e }) => ({ ...e, code: category?.code ?? '' }));
 }
 
 // ── Dotation matière des soins (Rentabilité Cabine) ─────────────────────────

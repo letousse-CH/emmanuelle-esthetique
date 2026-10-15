@@ -413,7 +413,29 @@ propose de reprendre l'usage des lignes de facture (`planReclassement`).
 tant que l'activité n'est pas assujettie — valeur du stock, marges, coût matière.
 Fiches techniques des soins : `service_supplies.quantite_estimee` = nombre de
 soins par flacon (coût par soin = coût du flacon ÷ ce nombre) ; aucun coût
-n'est inventé pour un soin sans fiche. Une prestation citée dans un forfait
+n'est inventé pour un soin sans fiche.
+
+**Entrées en stock : toujours par une facture d'achat**
+(`20261015_stock_achats_fiables.sql`, après `20261015_depenses_versements`).
+- Facture fournisseur détaillée : Dépenses › « Facture fournisseur → stock »
+  (`FactureImportModal`). L'IA lit le PDF ou la photo (`services/invoiceScan.ts`,
+  route `/api/admin/expenses/parse`), l'exploitante relit chaque ligne (usage,
+  fiche existante ou nouvelle, prix de vente des nouveautés),
+  `controlerFactureAchat` (`types/factureAchat.ts`) bloque l'import tant que le
+  total des lignes ≠ HT (sauf écart justifié), HT + TVA ≠ TTC, doublon, compte
+  ≠ 4xxx, nouveau produit de revente sans prix. La pièce est archivée, puis
+  `stock_importer_facture` (Postgres) rejoue ces contrôles et fait TOUT l'import
+  en une transaction : dépense, lignes, fiches, réceptions — ou rien.
+- Une facture de stock (même fournisseur + n°, non annulée) ne s'importe qu'une
+  fois (index unique). Annulée, son stock repart (mouvements inverses) ; elle ne
+  se supprime pas et ne se rétablit pas.
+- Toute réception porte `stock_movements.expense_id` (facture 4xxx non annulée,
+  montant non dépassé) ; une ligne de facture n'entre qu'une fois. Saisie
+  manuelle (`caisse_stock_movement`) : réception rattachée ou perte, rien
+  d'autre ; un retour cliente se fait en corrigeant sa facture de vente. Pas de
+  « stock de départ » à la création d'une fiche : facture ou inventaire.
+- L'ancien import (`invoiceParser.ts`, facture Coskyn codée en dur, « lecture »
+  du nom de fichier) est supprimé : ne pas le réintroduire. Une prestation citée dans un forfait
 refuse d'être supprimée tant qu'elle n'en est pas retirée.
 
 **Export fiducie.** Journal filtrable par mois ou par année, exporté en CSV

@@ -223,11 +223,11 @@ export const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {
   perte:      'Perte',
 };
 
-/** Mouvements saisissables à la main — la vente naît de la caisse, l'écart
- *  d'inventaire de l'écran d'inventaire. */
-export const STOCK_MOVEMENTS_MANUELS: { value: 'reception' | 'retour' | 'perte'; label: string; help: string }[] = [
-  { value: 'reception', label: 'Réception', help: 'Livraison du fournisseur' },
-  { value: 'retour',    label: 'Retour',    help: 'La cliente rapporte un article' },
+/** Mouvements saisissables à la main. La vente naît de la caisse, le retour
+ *  cliente de la correction de sa facture (Journal), l'écart de l'inventaire ;
+ *  une réception se rattache toujours à sa facture d'achat. */
+export const STOCK_MOVEMENTS_MANUELS: { value: 'reception' | 'perte'; label: string; help: string }[] = [
+  { value: 'reception', label: 'Réception', help: 'Livraison rattachée à sa facture d\'achat' },
   { value: 'perte',     label: 'Perte',     help: 'Casse, péremption, usage en cabine' },
 ];
 

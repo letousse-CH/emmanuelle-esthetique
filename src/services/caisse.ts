@@ -382,13 +382,18 @@ export async function listStockMovements(productId?: string, limit = 200): Promi
   return (data ?? []) as StockMovement[];
 }
 
-/** Réception, retour ou perte : passe par Postgres, qui signe la quantité. */
+/**
+ * Réception ou perte : passe par Postgres, qui signe la quantité. Une
+ * réception porte la facture d'achat qui la justifie (`expenseId`) ; une vente
+ * naît de la caisse, un retour cliente de la correction de sa facture.
+ */
 export async function stockMovement(input: {
   productId: string;
-  type: 'reception' | 'retour' | 'perte';
+  type: 'reception' | 'perte';
   quantite: number;
   prixAchatUnitaire?: number | null;
   motif?: string | null;
+  expenseId?: string | null;
 }): Promise<Product> {
   const { data, error } = await supabase.rpc('caisse_stock_movement', {
     p_product_id: input.productId,
@@ -396,6 +401,7 @@ export async function stockMovement(input: {
     p_quantite: Math.abs(Number(input.quantite || 0)),
     p_prix_achat_unitaire: input.prixAchatUnitaire ?? null,
     p_motif: input.motif ?? null,
+    p_expense_id: input.type === 'reception' ? input.expenseId ?? null : null,
   });
   if (error) throw new Error(error.message);
   return data as Product;

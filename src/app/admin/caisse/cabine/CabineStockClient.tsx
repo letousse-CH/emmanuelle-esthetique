@@ -7,7 +7,8 @@ import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
 import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import { useSettings } from '../../../../hooks/useSettings';
 import { listProducts, listServices, stockMovement, stockInventaire } from '../../../../services/caisse';
-import { listServiceSupplies, saveServiceSupplies } from '../../../../services/financeService';
+import { listFacturesAchat, listServiceSupplies, saveServiceSupplies } from '../../../../services/financeService';
+import FactureAchatSelect, { type FactureAchatOption } from '../produits/FactureAchatSelect';
 import { Product, Service, coutAchat, formatCHF, isVenteProduct } from '../../../../types/caisse';
 import { ServiceSupply, PRODUCT_USAGE_LABELS } from '../../../../types/finance';
 import type { ProductUsageType } from '../../../../types/finance';
@@ -53,13 +54,18 @@ export default function CabineStockClient() {
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustPrix, setAdjustPrix] = useState('');
   const [adjustMotif, setAdjustMotif] = useState('');
+  const [adjustFacture, setAdjustFacture] = useState('');
+  const [factures, setFactures] = useState<FactureAchatOption[] | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Fiche technique d'un soin : produit → nombre de soins par flacon
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [selectedSupplies, setSelectedSupplies] = useState<{ productId: string; soins: string }[]>([]);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => {
+    loadAll();
+    listFacturesAchat().then(setFactures).catch(() => setFactures([]));
+  }, []);
 
   const loadAll = async () => {
     setLoading(true); setError(null);
@@ -106,6 +112,7 @@ export default function CabineStockClient() {
     setAdjustQty('1');
     setAdjustPrix(String(p.prix_achat_chf ?? ''));
     setAdjustMotif('');
+    setAdjustFacture('');
   };
 
   const handleSaveStockAdjust = async (e: React.FormEvent) => {
@@ -120,6 +127,10 @@ export default function CabineStockClient() {
       return;
     }
     const prix = num(adjustPrix);
+    if (adjustType === 'reception' && !adjustFacture) {
+      setError('Choisissez la facture d\'achat de cette livraison.');
+      return;
+    }
     if (adjustType === 'reception' && (adjustPrix.trim() === '' || !Number.isFinite(prix) || prix < 0)) {
       setError('Indiquez le prix d\'achat unitaire de la facture (0 pour un article offert).');
       return;
@@ -136,6 +147,7 @@ export default function CabineStockClient() {
           quantite: val,
           prixAchatUnitaire: adjustType === 'reception' ? Math.round(prix * 100) / 100 : null,
           motif: adjustMotif.trim() || (adjustType === 'perte' ? 'Consommation cabine / fin de flacon' : 'Réception cabine'),
+          expenseId: adjustType === 'reception' ? adjustFacture : null,
         });
       }
       setNotice(`Stock de « ${adjusting.nom} » mis à jour.`);
@@ -471,18 +483,17 @@ export default function CabineStockClient() {
               </div>
 
               {adjustType === 'reception' && (
-                <div>
-                  <label htmlFor="cab-prix" className="block font-medium text-stone-700 mb-1">Prix d&apos;achat unitaire de la facture (CHF) *</label>
-                  <input
-                    id="cab-prix" type="text" inputMode="decimal"
-                    value={adjustPrix} onChange={e => setAdjustPrix(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                  <p className="text-[11.5px] text-stone-500 mt-1">
-                    Une réception correspond à une facture d&apos;achat : enregistrez aussi la facture dans « Factures & Dépenses »,
-                    sinon le stock augmente sans la dépense qui va avec.
-                  </p>
-                </div>
+                <>
+                  <FactureAchatSelect id="cab-facture" factures={factures} value={adjustFacture} onChange={setAdjustFacture} />
+                  <div>
+                    <label htmlFor="cab-prix" className="block font-medium text-stone-700 mb-1">Prix d&apos;achat unitaire de la facture (CHF) *</label>
+                    <input
+                      id="cab-prix" type="text" inputMode="decimal"
+                      value={adjustPrix} onChange={e => setAdjustPrix(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </div>
+                </>
               )}
 
               <div>

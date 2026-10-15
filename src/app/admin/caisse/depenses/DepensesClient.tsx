@@ -9,13 +9,13 @@ import {
 } from 'lucide-react';
 import TicketScanModal from './TicketScanModal';
 import PaymentsDialog from './PaymentsDialog';
+import FactureImportModal from './FactureImportModal';
 import DrivePanel from './DrivePanel';
 import { attachJustificatif, openJustificatif } from '../../../../services/receipts';
 import { downloadExpensesCsv } from '../../../../utils/expensesExport';
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
 import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import {
-  applyInvoiceToStock,
   createExpense,
   deleteExpense,
   getInvoiceVentilation,
@@ -23,12 +23,9 @@ import {
   listExpensePayments,
   listExpenses,
   updateExpense,
-  matchInvoiceItemsWithStock,
-  InvoiceItemStockMatch,
   DEFAULT_SWISS_CATEGORIES,
 } from '../../../../services/financeService';
 import { listProducts } from '../../../../services/caisse';
-import { COSKYN_FACTURE_139079 } from '../../../../services/invoiceParser';
 import {
   Expense,
   ExpenseCategory,
@@ -60,13 +57,12 @@ export default function DepensesClient() {
   // Filtre et recherche
   const [activeGroup, setActiveGroup] = useState<string>('tous');
   const [searchQuery, setSearchQuery] = useState('');
-  const [previewFilter, setPreviewFilter] = useState<'all' | 'existing' | 'new' | 'vente' | 'cabine' | 'consommable'>('all');
 
   // Modales
-  const [importModalOpen, setImportModalOpen] = useState(false);
+  // Facture fournisseur en cours d'import (lecture IA, relecture, import atomique).
+  const [factureFile, setFactureFile] = useState<File | null>(null);
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [viewExpense, setViewExpense] = useState<Expense | null>(null);
-  const [importProcessing, setImportProcessing] = useState(false);
   // Ticket photographié en cours de lecture / relecture.
   const [ticketFile, setTicketFile] = useState<File | null>(null);
   const [exportYear, setExportYear] = useState(() => new Date().getFullYear());
@@ -74,22 +70,6 @@ export default function DepensesClient() {
   const attachInput = useRef<HTMLInputElement>(null);
   const [attachTarget, setAttachTarget] = useState<Expense | null>(null);
   const [attaching, setAttaching] = useState<string | null>(null);
-
-  // Formulaire importation facture
-  const [parsedPreview, setParsedPreview] = useState<{
-    fournisseur: string;
-    numero_facture: string;
-    date_facture: string;
-    date_echeance?: string;
-    montant_ht: number;
-    taux_tva: number;
-    montant_tva: number;
-    montant_ttc: number;
-    category_code: string;
-    notes?: string;
-    items: ExpenseItem[];
-    updateStock: boolean;
-  } | null>(null);
 
   // Formulaire dépense manuelle
   const [manualForm, setManualForm] = useState({
@@ -132,104 +112,10 @@ export default function DepensesClient() {
     }
   };
 
-  // Chargement direct du bon Coskyn Phytomer 139079
-  const handleLoadCoskynDemo = () => {
-    setParsedPreview({
-      fournisseur: COSKYN_FACTURE_139079.fournisseur,
-      numero_facture: COSKYN_FACTURE_139079.numero_facture,
-      date_facture: COSKYN_FACTURE_139079.date_facture,
-      date_echeance: COSKYN_FACTURE_139079.date_echeance,
-      montant_ht: COSKYN_FACTURE_139079.montant_ht,
-      taux_tva: COSKYN_FACTURE_139079.taux_tva,
-      montant_tva: COSKYN_FACTURE_139079.montant_tva,
-      montant_ttc: COSKYN_FACTURE_139079.montant_ttc,
-      category_code: '4200',
-      notes: COSKYN_FACTURE_139079.notes,
-      items: COSKYN_FACTURE_139079.items,
-      updateStock: true,
-    });
-    setImportModalOpen(true);
-  };
-
-  // Traitement d'un fichier uploadé
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFacturePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    setImportProcessing(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/admin/expenses/parse', {
-        method: 'POST',
-        body: fd,
-      });
-      const data = await res.json();
-      if (data.success && data.data) {
-        setParsedPreview({
-          ...data.data,
-          updateStock: data.data.is_stock_invoice ?? true,
-        });
-        setImportModalOpen(true);
-      } else {
-        alert(data.error || 'Erreur lors de la lecture du document');
-      }
-    } catch {
-      alert('Impossible d’analyser le fichier');
-    } finally {
-      setImportProcessing(false);
-    }
-  };
-
-  // Validation de l'import de facture
-  const handleConfirmImport = async () => {
-    if (!parsedPreview) return;
-    setImportProcessing(true);
-
-    try {
-      const cat = categories.find(c => c.code === parsedPreview.category_code) || categories[0];
-
-      // 1. Création de la dépense
-      const created = await createExpense(
-        {
-          fournisseur: parsedPreview.fournisseur,
-          numero_facture: parsedPreview.numero_facture,
-          date_facture: parsedPreview.date_facture,
-          date_echeance: parsedPreview.date_echeance || null,
-          date_paiement: null,
-          montant_ht: parsedPreview.montant_ht,
-          taux_tva: parsedPreview.taux_tva,
-          montant_tva: parsedPreview.montant_tva,
-          montant_ttc: parsedPreview.montant_ttc,
-          category_id: cat ? cat.id : null,
-          statut: 'a_payer',
-          mode_paiement: 'virement',
-          notes: parsedPreview.notes || null,
-          document_url: null,
-          is_stock_invoice: parsedPreview.updateStock,
-        },
-        parsedPreview.items
-      );
-
-      // 2. Déversement direct dans le stock si demandé
-      let stockMsg = '';
-      if (parsedPreview.updateStock && parsedPreview.items.length > 0) {
-        const stockRes = await applyInvoiceToStock(created.id, parsedPreview.items);
-        stockMsg = ` Stock actualisé : +${stockRes.totalQuantityAdded} unités (+${stockRes.updatedCount} stocks existants ajustés avec le bon, +${stockRes.createdCount} nouvelles fiches créées).`;
-        if (stockRes.erreurs.length > 0) {
-          setError(`${stockRes.erreurs.length} article(s) ne sont PAS entrés en stock — à saisir à la main (Produits › Stock › Réception) : ${stockRes.erreurs.join(' · ')}`);
-        }
-      }
-
-      setNotice(`Facture « ${parsedPreview.fournisseur} » n° ${parsedPreview.numero_facture} enregistrée avec succès.${stockMsg}`);
-      setImportModalOpen(false);
-      setParsedPreview(null);
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de l’enregistrement');
-    } finally {
-      setImportProcessing(false);
-    }
+    e.target.value = '';
+    if (file) setFactureFile(file);
   };
 
   // Enregistrement manuel d'une dépense d'exploitation
@@ -333,7 +219,11 @@ export default function DepensesClient() {
     const name = exp.fournisseur;
     const aDesVersements = payments.some(p => p.expense_id === exp.id && p.date_paiement);
     try {
-      if (aDesVersements) {
+      if (exp.is_stock_invoice) {
+        if (!confirm(`« ${name} » a fait entrer des articles en stock : elle ne peut pas être supprimée.\n\nL'annuler ? Ses articles sortiront du stock (la trace reste), ses versements seront annulés, et elle ne comptera plus nulle part. Une facture de stock annulée peut être importée à nouveau, mais ne se rétablit pas.`)) return;
+        await updateExpense(exp.id, { statut: 'annulee' });
+        setNotice(`Facture « ${name} » annulée : ses articles sont sortis du stock.`);
+      } else if (aDesVersements) {
         if (!confirm(`« ${name} » a des versements enregistrés : elle ne peut pas être supprimée.\n\nL'annuler ? Elle restera dans la liste, barrée, et ne comptera plus ni dans les charges ni dans la trésorerie (ses versements seront annulés).`)) return;
         await updateExpense(exp.id, { statut: 'annulee' });
         setNotice(`Dépense « ${name} » annulée. Ses versements sont annulés, la trace reste.`);
@@ -381,29 +271,6 @@ export default function DepensesClient() {
     return acc;
   }, { vente: 0, cabine: 0, conso: 0 });
 
-  // Rapprochement automatique du bon de commande avec les stocks existants
-  const stockMatches: InvoiceItemStockMatch[] = useMemo(() => {
-    if (!parsedPreview?.items) return [];
-    return matchInvoiceItemsWithStock(parsedPreview.items, existingProducts);
-  }, [parsedPreview?.items, existingProducts]);
-
-  const countExisting = stockMatches.filter(m => m.isExisting).length;
-  const countNew = stockMatches.filter(m => !m.isExisting).length;
-  const qtyExisting = stockMatches.filter(m => m.isExisting).reduce((acc, m) => acc + m.quantiteBon, 0);
-  const qtyNew = stockMatches.filter(m => !m.isExisting).reduce((acc, m) => acc + m.quantiteBon, 0);
-  const totalUnits = stockMatches.reduce((acc, m) => acc + m.quantiteBon, 0);
-
-  const displayedMatches = useMemo(() => {
-    return stockMatches.filter(m => {
-      if (previewFilter === 'existing') return m.isExisting;
-      if (previewFilter === 'new') return !m.isExisting;
-      if (previewFilter === 'vente') return m.item.usage_type === 'vente';
-      if (previewFilter === 'cabine') return m.item.usage_type === 'cabine';
-      if (previewFilter === 'consommable') return m.item.usage_type === 'consommable';
-      return true;
-    });
-  }, [stockMatches, previewFilter]);
-
   return (
     <div className="space-y-6">
       <CaisseCatalogNav />
@@ -424,24 +291,15 @@ export default function DepensesClient() {
                 <Camera size={16} /> Photographier un ticket
               </span>
             </label>
-            <Button
-              variant="secondary"
-              icon={Sparkles}
-              onClick={handleLoadCoskynDemo}
-              title="Précharger la facture Coskyn n° 139079 (Phytomer)"
-            >
-              Facture Coskyn (Démo)
-            </Button>
-            <label className="cursor-pointer">
+            <label className="cursor-pointer" title="Facture fournisseur détaillée (PDF ou photo) : ses articles entrent en stock">
               <input
                 type="file"
-                accept=".pdf,.png,.jpg,.jpeg"
+                accept="application/pdf,image/*"
                 className="hidden"
-                onChange={handleFileUpload}
-                disabled={importProcessing}
+                onChange={handleFacturePicked}
               />
               <span className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-stone-900 text-white text-[13.5px] font-medium hover:bg-stone-800 transition-colors shadow-xs">
-                <UploadCloud size={16} /> Importer un bon / PDF
+                <UploadCloud size={16} /> Facture fournisseur → stock
               </span>
             </label>
             <Button
@@ -559,13 +417,8 @@ export default function DepensesClient() {
             <div>
               <p className="text-sm font-semibold text-stone-800">Aucune facture enregistrée pour le moment</p>
               <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto">
-                Commencez par importer votre première facture fournisseur (ex. Coskyn SA) pour réassortir automatiquement vos produits cabine et vente.
+                Importez une facture fournisseur (« Facture fournisseur → stock ») pour faire entrer ses articles en stock, ou photographiez un ticket.
               </p>
-            </div>
-            <div className="flex justify-center gap-2">
-              <Button size="sm" icon={Sparkles} onClick={handleLoadCoskynDemo}>
-                Tester avec la facture Coskyn (Démo)
-              </Button>
             </div>
           </div>
         ) : (
@@ -717,7 +570,7 @@ export default function DepensesClient() {
                           {exp.statut !== 'annulee' && (
                             <button
                               onClick={() => handleDelete(exp)}
-                              title={payments.some(p => p.expense_id === exp.id && p.date_paiement) ? 'Annuler la dépense' : 'Supprimer'}
+                              title={exp.is_stock_invoice || payments.some(p => p.expense_id === exp.id && p.date_paiement) ? 'Annuler la dépense' : 'Supprimer'}
                               className="p-1.5 rounded-lg text-stone-400 hover:text-red-700 hover:bg-red-50 cursor-pointer"
                             >
                               <Trash2 size={15} />
@@ -734,325 +587,21 @@ export default function DepensesClient() {
         )}
       </div>
 
-      {/* Modale d'aperçu et ventilation de la facture Coskyn / importée */}
-      {importModalOpen && parsedPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full border border-stone-200 shadow-xl overflow-hidden my-8 max-h-[90vh] flex flex-col">
-            <div className="p-6 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2">
-                  <Sparkles size={20} className="text-accent" />
-                  Ventilation automatique : {parsedPreview.fournisseur}
-                </h3>
-                <p className="text-xs text-stone-600 mt-1">
-                  Facture n° {parsedPreview.numero_facture} du {new Date(parsedPreview.date_facture).toLocaleDateString('fr-CH')} · Total {formatCHF(parsedPreview.montant_ttc)}
-                </p>
-              </div>
-              <button
-                onClick={() => setImportModalOpen(false)}
-                className="text-stone-400 hover:text-stone-600 text-sm font-semibold p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
-              {/* Synthèse comptable */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-stone-50 p-3.5 rounded-xl border border-stone-200">
-                <div>
-                  <span className="text-stone-500 font-medium">Montant Net HT :</span>
-                  <p className="font-semibold text-stone-900 text-sm">{formatCHF(parsedPreview.montant_ht)}</p>
-                </div>
-                <div>
-                  <span className="text-stone-500 font-medium">TVA ({parsedPreview.taux_tva}%) :</span>
-                  <p className="font-semibold text-stone-900 text-sm">{formatCHF(parsedPreview.montant_tva)}</p>
-                </div>
-                <div>
-                  <span className="text-stone-500 font-medium">Total TTC :</span>
-                  <p className="font-bold text-emerald-700 text-sm">{formatCHF(parsedPreview.montant_ttc)}</p>
-                </div>
-                <div>
-                  <span className="text-stone-500 font-medium">Échéance 1er tiers :</span>
-                  <p className="font-semibold text-stone-900 text-sm">CHF 700.00 (29.09.2026)</p>
-                </div>
-              </div>
-
-              {/* Ventilation comptable détaillée */}
-              {(() => {
-                const previewVent = getInvoiceVentilation({
-                  ...parsedPreview,
-                  id: 'preview',
-                  category_id: null,
-                  statut: 'a_payer',
-                  mode_paiement: 'virement',
-                  created_at: '',
-                  updated_at: '',
-                  is_stock_invoice: true,
-                } as any);
-
-                return (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl">
-                      <span className="text-[11px] font-semibold text-emerald-900 block uppercase">
-                        Part Vente Boutique (4000)
-                      </span>
-                      <p className="text-base font-bold text-emerald-950 mt-0.5">
-                        {formatCHF(previewVent.partVenteTTC)} TTC
-                      </p>
-                      <p className="text-[11px] text-emerald-800 mt-0.5">
-                        Base HT : {formatCHF(previewVent.partVenteHT)} (17 réf. cosmétiques)
-                      </p>
-                    </div>
-
-                    <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl">
-                      <span className="text-[11px] font-semibold text-purple-900 block uppercase">
-                        Part Cabine Soins Pro (4200)
-                      </span>
-                      <p className="text-base font-bold text-purple-950 mt-0.5">
-                        {formatCHF(previewVent.partCabineTTC)} TTC
-                      </p>
-                      <p className="text-[11px] text-purple-800 mt-0.5">
-                        Base HT : {formatCHF(previewVent.partCabineHT)} (16 réf. grands formats)
-                      </p>
-                    </div>
-
-                    <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl">
-                      <span className="text-[11px] font-semibold text-amber-900 block uppercase">
-                        Consommables & Matériel (4400)
-                      </span>
-                      <p className="text-base font-bold text-amber-950 mt-0.5">
-                        {formatCHF(previewVent.partConsommablesTTC)} TTC
-                      </p>
-                      <p className="text-[11px] text-amber-800 mt-0.5">
-                        Base HT : {formatCHF(previewVent.partConsommablesHT)} (Draps, parathermique)
-                      </p>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Option de déversement stock */}
-              <label className="flex items-start gap-3 p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={parsedPreview.updateStock}
-                  onChange={e => setParsedPreview({ ...parsedPreview, updateStock: e.target.checked })}
-                  className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
-                />
-                <div>
-                  <p className="font-semibold text-emerald-950">
-                    Déverser automatiquement les articles dans le stock de l'institut
-                  </p>
-                  <p className="text-emerald-800 text-[11.5px] mt-0.5">
-                    Met à jour les quantités des produits existants et crée instantanément les nouvelles références (Vente et Cabine).
-                  </p>
-                </div>
-              </label>
-
-              {/* Tableau des articles détectés & Rapprochement Stock */}
-              <div className="space-y-3">
-                {/* Bandeau didactique d'ajustement de stock */}
-                {parsedPreview.updateStock && (
-                  <div className="bg-emerald-50/80 border border-emerald-200/90 rounded-xl p-3.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Package className="text-emerald-700" size={17} />
-                        <span className="font-semibold text-emerald-950 text-xs">
-                          Rapprochement et ajustement des stocks en direct
-                        </span>
-                      </div>
-                      <span className="text-[11px] font-bold text-emerald-800 bg-white/80 px-2 py-0.5 rounded-md border border-emerald-200">
-                        +{totalUnits} unités à intégrer
-                      </span>
-                    </div>
-                    <p className="text-[11.5px] text-emerald-900 leading-relaxed">
-                      Pour chaque référence du bon de commande, le logiciel vérifie si le produit existe déjà en institut. Si la référence existe déjà, la quantité livrée est <strong>additionnée au stock actuel</strong>. Sinon, une nouvelle fiche produit est créée avec la quantité initiale.
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-100/90 text-blue-900 border border-blue-200 font-medium">
-                        <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
-                        <strong>{countExisting}</strong> références déjà en stock (+{qtyExisting} unités ajoutées)
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100/90 text-amber-900 border border-amber-200 font-medium">
-                        <span className="w-2 h-2 rounded-full bg-amber-600 inline-block" />
-                        <strong>{countNew}</strong> nouvelles références (+{qtyNew} unités initiales)
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Filtres d'affichage du tableau */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setPreviewFilter('all')}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                        previewFilter === 'all'
-                          ? 'bg-stone-900 text-white shadow-xs'
-                          : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                      }`}
-                    >
-                      Tous ({stockMatches.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewFilter('existing')}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                        previewFilter === 'existing'
-                          ? 'bg-blue-700 text-white shadow-xs'
-                          : 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200'
-                      }`}
-                    >
-                      Déjà en stock ({countExisting})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewFilter('new')}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                        previewFilter === 'new'
-                          ? 'bg-amber-700 text-white shadow-xs'
-                          : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
-                      }`}
-                    >
-                      Nouvelles références ({countNew})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewFilter('vente')}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                        previewFilter === 'vente'
-                          ? 'bg-emerald-700 text-white shadow-xs'
-                          : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-                      }`}
-                    >
-                      Vente Boutique
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewFilter('cabine')}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                        previewFilter === 'cabine'
-                          ? 'bg-purple-700 text-white shadow-xs'
-                          : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200'
-                      }`}
-                    >
-                      Cabine Soins Pro
-                    </button>
-                  </div>
-                  <span className="text-[11px] text-stone-500 font-normal">
-                    {displayedMatches.length} ligne{displayedMatches.length > 1 ? 's' : ''} affichée{displayedMatches.length > 1 ? 's' : ''}
-                  </span>
-                </div>
-
-                <div className="border border-stone-200 rounded-xl overflow-hidden max-h-84 overflow-y-auto">
-                  <table className="w-full text-left border-collapse text-[11.5px]">
-                    <thead className="bg-stone-50 border-b border-stone-200 text-stone-600 sticky top-0 font-medium">
-                      <tr>
-                        <th className="py-2.5 px-3">Réf</th>
-                        <th className="py-2.5 px-3">Désignation</th>
-                        <th className="py-2.5 px-3">Usage</th>
-                        <th className="py-2.5 px-3 text-center">Stock actuel</th>
-                        <th className="py-2.5 px-3 text-center">Qté sur bon</th>
-                        <th className="py-2.5 px-3 text-center">Nouveau stock ajusté</th>
-                        <th className="py-2.5 px-3 text-right">P.U.</th>
-                        <th className="py-2.5 px-3 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-100">
-                      {displayedMatches.map((m, idx) => {
-                        const badgeInfo = PRODUCT_USAGE_LABELS[m.item.usage_type] || PRODUCT_USAGE_LABELS.vente;
-                        return (
-                          <tr key={idx} className="hover:bg-stone-50/70 transition-colors">
-                            <td className="py-2.5 px-3 font-mono text-stone-500 whitespace-nowrap">
-                              {m.item.reference || '—'}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="font-medium text-stone-900 leading-snug">{m.item.designation}</div>
-                              {m.isExisting ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-blue-700 font-medium mt-0.5">
-                                  <CheckCircle2 size={11} className="text-blue-600" /> Produit déjà en stock
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 font-medium mt-0.5">
-                                  <Plus size={11} className="text-amber-600" /> Nouvelle référence catalogue
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 whitespace-nowrap">
-                              <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border ${badgeInfo.color}`}>
-                                {badgeInfo.badge}
-                              </span>
-                            </td>
-                            {/* Stock Actuel */}
-                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                              {m.isExisting ? (
-                                <span className="inline-block px-2 py-0.5 rounded-md bg-stone-100 border border-stone-200 text-stone-800 font-semibold text-xs">
-                                  {m.stockActuel}
-                                </span>
-                              ) : (
-                                <span className="text-stone-400 italic text-[11px]">0</span>
-                              )}
-                            </td>
-                            {/* Quantité sur Bon de commande */}
-                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                              <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs">
-                                +{m.quantiteBon}
-                              </span>
-                            </td>
-                            {/* Nouveau Stock Ajusté (Actuel + Bon) */}
-                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                              {parsedPreview.updateStock ? (
-                                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-stone-50 border border-stone-200 text-stone-800 text-xs">
-                                  <span className="text-stone-500 font-normal text-[11px]">
-                                    {m.stockActuel} + {m.quantiteBon} =
-                                  </span>
-                                  <span className="text-emerald-700 font-extrabold text-xs">
-                                    {m.nouveauStock}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-stone-400 text-xs">—</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-stone-600 whitespace-nowrap">
-                              {m.item.rabais_pct === 100 ? (
-                                <span className="line-through text-stone-400">{formatCHF(m.item.prix_unitaire)}</span>
-                              ) : (
-                                formatCHF(m.item.prix_unitaire)
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-medium text-stone-900 whitespace-nowrap">
-                              {m.item.rabais_pct === 100 ? (
-                                <span className="text-emerald-700 font-semibold">Gratuit (100%)</span>
-                              ) : (
-                                formatCHF(m.item.total_ttc)
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-between">
-              <Button variant="ghost" onClick={() => setImportModalOpen(false)}>
-                Annuler
-              </Button>
-              <Button
-                variant="primary"
-                icon={CheckCircle2}
-                onClick={handleConfirmImport}
-                disabled={importProcessing}
-              >
-                {importProcessing ? 'Enregistrement en cours…' : 'Valider et intégrer au stock'}
-              </Button>
-            </div>
-          </div>
-        </div>
+      {factureFile && (
+        <FactureImportModal
+          file={factureFile}
+          categories={categories}
+          products={existingProducts}
+          expenses={expenses}
+          onClose={() => setFactureFile(null)}
+          onDone={async (message, expenseId) => {
+            setFactureFile(null);
+            setNotice(message);
+            await loadData();
+            // Son paiement (ou son échéancier) se saisit tout de suite.
+            setPaymentsFor(expenseId);
+          }}
+        />
       )}
 
       {/* Modale de consultation des articles d'une facture existante */}

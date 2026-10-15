@@ -19,6 +19,8 @@ import {
   type TicketDraft,
 } from '../types/receipts';
 
+import type { FactureAchatLue } from '../types/factureAchat';
+
 export const JUSTIFICATIFS_BUCKET = 'justificatifs';
 
 /** Assez pour lire un ticket de 80 mm imprimé serré, assez léger pour l'envoi. */
@@ -106,6 +108,18 @@ export async function scanReceipt(
   const json = await res.json().catch(() => null);
   if (!res.ok || !json?.data) throw new Error(json?.error || `Lecture du ticket impossible (HTTP ${res.status}).`);
   return json.data as ReceiptExtraction;
+}
+
+/** Lecture IA d'une facture fournisseur détaillée (lignes d'articles). N'enregistre rien. */
+export async function lireFactureAchat(prepared: PreparedReceipt): Promise<FactureAchatLue> {
+  const res = await fetch('/api/admin/expenses/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await bearer()}` },
+    body: JSON.stringify({ fileBase64: prepared.base64, mediaType: prepared.mediaType }),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json?.data) throw new Error(json?.error || `Lecture de la facture impossible (HTTP ${res.status}).`);
+  return json.data as FactureAchatLue;
 }
 
 /** Message lisible quand la base n'a pas encore les tables ou le coffre. */

@@ -15,6 +15,8 @@ import {
 } from '../../../../services/caisse';
 import type { ProductInput } from '../../../../services/caisse';
 import { PRODUCT_USAGE_LABELS } from '../../../../types/finance';
+import { listFacturesAchat } from '../../../../services/financeService';
+import FactureAchatSelect, { type FactureAchatOption } from './FactureAchatSelect';
 import type { ProductUsageType } from '../../../../types/finance';
 import ReclassementCallout from './ReclassementCallout';
 import {
@@ -447,7 +449,6 @@ export function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, defau
   const [usage, setUsage]         = useState<ProductUsageType>(product?.usage_type ?? defaultUsage);
   const [contenance, setContenance] = useState(product?.contenance ?? '');
   const estVente = usage === 'vente';
-  const [stockInitial, setStockInitial] = useState('');
   const [active, setActive]       = useState(product?.active ?? true);
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -496,26 +497,9 @@ export function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, defau
         onSaved();
         return;
       }
-      const created = await createProduct(payload);
-      // Le stock de départ entre par la même porte que le reste : un mouvement
-      // de réception daté, pas une valeur posée dans la colonne `stock`.
-      // S'il échoue, le produit existe déjà : on ferme quand même (réessayer
-      // ici créerait un doublon) et on dit quoi faire.
-      const initial = num(stockInitial);
-      if (Number.isFinite(initial) && initial > 0) {
-        try {
-          await stockMovement({
-            productId: created.id,
-            type: 'reception',
-            quantite: initial,
-            prixAchatUnitaire: payload.prix_achat_chf,
-            motif: 'Stock initial',
-          });
-        } catch {
-          onSaved(`« ${payload.nom} » a été créé, mais son stock de départ n'a pas été enregistré. Ajoutez-le avec le bouton « Stock » du produit (type Réception).`);
-          return;
-        }
-      }
+      // Pas de stock saisi à la création : il entre par sa facture d'achat
+      // (import ou réception rattachée), ou par un inventaire explicite.
+      await createProduct(payload);
       onSaved();
     } catch (err) {
       setError(`Le produit n'a pas été enregistré${err instanceof Error ? ` (${err.message})` : ''}. Vos saisies sont conservées : réessayez.`);
@@ -671,19 +655,10 @@ export function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, defau
           </div>
 
           {!product && (
-            <div>
-              <label htmlFor="prd-stock0" className="block text-[12.5px] font-medium text-stone-700 mb-1">
-                Stock de départ <span className="text-stone-600">(facultatif)</span>
-              </label>
-              <input
-                id="prd-stock0" type="text" inputMode="decimal" value={stockInitial} onChange={e => setStockInitial(e.target.value)}
-                placeholder="0"
-                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
-              />
-              <p className="text-[12px] text-stone-600 mt-1">
-                Enregistré comme une première livraison, datée d&apos;aujourd&apos;hui.
-              </p>
-            </div>
+            <p className="text-[12px] text-stone-600 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2">
+              Le stock ne se saisit pas ici : il entre avec la facture d&apos;achat (« Facture fournisseur → stock »
+              ou bouton Stock › Réception), ou par un inventaire si l&apos;article est déjà en rayon sans facture.
+            </p>
           )}
 
           <div>
@@ -737,7 +712,10 @@ function StockDialog({ product, onClose, onUpdated }: {
   onUpdated: (p: Product) => void;
 }) {
   const [tab, setTab] = useState<'mouvement' | 'inventaire'>('mouvement');
-  const [type, setType] = useState<'reception' | 'retour' | 'perte'>('reception');
+  const [type, setType] = useState<'reception' | 'perte'>('reception');
+  // Facture d'achat qui justifie la réception (obligatoire, vérifié par Postgres).
+  const [factures, setFactures] = useState<FactureAchatOption[] | null>(null);
+  const [factureId, setFactureId] = useState('');
   const [quantite, setQuantite] = useState('1');
   const [prixAchat, setPrixAchat] = useState(String(product.prix_achat_chf));
   const [majFiche, setMajFiche] = useState(false);
@@ -747,6 +725,10 @@ function StockDialog({ product, onClose, onUpdated }: {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listFacturesAchat().then(setFactures).catch(() => setFactures([]));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -769,13 +751,19 @@ function StockDialog({ product, onClose, onUpdated }: {
     e.preventDefault();
     const q = num(quantite);
     if (!Number.isFinite(q) || q <= 0) { setError('La quantité doit être un nombre positif.'); return; }
+    const prix = type === 'reception' ? num(prixAchat) : null;
+    if (type === 'reception' && !factureId) { setError('Choisissez la facture d\'achat de cette livraison.'); return; }
+    if (type === 'reception' && !(Number.isFinite(prix as number) && (prix as number) >= 0)) {
+      setError('Indiquez le prix d\'achat unitaire de la facture (0 pour un article offert).');
+      return;
+    }
     setSaving(true); setError(null);
     try {
-      const prix = type === 'reception' ? num(prixAchat) : null;
       const updated = await stockMovement({
         productId: product.id, type, quantite: q,
-        prixAchatUnitaire: Number.isFinite(prix as number) ? prix : null,
+        prixAchatUnitaire: type === 'reception' ? prix : null,
         motif: motif.trim() || null,
+        expenseId: type === 'reception' ? factureId : null,
       });
       // La mise à jour du tarif de référence est un geste distinct de la
       // réception : recevoir à un nouveau prix ne redéfinit pas la marge des
@@ -851,7 +839,7 @@ function StockDialog({ product, onClose, onUpdated }: {
 
         {tab === 'mouvement' ? (
           <form onSubmit={submitMouvement} className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {STOCK_MOVEMENTS_MANUELS.map(m => (
                 <button
                   key={m.value} type="button" onClick={() => setType(m.value)}
@@ -868,6 +856,13 @@ function StockDialog({ product, onClose, onUpdated }: {
               {STOCK_MOVEMENTS_MANUELS.find(m => m.value === type)?.help}
               {type === 'perte' && ' — la quantité sortira du stock.'}
             </p>
+            <p className="text-[12px] text-stone-500 -mt-1">
+              Une cliente rapporte un article ? Corrigez sa facture dans le Journal : l&apos;article revient en stock avec la trace de la vente.
+            </p>
+
+            {type === 'reception' && (
+              <FactureAchatSelect id="mv-facture" factures={factures} value={factureId} onChange={setFactureId} />
+            )}
 
             <div className={`grid gap-3 ${type === 'reception' ? 'grid-cols-2' : 'grid-cols-1'}`}>
               <div>
