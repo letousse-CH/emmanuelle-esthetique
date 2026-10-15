@@ -68,6 +68,10 @@ export default function BilanClient() {
     );
   }
 
+  const arreteLabel = stats.stockFinAujourdhui
+    ? `à ce jour (${new Date().toLocaleDateString('fr-CH')})`
+    : `au 31.12.${annee}`;
+
   return (
     <div className="space-y-6">
       <CaisseCatalogNav />
@@ -232,6 +236,27 @@ export default function BilanClient() {
                   <span>· Consommables & matériel de soin (compte 4400 - draps, parathermique)</span>
                   <span>{formatCHF(stats.consommablesMatériel)}</span>
                 </div>
+                <div className="flex justify-between font-semibold text-stone-800 pt-1">
+                  <span>Achats de l&apos;exercice (date de la facture, payée ou non)</span>
+                  <span>{formatCHF(stats.achatsTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>
+                    · Variation des stocks : stock {arreteLabel} {formatCHF(stats.stockFin.total)} − stock au 01.01.{annee} {formatCHF(stats.stockDebut.total)}
+                  </span>
+                  <span>{stats.variationStockEstimee >= 0 ? '− ' : '+ '}{formatCHF(Math.abs(stats.variationStockEstimee))}</span>
+                </div>
+                <p className="text-[11px] text-stone-500 pt-1 leading-relaxed">
+                  Ce qui reste en rayon n&apos;est pas une charge de l&apos;exercice : c&apos;est un stock, valorisé au prix
+                  d&apos;achat, TVA non récupérable comprise (CO art. 960a). Le chiffre vient du
+                  stock enregistré : faites l&apos;inventaire au 31 décembre (Produits › Stock › Inventaire) pour qu&apos;il soit juste.
+                  La fiduciaire peut y appliquer la réserve fiscale d&apos;un tiers admise sur les marchandises.
+                </p>
+                {stats.stockNegatifs.length > 0 && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+                    Stock négatif (compté pour zéro, à inventorier) : {stats.stockNegatifs.join(', ')}.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -320,7 +345,7 @@ export default function BilanClient() {
               <div className="p-4 rounded-xl bg-red-50 border border-red-200">
                 <p className="font-medium text-red-800 text-xs uppercase tracking-wider">Décaissements Réels</p>
                 <p className="text-2xl font-bold text-red-950 mt-1">− {formatCHF(stats.totalDecaissementsReels)}</p>
-                <p className="text-[11.5px] text-red-700 mt-1">Factures payées (fournisseurs & charges)</p>
+                <p className="text-[11.5px] text-red-700 mt-1">Versements aux fournisseurs, à la date de chaque versement</p>
               </div>
 
               <div className="p-4 rounded-xl bg-purple-50 border border-purple-200">
@@ -336,6 +361,46 @@ export default function BilanClient() {
                 {formatCHF(stats.soldeTresoreriePeriode)}
               </span>
             </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl border border-stone-200 space-y-4 text-xs">
+            <h3 className="font-bold text-stone-900 text-sm flex items-center gap-2">
+              <Building size={18} className="text-accent" />
+              Situation {arreteLabel} : stock et dettes fournisseurs
+            </h3>
+            <p className="text-stone-600 text-xs">
+              Ce que l&apos;institut possède et doit à la date d&apos;arrêté, hors liquidités. Une facture d&apos;achat payée en
+              plusieurs fois compte en entier dans les charges ; ce qui n&apos;est pas encore versé est une dette envers le fournisseur.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                <p className="font-medium text-emerald-800 text-xs uppercase tracking-wider">Stock marchandises</p>
+                <p className="text-2xl font-bold text-emerald-950 mt-1">{formatCHF(stats.stockFin.marchandises)}</p>
+                <p className="text-[11.5px] text-emerald-700 mt-1">Produits destinés à la revente, au coût d&apos;achat</p>
+              </div>
+              <div className="p-4 rounded-xl bg-stone-50 border border-stone-200">
+                <p className="font-medium text-stone-700 text-xs uppercase tracking-wider">Stock matières & cabine</p>
+                <p className="text-2xl font-bold text-stone-900 mt-1">{formatCHF(stats.stockFin.matieres)}</p>
+                <p className="text-[11.5px] text-stone-600 mt-1">Produits cabine, consommables, testeurs</p>
+              </div>
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <p className="font-medium text-amber-800 text-xs uppercase tracking-wider">Dettes fournisseurs</p>
+                <p className="text-2xl font-bold text-amber-950 mt-1">{formatCHF(stats.dettesFournisseurs)}</p>
+                <p className="text-[11.5px] text-amber-800 mt-1">Factures reçues, pas encore entièrement payées</p>
+              </div>
+            </div>
+            {stats.dettesDetail.length > 0 && (
+              <ul className="divide-y divide-stone-100 border border-stone-200 rounded-xl">
+                {stats.dettesDetail.map((d, i) => (
+                  <li key={i} className="flex justify-between gap-3 px-4 py-2">
+                    <span className="text-stone-700">
+                      {d.fournisseur}{d.numero ? ` n° ${d.numero}` : ''} · facture du {new Date(`${d.date_facture}T12:00:00`).toLocaleDateString('fr-CH')}
+                    </span>
+                    <span className="font-semibold text-stone-900 tabular-nums">{formatCHF(d.reste)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       )}
@@ -428,12 +493,19 @@ export default function BilanClient() {
                       )}
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-right font-medium text-stone-900">{formatCHF(stats.coutMatiereTotal)}</td>
+                  <td className="py-3 px-4 text-right font-medium text-stone-900">{formatCHF(stats.achatsTotal)}</td>
                 </tr>
                 <tr className="hover:bg-stone-50/50">
                   <td className="py-3 px-4 font-mono font-bold text-stone-700">Rubrique 2.2</td>
-                  <td className="py-3 px-4 text-stone-700">Variation des stocks au 31 décembre (inventaire physique)</td>
-                  <td className="py-3 px-4 text-right text-stone-500">CHF 0.00 (ou selon inventaire)</td>
+                  <td className="py-3 px-4 text-stone-700">
+                    <div>Variation des stocks {arreteLabel} (stock de fin − stock de début)</div>
+                    <div className="text-[11px] text-stone-500 mt-0.5">
+                      {formatCHF(stats.stockFin.total)} − {formatCHF(stats.stockDebut.total)} · à confirmer par l&apos;inventaire physique
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-right font-medium text-stone-900">
+                    {stats.variationStockEstimee >= 0 ? '− ' : '+ '}{formatCHF(Math.abs(stats.variationStockEstimee))}
+                  </td>
                 </tr>
                 <tr className="hover:bg-stone-50/50">
                   <td className="py-3 px-4 font-mono font-bold text-stone-700">Rubrique 3.1</td>

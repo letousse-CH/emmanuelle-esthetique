@@ -8,6 +8,7 @@ import {
   Camera, Paperclip, Download, FilePlus2,
 } from 'lucide-react';
 import TicketScanModal from './TicketScanModal';
+import PaymentsDialog from './PaymentsDialog';
 import DrivePanel from './DrivePanel';
 import { attachJustificatif, openJustificatif } from '../../../../services/receipts';
 import { downloadExpensesCsv } from '../../../../utils/expensesExport';
@@ -19,6 +20,7 @@ import {
   deleteExpense,
   getInvoiceVentilation,
   listExpenseCategories,
+  listExpensePayments,
   listExpenses,
   updateExpense,
   matchInvoiceItemsWithStock,
@@ -31,17 +33,24 @@ import {
   Expense,
   ExpenseCategory,
   ExpenseItem,
+  ExpensePayment,
   ExpensePaymentMode,
   ExpenseStatus,
   EXPENSE_PAYMENT_MODE_LABELS,
   EXPENSE_STATUS_LABELS,
   PRODUCT_USAGE_LABELS,
   ProductUsageType,
+  situationPaiement,
 } from '../../../../types/finance';
 import { Product, formatCHF } from '../../../../types/caisse';
+import { zurichDate } from '../../../../components/admin/mobile/home/zurich';
 
 export default function DepensesClient() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  // Versements et échéances de toutes les factures (`expense_payments`).
+  const [payments, setPayments] = useState<ExpensePayment[]>([]);
+  // Facture dont on gère le paiement (échéancier, versements).
+  const [paymentsFor, setPaymentsFor] = useState<string | null>(null);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [existingProducts, setExistingProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +95,7 @@ export default function DepensesClient() {
   const [manualForm, setManualForm] = useState({
     fournisseur: '',
     numero_facture: '',
-    date_facture: new Date().toISOString().split('T')[0],
+    date_facture: zurichDate(),
     date_echeance: '',
     montant_ttc: '',
     taux_tva: '0',
@@ -103,14 +112,19 @@ export default function DepensesClient() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [cats, exps, prods] = await Promise.all([
+      const [cats, exps, prods, pays] = await Promise.all([
         listExpenseCategories(),
         listExpenses(),
         listProducts(true),
+        listExpensePayments().catch(err => {
+          setError(`Les versements n'ont pas pu être lus (${err instanceof Error ? err.message : err}) : les montants « à payer » sont incomplets.`);
+          return [] as ExpensePayment[];
+        }),
       ]);
       setCategories(cats);
       setExpenses(exps);
       setExistingProducts(prods);
+      setPayments(pays);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
     } finally {
@@ -232,7 +246,7 @@ export default function DepensesClient() {
       const ht = tva > 0 ? montant / (1 + tva / 100) : montant;
       const mtTva = montant - ht;
 
-      await createExpense({
+      const created = await createExpense({
         fournisseur: manualForm.fournisseur,
         numero_facture: manualForm.numero_facture || null,
         date_facture: manualForm.date_facture,
@@ -255,7 +269,7 @@ export default function DepensesClient() {
       setManualForm({
         fournisseur: '',
         numero_facture: '',
-        date_facture: new Date().toISOString().split('T')[0],
+        date_facture: zurichDate(),
         date_echeance: '',
         montant_ttc: '',
         taux_tva: '0',
@@ -265,6 +279,7 @@ export default function DepensesClient() {
         notes: '',
       });
       await loadData();
+      if (created.statut === 'a_payer' && created.mode_paiement === 'echelonne') setPaymentsFor(created.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
     }
@@ -309,25 +324,33 @@ export default function DepensesClient() {
     return [...years].sort((a, b) => b - a);
   }, [expenses]);
 
-  const handleTogglePaid = async (exp: Expense) => {
-    const nextStatus = exp.statut === 'payee' ? 'a_payer' : 'payee';
-    await updateExpense(exp.id, {
-      statut: nextStatus,
-      date_paiement: nextStatus === 'payee' ? new Date().toISOString().split('T')[0] : null,
-    });
-    setExpenses(prev => prev.map(e => e.id === exp.id ? { ...e, statut: nextStatus } : e));
-  };
-
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Supprimer la dépense « ${name} » ?`)) return;
-    await deleteExpense(id);
-    setExpenses(prev => prev.filter(e => e.id !== id));
-    setNotice(`Facture « ${name} » supprimée.`);
+  /**
+   * Une dépense qui a reçu un versement ne se supprime pas (CO art. 957a) :
+   * elle s'annule — ses versements aussi, la trace reste. Sans versement, une
+   * erreur de saisie peut encore être supprimée.
+   */
+  const handleDelete = async (exp: Expense) => {
+    const name = exp.fournisseur;
+    const aDesVersements = payments.some(p => p.expense_id === exp.id && p.date_paiement);
+    try {
+      if (aDesVersements) {
+        if (!confirm(`« ${name} » a des versements enregistrés : elle ne peut pas être supprimée.\n\nL'annuler ? Elle restera dans la liste, barrée, et ne comptera plus ni dans les charges ni dans la trésorerie (ses versements seront annulés).`)) return;
+        await updateExpense(exp.id, { statut: 'annulee' });
+        setNotice(`Dépense « ${name} » annulée. Ses versements sont annulés, la trace reste.`);
+      } else {
+        if (!confirm(`Supprimer la dépense « ${name} » ?`)) return;
+        await deleteExpense(exp.id);
+        setNotice(`Dépense « ${name} » supprimée.`);
+      }
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   // Filtrage
   const filteredExpenses = expenses.filter(exp => {
-    if (activeGroup === 'a_payer' && exp.statut !== 'a_payer') return false;
+    if (activeGroup === 'a_payer' && situationPaiement(exp, payments).reste <= 0) return false;
     if (activeGroup === 'marchandises' && exp.category?.groupe !== 'marchandises_matieres') return false;
     if (activeGroup === 'exploitation' && exp.category?.groupe !== 'charges_exploitation') return false;
     if (activeGroup === 'avs' && exp.category?.code !== '5000') return false;
@@ -344,8 +367,10 @@ export default function DepensesClient() {
 
   // Calculs statistiques
   const totalTTC = expenses.reduce((acc, e) => acc + (e.statut !== 'annulee' ? Number(e.montant_ttc || 0) : 0), 0);
-  const totalAPayer = expenses.filter(e => e.statut === 'a_payer').reduce((acc, e) => acc + Number(e.montant_ttc || 0), 0);
-  const countAPayer = expenses.filter(e => e.statut === 'a_payer').length;
+  // Ce qui reste dû, versements déjà faits déduits (une facture payée en partie compte pour son solde).
+  const restes = expenses.map(e => situationPaiement(e, payments).reste);
+  const totalAPayer = restes.reduce((acc, r) => acc + r, 0);
+  const countAPayer = restes.filter(r => r > 0).length;
 
   const ventilationTotals = expenses.reduce((acc, e) => {
     if (e.statut === 'annulee') return acc;
@@ -513,7 +538,7 @@ export default function DepensesClient() {
           </select>
           <button
             type="button"
-            onClick={() => downloadExpensesCsv(expenses, exportYear)}
+            onClick={() => downloadExpensesCsv(expenses, exportYear, payments)}
             title="Export CSV pour la fiduciaire : fournisseur, adresse, n° IDE, compte, TVA par taux, justificatif"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-stone-100 text-stone-700 hover:bg-stone-200 whitespace-nowrap cursor-pointer"
           >
@@ -559,6 +584,7 @@ export default function DepensesClient() {
               <tbody className="divide-y divide-stone-100">
                 {filteredExpenses.map(exp => {
                   const stat = EXPENSE_STATUS_LABELS[exp.statut] || { label: exp.statut, color: 'bg-stone-100 text-stone-600' };
+                  const sit = situationPaiement(exp, payments);
                   return (
                     <tr key={exp.id} className="hover:bg-stone-50/50 transition-colors">
                       <td className="py-3.5 px-4">
@@ -622,9 +648,23 @@ export default function DepensesClient() {
                         )}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${stat.color}`}>
-                          {stat.label}
-                        </span>
+                        {sit.etat === 'partielle' ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border bg-sky-50 text-sky-800 border-sky-200">
+                            Payée {sit.nbPayes}/{sit.nbEcheances}
+                          </span>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${stat.color}`}>
+                            {stat.label}
+                          </span>
+                        )}
+                        {sit.reste > 0 && sit.paye > 0 && (
+                          <div className="text-[11px] text-stone-600 mt-0.5 tabular-nums">Reste {formatCHF(sit.reste)}</div>
+                        )}
+                        {sit.prochaine && (
+                          <div className={`text-[11px] mt-0.5 tabular-nums ${(sit.prochaine.date_prevue ?? '') < zurichDate() ? 'text-red-700' : 'text-stone-500'}`}>
+                            Prochaine : {new Date(`${sit.prochaine.date_prevue}T12:00:00`).toLocaleDateString('fr-CH')} · {formatCHF(sit.prochaine.montant)}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-right whitespace-nowrap font-medium text-stone-900">
                         {formatCHF(exp.montant_ttc)}
@@ -662,23 +702,27 @@ export default function DepensesClient() {
                             </button>
                           )}
                           <button
-                            onClick={() => handleTogglePaid(exp)}
-                            title={exp.statut === 'payee' ? 'Marquer comme à payer' : 'Marquer comme payée'}
+                            onClick={() => setPaymentsFor(exp.id)}
+                            title="Paiements : versements et échéancier (payer en plusieurs fois)"
                             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                              exp.statut === 'payee'
+                              sit.etat === 'payee'
                                 ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                                : 'text-stone-400 hover:text-emerald-600 hover:bg-emerald-50'
+                                : sit.etat === 'partielle'
+                                  ? 'text-sky-700 bg-sky-50 hover:bg-sky-100'
+                                  : 'text-stone-400 hover:text-emerald-600 hover:bg-emerald-50'
                             }`}
                           >
                             <CheckCircle2 size={15} />
                           </button>
-                          <button
-                            onClick={() => handleDelete(exp.id, exp.fournisseur)}
-                            title="Supprimer"
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-red-700 hover:bg-red-50 cursor-pointer"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          {exp.statut !== 'annulee' && (
+                            <button
+                              onClick={() => handleDelete(exp)}
+                              title={payments.some(p => p.expense_id === exp.id && p.date_paiement) ? 'Annuler la dépense' : 'Supprimer'}
+                              className="p-1.5 rounded-lg text-stone-400 hover:text-red-700 hover:bg-red-50 cursor-pointer"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1080,6 +1124,18 @@ export default function DepensesClient() {
           }}
         />
       )}
+
+      {paymentsFor && (() => {
+        const exp = expenses.find(e => e.id === paymentsFor);
+        return exp ? (
+          <PaymentsDialog
+            expense={exp}
+            payments={payments.filter(p => p.expense_id === exp.id)}
+            onClose={() => setPaymentsFor(null)}
+            onChanged={loadData}
+          />
+        ) : null;
+      })()}
 
       {/* Modale de saisie manuelle d'une charge d'exploitation */}
       {manualModalOpen && (

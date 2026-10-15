@@ -182,17 +182,35 @@ export interface Product {
   updated_at: string;
 }
 
-export function isVenteProduct(p: Product): boolean {
-  if (p.usage_type && p.usage_type !== 'vente') return false;
-  const nom = (p.nom || '').toLowerCase();
-  const ref = (p.reference || '').toLowerCase();
-  if (ref.startsWith('11') || ref.startsWith('12') || ref.startsWith('13') || ref.startsWith('15') || ref.startsWith('16')) {
-    if (p.usage_type !== 'vente') return false;
-  }
-  if (nom.includes('1 l') || nom.includes('2 l') || nom.includes('2 kg') || nom.includes('cabine') || nom.includes('drap')) {
-    if (p.usage_type !== 'vente') return false;
-  }
-  return true;
+/**
+ * Article destiné à la revente : il apparaît en caisse et dans « Produits vente ».
+ * Tous les autres usages (cabine, consommable, testeur, échantillon) vivent
+ * dans « Stock cabine ». L'usage de la fiche fait foi — pas le nom ni la
+ * référence, qu'aucune règle ne sait lire sans se tromper.
+ */
+export function isVenteProduct(p: Pick<Product, 'usage_type'>): boolean {
+  return (p.usage_type ?? 'vente') === 'vente';
+}
+
+/**
+ * Coût d'acquisition d'un article (CO art. 960a) : le prix d'achat HT de la
+ * facture, plus la TVA payée au fournisseur tant qu'elle n'est pas récupérable
+ * (activité non assujettie). C'est ce coût qui vaut au bilan et dans les marges.
+ */
+export function coutAchat(
+  p: Pick<Product, 'prix_achat_chf' | 'taux_tva_defaut'>,
+  tvaRecuperable: boolean,
+  prixHT: number = Number(p.prix_achat_chf || 0),
+): number {
+  // Pas d'arrondi ici : multiplié par une quantité, un coût unitaire arrondi
+  // fausserait la valeur du stock. L'affichage (formatCHF) arrondit.
+  return prixHT * (tvaRecuperable ? 1 : 1 + Number(p.taux_tva_defaut || 0) / 100);
+}
+
+/** Contenance lue à la fin du nom Phytomer : « Lait Démaquillant - 1 l » → « 1 l ». */
+export function contenanceDepuisNom(nom: string): string | null {
+  const m = (nom || '').match(/\s[-–]\s([^-–]*\d[^-–]*)$/);
+  return m ? m[1].trim() : null;
 }
 
 export type StockMovementType = 'reception' | 'vente' | 'retour' | 'inventaire' | 'perte';
@@ -234,6 +252,58 @@ export function stockLevel(p: Pick<Product, 'stock' | 'seuil_alerte'>): StockLev
   return 'ok';
 }
 
+export interface ValeurStock {
+  /** Produits destinés à la revente (`isVenteProduct`). */
+  marchandises: number;
+  /** Produits cabine, consommables, testeurs : achetés pour les soins. */
+  matieres: number;
+  total: number;
+  /** Articles au stock enregistré négatif, comptés pour zéro : à inventorier. */
+  negatifs: string[];
+}
+
+/**
+ * Valeur du stock à un instant, reconstituée depuis le journal des mouvements :
+ * quantité = somme des mouvements antérieurs, valorisée au coût d'acquisition
+ * (CO art. 960a) — le prix de la dernière réception avant cet instant, sinon
+ * celui de la fiche. Tant que l'activité n'est pas assujettie, la TVA payée à
+ * l'achat n'est pas récupérable : elle fait partie du coût (`tvaNonRecuperable`).
+ *
+ * `avant` est un instant ISO exclu ; `null` prend tout le journal (aujourd'hui).
+ */
+export function valeurStock(
+  products: Pick<Product, 'id' | 'nom' | 'reference' | 'usage_type' | 'prix_achat_chf' | 'taux_tva_defaut'>[],
+  movements: Pick<StockMovement, 'product_id' | 'quantite' | 'type' | 'prix_achat_unitaire' | 'created_at'>[],
+  avant: string | null,
+  tvaNonRecuperable: boolean,
+): ValeurStock {
+  const limite = avant ? Date.parse(avant) : Infinity;
+  const qte = new Map<string, number>();
+  const dernierPrix = new Map<string, { t: number; prix: number }>();
+  for (const m of movements) {
+    const t = Date.parse(m.created_at);
+    if (!(t < limite)) continue;
+    qte.set(m.product_id, (qte.get(m.product_id) ?? 0) + Number(m.quantite || 0));
+    if (m.type === 'reception' && m.prix_achat_unitaire !== null && m.prix_achat_unitaire !== undefined) {
+      const prev = dernierPrix.get(m.product_id);
+      if (!prev || t >= prev.t) dernierPrix.set(m.product_id, { t, prix: Number(m.prix_achat_unitaire) });
+    }
+  }
+  let marchandises = 0;
+  let matieres = 0;
+  const negatifs: string[] = [];
+  for (const p of products) {
+    const q = qte.get(p.id) ?? 0;
+    if (q < 0) negatifs.push(p.nom);
+    if (q <= 0) continue;
+    const cout = coutAchat(p, !tvaNonRecuperable, dernierPrix.get(p.id)?.prix);
+    if (isVenteProduct(p)) marchandises += q * cout; else matieres += q * cout;
+  }
+  marchandises = round2(marchandises);
+  matieres = round2(matieres);
+  return { marchandises, matieres, total: round2(marchandises + matieres), negatifs };
+}
+
 /**
  * Marge sur un article, en francs.
  *
@@ -261,10 +331,15 @@ export function margePct(prixVenteTTC: number, tauxTva: number, prixAchat: numbe
  * catalogue sans prix d'achat) — c'est différent d'une marge nulle, et le
  * journal doit pouvoir le dire.
  */
-export function ligneMarge(item: Pick<TransactionItem, 'product_id' | 'prix_achat_unitaire' | 'total_ttc' | 'taux_tva' | 'quantite'>): number | null {
+export function ligneMarge(
+  item: Pick<TransactionItem, 'product_id' | 'prix_achat_unitaire' | 'total_ttc' | 'taux_tva' | 'quantite'>,
+  /** TVA payée sur l'achat et non récupérable (activité non assujettie) : elle s'ajoute au coût figé, HT. */
+  tauxAchatNonRecuperable = 0,
+): number | null {
   if (!item.product_id || item.prix_achat_unitaire === null || item.prix_achat_unitaire === undefined) return null;
   const ht = Number(item.total_ttc || 0) / (1 + Number(item.taux_tva || 0) / 100);
-  return round2(ht - Number(item.prix_achat_unitaire) * Number(item.quantite || 0));
+  const coutUnitaire = Number(item.prix_achat_unitaire) * (1 + Number(tauxAchatNonRecuperable || 0) / 100);
+  return round2(ht - coutUnitaire * Number(item.quantite || 0));
 }
 
 export type GiftCardStatus = 'active' | 'epuise' | 'annule';

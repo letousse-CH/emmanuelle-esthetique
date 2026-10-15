@@ -401,7 +401,19 @@ Trois conséquences à ne pas défaire :
   un bon a bien quitté le rayon ce mois-ci.
 
 Comme les clientes, un produit qui a une histoire en stock est **désactivé** et
-non supprimé (`deleteOrArchiveProduct`). Une prestation citée dans un forfait
+non supprimé (`deleteOrArchiveProduct`).
+
+**Vente ou cabine : `products.usage_type` fait foi** (`isVenteProduct`), jamais
+le nom ni la référence. `vente` → caisse et « Produits vente » ; `cabine`,
+`consommable`, `testeur`, `echantillon` → « Stock cabine ». Jusqu'au 2026-10-15
+la base refusait d'écrire l'usage : toutes les fiches importées étaient restées
+« vente » (flacons cabine vendus à CHF 0 en caisse). `ReclassementCallout`
+propose de reprendre l'usage des lignes de facture (`planReclassement`).
+**Coût d'un article = `coutAchat()`** : prix d'achat HT + TVA non récupérable
+tant que l'activité n'est pas assujettie — valeur du stock, marges, coût matière.
+Fiches techniques des soins : `service_supplies.quantite_estimee` = nombre de
+soins par flacon (coût par soin = coût du flacon ÷ ce nombre) ; aucun coût
+n'est inventé pour un soin sans fiche. Une prestation citée dans un forfait
 refuse d'être supprimée tant qu'elle n'en est pas retirée.
 
 **Export fiducie.** Journal filtrable par mois ou par année, exporté en CSV
@@ -452,6 +464,34 @@ anciennes saisies locales dès que la base contient une dépense.
 - Export fiduciaire (CSV `;` + BOM, `utils/expensesExport.ts`) : une ligne par
   dépense avec adresse, IDE, compte, TVA 8.1 / 2.6 / 3.8, justificatif, puis un
   total par compte (lignes de synthèse positionnelles, à la largeur de l'en-tête).
+  En fin de ligne : payé et reste dû au 31.12, versements datés.
+
+## Factures d'achat payées en plusieurs fois (2026-10-15)
+
+Migration `20261015_depenses_versements.sql`. Une facture d'achat reste UNE
+pièce avec son total : la charge de l'exercice de sa date, quelle que soit la
+façon de la payer. Ses paiements vivent dans `expense_payments` :
+`date_paiement` NULL = échéance à venir (plan, modifiable, supprimable) ;
+renseignée = versement effectué, écriture de trésorerie à SA date, qui ne se
+modifie ni ne se supprime (déclencheurs) — une erreur s'annule avec un motif.
+
+- `expenses.statut` / `date_paiement` sont des reflets recalculés par
+  `expenses_sync_paiement` (payée = versements ≥ total). Les anciens chemins
+  (ticket photographié, saisie « déjà payée », statut changé à la main)
+  créent ou annulent les versements eux-mêmes. Une facture qui a reçu un
+  versement ne se supprime pas : elle s'annule (ses versements aussi).
+- Écran : bouton ✓ d'une dépense → `PaymentsDialog` (échelonner en 2 à 6 fois,
+  marquer une échéance payée, versement libre, annulation). Règles pures dans
+  `types/finance.ts` (`splitEcheances`, `situationPaiement`,
+  `dettesFournisseursAu`, `decaissementsPeriode`).
+- Bilan : trésorerie = versements à leur date ; « Dettes fournisseurs » = reste
+  dû à la date d'arrêté (31.12, ou aujourd'hui pour l'exercice en cours).
+- **Variation de stock** : stock au 01.01 et au 31.12 reconstitués depuis
+  `stock_movements` (`valeurStock`, `types/caisse.ts`), au prix de la dernière
+  réception, TVA non récupérable comprise tant que l'activité n'est pas
+  assujettie. Coût des marchandises = achats − variation. Le chiffre vaut ce que
+  vaut le stock enregistré : inventaire physique au 31.12 (bouton Inventaire),
+  et toute réception de stock doit correspondre à une facture d'achat.
 
 ## CRM : fiche cliente, suivi, promotions
 

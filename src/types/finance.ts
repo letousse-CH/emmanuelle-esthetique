@@ -5,7 +5,49 @@
  * dans le canton de Vaud (Palézieux).
  */
 
+import type { Product } from './caisse';
+import { contenanceDepuisNom } from './caisse';
+
 export type ProductUsageType = 'vente' | 'cabine' | 'consommable' | 'testeur' | 'echantillon';
+
+/** Référence fournisseur comparable : « PHY-110.101 » et « 110101 » se valent. */
+export const refNormalisee = (r: string | null | undefined) => (r ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+export interface PlanReclassement {
+  /** Fiches dont l'usage ou la contenance diffèrent de la facture d'achat. */
+  produits: { id: string; nom: string; de: ProductUsageType; vers: ProductUsageType; contenance: string | null }[];
+  /** Lignes de facture à rattacher à leur fiche produit (traçabilité). */
+  liens: { itemId: string; productId: string }[];
+}
+
+/**
+ * Ce que la facture fournisseur dit de chaque produit, comparé à sa fiche.
+ * L'usage d'une ligne de facture (vente, cabine, testeur…) a été choisi à la
+ * relecture de l'import ; une fiche créée avant que la base accepte d'écrire
+ * l'usage est restée « vente » par défaut. Rapprochement par référence.
+ */
+export function planReclassement(
+  products: Pick<Product, 'id' | 'nom' | 'reference' | 'usage_type' | 'contenance'>[],
+  items: (Pick<ExpenseItem, 'reference' | 'usage_type' | 'product_id'> & { id: string })[],
+): PlanReclassement {
+  const parRef = new Map<string, typeof products[number]>();
+  for (const p of products) if (refNormalisee(p.reference)) parRef.set(refNormalisee(p.reference), p);
+  const produits: PlanReclassement['produits'] = [];
+  const liens: PlanReclassement['liens'] = [];
+  const vus = new Set<string>();
+  for (const it of items) {
+    const p = parRef.get(refNormalisee(it.reference));
+    if (!p) continue;
+    if (!it.product_id) liens.push({ itemId: it.id, productId: p.id });
+    if (vus.has(p.id)) continue;
+    vus.add(p.id);
+    const de = (p.usage_type ?? 'vente') as ProductUsageType;
+    const vers = (it.usage_type ?? 'vente') as ProductUsageType;
+    const contenance = p.contenance ? null : contenanceDepuisNom(p.nom);
+    if (de !== vers || contenance) produits.push({ id: p.id, nom: p.nom, de, vers, contenance });
+  }
+  return { produits, liens };
+}
 
 export const PRODUCT_USAGE_LABELS: Record<ProductUsageType, { label: string; badge: string; color: string }> = {
   vente: {
@@ -158,6 +200,147 @@ export interface Expense {
 
 export type ExpenseDocumentType = 'facture' | 'ticket' | 'autre';
 
+// ── Versements d'une facture d'achat (paiement échelonné) ───────────────────
+//
+// Une facture reste une pièce avec son montant total : c'est la charge de
+// l'exercice de sa date. Ses paiements vivent à part (`expense_payments`) :
+// sans `date_paiement`, une ligne est une échéance à venir (un plan) ; avec,
+// c'est un versement effectué — une écriture de trésorerie à sa date, qui ne
+// se modifie plus et ne s'efface jamais (elle s'annule, avec un motif).
+
+/** Un versement se fait par un moyen réel : « échelonné » décrit la facture, pas le paiement. */
+export type ExpenseVersementMode = Exclude<ExpensePaymentMode, 'echelonne'>;
+
+export const VERSEMENT_MODES: { value: ExpenseVersementMode; label: string }[] = [
+  { value: 'virement', label: 'Virement' },
+  { value: 'prelevement_auto', label: 'Prélèvement (LSV+)' },
+  { value: 'carte', label: 'Carte' },
+  { value: 'twint', label: 'TWINT' },
+  { value: 'especes', label: 'Espèces' },
+];
+
+export interface ExpensePayment {
+  id: string;
+  expense_id: string;
+  rang: number;
+  date_prevue: string | null;
+  montant: number;
+  /** `null` : échéance à venir. Renseignée : versement effectué ce jour-là. */
+  date_paiement: string | null;
+  mode_paiement: ExpenseVersementMode | null;
+  reference: string | null;
+  justificatif_url: string | null;
+  annule: boolean;
+  annule_le: string | null;
+  motif_annulation: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/** Montants d'un échéancier en `n` fois : égaux au centime, l'arrondi sur le dernier. */
+export function splitEcheances(total: number, n: number): number[] {
+  const nb = Math.max(1, Math.floor(n));
+  const base = Math.floor((Number(total) / nb) * 100) / 100;
+  return Array.from({ length: nb }, (_, i) => (i < nb - 1 ? base : r2(Number(total) - base * (nb - 1))));
+}
+
+/** `YYYY-MM-DD` + `mois` mois, en restant au dernier jour d'un mois plus court (31.01 → 28.02). */
+export function addMonthsISO(iso: string, mois: number): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const cible = new Date(Date.UTC(y, m - 1 + mois, 1));
+  const dernier = new Date(Date.UTC(cible.getUTCFullYear(), cible.getUTCMonth() + 1, 0)).getUTCDate();
+  cible.setUTCDate(Math.min(d, dernier));
+  return cible.toISOString().slice(0, 10);
+}
+
+/**
+ * Versements effectifs d'une facture, non annulés, éventuellement arrêtés à une
+ * date. Une dépense marquée payée sans aucune ligne de versement (saisie
+ * locale d'avant la base) compte comme payée en une fois à sa date.
+ */
+export function versementsEffectues(
+  expense: Pick<Expense, 'id' | 'statut' | 'montant_ttc' | 'date_paiement' | 'date_facture'>,
+  payments: ExpensePayment[],
+  au?: string,
+): { date: string; montant: number }[] {
+  const lignes = payments.filter(p => p.expense_id === expense.id);
+  const effectues = lignes
+    .filter(p => p.date_paiement && !p.annule)
+    .map(p => ({ date: p.date_paiement as string, montant: Number(p.montant) }));
+  if (lignes.length === 0 && expense.statut === 'payee') {
+    effectues.push({ date: expense.date_paiement ?? expense.date_facture, montant: Number(expense.montant_ttc) });
+  }
+  return au ? effectues.filter(v => v.date <= au) : effectues;
+}
+
+export type EtatPaiement = 'a_payer' | 'partielle' | 'payee' | 'annulee';
+
+export interface SituationPaiement {
+  paye: number;
+  /** Échéances à venir, planifiées mais pas encore versées. */
+  prevu: number;
+  reste: number;
+  nbPayes: number;
+  nbEcheances: number;
+  prochaine: ExpensePayment | null;
+  etat: EtatPaiement;
+}
+
+/** Où en est le paiement d'une facture d'achat, éventuellement à une date (31.12). */
+export function situationPaiement(
+  expense: Pick<Expense, 'id' | 'statut' | 'montant_ttc' | 'date_paiement' | 'date_facture'>,
+  payments: ExpensePayment[],
+  au?: string,
+): SituationPaiement {
+  const total = Number(expense.montant_ttc || 0);
+  const effectues = versementsEffectues(expense, payments, au);
+  const paye = r2(effectues.reduce((s, v) => s + v.montant, 0));
+  const aVenir = payments
+    .filter(p => p.expense_id === expense.id && !p.annule && !p.date_paiement)
+    .sort((a, b) => (a.date_prevue ?? '').localeCompare(b.date_prevue ?? '') || a.rang - b.rang);
+  const etat: EtatPaiement = expense.statut === 'annulee' ? 'annulee'
+    : total > 0 && paye >= total - 0.005 ? 'payee'
+    : paye > 0 ? 'partielle' : 'a_payer';
+  return {
+    paye,
+    prevu: r2(aVenir.reduce((s, p) => s + Number(p.montant), 0)),
+    reste: etat === 'annulee' ? 0 : Math.max(0, r2(total - paye)),
+    nbPayes: effectues.length,
+    nbEcheances: effectues.length + aVenir.length,
+    prochaine: aVenir[0] ?? null,
+    etat,
+  };
+}
+
+/** Sorties de trésorerie d'une période : les versements, à LEUR date — pas à celle de la facture. */
+export function decaissementsPeriode(
+  expenses: Pick<Expense, 'id' | 'statut' | 'montant_ttc' | 'date_paiement' | 'date_facture'>[],
+  payments: ExpensePayment[],
+  debut: string,
+  fin: string,
+): number {
+  let total = 0;
+  for (const e of expenses) {
+    for (const v of versementsEffectues(e, payments)) if (v.date >= debut && v.date <= fin) total += v.montant;
+  }
+  return r2(total);
+}
+
+/** Dettes fournisseurs à une date : factures reçues jusque-là, moins ce qui était versé à cette date. */
+export function dettesFournisseursAu<E extends Pick<Expense, 'id' | 'statut' | 'montant_ttc' | 'date_paiement' | 'date_facture'>>(
+  expenses: E[],
+  payments: ExpensePayment[],
+  au: string,
+): { total: number; detail: { expense: E; reste: number }[] } {
+  const detail = expenses
+    .filter(e => e.statut !== 'annulee' && e.date_facture <= au)
+    .map(e => ({ expense: e, reste: situationPaiement(e, payments, au).reste }))
+    .filter(d => d.reste > 0.005);
+  return { total: r2(detail.reduce((s, d) => s + d.reste, 0)), detail };
+}
+
 /** TVA d'une pièce, taux par taux : base de l'impôt préalable le jour de l'assujettissement. */
 export interface ExpenseTvaLine {
   taux: number;
@@ -170,6 +353,8 @@ export interface ServiceSupply {
   id: string;
   service_id: string;
   product_id: string;
+  /** Nombre de soins réalisés avec UN flacon (pot, rouleau) du produit.
+   *  Coût matière du soin = coût d'achat du flacon ÷ ce nombre. */
   quantite_estimee: number;
   notes: string | null;
   created_at: string;
@@ -258,7 +443,18 @@ export interface FinancialDashboardStats {
   achatsMarchandisesBoutique: number;
   achatsCabineMatieres: number;
   consommablesMatériel: number;
+  /** Stock au 1er janvier et au 31 décembre (ou à ce jour pour l'exercice en cours). */
+  stockDebut: { marchandises: number; matieres: number; total: number };
+  stockFin: { marchandises: number; matieres: number; total: number };
+  /** `true` quand l'exercice n'est pas clos : le stock « de fin » est celui d'aujourd'hui. */
+  stockFinAujourdhui: boolean;
+  /** Articles dont le stock enregistré est négatif : un inventaire s'impose. */
+  stockNegatifs: string[];
+  /** Stock de fin − stock de début : une hausse réduit le coût de l'exercice. */
   variationStockEstimee: number;
+  /** Achats de l'exercice (comptes 4000, 4200, 4400), avant variation de stock. */
+  achatsTotal: number;
+  /** Coût des marchandises et matières consommées : achats − variation de stock. */
   coutMatiereTotal: number;
   margeBruteTotale: number;
   margeBrutePct: number;
@@ -275,4 +471,7 @@ export interface FinancialDashboardStats {
   totalEncaissementsReels: number;
   totalDecaissementsReels: number;
   soldeTresoreriePeriode: number;
+  // Situation au 31.12 : ce qui reste dû aux fournisseurs
+  dettesFournisseurs: number;
+  dettesDetail: { fournisseur: string; numero: string | null; date_facture: string; reste: number }[];
 }

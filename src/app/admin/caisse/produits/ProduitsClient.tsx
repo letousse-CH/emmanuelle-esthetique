@@ -14,9 +14,12 @@ import {
   stockInventaire, stockMovement, updateProduct,
 } from '../../../../services/caisse';
 import type { ProductInput } from '../../../../services/caisse';
+import { PRODUCT_USAGE_LABELS } from '../../../../types/finance';
+import type { ProductUsageType } from '../../../../types/finance';
+import ReclassementCallout from './ReclassementCallout';
 import {
   STOCK_MOVEMENTS_MANUELS, STOCK_MOVEMENT_LABELS, TAUX_TVA_CH,
-  formatAmount, formatCHF, isVenteProduct, margeCHF, margePct, stockLevel,
+  coutAchat, formatAmount, formatCHF, isVenteProduct, margeCHF, margePct, stockLevel,
 } from '../../../../types/caisse';
 import type { Product, StockMovement } from '../../../../types/caisse';
 
@@ -31,6 +34,8 @@ export default function ProduitsClient() {
   const tauxDefaut = Number(settings.caisse_tva_taux_defaut || 0);
 
   const [products, setProducts] = useState<Product[]>([]);
+  // Tous les produits, cabine compris : le rapprochement avec les factures en a besoin.
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [notice, setNotice]     = useState<string | null>(null);
@@ -44,6 +49,7 @@ export default function ProduitsClient() {
     setLoading(true); setError(null);
     try {
       const all = await listProducts(true);
+      setAllProducts(all);
       setProducts(all.filter(isVenteProduct));
     } catch (err) {
       setError(`La liste des produits n'a pas pu être chargée${err instanceof Error ? ` (${err.message})` : ''}.`);
@@ -54,14 +60,15 @@ export default function ProduitsClient() {
 
   const replace = (p: Product) => setProducts(prev => prev.map(x => (x.id === p.id ? p : x)));
 
-  // Valeur du stock au prix d'achat — c'est ce chiffre qui figure à l'actif du
-  // bilan, jamais la valeur au prix de vente (elle anticiperait une marge non
-  // encore réalisée).
+  // Valeur du stock au coût d'achat (TVA non récupérable comprise) — c'est ce
+  // chiffre qui figure à l'actif du bilan, jamais la valeur au prix de vente
+  // (elle anticiperait une marge non encore réalisée).
   const stats = useMemo(() => {
     const actifs = products.filter(p => p.active);
-    const valeurAchat = actifs.reduce((acc, p) => acc + Math.max(0, Number(p.stock || 0)) * Number(p.prix_achat_chf || 0), 0);
+    const valeurAchat = actifs.reduce((acc, p) => acc + Math.max(0, Number(p.stock || 0)) * coutAchat(p, tvaActive), 0);
     const caPotentiel = actifs.reduce((acc, p) => acc + Math.max(0, Number(p.stock || 0)) * Number(p.prix_vente_chf || 0), 0);
-    const margePotentielle = Math.max(0, caPotentiel - valeurAchat);
+    const margePotentielle = Math.max(0, actifs.reduce((acc, p) => acc + Math.max(0, Number(p.stock || 0))
+      * margeCHF(Number(p.prix_vente_chf), tvaActive ? Number(p.taux_tva_defaut) : 0, coutAchat(p, tvaActive)), 0));
     const totalUnites = actifs.reduce((acc, p) => acc + Math.max(0, Number(p.stock || 0)), 0);
 
     return {
@@ -73,7 +80,7 @@ export default function ProduitsClient() {
       ruptures: actifs.filter(p => stockLevel(p) === 'rupture').length,
       bas: actifs.filter(p => stockLevel(p) === 'bas').length,
     };
-  }, [products]);
+  }, [products, tvaActive]);
 
   const handleDelete = async (p: Product) => {
     if (!confirm(`Retirer « ${p.nom} » du catalogue ?\n\nS'il a déjà bougé en stock, il sera désactivé plutôt que supprimé : son journal de mouvements et les factures qui le citent doivent rester lisibles.`)) return;
@@ -165,6 +172,11 @@ export default function ProduitsClient() {
         </Callout>
       )}
 
+      <ReclassementCallout products={allProducts} onDone={async () => {
+        await load();
+        setNotice('Classement repris des factures : les produits cabine, testeurs et échantillons ont rejoint le stock cabine.');
+      }} />
+
       {!loading && products.length > 0 && (
         <div className="space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -244,8 +256,9 @@ export default function ProduitsClient() {
               const niveau = stockLevel(p);
               // Non assujettie : la vente est facturée à 0 %, tout le prix est une recette.
               const tauxVente = tvaActive ? Number(p.taux_tva_defaut) : 0;
-              const marge = margeCHF(Number(p.prix_vente_chf), tauxVente, Number(p.prix_achat_chf));
-              const pct = margePct(Number(p.prix_vente_chf), tauxVente, Number(p.prix_achat_chf));
+              const cout = coutAchat(p, tvaActive);
+              const marge = margeCHF(Number(p.prix_vente_chf), tauxVente, cout);
+              const pct = margePct(Number(p.prix_vente_chf), tauxVente, cout);
               return (
                 <li key={p.id} className={`px-5 py-4 hover:bg-stone-50/50 transition-colors ${!p.active ? 'bg-stone-50/60' : ''}`}>
                   <div className="flex items-center gap-3">
@@ -275,7 +288,9 @@ export default function ProduitsClient() {
                       <p className="truncate text-[12.5px] text-stone-600 flex items-center gap-2 flex-wrap">
                         <span>
                           {p.reference && <span className="font-mono">{p.reference} · </span>}
-                          Achat {formatCHF(p.prix_achat_chf)} → vente {formatCHF(p.prix_vente_chf)}
+                          <span title={cout !== Number(p.prix_achat_chf) ? `Prix d'achat ${formatCHF(p.prix_achat_chf)} HT + TVA non récupérable` : undefined}>
+                            Coût {formatCHF(cout)}
+                          </span> → vente {formatCHF(p.prix_vente_chf)}
                           {' · '}
                           <span className={marge >= 0 ? 'text-stone-700 font-medium' : 'text-red-700 font-medium'}>
                             marge {formatCHF(marge)}{pct !== null && ` (${formatAmount(pct)} %)`}
@@ -410,11 +425,13 @@ function StockBadge({ product, level }: { product: Product; level: ReturnType<ty
 
 // ── Fiche produit ───────────────────────────────────────────────────────────
 
-function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onSaved }: {
+export function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, defaultUsage = 'vente', onClose, onSaved }: {
   product: Product | null;
   nextOrder: number;
   tvaActive: boolean;
   tauxDefaut: number;
+  /** Usage d'un nouveau produit : « vente » depuis la boutique, « cabine » depuis le stock cabine. */
+  defaultUsage?: ProductUsageType;
   onClose: () => void;
   /** `notice` : message à afficher sur la liste (par exemple un stock de départ non enregistré). */
   onSaved: (notice?: string) => void;
@@ -427,6 +444,9 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
   const [vente, setVente]         = useState(product ? String(product.prix_vente_chf) : '');
   const [taux, setTaux]           = useState(product ? Number(product.taux_tva_defaut) : tauxDefaut);
   const [seuil, setSeuil]         = useState(product ? String(product.seuil_alerte) : '2');
+  const [usage, setUsage]         = useState<ProductUsageType>(product?.usage_type ?? defaultUsage);
+  const [contenance, setContenance] = useState(product?.contenance ?? '');
+  const estVente = usage === 'vente';
   const [stockInitial, setStockInitial] = useState('');
   const [active, setActive]       = useState(product?.active ?? true);
   const [saving, setSaving]       = useState(false);
@@ -436,16 +456,18 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
   // Un prix d'achat vide vaut zéro ; un prix illisible (« 12 fr ») est refusé
   // au lieu d'être enregistré silencieusement à zéro.
   const achatRaw = achat.trim() === '' ? 0 : num(achat);
-  const venteRaw = num(vente);
+  // Un produit qui n'est pas revendu n'a pas de prix de vente : vide vaut zéro.
+  const venteRaw = !estVente && vente.trim() === '' ? 0 : num(vente);
   const achatNum = Number.isFinite(achatRaw) ? achatRaw : 0;
   const venteNum = Number.isFinite(venteRaw) ? venteRaw : 0;
-  const marge = margeCHF(venteNum, tvaActive ? taux : 0, achatNum);
-  const pct = margePct(venteNum, tvaActive ? taux : 0, achatNum);
+  const coutReel = coutAchat({ prix_achat_chf: achatNum, taux_tva_defaut: taux }, tvaActive);
+  const marge = margeCHF(venteNum, tvaActive ? taux : 0, coutReel);
+  const pct = margePct(venteNum, tvaActive ? taux : 0, coutReel);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nom.trim()) { setError('Indiquez le nom du produit.'); return; }
-    if (vente.trim() === '' || !Number.isFinite(venteRaw) || venteRaw < 0) {
+    if ((estVente && vente.trim() === '') || !Number.isFinite(venteRaw) || venteRaw < 0) {
       setError('Prix de vente non reconnu : saisissez un nombre, par exemple 45 ou 45.50.');
       return;
     }
@@ -465,6 +487,8 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
       seuil_alerte: Math.max(0, num(seuil) || 0),
       active,
       ordre: product?.ordre ?? nextOrder,
+      usage_type: usage,
+      contenance: contenance.trim() || null,
     };
     try {
       if (product) {
@@ -549,8 +573,35 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
 
           <div className="grid grid-cols-2 gap-3">
             <div>
+              <label htmlFor="prd-usage" className="block text-[12.5px] font-medium text-stone-700 mb-1">Usage *</label>
+              <select
+                id="prd-usage" value={usage} onChange={e => setUsage(e.target.value as ProductUsageType)}
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors cursor-pointer"
+              >
+                {(Object.keys(PRODUCT_USAGE_LABELS) as ProductUsageType[]).map(u => (
+                  <option key={u} value={u}>{PRODUCT_USAGE_LABELS[u].label}</option>
+                ))}
+              </select>
+              <p className="text-[12px] text-stone-600 mt-1">
+                {estVente ? 'Proposé à la vente en caisse.' : 'Hors caisse : suivi dans le stock cabine.'}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="prd-contenance" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+                Contenance <span className="text-stone-600">(facultatif)</span>
+              </label>
+              <input
+                id="prd-contenance" type="text" value={contenance} onChange={e => setContenance(e.target.value)}
+                placeholder="250 ml, 1 l, 2 kg…"
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label htmlFor="prd-achat" className="block text-[12.5px] font-medium text-stone-700 mb-1">
-                Prix d&apos;achat (CHF)
+                Prix d&apos;achat {!tvaActive && taux > 0 ? 'HT' : ''} (CHF)
               </label>
               <input
                 id="prd-achat" type="text" inputMode="decimal" value={achat} onChange={e => setAchat(e.target.value)}
@@ -560,17 +611,24 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
             </div>
             <div>
               <label htmlFor="prd-vente" className="block text-[12.5px] font-medium text-stone-700 mb-1">
-                Prix de vente TTC (CHF) *
+                Prix de vente TTC (CHF) {estVente ? '*' : <span className="text-stone-600">(non vendu)</span>}
               </label>
               <input
-                id="prd-vente" type="text" inputMode="decimal" value={vente} onChange={e => setVente(e.target.value)} required
+                id="prd-vente" type="text" inputMode="decimal" value={vente} onChange={e => setVente(e.target.value)} required={estVente}
                 placeholder="45.00"
                 className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
               />
             </div>
           </div>
 
+          {!tvaActive && taux > 0 && achatNum > 0 && (
+            <p className="text-[12px] text-stone-600 -mt-1">
+              Coût réel : {formatCHF(coutReel)} — la TVA de {taux} % payée au fournisseur n&apos;est pas récupérable tant que l&apos;activité n&apos;est pas assujettie.
+            </p>
+          )}
+
           {/* Marge en direct : c'est le chiffre qui décide du prix de vente. */}
+          {estVente && (
           <div className="rounded-xl border border-stone-200 bg-stone-50/60 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <TrendingUp size={14} className={marge >= 0 ? 'text-stone-600' : 'text-red-600'} />
@@ -583,6 +641,7 @@ function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, onClose, onS
               {pct !== null && <p className="text-[12px] text-stone-600 tabular-nums">{formatAmount(pct)} % du prix de vente</p>}
             </div>
           </div>
+          )}
           {tvaActive && (
             <p className="text-[12px] text-stone-600 leading-relaxed -mt-1">
               La marge compare la vente <strong>hors taxe</strong> au prix d&apos;achat : saisissez donc

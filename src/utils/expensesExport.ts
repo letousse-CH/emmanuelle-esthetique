@@ -5,11 +5,18 @@
  * comme le livre de caisse : le fichier s'ouvre d'un double-clic dans Excel.
  *
  * Les dépenses annulées n'y figurent pas : elles ne sont pas des charges.
+ *
+ * Une facture payée en plusieurs fois reste une ligne (la charge, à la date de
+ * la facture) ; ses versements sont listés avec leur date, et ce qui restait dû
+ * au 31 décembre forme les dettes fournisseurs.
  */
 import {
   EXPENSE_PAYMENT_MODE_LABELS,
   EXPENSE_STATUS_LABELS,
+  VERSEMENT_MODES,
+  situationPaiement,
   type Expense,
+  type ExpensePayment,
   type ExpenseTvaLine,
 } from '../types/finance';
 import { round2 } from '../types/receipts';
@@ -19,7 +26,10 @@ const HEADER = [
   'Compte', 'Libellé du compte', 'Déductible', 'Montant TTC (CHF)', 'TVA 8.1 % (CHF)', 'TVA 2.6 % (CHF)',
   'TVA 3.8 % (CHF)', 'TVA autres taux (CHF)', 'Total TVA (CHF)', 'Montant HT (CHF)', 'Mode de paiement',
   'Statut', 'Date de paiement', 'Justificatif', 'Remarque',
+  'Payé au 31.12 (CHF)', 'Reste dû au 31.12 (CHF)', 'Versements (date : montant)',
 ];
+
+const MODE_COURT = Object.fromEntries(VERSEMENT_MODES.map((m) => [m.value, m.label])) as Record<string, string>;
 
 const TYPE_LABELS: Record<string, string> = { ticket: 'Ticket de caisse', facture: 'Facture', autre: 'Autre' };
 
@@ -39,12 +49,15 @@ function row(cells: Partial<Record<number, string>>): string[] {
   return HEADER.map((_, i) => cells[i] ?? '');
 }
 
-export function buildExpensesCsv(expenses: Expense[], year: number): string {
+export function buildExpensesCsv(expenses: Expense[], year: number, payments: ExpensePayment[] = []): string {
+  const finAnnee = `${year}-12-31`;
   const list = expenses
     .filter((e) => e.statut !== 'annulee' && e.date_facture.startsWith(String(year)))
     .sort((a, b) => a.date_facture.localeCompare(b.date_facture) || a.fournisseur.localeCompare(b.fournisseur));
 
   const byAccount = new Map<string, { label: string; ttc: number; tva: number; ht: number }>();
+  let totalPaye = 0;
+  let totalReste = 0;
   const lines = list.map((e) => {
     const tva = tvaLines(e);
     const at = (rate: number) => round2(tva.filter((l) => l.taux === rate).reduce((s, l) => s + l.montant_tva, 0));
@@ -58,6 +71,15 @@ export function buildExpensesCsv(expenses: Expense[], year: number): string {
     const acc = byAccount.get(code) ?? { label, ttc: 0, tva: 0, ht: 0 };
     acc.ttc += ttc; acc.tva += totalTva; acc.ht += ht;
     byAccount.set(code, acc);
+
+    const au31 = situationPaiement(e, payments, finAnnee);
+    const actuel = situationPaiement(e, payments);
+    totalPaye += au31.paye; totalReste += au31.reste;
+    const versements = payments
+      .filter((p) => p.expense_id === e.id && p.date_paiement && !p.annule && p.date_paiement <= finAnnee)
+      .sort((a, b) => (a.date_paiement ?? '').localeCompare(b.date_paiement ?? ''))
+      .map((p) => `${frDate(p.date_paiement)} : ${Number(p.montant).toFixed(2)}${p.mode_paiement ? ` (${MODE_COURT[p.mode_paiement]})` : ''}`)
+      .join(' · ');
 
     return [
       frDate(e.date_facture),
@@ -77,13 +99,16 @@ export function buildExpensesCsv(expenses: Expense[], year: number): string {
       totalTva.toFixed(2),
       ht.toFixed(2),
       e.mode_paiement ? EXPENSE_PAYMENT_MODE_LABELS[e.mode_paiement] : '',
-      EXPENSE_STATUS_LABELS[e.statut]?.label ?? e.statut,
+      actuel.etat === 'partielle' ? `Payée en partie (${actuel.nbPayes}/${actuel.nbEcheances})` : (EXPENSE_STATUS_LABELS[e.statut]?.label ?? e.statut),
       frDate(e.date_paiement),
       // Lien Google Drive : il s'ouvre pour qui a reçu l'accès au dossier.
       e.document_url && /^https?:\/\//.test(e.document_url)
         ? e.document_url
         : e.justificatif_path ? 'Coffre privé de l’admin' : 'Aucun',
       e.notes ?? '',
+      au31.paye.toFixed(2),
+      au31.reste.toFixed(2),
+      versements,
     ];
   });
 
@@ -93,10 +118,14 @@ export function buildExpensesCsv(expenses: Expense[], year: number): string {
     synthese.push(row({ 0: `Total compte ${code || '—'}`, 7: acc.label, 9: acc.ttc.toFixed(2), 14: acc.tva.toFixed(2), 15: acc.ht.toFixed(2) }));
     total = { ttc: total.ttc + acc.ttc, tva: total.tva + acc.tva, ht: total.ht + acc.ht };
   }
-  synthese.push(row({ 0: `Total des dépenses ${year}`, 9: total.ttc.toFixed(2), 14: total.tva.toFixed(2), 15: total.ht.toFixed(2) }));
+  synthese.push(row({
+    0: `Total des dépenses ${year}`, 9: total.ttc.toFixed(2), 14: total.tva.toFixed(2), 15: total.ht.toFixed(2),
+    21: round2(totalPaye).toFixed(2), 22: round2(totalReste).toFixed(2),
+  }));
+  synthese.push(row({ 0: `Dettes fournisseurs au 31.12.${year}`, 22: round2(totalReste).toFixed(2) }));
   synthese.push(row({
     0: 'Note pour la fiducie',
-    20: "Les liens de la colonne Justificatif ouvrent la pièce dans le dossier Google Drive partagé avec la fiducie. Un ticket imputé à plusieurs comptes figure sur plusieurs lignes qui partagent le même justificatif ; la part privée d'un ticket n'est pas reprise. Les dépenses annulées sont exclues. La TVA est indiquée pour information : l'activité n'est pas assujettie tant que le chiffre d'affaires reste sous CHF 100'000.",
+    20: "Les liens de la colonne Justificatif ouvrent la pièce dans le dossier Google Drive partagé avec la fiducie. Un ticket imputé à plusieurs comptes figure sur plusieurs lignes qui partagent le même justificatif ; la part privée d'un ticket n'est pas reprise. Les dépenses annulées sont exclues. Chaque dépense compte à la date de sa facture ; ses versements sont listés à leur date, et la colonne « Reste dû au 31.12 » forme les dettes fournisseurs de l'exercice. La TVA est indiquée pour information : l'activité n'est pas assujettie tant que le chiffre d'affaires reste sous CHF 100'000.",
   }));
 
   return [HEADER, ...lines, ...synthese]
@@ -104,8 +133,8 @@ export function buildExpensesCsv(expenses: Expense[], year: number): string {
     .join('\r\n');
 }
 
-export function downloadExpensesCsv(expenses: Expense[], year: number): void {
-  const blob = new Blob(['﻿' + buildExpensesCsv(expenses, year)], { type: 'text/csv;charset=utf-8;' });
+export function downloadExpensesCsv(expenses: Expense[], year: number, payments: ExpensePayment[] = []): void {
+  const blob = new Blob(['﻿' + buildExpensesCsv(expenses, year, payments)], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

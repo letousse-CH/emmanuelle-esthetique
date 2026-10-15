@@ -10,10 +10,14 @@ import {
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
 import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import { listProducts, listTransactions } from '../../../../services/caisse';
-import { Product, TransactionWithItems, formatCHF, stockLevel, isVenteProduct, recetteEncaissee } from '../../../../types/caisse';
+import { Product, TransactionWithItems, coutAchat, formatCHF, stockLevel, isVenteProduct, recetteEncaissee } from '../../../../types/caisse';
+import { useSettings } from '../../../../hooks/useSettings';
 import { computeAvsIndependant } from '../../../../types/finance';
 
 export default function CockpitClient() {
+  const settings = useSettings(['caisse_tva_assujetti']);
+  // Non assujettie : la TVA payée au fournisseur fait partie du coût.
+  const tvaRecuperable = settings.caisse_tva_assujetti === 'true';
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<TransactionWithItems[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +67,7 @@ export default function CockpitClient() {
   const stockStats = useMemo(() => {
     const actifs = products.filter(p => p.active);
     const totalUnites = actifs.reduce((acc, p) => acc + Math.max(0, Number(p.stock || 0)), 0);
-    const valeurAchat = actifs.reduce((acc, p) => acc + Math.max(0, Number(p.stock || 0)) * Number(p.prix_achat_chf || 0), 0);
+    const valeurAchat = actifs.reduce((acc, p) => acc + Math.max(0, Number(p.stock || 0)) * coutAchat(p, tvaRecuperable), 0);
     const caPotentiel = actifs.reduce((acc, p) => acc + Math.max(0, Number(p.stock || 0)) * Number(p.prix_vente_chf || 0), 0);
     const margePotentielle = Math.max(0, caPotentiel - valeurAchat);
 
@@ -76,7 +80,7 @@ export default function CockpitClient() {
       .map(p => ({
         product: p,
         ca: Number(p.stock || 0) * Number(p.prix_vente_chf || 0),
-        marge: Number(p.stock || 0) * (Number(p.prix_vente_chf || 0) - Number(p.prix_achat_chf || 0)),
+        marge: Number(p.stock || 0) * (Number(p.prix_vente_chf || 0) - coutAchat(p, tvaRecuperable)),
       }))
       .sort((a, b) => b.ca - a.ca)
       .slice(0, 5);
@@ -91,7 +95,7 @@ export default function CockpitClient() {
       bas,
       topPotentiel,
     };
-  }, [products]);
+  }, [products, tvaRecuperable]);
 
   // ── Données Semaine en Cours ────────────────────────────────────────────────
   const weekStats = useMemo(() => {

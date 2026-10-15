@@ -7,7 +7,8 @@ import {
   Download, RefreshCw, Loader2, FileText, Ban,
   ChevronDown, ChevronRight, ChevronLeft, TrendingUp, Check, PenLine, Ticket, Package, CalendarDays, Receipt,
 } from 'lucide-react';
-import { cancelTransaction, listGiftCardsForSale, listTransactions } from '../../../../services/caisse';
+import { cancelTransaction, listGiftCardsForSale, listProducts, listTransactions } from '../../../../services/caisse';
+import { useSettings } from '../../../../hooks/useSettings';
 import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
 import {
   BottomSheet, Chip, EmptyState, ListGroup, ListRow, SegmentedControl, Skeleton, StatTile,
@@ -59,6 +60,19 @@ function startOfWeek(d: Date) {
 
 export default function JournalClient() {
   const now = new Date();
+  const settings = useSettings(['caisse_tva_assujetti']);
+  const tvaRecuperable = settings.caisse_tva_assujetti === 'true';
+  // TVA d'achat de chaque produit : non récupérable, elle fait partie du coût de la marchandise vendue.
+  const [tauxAchat, setTauxAchat] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    listProducts(true)
+      .then(ps => setTauxAchat(new Map(ps.map(p => [p.id, Number(p.taux_tva_defaut || 0)]))))
+      .catch(() => { /* sans fiches, la marge reste calculée sur le coût HT */ });
+  }, []);
+  const tauxNonRecup = useCallback(
+    (productId: string | null) => (tvaRecuperable || !productId ? 0 : tauxAchat.get(productId) ?? 0),
+    [tvaRecuperable, tauxAchat],
+  );
   const [mode, setMode]   = useState<PeriodMode>('mois');
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -160,12 +174,12 @@ export default function JournalClient() {
         if (!item.product_id) continue;
         articles += Number(item.quantite);
         ventes += Number(item.total_ttc);
-        const m = ligneMarge(item);
+        const m = ligneMarge(item, tauxNonRecup(item.product_id));
         if (m === null) sansCout += 1; else marge += m;
       }
     }
     return { marge, ventes, articles, sansCout };
-  }, [paidRows]);
+  }, [paidRows, tauxNonRecup]);
 
   // ── Ventilation par mode de paiement ──────────────────────────────────────
   const byPayment = useMemo(() => {
@@ -295,7 +309,7 @@ export default function JournalClient() {
         const ht = Math.round((encaisse / (1 + Number(item.taux_tva) / 100)) * 100) / 100;
         // La marchandise se distingue de la prestation : elle a un coût d'achat,
         // donc une marge, et elle entre dans la valeur du stock au bilan.
-        const marge = cancelled ? null : ligneMarge(item);
+        const marge = cancelled ? null : ligneMarge(item, tauxNonRecup(item.product_id));
         lines.push([
           d.toLocaleDateString('fr-CH'),
           d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' }),
@@ -329,7 +343,7 @@ export default function JournalClient() {
     ]);
     lines.push([
       'Note pour la fiducie', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
-      "La colonne « Montant encaissé TTC » est la recette de la période : elle exclut les prestations réglées par un bon cadeau, dont l'encaissement a eu lieu le jour de la vente du bon. La colonne « Dont bon cadeau » est donnée pour information et ne doit pas être ajoutée au chiffre d'affaires. La colonne « Marge » ne concerne que les lignes de nature « Marchandise » : c'est la vente hors taxe diminuée du prix d'achat figé au moment de la vente. Elle n'entre pas dans le chiffre d'affaires.",
+      "La colonne « Montant encaissé TTC » est la recette de la période : elle exclut les prestations réglées par un bon cadeau, dont l'encaissement a eu lieu le jour de la vente du bon. La colonne « Dont bon cadeau » est donnée pour information et ne doit pas être ajoutée au chiffre d'affaires. La colonne « Marge » ne concerne que les lignes de nature « Marchandise » : c'est la vente hors taxe diminuée du prix d'achat figé au moment de la vente, TVA d'achat non récupérable comprise tant que l'activité n'est pas assujettie. Elle n'entre pas dans le chiffre d'affaires.",
       '',
     ]);
 

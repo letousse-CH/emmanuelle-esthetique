@@ -8,16 +8,23 @@ import {
   Expense,
   ExpenseCategory,
   ExpenseItem,
+  ExpensePayment,
+  ExpenseVersementMode,
   FinancialDashboardStats,
+  PlanReclassement,
   ServiceSupply,
   ServiceSupplyCost,
+  addMonthsISO,
   computeAvsIndependant,
+  decaissementsPeriode,
+  dettesFournisseursAu,
+  situationPaiement,
+  splitEcheances,
   DEFAULT_SWISS_CATEGORIES,
 } from '../types/finance';
-import { Product, Service, Transaction, TransactionItem, ventilerRecettes } from '../types/caisse';
+import { Product, Service, StockMovement, Transaction, TransactionItem, valeurStock, ventilerRecettes } from '../types/caisse';
 import { createProduct, listProducts, stockMovement, updateProduct } from './caisse';
-import { zurichMidnightISO } from '../components/admin/mobile/home/zurich';
-import { COSKYN_FACTURE_139079 } from './invoiceParser';
+import { zurichDate, zurichMidnightISO } from '../components/admin/mobile/home/zurich';
 
 // ── Ventilation multi-lignes d'une facture mixte ────────────────────────────
 
@@ -112,70 +119,29 @@ export async function listExpenseCategories(): Promise<ExpenseCategory[]> {
 
 const STORAGE_EXPENSES_KEY = 'emmanuelle_finances_expenses_v1';
 
-function getInitialCoskynExpense(): Expense {
-  return {
-    id: 'exp-coskyn-139079',
-    fournisseur: COSKYN_FACTURE_139079.fournisseur,
-    numero_facture: COSKYN_FACTURE_139079.numero_facture,
-    date_facture: COSKYN_FACTURE_139079.date_facture,
-    date_echeance: COSKYN_FACTURE_139079.date_echeance || '2026-09-29',
-    date_paiement: null,
-    montant_ht: COSKYN_FACTURE_139079.montant_ht,
-    taux_tva: COSKYN_FACTURE_139079.taux_tva,
-    montant_tva: COSKYN_FACTURE_139079.montant_tva,
-    montant_ttc: COSKYN_FACTURE_139079.montant_ttc,
-    category_id: 'cat-4200',
-    statut: 'a_payer',
-    mode_paiement: 'virement',
-    notes: COSKYN_FACTURE_139079.notes || null,
-    document_url: null,
-    is_stock_invoice: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    items: COSKYN_FACTURE_139079.items.map(it => ({ ...it, expense_id: 'exp-coskyn-139079' })),
-  };
-}
-
+/** Saisies faites dans le navigateur avant que les dépenses n'aillent en base
+ *  (2026-10-08). Lues seulement : aucune n'est plus jamais écrite ni inventée. */
 function getLocalExpenses(): Expense[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(STORAGE_EXPENSES_KEY);
-    if (!raw) {
-      const initial = [getInitialCoskynExpense()];
-      localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify(initial));
-      return initial;
-    }
-    const list = JSON.parse(raw);
+    const list = JSON.parse(localStorage.getItem(STORAGE_EXPENSES_KEY) ?? '[]');
     return Array.isArray(list) ? list : [];
   } catch {
     return [];
   }
 }
 
-function saveLocalExpenses(list: Expense[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify(list));
-  } catch (e) {
-    console.error('Erreur sauvegarde localStorage dépenses:', e);
-  }
-}
-
 export async function listExpenses(): Promise<Expense[]> {
-  try {
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('*, category:expense_categories(*), items:expense_items(*)')
-      .order('date_facture', { ascending: false });
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('*, category:expense_categories(*), items:expense_items(*)')
+    .order('date_facture', { ascending: false });
+  // Une base injoignable ne doit jamais afficher les anciennes saisies locales
+  // comme si c'étaient les dépenses : on le dit.
+  if (error) throw new Error(`Les dépenses n'ont pas pu être lues (${error.message}).`);
+  if (data && data.length > 0) return data as Expense[];
 
-    if (!error && data && data.length > 0) {
-      return data as Expense[];
-    }
-  } catch {
-    // Fallback to local storage
-  }
-
-  // Utilisation du cache local
+  // Base vide : saisies locales d'avant 2026-10-08, pour qu'elles restent visibles.
   const local = getLocalExpenses();
   const categories = await listExpenseCategories();
   return local.map(exp => ({
@@ -184,95 +150,186 @@ export async function listExpenses(): Promise<Expense[]> {
   }));
 }
 
+/**
+ * Enregistre une dépense en base, ou échoue en le disant : une dépense gardée
+ * dans le seul navigateur n'existerait ni pour le bilan, ni pour la fiduciaire.
+ * Saisie « déjà payée », elle reçoit son versement (déclencheur en base).
+ */
 export async function createExpense(
   expenseData: Omit<Expense, 'id' | 'created_at' | 'updated_at'>,
   items: ExpenseItem[] = []
 ): Promise<Expense> {
-  const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `exp-${Date.now()}`;
-  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('expenses')
+    .insert({
+      fournisseur: expenseData.fournisseur,
+      numero_facture: expenseData.numero_facture,
+      date_facture: expenseData.date_facture,
+      date_echeance: expenseData.date_echeance,
+      date_paiement: expenseData.date_paiement,
+      montant_ht: expenseData.montant_ht,
+      taux_tva: expenseData.taux_tva,
+      montant_tva: expenseData.montant_tva,
+      montant_ttc: expenseData.montant_ttc,
+      category_id: expenseData.category_id,
+      statut: expenseData.statut,
+      mode_paiement: expenseData.mode_paiement,
+      notes: expenseData.notes,
+      document_url: expenseData.document_url,
+      is_stock_invoice: expenseData.is_stock_invoice,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(`La dépense n'a pas été enregistrée (${error.message}).`);
 
-  const newExpense: Expense = {
-    ...expenseData,
-    id: newId,
-    created_at: now,
-    updated_at: now,
-    items: items.map(it => ({ ...it, expense_id: newId })),
-  };
-
-  try {
-    const { data, error } = await supabase
-      .from('expenses')
-      .insert({
-        id: newId,
-        fournisseur: newExpense.fournisseur,
-        numero_facture: newExpense.numero_facture,
-        date_facture: newExpense.date_facture,
-        date_echeance: newExpense.date_echeance,
-        date_paiement: newExpense.date_paiement,
-        montant_ht: newExpense.montant_ht,
-        taux_tva: newExpense.taux_tva,
-        montant_tva: newExpense.montant_tva,
-        montant_ttc: newExpense.montant_ttc,
-        category_id: newExpense.category_id,
-        statut: newExpense.statut,
-        mode_paiement: newExpense.mode_paiement,
-        notes: newExpense.notes,
-        document_url: newExpense.document_url,
-        is_stock_invoice: newExpense.is_stock_invoice,
-      })
-      .select()
-      .single();
-
-    if (!error && data) {
-      if (items.length > 0) {
-        await supabase.from('expense_items').insert(
-          items.map(it => ({
-            expense_id: newId,
-            designation: it.designation,
-            reference: it.reference,
-            quantite: it.quantite,
-            prix_unitaire: it.prix_unitaire,
-            taux_tva: it.taux_tva,
-            rabais_pct: it.rabais_pct,
-            total_ttc: it.total_ttc,
-            usage_type: it.usage_type,
-            product_id: it.product_id,
-          }))
-        );
-      }
+  const created = data as Expense;
+  if (items.length > 0) {
+    const { error: itemsError } = await supabase.from('expense_items').insert(
+      items.map(it => ({
+        expense_id: created.id,
+        designation: it.designation,
+        reference: it.reference,
+        quantite: it.quantite,
+        prix_unitaire: it.prix_unitaire,
+        taux_tva: it.taux_tva,
+        rabais_pct: it.rabais_pct,
+        total_ttc: it.total_ttc,
+        usage_type: it.usage_type,
+        product_id: it.product_id,
+      }))
+    );
+    if (itemsError) {
+      throw new Error(`La facture est enregistrée, mais pas le détail de ses articles (${itemsError.message}).`);
     }
-  } catch (err) {
-    console.warn('Supabase expense creation error, saving locally:', err);
   }
-
-  // Save locally as reliable fallback
-  const list = getLocalExpenses();
-  saveLocalExpenses([newExpense, ...list]);
-
-  return newExpense;
+  return { ...created, items: items.map(it => ({ ...it, expense_id: created.id })) };
 }
 
 export async function updateExpense(id: string, updates: Partial<Expense>): Promise<void> {
-  try {
-    await supabase.from('expenses').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id);
-  } catch {
-    // continue
-  }
-
-  const list = getLocalExpenses();
-  const next = list.map(e => e.id === id ? { ...e, ...updates, updated_at: new Date().toISOString() } : e);
-  saveLocalExpenses(next);
+  // Les jointures de lecture ne sont pas des colonnes.
+  const { category: _c, items: _i, ...colonnes } = updates;
+  const { error } = await supabase
+    .from('expenses')
+    .update({ ...colonnes, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
+/** Refusé par la base dès qu'un versement a été enregistré : il faut alors annuler la facture. */
 export async function deleteExpense(id: string): Promise<void> {
-  try {
-    await supabase.from('expenses').delete().eq('id', id);
-  } catch {
-    // continue
-  }
+  const { error } = await supabase.from('expenses').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
 
-  const list = getLocalExpenses();
-  saveLocalExpenses(list.filter(e => e.id !== id));
+// ── Versements & échéanciers des factures d'achat ──────────────────────────
+
+/** Lit toutes les lignes d'une requête, par pages de 1000 (plafond de PostgREST). */
+async function lireTout<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const taille = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += taille) {
+    const { data, error } = await page(from, from + taille - 1);
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+    if (!data || data.length < taille) return out;
+  }
+}
+
+export async function listExpensePayments(): Promise<ExpensePayment[]> {
+  return lireTout<ExpensePayment>((from, to) => supabase
+    .from('expense_payments')
+    .select('*')
+    .order('expense_id', { ascending: true })
+    .order('rang', { ascending: true })
+    .order('id', { ascending: true })
+    .range(from, to));
+}
+
+/**
+ * Échelonne ce qui reste à payer en `n` échéances mensuelles à partir de
+ * `premiere`. Le solde d'une facture déjà en partie payée ou planifiée est
+ * seul réparti : Postgres refuse tout ce qui dépasserait le total.
+ */
+export async function planifierEcheances(
+  expense: Pick<Expense, 'id' | 'statut' | 'montant_ttc' | 'date_paiement' | 'date_facture'>,
+  payments: ExpensePayment[],
+  n: number,
+  premiere: string,
+): Promise<void> {
+  const sit = situationPaiement(expense, payments);
+  const aRepartir = Math.round((sit.reste - sit.prevu) * 100) / 100;
+  if (aRepartir <= 0) throw new Error('Il ne reste rien à échelonner sur cette facture.');
+  const montants = splitEcheances(aRepartir, n);
+  const rangMax = payments.filter(p => p.expense_id === expense.id).reduce((m, p) => Math.max(m, p.rang), 0);
+  const { error } = await supabase.from('expense_payments').insert(
+    montants.map((montant, i) => ({
+      expense_id: expense.id,
+      rang: rangMax + i + 1,
+      date_prevue: addMonthsISO(premiere, i),
+      montant,
+    })),
+  );
+  if (error) throw new Error(error.message);
+}
+
+export interface VersementInput {
+  date: string;
+  mode: ExpenseVersementMode | null;
+  reference?: string | null;
+  justificatif_url?: string | null;
+}
+
+/** Versement hors échéancier (ou sans échéancier). */
+export async function enregistrerVersement(
+  expenseId: string,
+  payments: ExpensePayment[],
+  montant: number,
+  v: VersementInput,
+): Promise<void> {
+  const rangMax = payments.filter(p => p.expense_id === expenseId).reduce((m, p) => Math.max(m, p.rang), 0);
+  const { error } = await supabase.from('expense_payments').insert({
+    expense_id: expenseId,
+    rang: rangMax + 1,
+    montant: Math.round(montant * 100) / 100,
+    date_paiement: v.date,
+    mode_paiement: v.mode,
+    reference: v.reference?.trim() || null,
+    justificatif_url: v.justificatif_url?.trim() || null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Une échéance prévue devient un versement, pour son montant éventuellement ajusté. */
+export async function payerEcheance(id: string, montant: number, v: VersementInput): Promise<void> {
+  const { error } = await supabase
+    .from('expense_payments')
+    .update({
+      montant: Math.round(montant * 100) / 100,
+      date_paiement: v.date,
+      mode_paiement: v.mode,
+      reference: v.reference?.trim() || null,
+      justificatif_url: v.justificatif_url?.trim() || null,
+    })
+    .eq('id', id)
+    .is('date_paiement', null);
+  if (error) throw new Error(error.message);
+}
+
+/** Une échéance à venir n'est qu'un plan : elle se supprime. Un versement, non. */
+export async function supprimerEcheance(id: string): Promise<void> {
+  const { error } = await supabase.from('expense_payments').delete().eq('id', id).is('date_paiement', null);
+  if (error) throw new Error(error.message);
+}
+
+/** Un versement erroné s'annule avec un motif ; la ligne reste visible. */
+export async function annulerVersement(id: string, motif: string): Promise<void> {
+  const { error } = await supabase
+    .from('expense_payments')
+    .update({ annule: true, motif_annulation: motif.trim() })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 // ── Entrée en stock automatique depuis une facture fournisseur (Coskyn) ─────
@@ -406,6 +463,12 @@ export async function applyInvoiceToStock(
         motif: `Facture ${it.reference || it.designation}`,
       });
 
+      // La ligne de facture pointe vers sa fiche : la traçabilité va dans les deux sens.
+      let lien = supabase.from('expense_items').update({ product_id: productId }).eq('expense_id', expenseId);
+      lien = it.reference ? lien.eq('reference', it.reference) : lien.eq('designation', it.designation);
+      const { error: lienError } = await lien;
+      if (lienError) erreurs.push(`${it.designation} : entré en stock, mais pas relié à sa ligne de facture (${lienError.message})`);
+
       if (prod) updatedCount++; else createdCount++;
       totalQuantityAdded += quantite;
       totalCostCHF += quantite * prixAchat;
@@ -427,63 +490,62 @@ export async function applyInvoiceToStock(
 }
 
 // ── Dotation matière des soins (Rentabilité Cabine) ─────────────────────────
-
-const STORAGE_SUPPLIES_KEY = 'emmanuelle_finances_supplies_v1';
+//
+// `quantite_estimee` d'une dotation = nombre de soins réalisés avec UN flacon
+// (ou pot, carton) du produit : « ce litre de lait fait 40 soins ». Le coût
+// matière d'un soin vaut donc coût d'achat du flacon ÷ ce rendement. Aucune
+// valeur par défaut n'est inventée : un soin sans fiche n'a pas de coût affiché.
 
 export async function listServiceSupplies(serviceId?: string): Promise<ServiceSupply[]> {
-  try {
-    let q = supabase.from('service_supplies').select('*, product:products(*)');
-    if (serviceId) q = q.eq('service_id', serviceId);
-    const { data, error } = await q;
-    if (!error && data) return data as ServiceSupply[];
-  } catch {
-    // continue
-  }
-
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_SUPPLIES_KEY);
-    const list: ServiceSupply[] = raw ? JSON.parse(raw) : [];
-    return serviceId ? list.filter(s => s.service_id === serviceId) : list;
-  } catch {
-    return [];
-  }
+  let q = supabase.from('service_supplies').select('*, product:products(*)');
+  if (serviceId) q = q.eq('service_id', serviceId);
+  const { data, error } = await q;
+  if (error) throw new Error(`Les fiches techniques n'ont pas pu être lues (${error.message}).`);
+  return (data ?? []) as ServiceSupply[];
 }
 
 export async function saveServiceSupplies(
   serviceId: string,
-  supplies: { productId: string; quantiteEstimee: number; notes?: string }[]
+  supplies: { productId: string; soinsParUnite: number; notes?: string }[]
 ): Promise<void> {
-  const newItems: ServiceSupply[] = supplies.map(s => ({
-    id: `sup-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    service_id: serviceId,
-    product_id: s.productId,
-    quantite_estimee: s.quantiteEstimee,
-    notes: s.notes || null,
-    created_at: new Date().toISOString(),
-  }));
+  const { error: delError } = await supabase.from('service_supplies').delete().eq('service_id', serviceId);
+  if (delError) throw new Error(delError.message);
+  if (supplies.length === 0) return;
+  const { error } = await supabase.from('service_supplies').insert(
+    supplies.map(s => ({
+      service_id: serviceId,
+      product_id: s.productId,
+      quantite_estimee: Math.round(s.soinsParUnite * 100) / 100,
+      notes: s.notes || null,
+    }))
+  );
+  if (error) throw new Error(`La fiche technique a été vidée mais pas réenregistrée (${error.message}) : ressaisissez-la.`);
+}
 
-  try {
-    await supabase.from('service_supplies').delete().eq('service_id', serviceId);
-    if (supplies.length > 0) {
-      await supabase.from('service_supplies').insert(
-        supplies.map(s => ({
-          service_id: serviceId,
-          product_id: s.productId,
-          quantite_estimee: s.quantiteEstimee,
-          notes: s.notes || null,
-        }))
-      );
-    }
-  } catch {
-    // continue
-  }
+// ── Classement vente / cabine repris des factures d'achat ──────────────────
 
-  if (typeof window !== 'undefined') {
-    const all = await listServiceSupplies();
-    const filtered = all.filter(s => s.service_id !== serviceId);
-    localStorage.setItem(STORAGE_SUPPLIES_KEY, JSON.stringify([...filtered, ...newItems]));
+export async function listLignesFactures(): Promise<(Pick<ExpenseItem, 'reference' | 'usage_type' | 'product_id'> & { id: string })[]> {
+  const { data, error } = await supabase
+    .from('expense_items')
+    .select('id, reference, usage_type, product_id')
+    .not('reference', 'is', null);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as (Pick<ExpenseItem, 'reference' | 'usage_type' | 'product_id'> & { id: string })[];
+}
+
+/** Applique le classement de la facture aux fiches (usage, contenance) et relie les lignes. */
+export async function appliquerReclassement(plan: PlanReclassement): Promise<number> {
+  for (const p of plan.produits) {
+    await updateProduct(p.id, {
+      usage_type: p.vers,
+      ...(p.contenance ? { contenance: p.contenance } : {}),
+    });
   }
+  for (const l of plan.liens) {
+    const { error } = await supabase.from('expense_items').update({ product_id: l.productId }).eq('id', l.itemId);
+    if (error) throw new Error(error.message);
+  }
+  return plan.produits.length;
 }
 
 // ── Tableau de Bord Financier & Déclaration Vaud ─────────────────────────────
@@ -493,31 +555,56 @@ export async function computeFinancialStats(
 ): Promise<FinancialDashboardStats> {
   const debut = `${annee}-01-01`;
   const fin = `${annee}-12-31`;
+  const debutISO = zurichMidnightISO(debut);
+  const finISO = zurichMidnightISO(`${annee + 1}-01-01`);
+  const aujourdhui = zurichDate();
+  // Exercice en cours : la « situation au 31.12 » est celle d'aujourd'hui.
+  const enCours = aujourdhui <= fin;
+  const arrete = enCours ? aujourdhui : fin;
 
   // 1. Chiffre d'affaires : recettes de caisse de l'exercice, bornées en heure
   //    de Zurich (une vente du 31 décembre à 23 h 30 appartient à cet exercice).
   //    Même règle que le journal : recette = total_ttc − montant_bon, la part
   //    réglée par bon ayant été encaissée le jour de la vente du bon
   //    (ventilation par nature : `ventilerRecettes`).
-  const { data: txs, error: txError } = await supabase
-    .from('transactions')
-    .select('status, total_ttc, montant_bon, transaction_items(total_ttc, product_id, gift_card_id)')
-    .eq('status', 'payee')
-    .gte('created_at', zurichMidnightISO(debut))
-    .lt('created_at', zurichMidnightISO(`${annee + 1}-01-01`))
-    .limit(10000);
-  if (txError) throw new Error(`Les encaissements n'ont pas pu être lus (${txError.message}).`);
+  type TxLigne = Pick<Transaction, 'status' | 'total_ttc' | 'montant_bon'> & {
+    transaction_items: Pick<TransactionItem, 'total_ttc' | 'product_id' | 'gift_card_id'>[];
+  };
+  const [txs, allExpenses, payments, products, movements, tvaSetting] = await Promise.all([
+    lireTout<TxLigne>((from, to) => supabase
+      .from('transactions')
+      .select('status, total_ttc, montant_bon, transaction_items(total_ttc, product_id, gift_card_id)')
+      .eq('status', 'payee')
+      .gte('created_at', debutISO)
+      .lt('created_at', finISO)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to)),
+    listExpenses(),
+    listExpensePayments(),
+    listProducts(true),
+    lireTout<Pick<StockMovement, 'product_id' | 'quantite' | 'type' | 'prix_achat_unitaire' | 'created_at'>>((from, to) => supabase
+      .from('stock_movements')
+      .select('product_id, quantite, type, prix_achat_unitaire, created_at')
+      .lt('created_at', finISO)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to)),
+    supabase.from('settings').select('value').eq('key', 'caisse_tva_assujetti').maybeSingle(),
+  ]).catch(err => {
+    throw new Error(`Les données du bilan n'ont pas pu être lues (${err instanceof Error ? err.message : err}).`);
+  });
 
-  const ventilation = ventilerRecettes(txs ?? []);
+  const ventilation = ventilerRecettes(txs);
   const caTotal = ventilation.total;
   const caPresta = ventilation.prestations;
   const caProd = ventilation.produits;
   const caBons = ventilation.bons;
-  const nbTx = (txs ?? []).length;
+  const nbTx = txs.length;
   const encaissementsReels = caTotal;
 
-  // 2. Dépenses & Achats
-  const allExpenses = await listExpenses();
+  // 2. Dépenses & Achats : la charge appartient à l'exercice de la facture,
+  //    quelle que soit la façon dont elle est payée.
   const filteredExp = allExpenses.filter(e => e.date_facture >= debut && e.date_facture <= fin && e.statut !== 'annulee');
 
   let achatsMarchandises = 0;
@@ -526,17 +613,12 @@ export async function computeFinancialStats(
   let chargesExploitation = 0;
   let cotisationsAvsPayees = 0;
   let prelevementsExploitant = 0;
-  let decaissementsReels = 0;
   const detailsCharges: Record<string, number> = {};
 
   for (const exp of filteredExp) {
     const montant = Number(exp.montant_ttc || exp.montant_ht || 0);
     const code = exp.category?.code || '';
     const groupe = exp.category?.groupe || '';
-
-    if (exp.statut === 'payee') {
-      decaissementsReels += montant;
-    }
 
     // Ventilation par article réservée aux achats de matières (comptes 4xxx) :
     // une charge détaillée article par article reste une charge.
@@ -564,8 +646,24 @@ export async function computeFinancialStats(
     }
   }
 
-  // 3. Calculs de marges et synthèse
-  const coutMatiereTotal = achatsMarchandises + achatsCabine + consommables;
+  // 3. Trésorerie : les versements, à leur date — une facture de décembre
+  //    payée en trois fois sort de la caisse en décembre, janvier et février.
+  const decaissementsReels = decaissementsPeriode(allExpenses, payments, debut, fin);
+
+  // 4. Situation au 31.12 : ce qui reste dû aux fournisseurs…
+  const dettes = dettesFournisseursAu(allExpenses, payments, arrete);
+
+  // …et le stock, au coût d'acquisition (TVA comprise tant qu'elle n'est pas
+  // récupérable). La marchandise encore en rayon n'est pas une charge de
+  // l'exercice : la variation de stock corrige les achats (CO art. 960a, 960c).
+  const tvaNonRecuperable = (tvaSetting.data?.value ?? '').trim().toLowerCase() !== 'true';
+  const stockDebut = valeurStock(products, movements, debutISO, tvaNonRecuperable);
+  const stockFin = valeurStock(products, movements, enCours ? null : finISO, tvaNonRecuperable);
+  const variationStock = Math.round((stockFin.total - stockDebut.total) * 100) / 100;
+
+  // 5. Calculs de marges et synthèse
+  const achatsTotal = achatsMarchandises + achatsCabine + consommables;
+  const coutMatiereTotal = achatsTotal - variationStock;
   const margeBruteTotale = caTotal - coutMatiereTotal;
   const margeBrutePct = caTotal > 0 ? (margeBruteTotale / caTotal) * 100 : 0;
 
@@ -579,29 +677,42 @@ export async function computeFinancialStats(
   const avsDeductible = cotisationsAvsPayees > 0 ? cotisationsAvsPayees : estimationAvs.totalAnnuel;
   const beneficeNetFiscal = Math.max(0, resultatAvantAvs - avsDeductible);
 
+  const r = (n: number) => Math.round(n * 100) / 100;
   return {
     periode: { debut, fin },
-    chiffreAffairesTotal: Math.round(caTotal * 100) / 100,
+    chiffreAffairesTotal: r(caTotal),
     caPrestations: caPresta,
     caProduitsVente: caProd,
     caBonsCadeaux: caBons,
     nombreFacturesCaisse: nbTx,
-    achatsMarchandisesBoutique: Math.round(achatsMarchandises * 100) / 100,
-    achatsCabineMatieres: Math.round(achatsCabine * 100) / 100,
-    consommablesMatériel: Math.round(consommables * 100) / 100,
-    variationStockEstimee: 0,
-    coutMatiereTotal: Math.round(coutMatiereTotal * 100) / 100,
-    margeBruteTotale: Math.round(margeBruteTotale * 100) / 100,
+    achatsMarchandisesBoutique: r(achatsMarchandises),
+    achatsCabineMatieres: r(achatsCabine),
+    consommablesMatériel: r(consommables),
+    stockDebut: { marchandises: stockDebut.marchandises, matieres: stockDebut.matieres, total: stockDebut.total },
+    stockFin: { marchandises: stockFin.marchandises, matieres: stockFin.matieres, total: stockFin.total },
+    stockFinAujourdhui: enCours,
+    stockNegatifs: stockFin.negatifs,
+    variationStockEstimee: variationStock,
+    achatsTotal: r(achatsTotal),
+    coutMatiereTotal: r(coutMatiereTotal),
+    margeBruteTotale: r(margeBruteTotale),
     margeBrutePct: Math.round(margeBrutePct * 10) / 10,
-    chargesExploitationTotal: Math.round(chargesExploitation * 100) / 100,
+    chargesExploitationTotal: r(chargesExploitation),
     detailsCharges,
-    resultatExploitationAvantAvs: Math.round(resultatAvantAvs * 100) / 100,
+    resultatExploitationAvantAvs: r(resultatAvantAvs),
     estimationAvs,
-    cotisationsAvsPayees: Math.round(cotisationsAvsPayees * 100) / 100,
-    prelevementsExploitant: Math.round(prelevementsExploitant * 100) / 100,
-    beneficeNetFiscal: Math.round(beneficeNetFiscal * 100) / 100,
-    totalEncaissementsReels: Math.round(encaissementsReels * 100) / 100,
-    totalDecaissementsReels: Math.round(decaissementsReels * 100) / 100,
-    soldeTresoreriePeriode: Math.round((encaissementsReels - decaissementsReels) * 100) / 100,
+    cotisationsAvsPayees: r(cotisationsAvsPayees),
+    prelevementsExploitant: r(prelevementsExploitant),
+    beneficeNetFiscal: r(beneficeNetFiscal),
+    totalEncaissementsReels: r(encaissementsReels),
+    totalDecaissementsReels: decaissementsReels,
+    soldeTresoreriePeriode: r(encaissementsReels - decaissementsReels),
+    dettesFournisseurs: dettes.total,
+    dettesDetail: dettes.detail.map(d => ({
+      fournisseur: d.expense.fournisseur,
+      numero: d.expense.numero_facture,
+      date_facture: d.expense.date_facture,
+      reste: d.reste,
+    })),
   };
 }
