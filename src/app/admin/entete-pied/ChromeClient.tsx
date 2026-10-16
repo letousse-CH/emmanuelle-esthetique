@@ -254,7 +254,7 @@ export default function ChromeClient() {
         </CardBody>
       </Card>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-stone-50 px-6 py-4">
         <p className={`text-[13px] ${isDirty ? 'font-medium text-amber-800' : 'text-stone-700'}`} aria-live="polite">
           {isDirty ? 'Modifications non enregistrées.' : 'Les modèles ne s’appliquent au site qu’une fois enregistrés.'}
         </p>
@@ -316,7 +316,7 @@ const strong = 'rounded-sm bg-stone-800';
 function HeaderSketch({ variant }: { variant: HeaderVariant }) {
   if (variant === 'centre') {
     return (
-      <span className="block space-y-2 rounded-md border border-stone-200 bg-white p-3">
+      <span className="block space-y-2 rounded-md bg-stone-50 p-3">
         <span className={`mx-auto block h-3 w-16 ${strong}`} />
         <span className="flex justify-center gap-2">
           {[10, 8, 12, 8].map((w, i) => <span key={i} className={`h-1.5 ${bar}`} style={{ width: w * 3 }} />)}
@@ -326,7 +326,7 @@ function HeaderSketch({ variant }: { variant: HeaderVariant }) {
   }
   if (variant === 'minimal') {
     return (
-      <span className="flex items-center justify-between rounded-md border border-stone-200 bg-white p-3">
+      <span className="flex items-center justify-between rounded-md bg-stone-50 p-3">
         <span className={`h-3 w-16 ${strong}`} />
         <span className="space-y-1">
           {[0, 1, 2].map((i) => <span key={i} className={`block h-0.5 w-4 ${bar}`} />)}
@@ -336,7 +336,7 @@ function HeaderSketch({ variant }: { variant: HeaderVariant }) {
   }
   return (
     <span className={`flex items-center justify-between rounded-md border p-3 ${
-      variant === 'plein' ? 'border-stone-300 bg-white shadow-sm' : 'border-dashed border-stone-300 bg-white/60'
+      variant === 'plein' ? 'border-stone-300 bg-white' : 'border-dashed border-stone-300 bg-white/60'
     }`}>
       <span className={`h-3 w-14 ${strong}`} />
       <span className="flex items-center gap-2">

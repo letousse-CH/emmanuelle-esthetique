@@ -4,11 +4,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Package, Plus, Pencil, Trash2, X, Check, Loader2, ArrowUp, ArrowDown,
-  ArrowDownUp, ClipboardCheck, TrendingUp, AlertTriangle, FlaskConical,
+  ArrowDownUp, ClipboardCheck, TrendingUp, AlertTriangle,
 } from 'lucide-react';
 import { useSettings } from '../../../../hooks/useSettings';
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
-import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
+import { AnimatedNumber, Button, Callout, Metric, MetricStrip } from '../../../../components/admin/ui';
 import {
   createProduct, deleteOrArchiveProduct, listProducts, listStockMovements,
   stockInventaire, stockMovement, updateProduct,
@@ -139,22 +139,17 @@ export default function ProduitsClient() {
     <div className="space-y-6">
       <CaisseCatalogNav />
 
-      <PageHeader
-        title="Produits Vente (Boutique)"
-        description="Les articles cosmétiques destinés à la revente aux clientes (Phytomer boutique). Le stock se décompte automatiquement à chaque encaissement. Les produits professionnels de soins sont gérés dans l'onglet Stock Cabine."
-        actions={
-          <div className="flex items-center gap-2">
-            <Link href="/admin/caisse/cabine">
-              <Button variant="secondary" icon={FlaskConical}>
-                Stock Cabine Soins
-              </Button>
-            </Link>
-            <Button variant="primary" icon={Plus} onClick={() => setEditing('new')}>
-              Ajouter un produit vente
-            </Button>
-          </div>
-        }
-      />
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
+          <h1 className="sr-only text-[30px] font-semibold leading-tight tracking-tight text-stone-950 lg:not-sr-only">Produits vente</h1>
+          <p className="mt-1 text-[15px] text-stone-600">
+            Ce que vous revendez aux clientes. Le stock se décompte à chaque encaissement ; les produits de soin vivent dans le stock cabine.
+          </p>
+        </div>
+        <Button variant="primary" icon={Plus} onClick={() => setEditing('new')}>
+          Ajouter un produit
+        </Button>
+      </header>
 
       {error && (
         <Callout
@@ -180,64 +175,21 @@ export default function ProduitsClient() {
       }} />
 
       {!loading && products.length > 0 && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            <StatCard
-              label="CA Potentiel Boutique"
-              value={formatCHF(stats.caPotentiel)}
-              hint="si tout le stock est vendu"
-              tone="success"
-              highlight
-            />
-            <StatCard
-              label="Marge brute potentielle"
-              value={formatCHF(stats.margePotentielle)}
-              hint={`sur ${stats.totalUnites} unités en rayon`}
-              tone="accent"
-            />
-            <StatCard
-              label="Valeur d'achat (Actif)"
-              value={formatCHF(stats.valeur)}
-              hint={`${stats.references} références actives`}
-            />
-            <StatCard
-              label="Stock bas"
-              value={String(stats.bas)}
-              tone={stats.bas > 0 ? 'warn' : undefined}
-              hint="à réapprovisionner"
-            />
-            <StatCard
-              label="En rupture"
-              value={String(stats.ruptures)}
-              tone={stats.ruptures > 0 ? 'alert' : undefined}
-              hint="ventes impossibles"
-            />
-          </div>
-
-          {/* Bannière didactique coaching pour l'esthéticienne */}
-          <div className="bg-emerald-50/80 border border-emerald-200/90 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-start gap-2.5">
-              <TrendingUp className="text-emerald-700 shrink-0 mt-0.5" size={17} />
-              <div>
-                <span className="font-semibold text-emerald-950 block">
-                  Gisement de vente conseil : {formatCHF(stats.caPotentiel)} de CA en attente sur vos étagères
-                </span>
-                <p className="text-emerald-850 text-[11.5px] mt-0.5">
-                  Vos {stats.totalUnites} produits de revente disponibles représentent {formatCHF(stats.margePotentielle)} de marge directe sans temps de cabine supplémentaire. À raison d&apos;un panier moyen cible entre 250 et 450 CHF (soin + routine beauté), ce stock permet d&apos;équiper environ {Math.max(1, Math.round(stats.caPotentiel / 120))} clientes.
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/admin/caisse/cockpit"
-              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-white font-medium text-xs hover:bg-emerald-800 transition-colors shadow-xs"
-            >
-              Voir le Cockpit Hebdo →
-            </Link>
-          </div>
-        </div>
+        <MetricStrip className="py-2">
+          <Metric size="lg" tone="warm" label="En rayon, au prix de vente" value={<AnimatedNumber value={stats.caPotentiel} format={formatCHF} />} hint={`${stats.totalUnites} unités`} />
+          <Metric size="lg" label="Marge à réaliser" value={formatCHF(stats.margePotentielle)} />
+          <Metric size="lg" label="Valeur d’achat" value={formatCHF(stats.valeur)} hint={`${stats.references} références`} />
+          <Metric size="lg" tone={stats.bas > 0 ? 'warm' : 'muted'} label="À recommander" value={stats.bas} hint="sous le seuil d’alerte" />
+          <Metric size="lg" tone={stats.ruptures > 0 ? 'negative' : 'muted'} label="En rupture" value={stats.ruptures} />
+        </MetricStrip>
       )}
 
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <div className="data-frame overflow-hidden rounded-xl">
+        {!loading && products.length > 0 && (
+          <div className="hidden lg:grid grid-cols-[1.5rem_minmax(0,1fr)_12.5rem_6.5rem_5rem_auto] items-center gap-4 border-b border-stone-100 bg-white px-5 py-2.5 text-[12.5px] font-semibold text-stone-500">
+            <span /><span>Produit</span><span className="text-right">Coût → vente</span><span className="text-right">Marge</span><span className="text-center">Stock</span><span />
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
             <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
@@ -253,7 +205,7 @@ export default function ProduitsClient() {
             <Button size="sm" icon={Plus} onClick={() => setEditing('new')}>Ajouter un produit</Button>
           </div>
         ) : (
-          <ul className="divide-y divide-stone-50">
+          <ul className="zebra">
             {products.map((p, i) => {
               const niveau = stockLevel(p);
               // Non assujettie : la vente est facturée à 0 %, tout le prix est une recette.
@@ -262,53 +214,46 @@ export default function ProduitsClient() {
               const marge = margeCHF(Number(p.prix_vente_chf), tauxVente, cout);
               const pct = margePct(Number(p.prix_vente_chf), tauxVente, cout);
               return (
-                <li key={p.id} className={`px-5 py-4 hover:bg-stone-50/50 transition-colors ${!p.active ? 'bg-stone-50/60' : ''}`}>
-                  <div className="flex items-center gap-3">
+                <li key={p.id} className={`px-5 py-3.5 transition-colors hover:bg-row-hover ${!p.active ? 'opacity-60' : ''}`}>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 lg:grid lg:grid-cols-[1.5rem_minmax(0,1fr)_12.5rem_6.5rem_5rem_auto]">
                     <div className="flex flex-col shrink-0">
                       <button
                         onClick={() => move(i, -1)} disabled={i === 0 || busyId !== null}
                         aria-label="Monter" title="Monter"
-                        className="p-0.5 text-stone-600 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
+                        className="p-0.5 text-stone-400 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
                       >
                         <ArrowUp size={12} />
                       </button>
                       <button
                         onClick={() => move(i, 1)} disabled={i === products.length - 1 || busyId !== null}
                         aria-label="Descendre" title="Descendre"
-                        className="p-0.5 text-stone-600 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
+                        className="p-0.5 text-stone-400 hover:text-stone-900 disabled:opacity-20 transition-colors cursor-pointer"
                       >
                         <ArrowDown size={12} />
                       </button>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-stone-900 flex items-center gap-2 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-2 text-[14.5px] font-semibold text-stone-950">
                         <span className="truncate">{p.nom}</span>
-                        {p.marque && <span className="text-[12.5px] text-stone-600 font-normal">{p.marque}</span>}
-                        {!p.active && <span className="text-[12px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-full">Masqué</span>}
+                        {!p.active && <span className="shrink-0 bg-stone-100 px-2 py-0.5 text-[11.5px] font-semibold text-stone-600 rounded">Masqué en caisse</span>}
                       </p>
-                      <p className="truncate text-[12.5px] text-stone-600 flex items-center gap-2 flex-wrap">
-                        <span>
-                          {p.reference && <span className="font-mono">{p.reference} · </span>}
-                          <span title={cout !== Number(p.prix_achat_chf) ? `Prix d'achat ${formatCHF(p.prix_achat_chf)} HT + TVA non récupérable` : undefined}>
-                            Coût {formatCHF(cout)}
-                          </span> → vente {formatCHF(p.prix_vente_chf)}
-                          {' · '}
-                          <span className={marge >= 0 ? 'text-stone-700 font-medium' : 'text-red-700 font-medium'}>
-                            marge {formatCHF(marge)}{pct !== null && ` (${formatAmount(pct)} %)`}
-                          </span>
-                        </span>
-                        {Number(p.stock || 0) > 0 && (
-                          <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[11px] inline-flex items-center gap-1">
-                            CA potentiel : {formatCHF(Number(p.stock || 0) * Number(p.prix_vente_chf || 0))}
-                          </span>
-                        )}
+                      <p className="truncate text-[12.5px] text-stone-500">
+                        {[p.marque, p.reference].filter(Boolean).join(' · ') || '—'}
                       </p>
                     </div>
 
-                    <StockBadge product={p} level={niveau} />
+                    <p className="whitespace-nowrap text-right text-[13.5px] text-stone-600 tabular-nums" title={cout !== Number(p.prix_achat_chf) ? `Prix d'achat ${formatCHF(p.prix_achat_chf)} HT + TVA non récupérable` : undefined}>
+                      {formatCHF(cout)} → <span className="font-semibold text-stone-950">{formatCHF(p.prix_vente_chf)}</span>
+                    </p>
 
-                    <div className="flex items-center gap-1 shrink-0">
+                    <p className={`text-right text-[13.5px] tabular-nums ${marge >= 0 ? 'text-stone-800' : 'font-semibold text-red-700'}`}>
+                      {formatCHF(marge)}{pct !== null && <span className="block text-[12px] text-stone-500">{formatAmount(pct)} %</span>}
+                    </p>
+
+                    <div className="flex justify-center"><StockBadge product={p} level={niveau} /></div>
+
+                    <div className="flex items-center justify-end gap-1 shrink-0">
                       {busyId === p.id ? (
                         <Loader2 size={14} className="animate-spin text-stone-500 mx-2" />
                       ) : (
@@ -375,48 +320,15 @@ export default function ProduitsClient() {
   );
 }
 
-function StatCard({ label, value, hint, tone, highlight }: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: 'warn' | 'alert' | 'success' | 'accent';
-  highlight?: boolean;
-}) {
-  const color =
-    tone === 'alert'
-      ? 'text-red-700'
-      : tone === 'warn'
-      ? 'text-amber-700'
-      : tone === 'success'
-      ? 'text-emerald-700 font-bold'
-      : tone === 'accent'
-      ? 'text-purple-700 font-bold'
-      : 'text-stone-900';
-
-  return (
-    <div
-      className={`border rounded-xl px-4 py-3.5 transition-all ${
-        highlight
-          ? 'bg-gradient-to-br from-emerald-50/80 to-emerald-100/40 border-emerald-300 shadow-xs'
-          : 'bg-white border-stone-200'
-      }`}
-    >
-      <p className="text-[12px] font-medium text-stone-600">{label}</p>
-      <p className={`text-lg font-bold tabular-nums mt-0.5 ${color}`}>{value}</p>
-      {hint && <p className="text-[11.5px] text-stone-500 mt-0.5">{hint}</p>}
-    </div>
-  );
-}
-
 function StockBadge({ product, level }: { product: Product; level: ReturnType<typeof stockLevel> }) {
   const styles = {
     rupture: 'border-red-200 bg-red-50 text-red-700',
-    bas:     'border-amber-200 bg-amber-50 text-amber-700',
-    ok:      'border-stone-200 bg-white text-stone-700',
+    bas:     'border-warm-muted bg-warm-soft text-warm-ink',
+    ok:      'border-stone-200 bg-white text-stone-800',
   }[level];
   return (
     <span
-      className={`shrink-0 inline-flex items-center gap-1.5 border rounded-lg px-2.5 py-1 text-xs tabular-nums ${styles}`}
+      className={`shrink-0 inline-flex min-w-12 items-center justify-center gap-1.5 border px-2.5 py-1 text-[13px] font-semibold tabular-nums ${styles}`}
       title={level === 'rupture' ? 'En rupture' : level === 'bas' ? `Sous le seuil d'alerte (${qte(product.seuil_alerte)})` : 'En stock'}
     >
       {level !== 'ok' && <AlertTriangle size={11} />}
@@ -613,7 +525,7 @@ export function ProductDialog({ product, nextOrder, tvaActive, tauxDefaut, defau
 
           {/* Marge en direct : c'est le chiffre qui décide du prix de vente. */}
           {estVente && (
-          <div className="rounded-xl border border-stone-200 bg-stone-50/60 px-4 py-3 flex items-center justify-between">
+          <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <TrendingUp size={14} className={marge >= 0 ? 'text-stone-600' : 'text-red-600'} />
               <span className="text-xs text-stone-600">Marge unitaire</span>
@@ -829,7 +741,7 @@ function StockDialog({ product, onClose, onUpdated }: {
               onClick={() => { setTab(t.id); setError(null); }}
               aria-selected={tab === t.id}
               className={`flex items-center gap-1.5 rounded-md px-3 h-8 text-[13px] transition-colors cursor-pointer ${
-                tab === t.id ? 'bg-white text-stone-950 font-semibold ring-1 ring-stone-200' : 'text-stone-700 font-medium hover:text-stone-950'
+                tab === t.id ? 'bg-stone-900 text-white font-semibold' : 'text-stone-700 font-medium hover:text-stone-950'
               }`}
             >
               <t.icon size={13} /> {t.label}

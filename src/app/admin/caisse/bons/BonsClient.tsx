@@ -11,7 +11,7 @@ import {
   formatCHF, giftCardStatusLabel, isGiftCardExpired,
 } from '../../../../types/caisse';
 import type { GiftCard } from '../../../../types/caisse';
-import { Button, Callout, LinkButton, PageHeader } from '../../../../components/admin/ui';
+import { AnimatedNumber, Button, Callout, LinkButton, PageHeader } from '../../../../components/admin/ui';
 
 const VENDRE_HREF = '/admin/caisse?vendre=bon';
 
@@ -96,17 +96,17 @@ export default function BonsClient() {
         </Callout>
       )}
 
-      <div className="bg-white border border-stone-200 rounded-xl p-5">
-        <p className="text-[13px] text-stone-700 font-medium mb-1">Montant restant à honorer</p>
-        {loading
-          ? <div className="h-7 w-28 bg-stone-100 rounded animate-pulse" />
-          : <p className="text-xl font-semibold text-stone-900 tabular-nums">{formatCHF(encours)}</p>}
-        <p className="text-[12.5px] text-stone-600 mt-2 leading-relaxed">
-          Prestations déjà payées que l&apos;institut doit encore. C&apos;est une dette
-          envers les clientes, pas un chiffre d&apos;affaires à venir — cet argent a
-          été encaissé à la vente des bons.
+      <section aria-label="Encours des bons" className="flex flex-wrap items-end gap-x-12 gap-y-4 rounded-xl bg-stone-50 px-6 py-6 lg:px-8">
+        <div>
+          <p className="text-[15px] font-medium text-stone-700">Reste à honorer</p>
+          {loading
+            ? <div className="mt-2 h-11 w-44 rounded-xl bg-stone-100 animate-pulse" />
+            : <p className="mt-2 text-[44px] font-semibold leading-none tracking-tight text-stone-950 tabular-nums"><AnimatedNumber value={encours} format={formatCHF} /></p>}
+        </div>
+        <p className="max-w-md flex-1 text-[14px] leading-relaxed text-stone-600">
+          Des soins déjà payés que l&apos;institut doit encore : une dette envers les clientes, pas un chiffre d&apos;affaires à venir — l&apos;argent est entré à la vente des bons.
         </p>
-      </div>
+      </section>
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -115,15 +115,15 @@ export default function BonsClient() {
           <input
             id="bons-search" type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Code, bénéficiaire, acheteuse…"
-            className="w-full pl-11 pr-4 py-2.5 border border-stone-200 bg-white rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+            className="h-11 w-full rounded-xl border border-stone-200 bg-white pl-11 pr-4 text-[15px] text-stone-900 placeholder:text-stone-500 outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15"
           />
         </div>
-        <div className="flex rounded-lg border border-stone-200 bg-white overflow-hidden">
+        <div className="inline-flex shrink-0 rounded-xl bg-stone-100 p-1">
           {(['valables', 'tous'] as Filter[]).map(f => (
             <button
               key={f} onClick={() => setFilter(f)} aria-pressed={filter === f}
-              className={`px-4 py-2.5 text-sm transition-colors cursor-pointer ${
-                filter === f ? 'bg-accent-soft text-accent font-semibold' : 'text-stone-700 hover:bg-stone-50'
+              className={`h-9 rounded-lg px-4 text-[14px] transition-colors cursor-pointer ${
+                filter === f ? 'bg-stone-900 font-semibold text-white' : 'font-medium text-stone-600 hover:text-stone-950'
               }`}
             >
               {f === 'valables' ? 'Valables' : 'Tous'}
@@ -132,7 +132,7 @@ export default function BonsClient() {
         </div>
       </div>
 
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <div className="data-frame overflow-hidden rounded-xl">
         {loading ? (
           <div className="flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
             <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
@@ -155,17 +155,19 @@ export default function BonsClient() {
             )}
           </div>
         ) : (
-          <ul className="divide-y divide-stone-50">
+          <ul className="zebra">
             {filtered.map(card => {
               const expired = isGiftCardExpired(card);
               const dim = card.status !== 'active' || expired;
               const entame = Number(card.montant_restant) !== Number(card.montant_initial);
               return (
-                <li key={card.id} className={`flex items-center gap-3 px-5 py-4 hover:bg-stone-50/50 transition-colors ${dim ? 'opacity-55' : ''}`}>
-                  <Ticket size={16} className="text-accent shrink-0" />
+                <li key={card.id} className={`flex items-center gap-4 px-5 py-4 transition-colors hover:bg-row-hover ${dim ? 'opacity-55' : ''}`}>
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-warm-soft text-warm-ink" aria-hidden="true">
+                    <Ticket size={18} />
+                  </span>
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-stone-900 tabular-nums flex items-center gap-2 flex-wrap">
+                    <p className="flex flex-wrap items-center gap-2 text-[14.5px] font-semibold text-stone-950 tabular-nums">
                       {card.code}
                       <StatusBadge card={card} />
                     </p>
@@ -180,7 +182,7 @@ export default function BonsClient() {
                   </div>
 
                   <div className="shrink-0 text-right">
-                    <span className="block text-sm font-medium text-stone-900 tabular-nums">
+                    <span className="block text-[15px] font-semibold text-stone-950 tabular-nums">
                       {formatCHF(card.montant_restant)}
                     </span>
                     {entame && (
@@ -216,7 +218,7 @@ function StatusBadge({ card }: { card: GiftCard }) {
       ? 'text-red-700 bg-red-50'
       : 'text-stone-700 bg-stone-100';
   return (
-    <span className={`text-[12px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${cls}`}>
+    <span className={`text-[12px] font-semibold px-2 py-0.5 whitespace-nowrap ${cls}`}>
       {label}
     </span>
   );

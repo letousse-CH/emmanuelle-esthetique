@@ -73,7 +73,7 @@ export default function MobileTabBar({
                   >
                     <tab.icon size={26} strokeWidth={2.1} />
                     {tab.badge ? (
-                      <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-600 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white">
+                      <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center bg-warm px-1 text-[12px] font-bold leading-none text-warm-ink ring-2 ring-white rounded">
                         {tab.badge > 99 ? '99+' : tab.badge}
                       </span>
                     ) : null}
@@ -100,7 +100,7 @@ export default function MobileTabBar({
                 >
                   <tab.icon size={22} strokeWidth={isActive ? 2.3 : 1.9} />
                   {tab.badge ? (
-                    <span className="absolute -top-0.5 right-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-600 px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white">
+                    <span className="absolute -top-0.5 right-0.5 inline-flex h-5 min-w-5 items-center justify-center bg-warm px-1 text-[12px] font-bold leading-none text-warm-ink ring-2 ring-white rounded">
                       {tab.badge > 99 ? '99+' : tab.badge}
                     </span>
                   ) : null}

@@ -33,8 +33,8 @@ function EmailPreview({ subject, html }: { subject: string; html: string }) {
       </div>
     </div>`;
   return (
-    <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-      <div className="px-5 py-3 border-b border-stone-200 bg-stone-50/50 flex items-center gap-2">
+    <div className="bg-stone-50 rounded-xl overflow-hidden">
+      <div className="px-5 py-3 border-b border-stone-200 bg-stone-50 flex items-center gap-2">
         <span className="text-[13px] font-semibold text-stone-800 shrink-0">Aperçu</span>
         {subject && <span className="truncate text-[13px] text-stone-700">{subject}</span>}
       </div>
@@ -120,7 +120,7 @@ export default function NewsletterEditor() {
           </Field>
           <div className="space-y-1.5">
             <p className="block text-[14px] font-semibold text-stone-900" id="nl-content-label">Contenu</p>
-            <div aria-labelledby="nl-content-label" className="bg-white border border-stone-300 rounded-lg overflow-hidden [&_.ql-editor]:text-[16px] [&_.ql-editor]:leading-relaxed [&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-stone-200 [&_.ql-container]:border-0">
+            <div aria-labelledby="nl-content-label" className="bg-stone-50 rounded-lg overflow-hidden [&_.ql-editor]:text-[16px] [&_.ql-editor]:leading-relaxed [&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-stone-200 [&_.ql-container]:border-0">
               <ReactQuill theme="snow" value={html} onChange={setHtml} modules={modules} className="font-sans" placeholder="Écrivez votre newsletter…" />
             </div>
           </div>

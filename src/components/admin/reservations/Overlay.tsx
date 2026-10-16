@@ -143,7 +143,7 @@ function DesktopOverlay({
           className={
             isDrawer
               ? 'flex h-full min-h-0 flex-1 flex-col focus:outline-none'
-              : 'pointer-events-auto flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-2xl focus:outline-none sm:max-w-lg sm:rounded-2xl'
+              : 'pointer-events-auto flex max-h-[92dvh] w-full flex-col rounded-t-xl bg-white shadow-2xl focus:outline-none sm:max-w-lg sm:rounded-xl'
           }
         >
           <header className="flex items-start justify-between gap-3 border-b border-stone-200 px-4 py-4 sm:px-6 pt-[max(1rem,env(safe-area-inset-top))]">

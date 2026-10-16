@@ -83,7 +83,7 @@ export default function SizeInput({
 
   return (
     <div
-      className={`flex h-10 items-stretch overflow-hidden rounded-lg border border-stone-300 bg-white transition-colors
+      className={`flex h-10 items-stretch overflow-hidden rounded-lg bg-stone-50 transition-colors
         focus-within:border-stone-900 focus-within:ring-1 focus-within:ring-stone-900 ${className}`}
     >
       <input

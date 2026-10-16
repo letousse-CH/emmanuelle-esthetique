@@ -12,7 +12,6 @@ import type {
   HomeData,
   LowStockItem,
   MoneyData,
-  SiteStatsData,
 } from './homeTypes';
 import {
   addDays,
@@ -58,7 +57,7 @@ export async function loadPending(): Promise<Booking[]> {
   return all.filter((b) => b.statut === 'en_attente' && !b.contacte_at);
 }
 
-/** Recettes du jour et du mois, depuis la table des transactions (lecture seule). */
+/** Recettes du jour, de la semaine et du mois, depuis la table des transactions (lecture seule). */
 export async function loadMoney(today: string): Promise<MoneyData> {
   const monthStart = firstOfMonth(today);
   const prevStart = firstOfPreviousMonth(today);
@@ -66,6 +65,8 @@ export async function loadMoney(today: string): Promise<MoneyData> {
   const prevEndExclusive = addDays(prevStart, Math.min(dayOfMonth(today), daysInMonth(prevStart)));
 
   const todayStartMs = Date.parse(zurichMidnightISO(today));
+  // Le lundi tombe au plus 6 jours avant : toujours après le 1er du mois précédent, donc dans la requête.
+  const weekStartMs = Date.parse(zurichMidnightISO(mondayOf(today)));
   const monthStartMs = Date.parse(zurichMidnightISO(monthStart));
   const prevStartISO = zurichMidnightISO(prevStart);
   const prevEndMs = Date.parse(zurichMidnightISO(prevEndExclusive));
@@ -77,7 +78,7 @@ export async function loadMoney(today: string): Promise<MoneyData> {
     .limit(5000);
   if (error) throw new Error('Impossible de lire les encaissements.');
 
-  const out: MoneyData = { today: 0, todayCount: 0, month: 0, prevMonthToDate: 0 };
+  const out: MoneyData = { today: 0, todayCount: 0, week: 0, weekCount: 0, month: 0, monthCount: 0, prevMonthToDate: 0 };
   for (const t of data ?? []) {
     const ms = Date.parse(t.created_at as string);
     const amount = recetteEncaissee({
@@ -85,18 +86,24 @@ export async function loadMoney(today: string): Promise<MoneyData> {
       total_ttc: Number(t.total_ttc),
       montant_bon: Number(t.montant_bon ?? 0),
     });
+    const counted = t.status !== 'annulee' ? 1 : 0;
     if (ms >= monthStartMs) {
       out.month += amount;
-      if (ms >= todayStartMs) {
-        out.today += amount;
-        if (t.status !== 'annulee') out.todayCount += 1;
-      }
+      out.monthCount += counted;
     } else if (ms < prevEndMs) {
       out.prevMonthToDate += amount;
     }
+    if (ms >= weekStartMs) {
+      out.week += amount;
+      out.weekCount += counted;
+    }
+    if (ms >= todayStartMs) {
+      out.today += amount;
+      out.todayCount += counted;
+    }
   }
   const r = (n: number) => Math.round(n * 100) / 100;
-  return { ...out, today: r(out.today), month: r(out.month), prevMonthToDate: r(out.prevMonthToDate) };
+  return { ...out, today: r(out.today), week: r(out.week), month: r(out.month), prevMonthToDate: r(out.prevMonthToDate) };
 }
 
 /** Stock bas et bons cadeaux proches de l'échéance. Requêtes directes : pas de repli sur des données locales. */
@@ -134,14 +141,6 @@ export async function loadAlerts(today: string): Promise<AlertsData> {
   return { lowStock, expiringCards };
 }
 
-export async function loadSiteStats(): Promise<SiteStatsData> {
-  const headers = await authHeaders();
-  const res = await fetch('/api/admin-stats', { headers, cache: 'no-store' });
-  if (!res.ok) throw new Error(`Statistiques indisponibles (erreur ${res.status}).`);
-  const json = await res.json();
-  return { today: Number(json.today ?? 0), week: Number(json.week ?? 0) };
-}
-
 const LOADING: Block<never> = { status: 'loading' };
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : 'Une erreur est survenue.');
 
@@ -153,15 +152,12 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : 'Une erreur est
 export function useHomeData(caisseEnabled: boolean): {
   data: HomeData | null;
   retry: (key: HomeBlockKey) => void;
-  loadSiteStatsOnce: () => void;
 } {
   const [today, setToday] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<Block<Booking[]>>(LOADING);
   const [pending, setPending] = useState<Block<Booking[]>>(LOADING);
   const [money, setMoney] = useState<Block<MoneyData>>(LOADING);
   const [alerts, setAlerts] = useState<Block<AlertsData>>(LOADING);
-  const [siteStats, setSiteStats] = useState<Block<SiteStatsData>>(LOADING);
-  const siteStatsAsked = useRef(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -193,7 +189,6 @@ export function useHomeData(caisseEnabled: boolean): {
         if (k === 'pending') run(setPending, () => loadPending(), hard);
         if (k === 'money' && caisseEnabled) run(setMoney, () => loadMoney(day), hard);
         if (k === 'alerts' && caisseEnabled) run(setAlerts, () => loadAlerts(day), hard);
-        if (k === 'siteStats') run(setSiteStats, () => loadSiteStats(), hard);
       }
     },
     [run, caisseEnabled],
@@ -202,9 +197,7 @@ export function useHomeData(caisseEnabled: boolean): {
   useEffect(() => {
     refresh(['schedule', 'pending', 'money', 'alerts'], true);
     const tick = () => {
-      const keys: HomeBlockKey[] = ['schedule', 'pending', 'money', 'alerts'];
-      if (siteStatsAsked.current) keys.push('siteStats');
-      refresh(keys, false);
+      refresh(['schedule', 'pending', 'money', 'alerts'], false);
     };
     const onVisible = () => {
       if (document.visibilityState === 'visible') tick();
@@ -220,12 +213,7 @@ export function useHomeData(caisseEnabled: boolean): {
   }, [refresh]);
 
   const retry = useCallback((key: HomeBlockKey) => refresh([key], true), [refresh]);
-  const loadSiteStatsOnce = useCallback(() => {
-    if (siteStatsAsked.current) return;
-    siteStatsAsked.current = true;
-    refresh(['siteStats'], true);
-  }, [refresh]);
 
-  const data: HomeData | null = today ? { today, schedule, pending, money, alerts, siteStats } : null;
-  return { data, retry, loadSiteStatsOnce };
+  const data: HomeData | null = today ? { today, schedule, pending, money, alerts } : null;
+  return { data, retry };
 }

@@ -48,7 +48,7 @@ function cx(...parts: Array<string | false | null | undefined>) {
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
 
-const CARD = 'rounded-2xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)]';
+const CARD = 'rounded-xl bg-stone-50';
 
 /** Rend un lien interne, un lien externe ou un bouton selon les props. */
 type Pressable = {
@@ -148,7 +148,7 @@ function CountBadge({ value, label, className }: { value: number | string; label
     <span
       aria-label={label}
       className={cx(
-        'inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-amber-600 px-1.5 text-[12px] font-bold leading-none text-white',
+        'inline-flex h-6 min-w-6 items-center justify-center bg-warm px-1.5 text-[12px] font-bold leading-none text-warm-ink',
         className,
       )}
     >
@@ -214,7 +214,7 @@ export function ActionTile({
     </>
   );
   const cls = cx(
-    'relative flex w-full flex-col items-start rounded-2xl border p-4 text-left shadow-[0_1px_2px_rgba(28,25,23,0.04)]',
+    'relative flex w-full flex-col items-start rounded-xl border p-4 text-left',
     size === 'lg' ? 'min-h-[132px]' : 'min-h-[108px]',
     t.box,
     interactive && 'cursor-pointer transition-[transform,background-color] duration-150 active:scale-[0.98]',
@@ -306,7 +306,7 @@ export function StatTile({
   );
 
   const cls = cx(
-    'flex w-full flex-col items-start rounded-2xl border p-4 text-left shadow-[0_1px_2px_rgba(28,25,23,0.04)]',
+    'flex w-full flex-col items-start rounded-xl border p-4 text-left',
     accent ? 'border-transparent bg-accent text-accent-fg' : 'border-stone-200 bg-white',
     (href || onClick) && 'cursor-pointer transition-transform duration-150 active:scale-[0.98]',
     FOCUS_RING,
@@ -407,7 +407,7 @@ export interface ChipProps extends Pressable {
  */
 export function Chip({ children, selected, icon: Icon, count, className, ...press }: ChipProps) {
   const cls = cx(
-    'inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-4 text-[15px] font-medium',
+    'inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap border px-4 text-[15px] font-medium',
     'cursor-pointer select-none transition-colors duration-150 active:scale-[0.97]',
     selected
       ? 'border-transparent bg-accent text-accent-fg font-semibold'
@@ -422,7 +422,7 @@ export function Chip({ children, selected, icon: Icon, count, className, ...pres
       {typeof count === 'number' && (
         <span
           className={cx(
-            'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[12px] font-semibold leading-5',
+            'inline-flex min-w-5 items-center justify-center px-1.5 text-[12px] font-semibold leading-5',
             selected ? 'bg-white/25 text-accent-fg' : 'bg-stone-100 text-stone-700',
           )}
         >
@@ -477,7 +477,7 @@ export function ChipBar({ children, label, activeKey, bleed = true, className }:
 // ── Skeleton / EmptyState ────────────────────────────────────────────────────
 
 export function Skeleton({ className }: { className?: string }) {
-  return <span aria-hidden="true" className={cx('block animate-pulse rounded-xl bg-stone-200/70', className)} />;
+  return <span aria-hidden="true" className={cx('block animate-pulse rounded-xl bg-stone-100', className)} />;
 }
 
 export interface EmptyStateProps {
@@ -491,9 +491,9 @@ export interface EmptyStateProps {
 
 export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
   return (
-    <div className={cx('flex flex-col items-center rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center', className)}>
+    <div className={cx('flex flex-col items-center rounded-xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center', className)}>
       {Icon && (
-        <span className="mb-4 grid size-14 place-items-center rounded-2xl bg-accent-soft text-accent">
+        <span className="mb-4 grid size-14 place-items-center rounded-xl bg-accent-soft text-accent">
           <Icon size={26} strokeWidth={1.8} aria-hidden="true" />
         </span>
       )}
@@ -534,7 +534,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
     refs.current[next]?.focus();
   };
   return (
-    <div role="radiogroup" aria-label={label} className={cx('flex w-full gap-1 rounded-2xl bg-stone-100 p-1', className)}>
+    <div role="radiogroup" aria-label={label} className={cx('flex w-full gap-1 rounded-xl bg-stone-100 p-1', className)}>
       {options.map((o, i) => {
         const active = o.value === value;
         return (
@@ -552,7 +552,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
             className={cx(
               'flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl px-3 text-[15px] transition-all duration-150',
               active
-                ? 'bg-white font-semibold text-stone-950 shadow-[0_1px_3px_rgba(28,25,23,0.12)]'
+                ? 'bg-accent font-semibold text-accent-fg'
                 : 'font-medium text-stone-700 active:bg-white/60',
               FOCUS_RING,
             )}
@@ -560,7 +560,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
             {o.icon && <o.icon size={16} aria-hidden="true" />}
             <span className="truncate">{o.label}</span>
             {typeof o.count === 'number' && (
-              <span className="rounded-full bg-stone-200/80 px-1.5 text-[12px] font-semibold leading-5 text-stone-700">{o.count}</span>
+              <span className="bg-stone-100 px-1.5 text-[12px] font-semibold leading-5 text-stone-700">{o.count}</span>
             )}
           </button>
         );
@@ -651,7 +651,7 @@ export function StickyActionBar({ children, summary, reserveSpace = true, label 
         className={cx(
           'admin-sticky-bar fixed inset-x-0 z-30 border-t border-stone-200 bg-white/95 px-4 py-3 backdrop-blur',
           'shadow-[0_-4px_16px_rgba(28,25,23,0.06)]',
-          'lg:static lg:mt-6 lg:rounded-2xl lg:border lg:shadow-none',
+          'lg:static lg:mt-6 lg:rounded-xl lg:border lg:shadow-none',
           className,
         )}
         style={{ bottom: 'calc(var(--admin-tabbar-h, 0px) + env(safe-area-inset-bottom))' }}
@@ -827,7 +827,7 @@ export function BottomSheet({ open, onClose, title, hideTitle, description, chil
           tabIndex={-1}
           className={cx(
             'pointer-events-auto flex w-full flex-col overflow-hidden bg-white shadow-[0_-8px_32px_rgba(28,25,23,0.18)] focus:outline-none',
-            'rounded-t-[24px] lg:max-w-lg lg:rounded-[24px] lg:shadow-2xl',
+            'rounded-t-xl lg:max-w-lg lg:rounded-xl lg:shadow-2xl',
             size === 'full' ? 'h-[94dvh] lg:h-auto lg:max-h-[88dvh]' : 'max-h-[90dvh] lg:max-h-[88dvh]',
             'transition-[translate,opacity,scale] duration-[240ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
             shown ? 'translate-y-0 opacity-100 lg:scale-100' : 'translate-y-full opacity-100 lg:translate-y-0 lg:scale-95 lg:opacity-0',

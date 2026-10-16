@@ -55,7 +55,7 @@ const SETTINGS_SECTIONS: TabItem[] = [
  */
 const STICKY_SAVE =
   'max-lg:sticky max-lg:bottom-[calc(var(--admin-tabbar-h,0px)+env(safe-area-inset-bottom)+1rem)] max-lg:z-20 ' +
-  'max-lg:rounded-2xl max-lg:border max-lg:border-stone-200 max-lg:bg-white/95 max-lg:p-3 max-lg:shadow-[0_4px_16px_rgba(28,25,23,0.12)] ' +
+  'max-lg:rounded-xl max-lg:border max-lg:border-stone-200 max-lg:bg-white/95 max-lg:p-3 max-lg:shadow-[0_4px_16px_rgba(28,25,23,0.12)] ' +
   'max-lg:backdrop-blur max-lg:[&>button]:flex-1';
 
 interface MediaAsset {
@@ -280,7 +280,7 @@ export default function Settings() {
           onClick={() => setter(preset.value)}
           style={{ backgroundColor: preset.value }}
           title={preset.name}
-          className="w-4 h-4 rounded-full border border-stone-200 hover:scale-125 transition-transform cursor-pointer shadow-sm shrink-0"
+          className="w-4 h-4 rounded-full border border-stone-200 hover:scale-125 transition-transform cursor-pointer shrink-0"
         />
       ))}
     </div>
@@ -1137,7 +1137,7 @@ export default function Settings() {
         {activeTab === 'general' && (
           <div className="space-y-10 animate-fadein">
             {/* Logo Section */}
-            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
+            <div className="bg-stone-50 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Image size={16} /> Logos et images du site
               </h2>
@@ -1155,7 +1155,7 @@ export default function Settings() {
 
                     {/* Aperçu */}
                     {logoImage && (
-                      <div className="relative w-24 h-24 rounded-[22%] aspect-square overflow-hidden border border-stone-200 bg-stone-50 p-2 shadow-sm">
+                      <div className="relative w-24 h-24 rounded-[22%] aspect-square overflow-hidden border border-stone-200 bg-stone-50 p-2">
                         <img src={logoImage} alt="Aperçu logo principal" className="w-full h-full object-cover rounded-[22%]" />
                       </div>
                     )}
@@ -1187,7 +1187,7 @@ export default function Settings() {
 
                     {/* Aperçu */}
                     {footerLogoImage && (
-                      <div className="relative w-48 h-20 rounded-lg overflow-hidden border border-stone-200 bg-stone-900 p-2 shadow-sm">
+                      <div className="relative w-48 h-20 rounded-lg overflow-hidden border border-stone-200 bg-stone-900 p-2">
                         <img src={footerLogoImage} alt="Aperçu logo footer" className="w-full h-full object-contain" />
                       </div>
                     )}
@@ -1218,7 +1218,7 @@ export default function Settings() {
                     </label>
 
                     {footerImage && (
-                      <div className="relative w-48 h-32 rounded-lg overflow-hidden border border-stone-200 bg-stone-900 p-2 shadow-sm">
+                      <div className="relative w-48 h-32 rounded-lg overflow-hidden border border-stone-200 bg-stone-900 p-2">
                         <img src={footerImage} alt="Aperçu image footer" className="w-full h-full object-contain" />
                       </div>
                     )}
@@ -1249,7 +1249,7 @@ export default function Settings() {
                     </label>
 
                     {faviconImage && (
-                      <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-stone-200 bg-stone-50 p-2 shadow-sm">
+                      <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-stone-200 bg-stone-50 p-2">
                         <img src={faviconImage} alt="Aperçu favicon" className="w-full h-full object-contain" />
                       </div>
                     )}
@@ -1286,7 +1286,7 @@ export default function Settings() {
 
 
             {/* Réseaux sociaux */}
-            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
+            <div className="bg-stone-50 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Share2 size={16} /> Réseaux sociaux
               </h2>
@@ -1341,7 +1341,7 @@ export default function Settings() {
             </div>
 
             {/* Auteur (bio + lien) */}
-            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
+            <div className="bg-stone-50 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Share2 size={16} /> Présentation affichée sous chaque article
               </h2>
@@ -1398,7 +1398,7 @@ export default function Settings() {
             <DesignSystemPanel />
 
             {/* Bouton S'inscrire / Action du Header */}
-            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
+            <div className="bg-stone-50 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Sliders size={16} /> Bouton d'action du menu
               </h2>
@@ -1436,7 +1436,7 @@ export default function Settings() {
 
         {activeTab === 'business' && (
           <div className="space-y-8 animate-fadein">
-          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
+          <div className="bg-stone-50 rounded-xl p-6 md:p-7">
             <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
               <Building2 size={16} /> Coordonnées d'entreprise
             </h2>
@@ -1567,7 +1567,7 @@ export default function Settings() {
           </div>
 
             {/* Code Promo de Bienvenue */}
-            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7">
+            <div className="bg-stone-50 rounded-xl p-6 md:p-7">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Tag size={16} /> Code promo de l'e-mail de bienvenue
               </h2>
@@ -1623,7 +1623,7 @@ export default function Settings() {
 
         {/* ── Onglet Éditorial & Marque ───────────────────────────── */}
         {activeTab === 'editorial' && (
-          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein space-y-6">
+          <div className="bg-stone-50 rounded-xl p-6 md:p-7 animate-fadein space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-3 mb-2">
               <div>
                 <h2 className="text-[15px] font-semibold text-stone-900 flex items-center gap-2">
@@ -1736,7 +1736,7 @@ export default function Settings() {
 
         {/* ── Onglet Modules ───────────────────────────────────────── */}
         {activeTab === 'modules' && (
-          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein">
+          <div className="bg-stone-50 rounded-xl p-6 md:p-7 animate-fadein">
             <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-2 mb-2 flex items-center gap-2">
               <Puzzle size={16} /> Modules du site
             </h2>
@@ -1779,7 +1779,7 @@ export default function Settings() {
 
         {/* ── Onglet Caisse & facturation ─────────────────────────── */}
         {activeTab === 'caisse' && (
-          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein">
+          <div className="bg-stone-50 rounded-xl p-6 md:p-7 animate-fadein">
             <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-2 mb-2 flex items-center gap-2">
               <CreditCard size={16} /> Caisse &amp; facturation
             </h2>
@@ -1900,7 +1900,7 @@ export default function Settings() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/60 px-5 py-4 text-[13px] text-stone-700 leading-relaxed">
+                  <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 px-5 py-4 text-[13px] text-stone-700 leading-relaxed">
                     Le droit suisse ne fixe <strong>aucune durée minimale</strong>. Un bon cadeau est une
                     créance ordinaire : à défaut d&apos;accord contraire, il se prescrit par 10 ans
                     (CO art. 127). Une validité courte reste possible si elle est annoncée à l&apos;achat,
@@ -1926,9 +1926,9 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-stone-200 bg-stone-50/60 px-5 py-4 text-[13px] text-stone-700 leading-relaxed">
+                <div className="rounded-xl border border-stone-200 bg-stone-50 px-5 py-4 text-[13px] text-stone-700 leading-relaxed">
                   <strong className="block text-stone-700 mb-1 font-semibold">Numérotation et conservation</strong>
-                  Les factures sont numérotées <code className="px-1 bg-white rounded border border-stone-200">FAC-{new Date().getFullYear()}-0001</code>,
+                  Les factures sont numérotées <code className="px-1 bg-stone-50 rounded">FAC-{new Date().getFullYear()}-0001</code>,
                   en continu et par année civile. Une écriture encaissée ne peut être ni supprimée ni recalculée :
                   une erreur se corrige par une annulation depuis le journal, qui laisse la trace exigée par
                   le Code des obligations (art. 957a). Pensez à exporter le livre de caisse pour votre fiduciaire
@@ -1953,7 +1953,7 @@ export default function Settings() {
 
         {/* ── Onglet IA & Budget ──────────────────────────────────── */}
         {activeTab === 'ai' && (
-          <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein">
+          <div className="bg-stone-50 rounded-xl p-6 md:p-7 animate-fadein">
             <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-2 mb-2 flex items-center gap-2">
               <Sparkles size={16} /> Modèle IA &amp; budget
             </h2>
@@ -1990,11 +1990,11 @@ export default function Settings() {
                         <span className="flex-1">
                           <span className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-semibold text-stone-800">{m.label}</span>
-                            {m.badge === 'qualite'    && <span className="text-[12.5px] font-medium bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full">Meilleure qualité</span>}
-                            {m.badge === 'equilibre'  && <span className="text-[12.5px] font-medium bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full">Meilleur rapport qualité-prix</span>}
-                            {m.badge === 'economique' && <span className="text-[12.5px] font-medium bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full">Le moins cher</span>}
+                            {m.badge === 'qualite'    && <span className="text-[12.5px] font-medium bg-stone-100 text-stone-700 px-2 py-0.5 rounded">Meilleure qualité</span>}
+                            {m.badge === 'equilibre'  && <span className="text-[12.5px] font-medium bg-stone-100 text-stone-700 px-2 py-0.5 rounded">Meilleur rapport qualité-prix</span>}
+                            {m.badge === 'economique' && <span className="text-[12.5px] font-medium bg-stone-100 text-stone-700 px-2 py-0.5 rounded">Le moins cher</span>}
                             {m.available === false && (
-                              <span className="text-[12.5px] font-medium bg-red-50 text-red-700 px-2 py-0.5 rounded-full">
+                              <span className="text-[12.5px] font-medium bg-red-50 text-red-700 px-2 py-0.5 rounded">
                                 Plus proposé par Anthropic
                               </span>
                             )}
@@ -2189,7 +2189,7 @@ export default function Settings() {
 
         {activeTab === 'security' && (
           <div className="space-y-6">
-            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein">
+            <div className="bg-stone-50 rounded-xl p-6 md:p-7 animate-fadein">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 mb-6 flex items-center gap-2">
                 <Lock size={16} /> Mot de passe
               </h2>
@@ -2232,7 +2232,7 @@ export default function Settings() {
               </form>
             </div>
 
-            <div className="bg-white border border-stone-200 rounded-xl p-6 md:p-7 animate-fadein space-y-4">
+            <div className="bg-stone-50 rounded-xl p-6 md:p-7 animate-fadein space-y-4">
               <h2 className="text-[15px] font-semibold text-stone-900 border-b border-stone-200 pb-3 flex items-center gap-2">
                 <ShieldCheck size={16} /> Vérification de la base de données
               </h2>

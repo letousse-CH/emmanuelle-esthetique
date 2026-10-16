@@ -184,7 +184,7 @@ export default function FloatingPanel({
               <button
                 type="button"
                 onClick={toggleDock}
-                className="px-2 py-0.5 rounded-md bg-white border border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900 transition-colors cursor-pointer text-[10.5px] font-bold flex items-center gap-1 shadow-2xs"
+                className="px-2 py-0.5 rounded-md bg-stone-50 border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900 transition-colors cursor-pointer text-[10.5px] font-bold flex items-center gap-1"
                 title="Détacher en fenêtre flottante déplaçable"
               >
                 <Move size={11} />
@@ -208,7 +208,7 @@ export default function FloatingPanel({
       <div
         role="dialog"
         aria-label={ariaLabel}
-        className="fixed inset-3 z-[60] flex flex-col bg-white border border-zinc-300 shadow-2xl rounded-2xl overflow-hidden animate-in zoom-in-95 duration-150"
+        className="fixed inset-3 z-[60] flex flex-col bg-white border border-zinc-300 shadow-2xl rounded-xl overflow-hidden animate-in zoom-in-95 duration-150"
       >
         <div className="shrink-0 border-b border-zinc-200 bg-zinc-50/90 text-zinc-900">
           <div className="flex items-center justify-between px-4 py-1.5 border-b border-zinc-200/80 bg-zinc-100/60 text-[11px] font-bold text-zinc-600">
@@ -220,7 +220,7 @@ export default function FloatingPanel({
               <button
                 type="button"
                 onClick={() => setIsMaximized(false)}
-                className="px-2 py-0.5 rounded-md bg-white border border-zinc-300 hover:bg-zinc-100 transition-colors cursor-pointer text-[10.5px] font-bold flex items-center gap-1 shadow-2xs"
+                className="px-2 py-0.5 rounded-md bg-stone-50 border-zinc-300 hover:bg-zinc-100 transition-colors cursor-pointer text-[10.5px] font-bold flex items-center gap-1"
                 title="Quitter le plein écran"
               >
                 <Minimize2 size={11} />
@@ -244,11 +244,11 @@ export default function FloatingPanel({
       role="dialog"
       aria-label={ariaLabel}
       style={{ left: box.x, top: box.y, width: box.width, height: box.height }}
-      className="fixed z-[60] flex flex-col border border-zinc-300 bg-white shadow-2xl rounded-2xl overflow-hidden ring-1 ring-zinc-900/10 transition-all duration-75 select-none"
+      className="fixed z-[60] flex flex-col border border-zinc-300 bg-white shadow-2xl rounded-xl overflow-hidden ring-1 ring-zinc-900/10 transition-all duration-75 select-none"
     >
       <div
         onPointerDown={start('move')}
-        className="shrink-0 cursor-grab touch-none border-b border-zinc-200 bg-white text-zinc-900 active:cursor-grabbing rounded-t-2xl overflow-hidden"
+        className="shrink-0 cursor-grab touch-none border-b border-zinc-200 bg-white text-zinc-900 active:cursor-grabbing rounded-t-xl overflow-hidden"
       >
         <div className="flex items-center justify-between px-3 py-1 border-b border-zinc-200/80 bg-zinc-100/80 text-[10.5px] font-bold text-zinc-600 select-none">
           <span className="flex items-center gap-1.5 uppercase tracking-wider text-zinc-700">
@@ -279,7 +279,7 @@ export default function FloatingPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-white">{children}</div>
 
-      {footer && <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/90 rounded-b-2xl overflow-hidden">{footer}</div>}
+      {footer && <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/90 rounded-b-xl overflow-hidden">{footer}</div>}
 
       {/* Poignée de redimensionnement */}
       <div

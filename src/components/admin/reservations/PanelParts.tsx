@@ -118,7 +118,7 @@ export function EventsLog({ events }: { events: BookingEvent[] }) {
   if (!events || events.length === 0) return null;
   const sorted = [...events].sort((a, b) => b.created_at.localeCompare(a.created_at));
   return (
-    <details className="group rounded-xl border border-stone-300 bg-white">
+    <details className="group rounded-xl bg-stone-50">
       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-[15px] font-semibold text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 [&::-webkit-details-marker]:hidden">
         Historique de cette réservation ({events.length})
         <ChevronDown size={18} className="transition-transform group-open:rotate-180" aria-hidden="true" />

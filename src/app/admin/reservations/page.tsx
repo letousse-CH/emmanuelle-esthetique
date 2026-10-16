@@ -2,8 +2,8 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { CalendarDays, CalendarOff, List, Phone, Plus, RefreshCw } from 'lucide-react';
-import type { Booking } from '../../../types/booking';
+import { CalendarDays, CalendarOff, List, Phone, Plus, RefreshCw, User } from 'lucide-react';
+import type { Booking, BookingBlock } from '../../../types/booking';
 import { listClientStats } from '../../../services/caisse';
 import { Button } from '../../../components/admin/ui';
 import AgendaView from '../../../components/admin/reservations/AgendaView';
@@ -12,6 +12,7 @@ import BookingPanel from '../../../components/admin/reservations/BookingPanel';
 import { FeedbackProvider } from '../../../components/admin/reservations/Feedback';
 import ListView from '../../../components/admin/reservations/ListView';
 import NewBookingPanel from '../../../components/admin/reservations/NewBookingPanel';
+import PersoPanel from '../../../components/admin/reservations/PersoPanel';
 import Overlay from '../../../components/admin/reservations/Overlay';
 import SyncClientsButton from '../../../components/admin/reservations/SyncClientsButton';
 import TodoView from '../../../components/admin/reservations/TodoView';
@@ -63,6 +64,8 @@ function ReservationsScreen() {
   const [newDraft, setNewDraft] = useState<{ date?: string; time?: string | null; clientId?: string } | null>(null);
   // `date` : « Je ne travaille pas » depuis un jour précis (téléphone : ouvre le formulaire tout de suite).
   const [blocksOpen, setBlocksOpen] = useState<{ date?: string } | null>(null);
+  // Rendez-vous perso : `block` pour en modifier un, sinon création (jour et heure proposés).
+  const [perso, setPerso] = useState<{ block?: BookingBlock; date?: string; time?: string | null } | null>(null);
 
   // « Aujourd'hui » à Zurich, recalculé si l'onglet reste ouvert après minuit.
   const [today, setToday] = useState(() => todayZurich());
@@ -169,6 +172,9 @@ function ReservationsScreen() {
           <Button variant="primary" icon={Plus} className="h-12 flex-1 sm:flex-none" onClick={() => setNewDraft({})}>
             Nouveau rendez-vous
           </Button>
+          <Button icon={User} className="h-12 flex-1 sm:flex-none" onClick={() => setPerso({})}>
+            Rendez-vous perso
+          </Button>
           <Button icon={CalendarOff} className="h-12 flex-1 sm:flex-none" onClick={() => setBlocksOpen({})}>
             Je ne travaille pas
           </Button>
@@ -189,13 +195,13 @@ function ReservationsScreen() {
               aria-selected={active}
               onClick={() => setView(v.id)}
               className={`flex h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-[14px] transition-colors sm:gap-2 sm:px-3 sm:text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
-                active ? 'bg-white font-semibold text-stone-950 shadow-xs ring-1 ring-stone-200' : 'font-medium text-stone-700 hover:text-stone-950'
+                active ? 'bg-stone-900 font-semibold text-white' : 'font-medium text-stone-700 hover:text-stone-950'
               }`}
             >
               <v.icon size={17} aria-hidden="true" className="hidden shrink-0 sm:block" />
               {v.label}
               {v.id === 'traiter' && toCall > 0 && (
-                <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[12px] font-bold text-white" aria-label={`${toCall} en attente`}>
+                <span className="bg-warm px-2 py-0.5 text-[12px] font-bold text-warm-ink rounded" aria-label={`${toCall} en attente`}>
                   {toCall}
                 </span>
               )}
@@ -236,12 +242,13 @@ function ReservationsScreen() {
             onOpenBooking={setOpenId}
             onNewAt={(date, time) => setNewDraft({ date, time })}
             onOpenBlocks={() => setBlocksOpen({})}
+            onOpenPerso={(block) => setPerso({ block })}
           />
         )}
         {view === 'liste' && <ListView bookings={bookings} today={today} coupure={coupure} onOpen={setOpenId} />}
       </div>
 
-      <details className="rounded-xl border border-stone-300 bg-white">
+      <details className="rounded-xl bg-stone-50">
         <summary className="flex min-h-12 cursor-pointer items-center px-4 text-[15px] font-semibold text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
           Outils
         </summary>
@@ -272,6 +279,7 @@ function ReservationsScreen() {
       onOpen={setOpenId}
       onNew={(date, time) => setNewDraft({ date, time })}
       onOpenBlocks={(date) => setBlocksOpen({ date })}
+      onPerso={setPerso}
       onReload={reload}
     />
   );
@@ -301,6 +309,24 @@ function ReservationsScreen() {
           onClose={() => setNewDraft(null)}
           onCreated={() => {
             setNewDraft(null);
+            reload();
+          }}
+          onSwitchToPerso={(date, time) => {
+            setNewDraft(null);
+            setPerso({ date, time });
+          }}
+        />
+      )}
+
+      {perso && (
+        <PersoPanel
+          key={perso.block?.id ?? 'new'}
+          block={perso.block}
+          initialDate={perso.date}
+          initialTime={perso.time}
+          onClose={() => setPerso(null)}
+          onSaved={() => {
+            setPerso(null);
             reload();
           }}
         />

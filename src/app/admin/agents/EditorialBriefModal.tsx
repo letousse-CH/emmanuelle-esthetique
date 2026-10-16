@@ -232,7 +232,7 @@ export default function EditorialBriefModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-stone-200 bg-stone-50/50 px-6 py-4">
+        <div className="flex items-center justify-between border-t border-stone-200 bg-stone-50 px-6 py-4">
           <p className="text-[13px] text-stone-600">
             Ces réglages servent aussi à la rédaction des articles.
           </p>

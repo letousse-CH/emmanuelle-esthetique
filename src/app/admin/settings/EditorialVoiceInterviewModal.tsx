@@ -593,7 +593,7 @@ export default function EditorialVoiceInterviewModal({
                     { key: 'site_brand_tone', label: '4. Promesse et vocabulaire' },
                     { key: 'site_blog_topics', label: '5. Grands thèmes du blog' },
                   ].map((field) => (
-                    <div key={field.key} className="border border-stone-200 rounded-xl p-3.5 bg-stone-50/50 space-y-1.5">
+                    <div key={field.key} className="border border-stone-200 rounded-xl p-3.5 bg-stone-50 space-y-1.5">
                       <h5 className="text-[13px] font-semibold text-stone-900 flex items-center gap-1.5">
                         <FileText size={14} className="text-stone-600" />
                         {field.label}

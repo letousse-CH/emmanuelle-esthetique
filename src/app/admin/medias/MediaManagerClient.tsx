@@ -476,7 +476,7 @@ export default function MediaManager() {
       )}
 
       {/* Grid */}
-      <div className="bg-white border border-stone-200 rounded-xl p-6">
+      <div className="bg-stone-50 rounded-xl p-6">
         {loading ? (
           <div className="py-12 text-center text-[14px] text-stone-700">Chargement des images…</div>
         ) : medias.length === 0 ? (
@@ -488,7 +488,7 @@ export default function MediaManager() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {medias.map((asset) => (
-              <div key={asset.id} className="border border-stone-200 rounded-xl overflow-hidden flex flex-col bg-white">
+              <div key={asset.id} className="rounded-xl overflow-hidden flex flex-col bg-stone-50">
                 <div className="aspect-[4/3] bg-stone-200 overflow-hidden relative">
                   <img
                     src={asset.url}
@@ -551,7 +551,7 @@ export default function MediaManager() {
         )}
       </div>
 
-      <details className="mt-8 rounded-xl border border-stone-200 bg-white">
+      <details className="mt-8 rounded-xl bg-stone-50">
         <summary className="cursor-pointer px-6 py-4 text-[14px] font-semibold text-stone-900">Avancé</summary>
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-stone-200 px-6 py-5">
           <p className="max-w-2xl text-[14px] text-stone-700">

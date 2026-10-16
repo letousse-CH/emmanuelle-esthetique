@@ -60,7 +60,7 @@ function ServiceRow({
   const stateLabel = state === 'ok' ? 'Opérationnel' : state === 'warning' ? 'À régler' : 'Inconnu';
   const dot = state === 'ok' ? 'bg-emerald-500' : state === 'warning' ? 'bg-amber-500' : 'bg-stone-400';
   return (
-    <div className="p-4 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-3">
+    <div className="p-4 rounded-xl bg-stone-50 flex items-center justify-between gap-3">
       <div className="flex items-center gap-3 min-w-0">
         <div className="p-2.5 rounded-xl bg-stone-100 text-stone-700 shrink-0">
           <Icon size={18} />

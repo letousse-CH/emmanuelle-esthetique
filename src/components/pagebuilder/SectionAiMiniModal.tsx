@@ -96,10 +96,10 @@ export default function SectionAiMiniModal({
         <div className="flex items-center justify-between gap-4 px-5 py-4 bg-white text-zinc-900 border-b border-zinc-200">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white text-[10.5px] font-extrabold uppercase tracking-wider shadow-[0_2px_10px_rgba(168,85,247,0.25)]">
+              <span className="px-3 py-1 bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white text-[10.5px] font-extrabold uppercase tracking-wider shadow-[0_2px_10px_rgba(168,85,247,0.25)]">
                 Modification IA
               </span>
-              <span className="text-[11px] font-mono font-extrabold text-zinc-700 bg-zinc-100 px-2.5 py-0.5 rounded-full border border-zinc-200 truncate">
+              <span className="text-[11px] font-mono font-extrabold text-zinc-700 bg-zinc-100 px-2.5 py-0.5 border border-zinc-200 truncate">
                 {section.type}
               </span>
             </div>
@@ -173,7 +173,7 @@ export default function SectionAiMiniModal({
             type="button"
             disabled={loading || !customPrompt.trim()}
             onClick={() => handleGenerate()}
-            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 font-extrabold rounded-full text-white text-xs shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 hover:from-violet-700 hover:to-pink-600 font-extrabold text-white text-xs shadow-[0_4px_14px_rgba(168,85,247,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
           >
             {loading ? (
               <>

@@ -90,7 +90,7 @@ export default function AdminOnboardingWizard({
   }
 
   return (
-    <section className="rounded-xl border border-stone-200 bg-white">
+    <section className="rounded-xl bg-stone-50">
       <div className="flex items-start justify-between gap-4 px-6 pt-6">
         <div>
           <h2 className="text-[18px] font-semibold text-stone-950">Pour bien démarrer</h2>

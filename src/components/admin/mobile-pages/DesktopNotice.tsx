@@ -26,7 +26,7 @@ export default function DesktopNotice({
       {!forced && (
         <div
           role="note"
-          className="mb-4 flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4 lg:hidden"
+          className="mb-4 flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4 lg:hidden"
         >
           <Monitor size={20} className="mt-0.5 shrink-0 text-stone-600" aria-hidden="true" />
           <div className="min-w-0 flex-1">

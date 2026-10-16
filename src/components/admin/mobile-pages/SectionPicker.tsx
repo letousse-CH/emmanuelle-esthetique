@@ -31,7 +31,7 @@ export default function SectionPicker({
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-label={`${label} : ${current?.label ?? ''}. Changer de rubrique`}
-        className="flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-left shadow-[0_1px_2px_rgba(28,25,23,0.04)] active:bg-stone-50"
+        className="flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-xl bg-stone-50 px-4 py-2.5 text-left active:bg-stone-50"
       >
         {Icon && (
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
@@ -47,7 +47,7 @@ export default function SectionPicker({
         </span>
       </button>
       <BottomSheet open={open} onClose={() => setOpen(false)} title={label} size="full">
-        <div role="list" aria-label={label} className="divide-y divide-stone-100 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+        <div role="list" aria-label={label} className="divide-y divide-stone-100 overflow-hidden rounded-xl bg-stone-50">
           {items.map((item) => {
             const I = item.icon;
             const on = item.id === active;

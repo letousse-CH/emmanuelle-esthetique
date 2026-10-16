@@ -14,7 +14,7 @@ export default function InstallCard({ className = '' }: { className?: string }) 
   if (!install.canPrompt && !install.isIOS) return null;
 
   return (
-    <div className={`flex items-start gap-3 rounded-2xl border border-accent/20 bg-accent-soft p-4 ${className}`}>
+    <div className={`flex items-start gap-3 rounded-xl border border-accent/20 bg-accent-soft p-4 ${className}`}>
       <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent text-accent-fg">
         <Download size={22} aria-hidden="true" />
       </span>

@@ -45,7 +45,7 @@ function ApparenceAccordion({
   };
 
   return (
-    <div className="border border-zinc-300 rounded-lg overflow-hidden shadow-2xs bg-white mb-3 transition-all">
+    <div className="border-zinc-300 rounded-lg overflow-hidden bg-stone-50 mb-3 transition-all">
       <button
         type="button"
         onClick={handleToggle}
@@ -108,7 +108,7 @@ function Segmented({
               onClick={() => onChange(option.value)}
               className={`flex items-center gap-1.5 rounded-[5px] border px-3 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${
                 active
-                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                  ? 'border-zinc-900 bg-zinc-900 text-white'
                   : 'border-zinc-300 text-zinc-800 bg-white hover:bg-zinc-100'
               }`}
             >
@@ -307,7 +307,7 @@ export function AnimationControls({
         />
       </div>
 
-      <p className="rounded-none border border-zinc-200 bg-white p-3 text-[11.5px] leading-relaxed text-zinc-500">
+      <p className="rounded-none border-zinc-200 bg-stone-50 p-3 text-[11.5px] leading-relaxed text-zinc-500">
         Les animations sont désactivées pour les visiteurs ayant configuré la réduction des mouvements dans leur système d'exploitation (norme WCAG/accessibilité).
       </p>
     </div>

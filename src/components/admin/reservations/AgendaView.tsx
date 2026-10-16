@@ -6,6 +6,7 @@ import type { AgendaData, Booking, BookingBlock, BookingPeriode, PlageHoraire } 
 import { ACTIVE_STATUSES, PERIODE_LABEL, minutesToTime, timeToMinutes } from '../../../types/booking';
 import { Button } from '../ui';
 import { useMediaQuery } from './hooks';
+import { isPersoBlock } from './PersoPanel';
 import {
   DEFAULT_COUPURE,
   addDays,
@@ -111,6 +112,7 @@ export default function AgendaView({
   onOpenBooking,
   onNewAt,
   onOpenBlocks,
+  onOpenPerso,
 }: {
   refreshKey: number;
   today: string;
@@ -119,6 +121,8 @@ export default function AgendaView({
   onOpenBooking: (id: string) => void;
   onNewAt: (date: string, heure: string | null) => void;
   onOpenBlocks: () => void;
+  /** Ouvre un rendez-vous perso (plage horaire nommée) pour le modifier. */
+  onOpenPerso: (block: BookingBlock) => void;
 }) {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [anchor, setAnchor] = useState(initialDate || today);
@@ -165,7 +169,7 @@ export default function AgendaView({
             type="button"
             onClick={() => setAnchor(addDays(anchor, -step))}
             aria-label={mode === 'semaine' ? 'Semaine précédente' : 'Jour précédent'}
-            className="grid size-12 place-items-center rounded-lg border border-stone-300 bg-white text-stone-900 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className="grid size-12 place-items-center rounded-lg bg-stone-50 text-stone-900 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <ChevronLeft size={20} />
           </button>
@@ -173,7 +177,7 @@ export default function AgendaView({
             type="button"
             onClick={() => setAnchor(addDays(anchor, step))}
             aria-label={mode === 'semaine' ? 'Semaine suivante' : 'Jour suivant'}
-            className="grid size-12 place-items-center rounded-lg border border-stone-300 bg-white text-stone-900 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className="grid size-12 place-items-center rounded-lg bg-stone-50 text-stone-900 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <ChevronRight size={20} />
           </button>
@@ -193,7 +197,7 @@ export default function AgendaView({
               aria-pressed={mode === m}
               onClick={() => setMode(m)}
               className={`h-10 rounded-md px-4 text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
-                mode === m ? 'bg-white font-semibold text-stone-950 shadow-xs ring-1 ring-stone-200' : 'font-medium text-stone-700'
+                mode === m ? 'bg-stone-900 font-semibold text-white' : 'font-medium text-stone-700'
               }`}
             >
               {m === 'jour' ? 'Jour' : 'Semaine'}
@@ -211,10 +215,13 @@ export default function AgendaView({
           <span className="inline-block h-3.5 w-5 rounded-sm border-2 border-dashed border-amber-600 bg-amber-50" aria-hidden="true" /> Demande à fixer
         </li>
         <li className="flex items-center gap-1.5">
-          <span className="inline-block h-3.5 w-5 rounded-sm border border-stone-400" style={HATCH} aria-hidden="true" /> Indisponible
+          <span className="inline-block h-3.5 w-5 rounded-sm border-l-[3px] border-warm-strong bg-warm-soft" aria-hidden="true" /> Rendez-vous perso
         </li>
         <li className="flex items-center gap-1.5">
-          <span className="inline-block h-3.5 w-5 rounded-sm border border-stone-300 bg-white" aria-hidden="true" /> Heures d’ouverture
+          <span className="inline-block h-3.5 w-5 rounded-sm border border-stone-400" style={HATCH} aria-hidden="true" /> Jour fermé
+        </li>
+        <li className="flex items-center gap-1.5">
+          <span className="inline-block h-3.5 w-5 rounded-sm bg-stone-50" aria-hidden="true" /> Heures d’ouverture
         </li>
         <li>
           <button type="button" onClick={onOpenBlocks} className="inline-flex min-h-8 items-center gap-1 font-semibold text-accent underline underline-offset-2 hover:no-underline">
@@ -230,9 +237,9 @@ export default function AgendaView({
       )}
 
       {data && (isDesktop && mode === 'semaine' ? (
-        <WeekGrid days={days} today={today} pas={pas} coupure={coupure} onOpenBooking={onOpenBooking} onNewAt={onNewAt} />
+        <WeekGrid days={days} today={today} pas={pas} coupure={coupure} onOpenBooking={onOpenBooking} onNewAt={onNewAt} onOpenPerso={onOpenPerso} />
       ) : (
-        <DayList days={days} today={today} onOpenBooking={onOpenBooking} onNewAt={onNewAt} />
+        <DayList days={days} today={today} onOpenBooking={onOpenBooking} onNewAt={onNewAt} onOpenPerso={onOpenPerso} />
       ))}
       {!data && loading && <p className="py-10 text-center text-[15px] text-stone-700">Chargement de l’agenda…</p>}
     </div>
@@ -248,6 +255,7 @@ function WeekGrid({
   coupure,
   onOpenBooking,
   onNewAt,
+  onOpenPerso,
 }: {
   days: DayModel[];
   today: string;
@@ -255,6 +263,7 @@ function WeekGrid({
   coupure: string;
   onOpenBooking: (id: string) => void;
   onNewAt: (date: string, heure: string | null) => void;
+  onOpenPerso: (block: BookingBlock) => void;
 }) {
   const [nowMin, setNowMin] = useState(() => nowMinutesZurich());
   useEffect(() => {
@@ -292,7 +301,7 @@ function WeekGrid({
   const y = (m: number) => (m - gridMin) * PX_PER_MIN;
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-stone-300 bg-white">
+    <div className="overflow-x-auto rounded-xl bg-stone-50">
       <div className="min-w-[56rem]">
         {/* En-têtes */}
         <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-stone-300 bg-stone-50">
@@ -314,7 +323,7 @@ function WeekGrid({
                   type="button"
                   onClick={() => onNewAt(d.date, null)}
                   aria-label={`Ajouter un rendez-vous le ${formatDateLong(d.date)}`}
-                  className="grid size-9 shrink-0 place-items-center rounded-lg border border-stone-300 bg-white text-stone-800 hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  className="grid size-9 shrink-0 place-items-center rounded-lg bg-stone-50 text-stone-800 hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 >
                   <Plus size={16} />
                 </button>
@@ -368,18 +377,35 @@ function WeekGrid({
                   <div key={m} className="pointer-events-none absolute inset-x-0 border-t border-stone-200" style={{ top: y(m) }} />
                 ))}
 
-                {/* Indisponibilités */}
+                {/* Jours fermés (hachurés) et rendez-vous perso (safran, cliquables) */}
                 {d.blocks.map((b) => {
-                  const partial = Boolean(b.heure_debut && b.heure_fin);
-                  const top = partial ? y(timeToMinutes(b.heure_debut as string)) : 0;
-                  const h = partial ? (timeToMinutes(b.heure_fin as string) - timeToMinutes(b.heure_debut as string)) * PX_PER_MIN : height;
+                  if (isPersoBlock(b)) {
+                    const top = y(timeToMinutes(b.heure_debut as string));
+                    const h = Math.max(22, (timeToMinutes(b.heure_fin as string) - timeToMinutes(b.heure_debut as string)) * PX_PER_MIN - 1);
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenPerso(b);
+                        }}
+                        aria-label={`Rendez-vous perso de ${b.heure_debut} à ${b.heure_fin} : ${b.motif || 'sans titre'}`}
+                        className="absolute inset-x-0.5 z-20 flex flex-col items-stretch justify-start overflow-hidden rounded-md border-l-[3px] border-warm-strong bg-warm-soft px-1.5 py-1 text-left text-[12px] leading-tight text-warm-ink shadow-xs hover:bg-warm-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warm-strong"
+                        style={{ top, height: h }}
+                      >
+                        <span className="block truncate font-bold">{b.heure_debut} {b.motif || 'Perso'}</span>
+                        {h >= 40 && <span className="block truncate opacity-80">jusqu’à {b.heure_fin}</span>}
+                      </button>
+                    );
+                  }
                   return (
                     <div
                       key={b.id}
                       className="pointer-events-none absolute inset-x-0 z-10 overflow-hidden border-y border-stone-400 px-1.5 py-1 text-[12px] font-semibold text-stone-900"
-                      style={{ ...HATCH, top, height: h }}
+                      style={{ ...HATCH, top: 0, height }}
                     >
-                      <span className="rounded bg-white/85 px-1">{b.motif || 'Indisponible'}</span>
+                      <span className="rounded bg-white/85 px-1">{b.motif || 'Fermé'}</span>
                     </div>
                   );
                 })}
@@ -464,11 +490,13 @@ function DayList({
   today,
   onOpenBooking,
   onNewAt,
+  onOpenPerso,
 }: {
   days: DayModel[];
   today: string;
   onOpenBooking: (id: string) => void;
   onNewAt: (date: string, heure: string | null) => void;
+  onOpenPerso: (block: BookingBlock) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -479,13 +507,13 @@ function DayList({
           <section
             key={d.date}
             aria-label={cap(formatDateLong(d.date))}
-            className={`overflow-hidden rounded-2xl border bg-white ${isToday ? 'border-accent' : 'border-stone-300'}`}
+            className={`overflow-hidden rounded-xl border bg-white ${isToday ? 'border-accent' : 'border-stone-100'}`}
           >
             <header className={`flex items-center justify-between gap-3 px-4 py-3 ${isToday ? 'bg-accent-soft' : 'bg-stone-50'}`}>
               <div className="min-w-0">
                 <h3 className="text-[16px] font-semibold text-stone-950">
                   {cap(formatDateLong(d.date))}
-                  {isToday && <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-accent-fg">Aujourd’hui</span>}
+                  {isToday && <span className="ml-2 bg-accent px-2 py-0.5 text-[11px] font-bold text-accent-fg rounded">Aujourd’hui</span>}
                 </h3>
                 <p className="text-[13.5px] text-stone-700">{hoursLabel(d)}</p>
               </div>
@@ -493,7 +521,7 @@ function DayList({
                 type="button"
                 onClick={() => onNewAt(d.date, null)}
                 aria-label={`Ajouter un rendez-vous le ${formatDateLong(d.date)}`}
-                className="grid size-11 shrink-0 place-items-center rounded-lg border border-stone-300 bg-white text-stone-900 hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                className="grid size-11 shrink-0 place-items-center rounded-lg bg-stone-50 text-stone-900 hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
                 <Plus size={19} />
               </button>
@@ -503,13 +531,31 @@ function DayList({
               <p className="px-4 py-3 text-[14px] text-stone-600">{d.plages.length ? 'Rien de prévu.' : 'Jour de fermeture.'}</p>
             ) : (
               <ul className="space-y-2 p-3">
-                {d.blocks.map((b) => (
-                  <li key={b.id} className="rounded-lg border border-stone-400 px-3 py-2 text-[14.5px] font-semibold text-stone-900" style={HATCH}>
-                    <span className="rounded bg-white/85 px-1.5 py-0.5">
-                      {b.heure_debut && b.heure_fin ? `${b.heure_debut} – ${b.heure_fin}` : 'Toute la journée'} · {b.motif || 'Indisponible'}
-                    </span>
-                  </li>
-                ))}
+                {d.blocks.map((b) =>
+                  isPersoBlock(b) ? (
+                    <li key={b.id}>
+                      <button
+                        type="button"
+                        onClick={() => onOpenPerso(b)}
+                        className="flex min-h-14 w-full items-center gap-3 rounded-lg border-l-4 border-warm-strong bg-warm-soft px-3 py-2 text-left text-warm-ink hover:bg-warm-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warm-strong"
+                      >
+                        <span className="w-14 shrink-0 text-[15px] font-bold leading-tight">
+                          {b.heure_debut}
+                          <span className="block text-[12px] font-medium opacity-80">{b.heure_fin}</span>
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[15.5px] font-semibold">{b.motif || 'Rendez-vous perso'}</span>
+                          <span className="block text-[13px] opacity-80">Perso</span>
+                        </span>
+                        <ChevronRight size={18} className="shrink-0" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ) : (
+                    <li key={b.id} className="rounded-lg border border-stone-400 px-3 py-2 text-[14.5px] font-semibold text-stone-900" style={HATCH}>
+                      <span className="rounded bg-white/85 px-1.5 py-0.5">Toute la journée · {b.motif || 'Fermé'}</span>
+                    </li>
+                  ),
+                )}
                 {(['matin', 'apres_midi'] as BookingPeriode[]).map((p) =>
                   d.soft[p].length === 0 ? null : (
                     <li key={p}>

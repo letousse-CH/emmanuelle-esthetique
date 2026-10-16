@@ -213,7 +213,7 @@ export default function BlocksSection({
   return (
     <div className="space-y-6">
       {isLg ? (
-        <form onSubmit={add} className="space-y-4 rounded-2xl border border-stone-300 bg-white p-4 sm:p-5">
+        <form onSubmit={add} className="space-y-4 rounded-xl bg-stone-50 p-4 sm:p-5">
           <h3 className="text-[17px] font-semibold text-stone-950">Je ne travaille pas le…</h3>
           {formFields}
           <Button type="submit" variant="primary" loading={busy} icon={CalendarOff} className="h-12 w-full sm:w-auto">
@@ -291,7 +291,7 @@ export default function BlocksSection({
           <EmptyState icon={CalendarOff} title="Aucune indisponibilité prévue" description="Ajoutez un jour de congé, des vacances ou une plage horaire ci-dessus." />
         )}
         {upcoming.length > 0 && (
-          <ul className="divide-y divide-stone-200 overflow-hidden rounded-2xl border border-stone-300 bg-white">
+          <ul className="zebra data-frame overflow-hidden rounded-xl">
             {upcoming.map((b) => (
               <li key={b.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">

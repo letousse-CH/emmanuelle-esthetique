@@ -205,7 +205,7 @@ export default function OfferEditor({ offer, initial, stats, onClose, onSaved }:
           {saveError && <Callout tone="danger">{saveError}</Callout>}
 
           {/* ── Image ─────────────────────────────────────────────────── */}
-          <section className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
+          <section className="bg-stone-50 rounded-xl p-5 space-y-3">
             <h2 className="text-[15px] font-semibold text-stone-900">Image</h2>
             <div className="relative aspect-square w-full max-w-xs overflow-hidden rounded-lg border border-dashed border-stone-300 bg-stone-100">
               {form.image_url ? (
@@ -235,7 +235,7 @@ export default function OfferEditor({ offer, initial, stats, onClose, onSaved }:
           </section>
 
           {/* ── Contenu ──────────────────────────────────────────────── */}
-          <section className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+          <section className="bg-stone-50 rounded-xl p-5 space-y-4">
             <h2 className="text-[15px] font-semibold text-stone-900">L’offre</h2>
             <Field label="Titre" htmlFor="of-titre" required error={errors.titre}>
               <Input
@@ -261,7 +261,7 @@ export default function OfferEditor({ offer, initial, stats, onClose, onSaved }:
           </section>
 
           {/* ── Conditions ───────────────────────────────────────────── */}
-          <section className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+          <section className="bg-stone-50 rounded-xl p-5 space-y-4">
             <h2 className="text-[15px] font-semibold text-stone-900">Période et conditions</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Du" htmlFor="of-debut" required error={errors.date_debut}>
@@ -304,7 +304,7 @@ export default function OfferEditor({ offer, initial, stats, onClose, onSaved }:
           </section>
 
           {/* ── Diffusion ────────────────────────────────────────────── */}
-          <section className="bg-white border border-stone-200 rounded-xl px-5 py-2 divide-y divide-stone-100">
+          <section className="bg-stone-50 rounded-xl px-5 py-2 divide-y divide-stone-100">
             <ToggleRow
               title="Réservable en ligne"
               description="La cliente peut choisir l’offre dans le formulaire de réservation. Sinon, le bouton du site mène à la page Contact."

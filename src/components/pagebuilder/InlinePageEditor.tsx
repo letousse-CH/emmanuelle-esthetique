@@ -146,7 +146,7 @@ export default function InlinePageEditor({ pageId, initialSections, onExit }: Pr
       </div>
 
       {/* Barre de Contrôle Front-End Flottante Lumineuse avec Sortie Automatique */}
-      <div className="fixed bottom-6 left-6 z-[9990] bg-zinc-900/95 text-white px-4 py-2 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.4)] border border-zinc-700/80 backdrop-blur-md flex items-center gap-3 select-none animate-in slide-in-from-bottom duration-300">
+      <div className="fixed bottom-6 left-6 z-[9990] bg-zinc-900/95 text-white px-4 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.4)] border border-zinc-700/80 backdrop-blur-md flex items-center gap-3 select-none animate-in slide-in-from-bottom duration-300">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -162,7 +162,7 @@ export default function InlinePageEditor({ pageId, initialSections, onExit }: Pr
           type="button"
           onClick={save}
           disabled={saveStatus === 'saving' || isExiting}
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-xs ${
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${
             dirty || saveStatus === 'error'
               ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_2px_10px_rgba(16,185,129,0.3)] hover:scale-105'
               : 'bg-white/10 hover:bg-white/20 text-zinc-200'
@@ -184,7 +184,7 @@ export default function InlinePageEditor({ pageId, initialSections, onExit }: Pr
               type="button"
               onClick={handleExitWithAutoSave}
               disabled={saveStatus === 'saving' || isExiting}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-[0_2px_10px_rgba(249,115,22,0.3)] hover:scale-105 disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white text-xs font-extrabold transition-all cursor-pointer shadow-[0_2px_10px_rgba(249,115,22,0.3)] hover:scale-105 disabled:opacity-50"
               title="Enregistre automatiquement toutes les modifications et quitte le mode édition"
             >
               {isExiting ? (
@@ -202,7 +202,7 @@ export default function InlinePageEditor({ pageId, initialSections, onExit }: Pr
         {/* Bouton Retour Admin */}
         <a
           href="/admin"
-          className="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white rounded-full text-xs font-bold transition-all hover:scale-105 cursor-pointer"
+          className="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white text-xs font-bold transition-all hover:scale-105 cursor-pointer"
           title="Retourner au tableau de bord d'administration"
         >
           <span>Admin</span>

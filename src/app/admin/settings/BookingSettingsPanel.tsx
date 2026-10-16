@@ -210,7 +210,7 @@ function BookingSettingsContent() {
   return (
     <div className="space-y-6 lg:space-y-12 animate-fadein">
       {/* L'offre du moment a sa propre page (dates, places, archives) : on y renvoie. */}
-      <section className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <section className="flex flex-col gap-3 rounded-xl bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="flex items-start gap-3">
           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent">
             <Sparkles size={16} />
@@ -231,7 +231,7 @@ function BookingSettingsContent() {
       {/* ═════════════════════════════════════════════════════════════════════
           SECTION 2 : GOOGLE AGENDA & NOTIFICATIONS SMARTPHONE
           ═════════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-6">
+      <section className="bg-stone-50 rounded-xl p-4 sm:p-8 space-y-6">
         <div className="space-y-1 border-b border-stone-100 pb-5">
           <div className="flex items-center gap-2">
             <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold">
@@ -413,7 +413,7 @@ function BookingSettingsContent() {
                   id="bs-pas"
                   value={settings.pas_creneau_minutes}
                   onChange={(e) => setSettings({ ...settings, pas_creneau_minutes: parseInt(e.target.value, 10) })}
-                  className="w-full sm:w-40 text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white"
+                  className="w-full sm:w-40 text-sm px-3.5 py-2.5 rounded-xl bg-stone-50"
                 >
                   {PAS_OPTIONS.map((m) => (
                     <option key={m} value={m}>
@@ -435,7 +435,7 @@ function BookingSettingsContent() {
                   type="time"
                   value={settings.heure_coupure_periode}
                   onChange={(e) => setSettings({ ...settings, heure_coupure_periode: e.target.value })}
-                  className="w-full sm:w-40 text-sm px-3.5 py-2.5 rounded-xl border border-stone-200 bg-white"
+                  className="w-full sm:w-40 text-sm px-3.5 py-2.5 rounded-xl bg-stone-50"
                 />
                 <p className="text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 font-light">
                   Sépare « matin » et « après-midi » dans les demandes des clientes.
@@ -457,7 +457,7 @@ function BookingSettingsContent() {
             <button
               type="submit"
               disabled={savingSettings}
-              className="inline-flex w-full lg:w-auto min-h-12 lg:min-h-0 items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-accent-fg hover:bg-accent-hover text-[15px] lg:text-xs font-semibold tracking-wide transition-all shadow-sm disabled:opacity-50"
+              className="inline-flex w-full lg:w-auto min-h-12 lg:min-h-0 items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-accent-fg hover:bg-accent-hover text-[15px] lg:text-xs font-semibold tracking-wide transition-all disabled:opacity-50"
             >
               {savingSettings ? (
                 <>
@@ -476,7 +476,7 @@ function BookingSettingsContent() {
       {/* ═════════════════════════════════════════════════════════════════════
           E-MAILS AUX CLIENTES (accusé, confirmation, rappel…)
           ═════════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-4">
+      <section className="bg-stone-50 rounded-xl p-4 sm:p-8 space-y-4">
         <div className="space-y-1 border-b border-stone-100 pb-5">
           <h2 className="text-xl font-bold text-stone-900">E-mails aux clientes</h2>
           <p className="text-[14px] sm:text-sm text-stone-600 sm:text-stone-500 font-light">
@@ -489,7 +489,7 @@ function BookingSettingsContent() {
       {/* ═════════════════════════════════════════════════════════════════════
           SECTION 3 : INDISPONIBILITÉS (congés, vacances, plages horaires)
           ═════════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-6">
+      <section className="bg-stone-50 rounded-xl p-4 sm:p-8 space-y-6">
         <div className="space-y-1 border-b border-stone-100 pb-5">
           <h2 className="text-xl font-bold text-stone-900">Congés et indisponibilités</h2>
           <p className="text-[14px] sm:text-sm text-stone-600 sm:text-stone-500 font-light">
@@ -502,7 +502,7 @@ function BookingSettingsContent() {
       {/* ═════════════════════════════════════════════════════════════════════
           SECTION 4 : RATTACHER LES RÉSERVATIONS À LA CLIENTÈLE
           ═════════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white rounded-2xl border border-stone-200 p-4 sm:p-8 shadow-xs space-y-4">
+      <section className="bg-stone-50 rounded-xl p-4 sm:p-8 space-y-4">
         <div className="space-y-1 border-b border-stone-100 pb-5">
           <h2 className="text-xl font-bold text-stone-900">Clientèle</h2>
         </div>

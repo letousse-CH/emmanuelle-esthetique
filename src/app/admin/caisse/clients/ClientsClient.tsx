@@ -219,33 +219,52 @@ export default function ClientsClient() {
         </ChipBar>
       </div>
 
-      <div className="hidden lg:flex flex-row gap-3">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-600" />
+      <div className="hidden lg:block space-y-3">
+        <div className="relative">
+          <Search size={17} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500" />
           <label htmlFor="clients-search" className="sr-only">Rechercher une cliente</label>
           <input
             id="clients-search"
-            type="text" value={search} onChange={e => setSearch(e.target.value)}
+            type="search" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Nom, prénom, téléphone ou e-mail…"
-            className="w-full pl-11 pr-4 py-2.5 border border-stone-200 bg-white rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
+            autoComplete="off"
+            className="h-12 w-full rounded-xl border border-stone-200 bg-white pl-11 pr-4 text-[15px] text-stone-900 placeholder:text-stone-500 outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15"
           />
         </div>
-        <button
-          onClick={() => setShowArchived(v => !v)}
-          aria-pressed={showArchived}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm border transition-colors cursor-pointer ${
-            showArchived ? 'border-accent bg-accent-soft text-accent font-semibold' : 'border-stone-200 bg-white text-stone-700 hover:text-stone-900'
-          }`}
-        >
-          <Archive size={14} /> {showArchived ? 'Archivées incluses' : 'Voir les archivées'}
-        </button>
+        <div role="group" aria-label="Filtrer les clientes" className="flex flex-wrap items-center gap-1.5">
+          {CLIENT_FILTERS.map(f => {
+            const active = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                aria-pressed={active}
+                className={`inline-flex h-9 items-center gap-1.5 border px-3.5 text-[13.5px] font-medium transition-colors cursor-pointer ${
+                  active ? 'border-stone-900 bg-accent text-white' : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+                }`}
+              >
+                {f.icon && <f.icon size={14} aria-hidden="true" />}{f.label}
+              </button>
+            );
+          })}
+          <span className="mx-1 h-5 w-px bg-stone-200" aria-hidden="true" />
+          <button
+            onClick={() => setShowArchived(v => !v)}
+            aria-pressed={showArchived}
+            className={`inline-flex h-9 items-center gap-1.5 border px-3.5 text-[13.5px] font-medium transition-colors cursor-pointer ${
+              showArchived ? 'border-stone-900 bg-accent text-white' : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+            }`}
+          >
+            <Archive size={14} aria-hidden="true" /> Archivées
+          </button>
+        </div>
       </div>
 
       {/* Téléphone : une carte par cliente */}
       <div className="lg:hidden">
         {loading ? (
           <div className="space-y-3" aria-busy="true">
-            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-[92px] rounded-2xl" />)}
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-[92px] rounded-xl" />)}
           </div>
         ) : filtered.length === 0 ? (
           <EmptyState
@@ -272,7 +291,7 @@ export default function ClientsClient() {
         <div className="h-20" aria-hidden="true" />
       </div>
 
-      <div className="hidden lg:block bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <div className="data-frame hidden lg:block overflow-hidden rounded-xl">
         {loading ? (
           <div className="flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
             <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
@@ -291,57 +310,70 @@ export default function ClientsClient() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-[14px]">
                 <thead>
-                  <tr className="border-b border-stone-200 bg-stone-50/50">
-                    {['Cliente', 'Contact', 'Dernière visite', 'Accords'].map(h => (
-                      <th key={h} className="px-6 py-3.5 text-[13px] font-semibold text-stone-700 text-left">{h}</th>
-                    ))}
-                    <th className="px-6 py-3.5" />
+                  <tr className="border-b border-stone-200 bg-stone-50 text-left text-[12.5px] font-semibold text-stone-500">
+                    <th className="py-2.5 pl-5 pr-3">Cliente</th>
+                    <th className="px-3 py-2.5">Dernière venue</th>
+                    <th className="px-3 py-2.5 text-right">Visites</th>
+                    <th className="px-3 py-2.5 text-right">Encaissé</th>
+                    <th className="px-3 py-2.5">Accords</th>
+                    <th className="py-2.5 pl-3 pr-5" />
                   </tr>
                 </thead>
-                <tbody>
-                  {filtered.map(c => (
-                    <tr key={c.id} className={`border-b border-stone-50 hover:bg-stone-50/50 transition-colors group ${c.archived ? 'opacity-50' : ''}`}>
-                      <td className="px-6 py-4 font-medium text-stone-900">
-                        <button
-                          onClick={() => setDetail(c)}
-                          title="Ouvrir la fiche"
-                          className="text-left hover:underline underline-offset-2 cursor-pointer"
-                        >
-                          {clientFullName(c)}
-                        </button>
-                        {c.archived && <span className="ml-2 text-[12px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-full">Archivée</span>}
-                      </td>
-                      <td className="px-6 py-4 text-stone-600 text-xs">
-                        {c.telephone && <span className="block whitespace-nowrap">{c.telephone}</span>}
-                        {c.email && <span className="block truncate max-w-[13rem]">{c.email}</span>}
-                        {!c.telephone && !c.email && <span className="text-stone-600">—</span>}
-                      </td>
-                      <td className="px-6 py-4 text-stone-600 text-xs whitespace-nowrap tabular-nums">
-                        {stats.get(c.id)?.derniere_visite
-                          ? <>
-                              {dateCH(stats.get(c.id)!.derniere_visite)}
-                              <span className="block text-stone-600">
-                                {stats.get(c.id)!.nb_visites} visite{Number(stats.get(c.id)!.nb_visites) > 1 ? 's' : ''}
-                                {' · '}{formatCHF(stats.get(c.id)!.total_encaisse)}
+                <tbody className="zebra">
+                  {filtered.map(c => {
+                    const st = stats.get(c.id);
+                    const initials = clientFullName(c).split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase();
+                    return (
+                      <tr
+                        key={c.id}
+                        onClick={() => setDetail(c)}
+                        className={`group cursor-pointer transition-colors hover:bg-row-hover ${c.archived ? 'opacity-50' : ''}`}
+                      >
+                        <td className="py-3 pl-5 pr-3">
+                          <div className="flex items-center gap-3">
+                            <span className={`grid size-9 shrink-0 place-items-center rounded-full text-[12.5px] font-semibold ${st?.nb_visites ? 'bg-warm-soft text-warm-ink ring-1 ring-warm-muted' : 'bg-stone-900 text-stone-500 text-white'}`} aria-hidden="true">
+                              {initials}
+                            </span>
+                            <div className="min-w-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDetail(c); }}
+                                className="block truncate text-left text-[14.5px] font-semibold text-stone-950 hover:underline underline-offset-2 cursor-pointer"
+                              >
+                                {clientFullName(c)}
+                              </button>
+                              <span className="block truncate text-[12.5px] text-stone-500">
+                                {[c.telephone, c.email].filter(Boolean).join(' · ') || 'Pas de coordonnées'}
                               </span>
+                            </div>
+                            {c.archived && <span className="shrink-0 bg-stone-100 px-2 py-0.5 text-[11.5px] font-semibold text-stone-600 rounded">Archivée</span>}
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 tabular-nums">
+                          {st?.derniere_visite ? (
+                            <>
+                              <span className="block text-stone-800">{depuis(st.derniere_visite)}</span>
+                              <span className="block text-[12.5px] text-stone-500">{dateCH(st.derniere_visite)}</span>
                             </>
-                          : <span className="text-stone-600">Jamais venue</span>}
-                      </td>
-                      <td className="px-6 py-4">
-                        <ConsentBadges client={c} />
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <RowActions
-                          client={c} busy={busyId === c.id}
-                          onEdit={() => setEditing(c)}
-                          onDelete={() => handleDelete(c)}
-                          onUnarchive={() => handleUnarchive(c)}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                          ) : <span className="text-stone-400">Jamais venue</span>}
+                        </td>
+                        <td className="px-3 py-3 text-right text-stone-700 tabular-nums">{st?.nb_visites ? Number(st.nb_visites) : <span className="text-stone-400">—</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right font-medium text-stone-950 tabular-nums">
+                          {st?.nb_visites ? formatCHF(st.total_encaisse) : <span className="font-normal text-stone-400">—</span>}
+                        </td>
+                        <td className="px-3 py-3"><ConsentBadges client={c} /></td>
+                        <td className="whitespace-nowrap py-3 pl-3 pr-5 text-right" onClick={(e) => e.stopPropagation()}>
+                          <RowActions
+                            client={c} busy={busyId === c.id}
+                            onEdit={() => setEditing(c)}
+                            onDelete={() => handleDelete(c)}
+                            onUnarchive={() => handleUnarchive(c)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -378,6 +410,19 @@ export default function ClientsClient() {
 }
 
 type ClientFilter = 'toutes' | 'revenir' | 'email' | 'whatsapp' | 'anniv';
+/** « Aujourd'hui », « Hier », « il y a 3 jours », « il y a 2 semaines », « il y a 5 mois ». */
+function depuis(iso: string): string {
+  const jour = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const n = Math.round((jour(new Date()) - jour(new Date(iso))) / 86400000);
+  if (n <= 0) return 'Aujourd’hui';
+  if (n === 1) return 'Hier';
+  if (n < 14) return `Il y a ${n} jours`;
+  if (n < 60) return `Il y a ${Math.round(n / 7)} semaines`;
+  if (n < 365) return `Il y a ${Math.round(n / 30)} mois`;
+  const ans = Math.floor(n / 365);
+  return `Il y a ${ans} an${ans > 1 ? 's' : ''}`;
+}
+
 const CLIENT_FILTERS: { id: ClientFilter; label: string; icon?: React.ElementType }[] = [
   { id: 'toutes', label: 'Toutes' },
   { id: 'revenir', label: 'À relancer' },
@@ -406,10 +451,10 @@ export function ClientCard({ client, stat, busy, onOpen, onUnarchive }: {
   const visites = Number(stat?.nb_visites ?? 0);
   const roundBtn = 'grid size-11 shrink-0 place-items-center rounded-full bg-stone-100 text-stone-800 active:bg-stone-200';
   return (
-    <div className={`flex items-center rounded-2xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)] ${client.archived ? 'opacity-70' : ''}`}>
+    <div className={`flex items-center rounded-xl bg-stone-50 ${client.archived ? 'opacity-70' : ''}`}>
       <button
         type="button" onClick={onOpen} aria-label={`Ouvrir la fiche de ${clientFullName(client)}`}
-        className="flex min-h-[84px] min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left cursor-pointer active:bg-stone-50 rounded-l-2xl"
+        className="flex min-h-[84px] min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left cursor-pointer active:bg-stone-50 rounded-l-xl"
       >
         <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-accent-soft text-[15px] font-semibold text-accent">
           {initiales(client)}
@@ -417,7 +462,7 @@ export function ClientCard({ client, stat, busy, onOpen, onUnarchive }: {
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <span className="truncate text-[16px] font-semibold leading-snug text-stone-950">{clientFullName(client) || 'Sans nom'}</span>
-            {client.archived && <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[12px] font-semibold text-stone-700">Archivée</span>}
+            {client.archived && <span className="shrink-0 bg-stone-100 px-2 py-0.5 text-[12px] font-semibold text-stone-700 rounded">Archivée</span>}
           </span>
           <span className="mt-0.5 block truncate text-[14px] text-stone-600">
             {stat?.derniere_visite ? `Dernière visite : ${dateCH(stat.derniere_visite)}` : 'Jamais venue'}
@@ -451,13 +496,13 @@ export function ClientCard({ client, stat, busy, onOpen, onUnarchive }: {
  *  entre ou non dans une audience de promotion. */
 function ConsentBadges({ client }: { client: Client }) {
   if (!client.consent_email && !client.consent_whatsapp) {
-    return <span className="text-[13px] text-stone-600">Aucun</span>;
+    return <span className="text-[13px] text-stone-400">—</span>;
   }
   return (
     <span className="inline-flex items-center gap-1">
       {client.consent_email && (
         <span
-          className="inline-flex items-center gap-1 text-[12px] font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded"
+          className="inline-flex items-center gap-1 bg-stone-100 px-2 py-0.5 text-[12px] font-medium text-stone-700 rounded"
           title="Accepte les offres par e-mail"
         >
           <Mail size={11} /> E-mail
@@ -465,7 +510,7 @@ function ConsentBadges({ client }: { client: Client }) {
       )}
       {client.consent_whatsapp && (
         <span
-          className="inline-flex items-center gap-1 text-[12px] font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded"
+          className="inline-flex items-center gap-1 bg-stone-100 px-2 py-0.5 text-[12px] font-medium text-stone-700 rounded"
           title="Accepte les offres par WhatsApp"
         >
           <MessageCircle size={11} /> WhatsApp
@@ -653,7 +698,7 @@ function ClientDialog({ client, onClose, onSaved, onDelete }: {
                     Supprimer cette fiche ? Si elle figure sur une facture, elle sera archivée (conservation comptable de 10 ans).
                   </p>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => setConfirmDelete(false)} className="min-h-11 flex-1 rounded-lg bg-white border border-stone-300 text-[15px] font-semibold text-stone-800 cursor-pointer">Garder</button>
+                    <button type="button" onClick={() => setConfirmDelete(false)} className="min-h-11 flex-1 rounded-lg bg-stone-50 text-[15px] font-semibold text-stone-800 cursor-pointer">Garder</button>
                     <button type="button" onClick={onDelete} className="min-h-11 flex-1 rounded-lg bg-red-600 text-[15px] font-semibold text-white cursor-pointer">Supprimer</button>
                   </div>
                 </div>

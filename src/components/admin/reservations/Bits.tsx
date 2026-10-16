@@ -9,7 +9,7 @@ import { STATUS_STYLE, telHref, waHref } from './lib';
 export function StatusPill({ statut }: { statut: BookingStatus }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[12.5px] font-semibold ${STATUS_STYLE[statut]}`}
+      className={`inline-flex items-center border px-2.5 py-0.5 text-[12.5px] font-semibold ${STATUS_STYLE[statut]}`}
     >
       {STATUT_LABEL[statut]}
     </span>
@@ -20,20 +20,20 @@ export function StatusPill({ statut }: { statut: BookingStatus }) {
 export function ClientBadge({ clientId, visites }: { clientId: string | null; visites: number }) {
   if (!clientId) {
     return (
-      <span className="inline-flex items-center rounded-full border border-stone-300 bg-stone-50 px-2.5 py-0.5 text-[12.5px] font-medium text-stone-700">
+      <span className="inline-flex items-center border border-stone-300 bg-stone-50 px-2.5 py-0.5 text-[12.5px] font-medium text-stone-700 rounded">
         Pas encore dans la clientèle
       </span>
     );
   }
   if (visites > 0) {
     return (
-      <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-emerald-900">
+      <span className="inline-flex items-center border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-emerald-900 rounded">
         Cliente connue ({visites} visite{visites > 1 ? 's' : ''})
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full border border-sky-300 bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-sky-900">
+    <span className="inline-flex items-center border border-sky-300 bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-sky-900 rounded">
       Nouvelle cliente
     </span>
   );

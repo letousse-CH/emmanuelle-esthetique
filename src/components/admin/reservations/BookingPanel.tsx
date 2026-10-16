@@ -462,7 +462,7 @@ export default function BookingPanel({
             </Field>
           </div>
 
-          <div className="rounded-xl border border-stone-300 bg-white p-4">
+          <div className="rounded-xl bg-stone-50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="flex items-center gap-2 text-[15px] font-semibold text-stone-950">
                 <UserRound size={17} aria-hidden="true" /> Fiche cliente
@@ -626,7 +626,7 @@ export default function BookingPanel({
             </label>
             <Textarea id={notesId} rows={3} value={draft.notes} onChange={(e) => set({ notes: e.target.value })} className="text-[16px]" placeholder="Ex. : préfère les rendez-vous tôt, peau sensible…" />
           </div>
-          <div className="rounded-xl border border-stone-300 bg-white p-3">
+          <div className="rounded-xl bg-stone-50 p-3">
             <label htmlFor={notifyId} className={`flex min-h-11 items-center gap-3 text-[15px] font-semibold ${hasEmail ? 'cursor-pointer text-stone-950' : 'cursor-not-allowed text-stone-500'}`}>
               <input
                 id={notifyId}

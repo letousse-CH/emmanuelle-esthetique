@@ -98,7 +98,7 @@ export default function WeeklyHoursEditor({
         </Button>
       </div>
 
-      <ul className="divide-y divide-stone-200 overflow-hidden rounded-xl border border-stone-300 bg-white">
+      <ul className="zebra data-frame overflow-hidden rounded-xl">
         {DAYS.map((d) => {
           const c = value[d.key];
           const err = errors[d.key];

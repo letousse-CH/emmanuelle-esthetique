@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { useSettings } from '../../../../hooks/useSettings';
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
-import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
+import { Button, Callout } from '../../../../components/admin/ui';
+import { ORPHAN_COLOR, categoryColor } from '../../../../components/admin/categoryColors';
 import {
   createService, createServiceCategory, deleteService, deleteServiceCategory,
   listAllForfaitItems, listServiceCategories, listServices, setForfaitItems,
@@ -154,19 +155,21 @@ export default function PrestationsClient() {
     <div className="space-y-6">
       <CaisseCatalogNav />
 
-      <PageHeader
-        title="Prestations"
-        description="Les soins et forfaits proposés sur l'écran d'encaissement, rangés par catégorie. Les prix sont TTC."
-        actions={
-          <div className="flex flex-wrap justify-end gap-2 max-w-[calc(100vw-2rem)]">
-            <Button icon={FolderCog} onClick={() => setShowCategories(true)}>Catégories</Button>
-            <Button icon={Layers} onClick={() => setEditing({ service: null, type: 'forfait' })}>Ajouter un forfait</Button>
-            <Button variant="primary" icon={Plus} onClick={() => setEditing({ service: null, type: 'prestation' })}>
-              Ajouter une prestation
-            </Button>
-          </div>
-        }
-      />
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
+          <h1 className="sr-only text-[30px] font-semibold leading-tight tracking-tight text-stone-950 lg:not-sr-only">Prestations</h1>
+          <p className="mt-1 text-[15px] text-stone-600">
+            Les soins et forfaits de l’écran d’encaissement, rangés par catégorie. Prix TTC.
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2 max-w-[calc(100vw-2rem)]">
+          <Button variant="ghost" icon={FolderCog} onClick={() => setShowCategories(true)}>Catégories</Button>
+          <Button icon={Layers} onClick={() => setEditing({ service: null, type: 'forfait' })}>Forfait</Button>
+          <Button variant="primary" icon={Plus} onClick={() => setEditing({ service: null, type: 'prestation' })}>
+            Prestation
+          </Button>
+        </div>
+      </header>
 
       {error && (
         <Callout
@@ -178,11 +181,11 @@ export default function PrestationsClient() {
       )}
 
       {loading ? (
-        <div className="bg-white border border-stone-200 rounded-xl flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
+        <div className="bg-stone-50 rounded-xl flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
           <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
         </div>
       ) : services.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-10 text-center space-y-3">
+        <div className="bg-stone-50 rounded-xl p-10 text-center space-y-3">
           <p className="text-sm text-stone-700">Le catalogue est vide.</p>
           <p className="text-stone-600 text-[13px] max-w-md mx-auto">
             Ajoutez les soins que vous proposez : ils apparaîtront en un clic sur l&apos;
@@ -194,29 +197,52 @@ export default function PrestationsClient() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="grid items-start gap-8 xl:grid-cols-[13rem_minmax(0,1fr)]">
+          {/* Sommaire : saute à une catégorie */}
+          <nav aria-label="Catégories" className="hidden xl:block sticky top-24">
+            <ul className="space-y-0.5">
+              {groups.map(group => (
+                <li key={group.id ?? 'orphans'}>
+                  <a
+                    href={`#cat-${group.id ?? 'orphans'}`}
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[14px] font-medium text-stone-700 transition-colors hover:bg-stone-100 hover:text-stone-950"
+                  >
+                    <span className="size-2 shrink-0 rounded-full" style={{ background: group.id ? categoryColor(categories, group.id) : ORPHAN_COLOR }} aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate">{group.nom}</span>
+                    <span className="text-[12.5px] text-stone-400 tabular-nums">{group.items.length}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+        <div className="min-w-0 space-y-8">
           {groups.map(group => (
-            <section key={group.id ?? 'orphans'} className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-stone-200 flex items-center justify-between bg-stone-50/50">
-                <h2 className="text-[13px] font-medium text-stone-800">{group.nom}</h2>
-                <span className="text-[12.5px] text-stone-600 tabular-nums">
+            <section key={group.id ?? 'orphans'} id={`cat-${group.id ?? 'orphans'}`} className="scroll-mt-24 space-y-2.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-stone-950">
+                  <span className="size-2.5 rounded-full" style={{ background: group.id ? categoryColor(categories, group.id) : ORPHAN_COLOR }} aria-hidden="true" />
+                  {group.nom}
+                </h2>
+                <span className="text-[13px] text-stone-500 tabular-nums">
                   {group.items.length} {group.items.length > 1 ? 'entrées' : 'entrée'}
                 </span>
               </div>
+              <div className="data-frame overflow-hidden rounded-xl">
 
               {group.items.length === 0 ? (
-                <p className="px-5 py-6 text-center text-stone-600 text-[13px]">
+                <p className="px-5 py-6 text-center text-stone-500 text-[13.5px]">
                   Aucune prestation dans cette catégorie.
                 </p>
               ) : (
-                <ul className="divide-y divide-stone-50">
+                <ul className="zebra">
                   {group.items.map((s, i) => {
                     const items = compositions.get(s.id) ?? [];
                     const economie = s.type === 'forfait' ? forfaitEconomie(Number(s.prix_chf), items) : 0;
                     return (
                       <li
                         key={s.id}
-                        className={`flex items-center gap-3 px-5 py-4 hover:bg-stone-50/50 transition-colors ${!s.active ? 'bg-stone-50/60' : ''}`}
+                        className={`flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-row-hover ${!s.active ? 'opacity-60' : ''}`}
                       >
                         <div className="flex flex-col shrink-0">
                           <button
@@ -236,14 +262,14 @@ export default function PrestationsClient() {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-stone-900 flex items-center gap-2 flex-wrap">
+                          <p className="flex flex-wrap items-center gap-2 text-[14.5px] font-semibold text-stone-950">
                             <span className="truncate">{s.nom}</span>
                             {s.type === 'forfait' && (
-                              <span className="text-[12px] font-medium text-stone-700 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <span className="text-[12px] font-medium text-stone-700 bg-stone-100 border border-stone-200 px-2 py-0.5 inline-flex items-center gap-1 rounded">
                                 <Layers size={11} /> Forfait
                               </span>
                             )}
-                            {!s.active && <span className="text-[12px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-full">Masquée</span>}
+                            {!s.active && <span className="text-[11.5px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded">Masquée en caisse</span>}
                           </p>
                           {s.type === 'forfait' ? (
                             <p className="truncate text-[12.5px] text-stone-600">
@@ -255,7 +281,7 @@ export default function PrestationsClient() {
                               )}
                             </p>
                           ) : (
-                            s.description && <p className="truncate text-[12.5px] text-stone-600">{s.description}</p>
+                            s.description && <p className="truncate text-[13px] text-stone-500">{s.description}</p>
                           )}
                         </div>
 
@@ -264,7 +290,7 @@ export default function PrestationsClient() {
                             TVA {Number(s.taux_tva_defaut)} %
                           </span>
                         )}
-                        <span className="text-sm font-medium text-stone-900 tabular-nums shrink-0">{formatCHF(s.prix_chf)}</span>
+                        <span className="w-28 shrink-0 text-right text-[15px] font-semibold text-stone-950 tabular-nums">{formatCHF(s.prix_chf)}</span>
 
                         <div className="flex items-center gap-1 shrink-0">
                           {busyId === s.id ? (
@@ -301,8 +327,10 @@ export default function PrestationsClient() {
                   })}
                 </ul>
               )}
+              </div>
             </section>
           ))}
+        </div>
         </div>
       )}
 
@@ -466,7 +494,7 @@ function ServiceDialog({
           </div>
 
           {isForfait && (
-            <div className="rounded-xl border border-stone-200 p-3.5 space-y-3 bg-stone-50/40">
+            <div className="rounded-xl border border-stone-200 p-3.5 space-y-3 bg-stone-50">
               <div>
                 <p className="text-[13px] font-medium text-stone-700 mb-1">Composition *</p>
                 <p className="text-[12px] text-stone-600 leading-relaxed mb-2">
@@ -478,7 +506,7 @@ function ServiceDialog({
               {parts.length > 0 && (
                 <ul className="space-y-1.5">
                   {partsDetail.map((it, i) => (
-                    <li key={`${it.service_id}-${i}`} className="flex items-center gap-2 bg-white border border-stone-200 rounded-lg px-2.5 py-1.5">
+                    <li key={`${it.service_id}-${i}`} className="flex items-center gap-2 bg-stone-50 rounded-lg px-2.5 py-1.5">
                       <span className="flex-1 min-w-0 text-xs text-stone-700 truncate">{it.service?.nom ?? 'Prestation supprimée'}</span>
                       <label className="sr-only" htmlFor={`part-qte-${i}`}>Quantité</label>
                       <input

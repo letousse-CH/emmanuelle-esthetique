@@ -4,32 +4,29 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../services/supabase';
 import Link from 'next/link';
 import {
-  Eye,
-  FileText,
-  Mail,
-  Layers,
+  Files,
+  PenLine,
+  UsersRound,
   ArrowUpRight,
-  ArrowRight,
+  ArrowDownRight,
   CreditCard,
-  Send,
-  CalendarDays,
+  CalendarPlus,
   Phone,
   MessageCircle,
   Check,
-  X,
-  Clock,
-  Sparkles,
   AlertTriangle,
   CheckCircle2,
-  CalendarCheck,
   ChevronRight,
+  RefreshCw,
 } from 'lucide-react';
 import { useModuleFlags } from '../../hooks/useModuleFlags';
 import AdminOnboardingWizard from '../../components/admin/AdminOnboardingWizard';
 import MobileHome from '../../components/admin/mobile/home/MobileHome';
-
-interface DayCount { date: string; count: number }
-interface PageStat  { page: string; count: number }
+import { loadMoney } from '../../components/admin/mobile/home/homeData';
+import type { MoneyData } from '../../components/admin/mobile/home/homeTypes';
+import { dayOfMonth, firstOfPreviousMonth } from '../../components/admin/mobile/home/zurich';
+import { formatCHF } from '../../types/caisse';
+import { AnimatedNumber } from '../../components/admin/ui';
 
 interface DashboardBooking {
   id: string;
@@ -50,37 +47,117 @@ interface DashboardBooking {
   notes_cliente?: string | null;
 }
 
-const PAGE_LABELS: Record<string, string> = {
-  '/':                    'Accueil',
-  '/about':               'Mon Approche',
-  '/blog':                'Blog',
-  '/contact':             'Contact',
-  '/reservation':         'Réservation en ligne',
-  '/seance-individuelle': 'Séance individuelle',
-  '/programme-complet':   'Programme complet',
-  '/mentions-legales':    'Mentions légales',
-};
+function fmt(n: number) { return n.toLocaleString('fr-CH'); }
 
-function label(page: string) {
-  if (PAGE_LABELS[page]) return PAGE_LABELS[page];
-  if (page.startsWith('/blog/')) return `Article : ${page.replace('/blog/', '')}`;
-  return page;
+const salesLabel = (n: number) => (n > 0 ? `${n} encaissement${n > 1 ? 's' : ''}` : 'Aucun encaissement');
+
+/** Nom du mois d'une date `YYYY-MM-DD` (« septembre »), sans effet du fuseau. */
+function monthName(dateStr: string) {
+  const [y, m] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('fr-CH', { month: 'long', timeZone: 'UTC' });
 }
 
-function fmt(n: number) { return n.toLocaleString('fr-FR'); }
+/**
+ * Chiffres clés : la recette encaissée du mois (en tête), de la semaine et du
+ * jour. Même calcul que l'accueil mobile (`loadMoney` → `recetteEncaissee`) :
+ * un soin réglé par bon cadeau ne compte pas une seconde fois.
+ */
+function KeyFigures({ today }: { today: string }) {
+  const [money, setMoney] = useState<MoneyData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = React.useCallback(() => {
+    setError(null);
+    loadMoney(today).then(setMoney, (e) => setError(e instanceof Error ? e.message : 'Chargement impossible.'));
+  }, [today]);
+
+  useEffect(() => {
+    load();
+    // Une vente encaissée dans un autre onglet : les chiffres suivent au retour.
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [load]);
+
+  const prevStart = firstOfPreviousMonth(today);
+  const delta = money && money.prevMonthToDate > 0
+    ? ((money.month - money.prevMonthToDate) / money.prevMonthToDate) * 100
+    : null;
+  const deltaShown = delta === null ? null : Math.round(delta);
+
+  const skeleton = (cls: string) => <span className={`inline-block rounded-md animate-pulse align-middle ${cls}`} />;
+
+  return (
+    <section aria-labelledby="figures-title" className="space-y-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-4">
+        <h2 id="figures-title" className="text-[17px] font-semibold tracking-tight text-stone-950">Chiffre d’affaires</h2>
+        <Link href="/admin/caisse/journal" className="text-[13.5px] font-semibold text-accent hover:underline underline-offset-4 inline-flex items-center gap-1">
+          Journal des ventes <ChevronRight size={14} />
+        </Link>
+      </div>
+
+      {error ? (
+        <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50/70 px-4 py-3 text-[14px] text-red-900">
+          <AlertTriangle size={16} className="shrink-0 text-red-600" />
+          <p className="flex-1">{error}</p>
+          <button type="button" onClick={load} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-red-200 bg-white text-[13px] font-medium text-red-800 hover:bg-red-50 cursor-pointer">
+            <RefreshCw size={13} /> Réessayer
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Le mois : la carte qui compte */}
+          <Link
+            href="/admin/caisse/journal"
+            className="md:col-span-2 rounded-xl bg-growth p-7 transition-[filter] hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2"
+          >
+            <p className="text-[15px] font-medium text-white first-letter:uppercase">{monthName(today)} · ce mois-ci</p>
+            <p className="mt-2 text-[44px] font-semibold leading-none tracking-tight text-white tabular-nums">
+              {money ? <AnimatedNumber value={money.month} format={formatCHF} /> : skeleton('h-11 w-56 bg-white/30')}
+            </p>
+            <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px] text-white">
+              <span>{money ? salesLabel(money.monthCount) : '…'}</span>
+              {deltaShown !== null && (
+                <span className={`inline-flex items-center gap-1 font-semibold text-white`}>
+                  {deltaShown >= 0 ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />}
+                  {deltaShown >= 0 ? '+' : '−'}{Math.abs(deltaShown)} %
+                  <span className="font-normal text-white/90">
+                    vs 1–{dayOfMonth(today)} {monthName(prevStart)}
+                  </span>
+                </span>
+              )}
+            </p>
+          </Link>
+
+          {[
+            { label: 'Cette semaine', hint: ' depuis lundi', amount: money?.week, count: money?.weekCount },
+            { label: 'Aujourd’hui', hint: '', amount: money?.today, count: money?.todayCount },
+          ].map((f) => (
+            <Link
+              key={f.label}
+              href="/admin/caisse/journal"
+              className="rounded-xl bg-stone-50 p-6 transition-colors hover:border-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2"
+            >
+              <p className="text-[15px] font-medium text-stone-600">{f.label}</p>
+              <p className="mt-2 text-[28px] font-semibold leading-tight tracking-tight text-stone-950 tabular-nums">
+                {f.amount !== undefined ? <AnimatedNumber value={f.amount} format={formatCHF} /> : skeleton('h-8 w-32 bg-stone-100')}
+              </p>
+              <p className="mt-3 text-[14px] text-stone-600">{f.count !== undefined ? `${salesLabel(f.count)}${f.hint}` : '…'}</p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 function DesktopDashboard() {
   const [loading, setLoading]         = useState(true);
-  const [today, setToday]             = useState(0);
-  const [week, setWeek]               = useState(0);
-  const [month, setMonth]             = useState(0);
-  const [subscribers, setSubscribers] = useState(0);
   const [articles, setArticles]       = useState(0);
   const [pageCount, setPageCount]     = useState(0);
   const [hasBusinessInfo, setHasBusinessInfo] = useState(false);
   const [siteName, setSiteName]       = useState('');
-  const [days, setDays]               = useState<DayCount[]>([]);
-  const [topPages, setTopPages]       = useState<PageStat[]>([]);
+  const [firstName, setFirstName]     = useState('');
 
   // ── Réservations du jour & demandes en attente ──
   const [todayBookings, setTodayBookings]     = useState<DashboardBooking[]>([]);
@@ -161,365 +238,241 @@ function DesktopDashboard() {
   const load = async () => {
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        setLoading(false);
-        return;
-      }
-      const res = await fetch('/api/admin-stats', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setToday(json.today ?? 0);
-      setWeek(json.week ?? 0);
-      setMonth(json.month ?? 0);
-      setSubscribers(json.subscribers ?? 0);
-      setArticles(json.articles ?? 0);
-      setDays(json.days ?? []);
-      setTopPages(json.topPages ?? []);
-
-      // Récupération du nombre de pages dynamiques et des réglages
-      const { count: pagesTotal } = await supabase.from('dynamic_pages').select('id', { count: 'exact', head: true });
+      const [{ count: pagesTotal }, { count: articlesTotal }, { data: bizSettings }] = await Promise.all([
+        supabase.from('dynamic_pages').select('id', { count: 'exact', head: true }),
+        supabase.from('articles').select('id', { count: 'exact', head: true }).eq('published', true),
+        supabase.from('settings').select('key, value').in('key', ['business_name', 'business_email', 'business_phone', 'business_owner']),
+      ]);
       setPageCount(pagesTotal ?? 0);
-
-      const { data: bizSettings } = await supabase.from('settings').select('key, value').in('key', ['business_name', 'business_email', 'business_phone']);
+      setArticles(articlesTotal ?? 0);
       if (bizSettings && bizSettings.length > 0) {
         const nameSetting = bizSettings.find(s => s.key === 'business_name')?.value;
         const emailSetting = bizSettings.find(s => s.key === 'business_email')?.value;
         if (nameSetting) setSiteName(nameSetting);
         if (nameSetting || emailSetting) setHasBusinessInfo(true);
+        // « Bonjour Emmanuelle » : le prénom de la gérante, s'il est renseigné (onglet Entreprise).
+        const owner = String(bizSettings.find(s => s.key === 'business_owner')?.value ?? '').trim();
+        if (owner) setFirstName(owner.split(/\s+/)[0]);
       }
     } catch (err) {
-      console.error('[Dashboard] Erreur chargement stats:', err);
+      console.error('[Dashboard] Erreur chargement:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const maxDay = Math.max(...days.map(d => d.count), 1);
   const now = new Date();
   const greeting = now.getHours() < 18 ? 'Bonjour' : 'Bonsoir';
   const dateLabel = now.toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  // Les actions du quotidien, dans l'ordre où on s'en sert.
-  const actions = [
-    {
-      label: 'Réservations',
-      text: pendingBookings.length > 0 ? `${pendingBookings.length} demande${pendingBookings.length > 1 ? 's' : ''} en attente` : `${todayBookings.length} rdv aujourd’hui`,
-      href: '/admin/reservations',
-      icon: CalendarDays,
-    },
-    ...(flags.caisse ? [{ label: 'Encaisser', text: 'Nouvelle vente ou prestation', href: '/admin/caisse', icon: CreditCard }] : []),
-    { label: 'Modifier une page', text: `${fmt(pageCount)} page${pageCount > 1 ? 's' : ''} sur le site`, href: '/admin/pages', icon: Layers },
-    ...(flags.blog ? [{ label: 'Rédiger un article', text: `${fmt(articles)} publié${articles > 1 ? 's' : ''}`, href: '/admin/blog/new', icon: FileText }] : []),
+  // Raccourcis : ce qui ne mérite pas une carte, mais qu'on veut sous la main.
+  const shortcuts = [
+    { label: 'Modifier une page', hint: loading ? '…' : `${fmt(pageCount)} page${pageCount > 1 ? 's' : ''}`, href: '/admin/pages', icon: Files },
+    ...(flags.blog ? [{ label: 'Rédiger un article', hint: loading ? '…' : `${fmt(articles)} publié${articles > 1 ? 's' : ''}`, href: '/admin/blog/new', icon: PenLine }] : []),
+    ...(flags.caisse ? [{ label: 'Fiche cliente', hint: 'Créer ou retrouver', href: '/admin/caisse/clients', icon: UsersRound }] : []),
+    { label: 'Voir le site', hint: 'Nouvel onglet', href: '/', icon: ArrowUpRight, external: true },
   ];
 
-  const stats = [
-    { label: "Visites aujourd'hui", value: today },
-    { label: '7 derniers jours', value: week },
-    { label: 'Ce mois-ci', value: month },
-    { label: 'Abonnés actifs', value: subscribers },
-    ...(flags.blog ? [{ label: 'Articles publiés', value: articles }] : []),
-  ];
+  const cleanPhone = (t: string) => t.replace(/[^\d]/g, '');
+  const iconBtn = 'grid size-9 shrink-0 place-items-center rounded-lg text-stone-500 transition-colors hover:bg-white hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
 
   return (
-    <div className="space-y-10 animate-fadein">
+    <div className="mx-auto w-full max-w-6xl space-y-12">
       {/* En-tête */}
       <header className="flex flex-wrap items-end justify-between gap-6">
         <div>
-          <p className="text-[14px] font-medium text-stone-600 first-letter:uppercase">{dateLabel}</p>
-          <h1 className="mt-1 text-[32px] font-semibold tracking-tight text-stone-950 leading-tight">
-            {greeting}
+          <p className="text-[14px] font-medium text-stone-500 first-letter:uppercase">{dateLabel}</p>
+          <h1 className="mt-1 text-[34px] font-semibold leading-tight tracking-tight text-stone-950">
+            {greeting}{firstName ? ` ${firstName}` : ''}
           </h1>
-          <p className="mt-2 text-[16px] text-stone-700">Voici l’essentiel d’Emmanuelle Esthétique aujourd’hui.</p>
+          <p className="mt-1.5 text-[16px] text-stone-600">
+            {bookingsLoading
+              ? 'Voici l’essentiel de la journée.'
+              : todayBookings.length === 0 && pendingBookings.length === 0
+                ? 'Journée calme : aucun rendez-vous ni demande en attente.'
+                : [
+                    todayBookings.length > 0 && `${todayBookings.length} rendez-vous aujourd’hui`,
+                    pendingBookings.length > 0 && `${pendingBookings.length} demande${pendingBookings.length > 1 ? 's' : ''} à confirmer`,
+                  ].filter(Boolean).join(' · ') + '.'}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Link
-            href="/admin/reservations"
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-stone-900 text-[14px] font-semibold text-white hover:bg-stone-800 transition-colors shadow-xs"
+            href="/admin/reservations?nouveau=1"
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-stone-100 px-4 text-[14px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
-            <CalendarCheck size={16} /> Planning complet
+            <CalendarPlus size={16} /> Rendez-vous
           </Link>
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener"
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-stone-100 text-[14px] font-semibold text-stone-900 hover:bg-stone-200 transition-colors"
-          >
-            Voir le site <ArrowUpRight size={16} />
-          </a>
+          {flags.caisse && (
+            <Link
+              href="/admin/caisse"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-accent px-4 text-[14px] font-semibold text-accent-fg transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2"
+            >
+              <CreditCard size={16} /> Encaisser
+            </Link>
+          )}
         </div>
       </header>
 
-      {/* ── SECTION PRIORITAIRE : RENDEZ-VOUS DU JOUR & DEMANDES EN ATTENTE ── */}
-      <section aria-labelledby="reservations-priority-title" className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <h2 id="reservations-priority-title" className="text-xl font-bold tracking-tight text-stone-950">
-              Activité Cabine & Réservations
+      {/* Chiffres clés : le chiffre d'affaires, le mois d'abord */}
+      {flags.caisse && <KeyFigures today={todayStr} />}
+
+      {/* Aujourd'hui et demandes : deux listes simples, pas de cartes dans des cartes */}
+      <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <section aria-labelledby="today-title" className="space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="today-title" className="text-[17px] font-semibold tracking-tight text-stone-950">
+              Rendez-vous du jour
+              {!bookingsLoading && <span className="ml-2 text-[14px] font-normal text-stone-500">{todayBookings.length}</span>}
             </h2>
-            {pendingBookings.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-white animate-pulse">
-                <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                {pendingBookings.length} demande{pendingBookings.length > 1 ? 's' : ''} à confirmer
-              </span>
-            )}
+            <Link href="/admin/reservations?vue=jour" className="inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent underline-offset-4 hover:underline">
+              Agenda <ChevronRight size={14} />
+            </Link>
           </div>
-          <Link
-            href="/admin/reservations"
-            className="text-xs font-semibold text-accent hover:underline inline-flex items-center gap-1"
-          >
-            Gérer toutes les réservations <ChevronRight size={14} />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* CARTE 1 : RENDEZ-VOUS DU JOUR */}
-          <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-                    <Clock size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-stone-900">Rendez-vous du jour</h3>
-                    <p className="text-xs text-stone-500 capitalize">{dateLabel}</p>
-                  </div>
-                </div>
-                <span className="text-xs font-semibold text-stone-600 bg-stone-100 px-2.5 py-1 rounded-full">
-                  {todayBookings.length} rdv prévu{todayBookings.length > 1 ? 's' : ''}
-                </span>
+          <div className="data-frame overflow-hidden rounded-xl">
+            {bookingsLoading ? (
+              <div className="space-y-px">
+                {[0, 1].map((i) => <div key={i} className="h-16 animate-pulse bg-stone-50" />)}
               </div>
-
-              {bookingsLoading ? (
-                <div className="py-8 text-center text-xs text-stone-400">Chargement de votre planning...</div>
-              ) : todayBookings.length === 0 ? (
-                <div className="py-8 text-center space-y-1">
-                  <p className="text-sm font-medium text-stone-700">Aucun rendez-vous prévu aujourd'hui</p>
-                  <p className="text-xs text-stone-400 font-light">Votre cabine est libre pour des soins impromptus ou la préparation des produits.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {todayBookings.map((b) => {
-                    const cleanPhone = b.telephone.replace(/[^\d]/g, '');
-                    const timeLabel = b.horaire_fixe === false ? (b.periode === 'apres_midi' ? 'Après-midi' : 'Matin') : b.heure_rdv;
-                    const waMsg = encodeURIComponent(
-                      b.horaire_fixe === false
-                        ? `Bonjour ${b.prenom}, c'est Emmanuelle au sujet de votre demande de rendez-vous aujourd'hui (${timeLabel.toLowerCase()}).`
-                        : `Bonjour ${b.prenom}, c'est Emmanuelle au sujet de votre rendez-vous aujourd'hui à ${b.heure_rdv}.`,
-                    );
-                    return (
-                      <div
-                        key={b.id}
-                        className="p-3.5 rounded-xl border border-stone-100 bg-stone-50/70 hover:bg-stone-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-bold bg-accent text-accent-fg px-2 py-0.5 rounded">
-                              {timeLabel}
-                            </span>
-                            <span className="text-sm font-semibold text-stone-900">
-                              {b.prenom} {b.nom}
-                            </span>
-                            <span className="text-xs text-stone-500">
-                              (CHF {b.service_prix_chf})
-                            </span>
-                          </div>
-                          <p className="text-xs text-stone-600 font-light">
-                            {b.service_nom} · {b.service_duree_minutes} min
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <a
-                            href={`tel:${b.telephone.replace(/\s+/g, '')}`}
-                            className="p-2 rounded-lg bg-white border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs transition-colors"
-                            title="Appeler"
-                          >
-                            <Phone size={14} />
-                          </a>
-                          <a
-                            href={`https://wa.me/${cleanPhone}?text=${waMsg}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 rounded-lg bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-colors"
-                            title="WhatsApp"
-                          >
-                            <MessageCircle size={14} />
-                          </a>
-                          {b.statut === 'confirme' && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateBookingStatus(b.id, 'termine')}
-                              className="px-2.5 py-1.5 rounded-lg bg-stone-900 text-white text-xs font-medium hover:bg-stone-800 transition-colors"
-                            >
-                              Terminer
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* CARTE 2 : DEMANDES DE RÉSERVATION À CONFIRMER */}
-          <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
-                    <AlertTriangle size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-stone-900">Demandes à confirmer</h3>
-                    <p className="text-xs text-stone-500">Clientes ayant réservé en ligne</p>
-                  </div>
-                </div>
-                {pendingBookings.length > 0 && (
-                  <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-full">
-                    {pendingBookings.length} en attente
-                  </span>
-                )}
-              </div>
-
-              {bookingsLoading ? (
-                <div className="py-8 text-center text-xs text-stone-400">Vérification des demandes...</div>
-              ) : pendingBookings.length === 0 ? (
-                <div className="py-8 text-center space-y-1">
-                  <CheckCircle2 size={24} className="mx-auto text-emerald-500" />
-                  <p className="text-sm font-medium text-stone-700">Aucune demande en attente</p>
-                  <p className="text-xs text-stone-400 font-light">Toutes les réservations en ligne ont été confirmées.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pendingBookings.slice(0, 3).map((b) => {
-                    const cleanPhone = b.telephone.replace(/[^\d]/g, '');
-                    const formattedDateShort = new Date(`${b.date_rdv}T12:00:00`).toLocaleDateString('fr-CH', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    });
-                    const periodLabel = b.horaire_fixe === false ? (b.periode === 'apres_midi' ? 'l’après-midi' : 'le matin') : null;
-                    const waMsg = encodeURIComponent(
-                      periodLabel
-                        ? `Bonjour ${b.prenom}, c'est Emmanuelle d'Emmanuelle Esthétique au sujet de votre demande de rdv pour le ${formattedDateShort}, ${periodLabel}.`
-                        : `Bonjour ${b.prenom}, c'est Emmanuelle d'Emmanuelle Esthétique au sujet de votre demande de rdv pour le ${formattedDateShort} à ${b.heure_rdv}.`,
-                    );
-
-                    return (
-                      <div
-                        key={b.id}
-                        className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-stone-900 capitalize">
-                              {formattedDateShort} {periodLabel ? `· ${periodLabel === 'le matin' ? 'matin' : 'après-midi'}` : `à ${b.heure_rdv}`}
-                            </span>
-                            <span className="text-sm font-semibold text-stone-900">
-                              {b.prenom} {b.nom}
-                            </span>
-                          </div>
-                          <p className="text-xs text-stone-600">
-                            {b.service_nom} · CHF {b.service_prix_chf}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <a
-                            href={`tel:${b.telephone.replace(/\s+/g, '')}`}
-                            className="p-2 rounded-lg bg-white border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs"
-                            title="Appeler"
-                          >
-                            <Phone size={14} />
-                          </a>
-                          <a
-                            href={`https://wa.me/${cleanPhone}?text=${waMsg}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 rounded-lg bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20"
-                            title="WhatsApp"
-                          >
-                            <MessageCircle size={14} />
-                          </a>
-                          <Link
-                            href={`/admin/reservations?id=${b.id}`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors"
-                            title="Appeler la cliente, fixer l'horaire et confirmer"
-                          >
-                            <Check size={14} /> Traiter
-                          </Link>
+            ) : todayBookings.length === 0 ? (
+              <p className="px-5 py-8 text-center text-[14.5px] text-stone-500">Aucun rendez-vous aujourd’hui.</p>
+            ) : (
+              <ul className="zebra">
+                {todayBookings.map((b) => {
+                  const soft = b.horaire_fixe === false;
+                  const timeLabel = soft ? (b.periode === 'apres_midi' ? 'Après-midi' : 'Matin') : b.heure_rdv;
+                  const waMsg = encodeURIComponent(
+                    soft
+                      ? `Bonjour ${b.prenom}, c'est Emmanuelle au sujet de votre demande de rendez-vous aujourd'hui (${timeLabel.toLowerCase()}).`
+                      : `Bonjour ${b.prenom}, c'est Emmanuelle au sujet de votre rendez-vous aujourd'hui à ${b.heure_rdv}.`,
+                  );
+                  const done = b.statut === 'termine';
+                  return (
+                    <li key={b.id} className={`flex items-center gap-4 px-4 py-3 transition-colors hover:bg-row-hover ${done ? 'opacity-55' : ''}`}>
+                      <span className={`w-[4.5rem] shrink-0 tabular-nums ${soft ? 'text-[13px] font-semibold text-warm-ink' : 'text-[16px] font-semibold text-stone-950'}`}>
+                        {timeLabel}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14.5px] font-semibold text-stone-950">{b.prenom} {b.nom}</span>
+                        <span className="block truncate text-[13px] text-stone-500">{b.service_nom} · {b.service_duree_minutes} min</span>
+                      </span>
+                      <span className="hidden shrink-0 text-[14px] font-medium text-stone-700 tabular-nums sm:block">{formatCHF(b.service_prix_chf)}</span>
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <a href={`tel:${b.telephone.replace(/\s+/g, '')}`} className={iconBtn} title="Appeler" aria-label={`Appeler ${b.prenom}`}>
+                          <Phone size={15} />
+                        </a>
+                        <a href={`https://wa.me/${cleanPhone(b.telephone)}?text=${waMsg}`} target="_blank" rel="noopener noreferrer" className={iconBtn} title="WhatsApp" aria-label={`Écrire à ${b.prenom} sur WhatsApp`}>
+                          <MessageCircle size={15} />
+                        </a>
+                        {b.statut === 'confirme' && (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (confirm(`Refuser/annuler la demande de ${b.prenom} ${b.nom} ?`)) {
-                                handleUpdateBookingStatus(b.id, 'annule');
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
-                            title="Replanifier ou annuler"
+                            onClick={() => handleUpdateBookingStatus(b.id, 'termine')}
+                            className="ml-1 h-8 rounded-lg bg-accent px-3 text-[12.5px] font-semibold text-accent-fg transition-colors hover:bg-accent-hover cursor-pointer"
                           >
-                            <X size={14} />
+                            Terminer
                           </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {pendingBookings.length > 3 && (
-                    <Link
-                      href="/admin/reservations"
-                      className="block text-center text-xs font-semibold text-accent hover:underline py-1"
-                    >
-                      + {pendingBookings.length - 3} autre(s) demande(s) à confirmer
-                    </Link>
-                  )}
-                </div>
-              )}
-            </div>
+                        )}
+                        {done && <span className="ml-1 inline-flex items-center gap-1 text-[12.5px] font-medium text-emerald-700"><Check size={14} /> Terminé</span>}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Actions principales */}
-      <section aria-labelledby="actions-title">
-        <h2 id="actions-title" className="sr-only">Actions principales</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4">
-          {actions.map((a, i) => (
-            <Link
-              key={a.href}
-              href={a.href}
-              className={`group flex items-center gap-4 rounded-xl p-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 ${
-                i === 0
-                  ? 'bg-accent text-accent-fg hover:bg-accent-hover'
-                  : 'bg-white border border-stone-200 hover:border-stone-400'
-              }`}
-            >
-              <span
-                className={`grid size-11 shrink-0 place-items-center rounded-lg ${
-                  i === 0 ? 'bg-white/15' : 'bg-accent-soft text-accent'
-                }`}
-              >
-                <a.icon size={20} strokeWidth={1.75} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className={`block text-[16px] font-semibold ${i === 0 ? '' : 'text-stone-950'}`}>{a.label}</span>
-                <span className={`block truncate text-[14px] ${i === 0 ? 'opacity-85' : 'text-stone-600'}`}>
-                  {loading && i !== 0 ? '…' : a.text}
-                </span>
-              </span>
-              <ArrowRight
-                size={18}
-                className={`shrink-0 transition-transform group-hover:translate-x-0.5 ${i === 0 ? 'opacity-80' : 'text-stone-500 group-hover:text-stone-900'}`}
-              />
+        <section aria-labelledby="pending-title" className="space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="pending-title" className="flex items-center gap-2 text-[17px] font-semibold tracking-tight text-stone-950">
+              À confirmer
+              {pendingBookings.length > 0 && (
+                <span className="bg-warm px-2 py-0.5 text-[12.5px] font-bold text-warm-ink tabular-nums rounded">{pendingBookings.length}</span>
+              )}
+            </h2>
+            <Link href="/admin/reservations?vue=a-traiter" className="inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent underline-offset-4 hover:underline">
+              Tout traiter <ChevronRight size={14} />
             </Link>
-          ))}
-        </div>
-      </section>
+          </div>
+          <div className="data-frame overflow-hidden rounded-xl">
+            {bookingsLoading ? (
+              <div className="space-y-px">
+                {[0, 1].map((i) => <div key={i} className="h-16 animate-pulse bg-stone-50" />)}
+              </div>
+            ) : pendingBookings.length === 0 ? (
+              <p className="flex items-center justify-center gap-2 px-5 py-8 text-[14.5px] text-stone-500">
+                <CheckCircle2 size={17} className="text-emerald-600" /> Aucune demande en attente.
+              </p>
+            ) : (
+              <ul className="zebra">
+                {pendingBookings.slice(0, 5).map((b) => {
+                  const when = new Date(`${b.date_rdv}T12:00:00`).toLocaleDateString('fr-CH', { weekday: 'short', day: 'numeric', month: 'short' });
+                  const periodLabel = b.horaire_fixe === false ? (b.periode === 'apres_midi' ? 'après-midi' : 'matin') : null;
+                  const waMsg = encodeURIComponent(
+                    periodLabel
+                      ? `Bonjour ${b.prenom}, c'est Emmanuelle d'Emmanuelle Esthétique au sujet de votre demande de rdv pour le ${when}, ${periodLabel === 'matin' ? 'le matin' : 'l’après-midi'}.`
+                      : `Bonjour ${b.prenom}, c'est Emmanuelle d'Emmanuelle Esthétique au sujet de votre demande de rdv pour le ${when} à ${b.heure_rdv}.`,
+                  );
+                  return (
+                    <li key={b.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-row-hover">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14.5px] font-semibold text-stone-950">{b.prenom} {b.nom}</span>
+                        <span className="block truncate text-[13px] text-stone-500">
+                          <span className="font-medium capitalize text-warm-ink">{when} · {periodLabel ?? b.heure_rdv}</span> · {b.service_nom}
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <a href={`tel:${b.telephone.replace(/\s+/g, '')}`} className={iconBtn} title="Appeler" aria-label={`Appeler ${b.prenom}`}>
+                          <Phone size={15} />
+                        </a>
+                        <a href={`https://wa.me/${cleanPhone(b.telephone)}?text=${waMsg}`} target="_blank" rel="noopener noreferrer" className={iconBtn} title="WhatsApp" aria-label={`Écrire à ${b.prenom} sur WhatsApp`}>
+                          <MessageCircle size={15} />
+                        </a>
+                        <Link
+                          href={`/admin/reservations?id=${b.id}`}
+                          title="Appeler la cliente, fixer l'horaire et confirmer"
+                          className="ml-1 inline-flex h-8 items-center rounded-lg bg-accent px-3 text-[12.5px] font-semibold text-accent-fg transition-colors hover:bg-accent-hover"
+                        >
+                          Traiter
+                        </Link>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {pendingBookings.length > 5 && (
+              <Link href="/admin/reservations?vue=a-traiter" className="block border-t border-stone-100 px-4 py-2.5 text-center text-[13.5px] font-semibold text-accent hover:bg-stone-50">
+                + {pendingBookings.length - 5} autre{pendingBookings.length - 5 > 1 ? 's' : ''} demande{pendingBookings.length - 5 > 1 ? 's' : ''}
+              </Link>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* Raccourcis */}
+      <nav aria-label="Raccourcis" className="flex flex-wrap gap-x-8 gap-y-3">
+        {shortcuts.map((a) => {
+          const inner = (
+            <>
+              <span className="grid size-9 place-items-center rounded-lg bg-stone-100 text-stone-700 transition-colors group-hover:bg-warm-soft group-hover:text-warm-ink">
+                <a.icon size={17} />
+              </span>
+              <span>
+                <span className="block text-[14.5px] font-semibold text-stone-900">{a.label}</span>
+                <span className="block text-[12.5px] text-stone-500">{a.hint}</span>
+              </span>
+            </>
+          );
+          const cls = 'group flex items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
+          return 'external' in a && a.external ? (
+            <a key={a.href} href={a.href} target="_blank" rel="noopener" className={cls}>{inner}</a>
+          ) : (
+            <Link key={a.href} href={a.href} className={cls}>{inner}</Link>
+          );
+        })}
+      </nav>
 
       <AdminOnboardingWizard
         hasBusinessInfo={hasBusinessInfo}
@@ -527,103 +480,6 @@ function DesktopDashboard() {
         articleCount={articles}
         siteName={siteName}
       />
-
-      {/* Chiffres clés */}
-      <section aria-labelledby="stats-title">
-        <h2 id="stats-title" className="text-[18px] font-semibold text-stone-950 mb-4">Activité</h2>
-        <dl className="flex flex-wrap gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-100">
-          {stats.map((s) => (
-            <div key={s.label} className="flex-1 basis-40 bg-white px-6 py-5">
-              <dt className="text-[14px] font-medium text-stone-600">{s.label}</dt>
-              <dd className="mt-1.5 text-[30px] font-semibold tracking-tight text-stone-950 tabular-nums">
-                {loading ? <span className="inline-block h-8 w-16 rounded-md bg-stone-100 animate-pulse align-middle" /> : fmt(s.value)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      {/* Fréquentation et pages vues */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <section className="xl:col-span-2 rounded-xl border border-stone-200 bg-white p-6 sm:p-8">
-          <div className="flex items-baseline justify-between gap-4 mb-8">
-            <h2 className="text-[18px] font-semibold text-stone-950">Fréquentation sur 7 jours</h2>
-            {week > 0 && <p className="text-[14px] text-stone-600 tabular-nums">{fmt(week)} visites</p>}
-          </div>
-
-          {loading ? (
-            <div className="h-56 flex items-end gap-4">
-              {[...Array(7)].map((_, i) => (
-                <div key={i} className="flex-1 bg-stone-100 rounded-md animate-pulse" style={{ height: `${30 + i * 8}%` }} />
-              ))}
-            </div>
-          ) : week === 0 ? (
-            <div className="h-56 grid place-items-center text-center">
-              <div>
-                <Eye size={24} strokeWidth={1.5} className="mx-auto text-stone-400" />
-                <p className="mt-2 text-[14px] text-stone-600">Aucune visite enregistrée pour l’instant.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-end gap-3 sm:gap-5 h-56">
-              {days.map((d, i) => {
-                const h = Math.max((d.count / maxDay) * 100, d.count > 0 ? 4 : 0);
-                const isLast = i === days.length - 1;
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                    <span className="text-[12px] font-medium text-stone-700 tabular-nums opacity-0 group-hover:opacity-100 transition-opacity">
-                      {d.count}
-                    </span>
-                    <div
-                      className={`w-full max-w-14 rounded-md transition-colors ${isLast ? 'bg-accent' : 'bg-accent/15 group-hover:bg-accent/30'}`}
-                      style={{ height: `${h}%` }}
-                      title={`${d.date} : ${d.count} visite${d.count > 1 ? 's' : ''}`}
-                    />
-                    <span className="text-[13px] font-medium text-stone-600 whitespace-nowrap">{d.date}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-xl border border-stone-200 bg-white p-6 sm:p-8">
-          <div className="flex items-baseline justify-between gap-4 mb-6">
-            <h2 className="text-[18px] font-semibold text-stone-950">Pages les plus vues</h2>
-            <Link href="/admin/analytics" className="text-[14px] font-semibold text-accent hover:underline underline-offset-4">Détails</Link>
-          </div>
-
-          {loading ? (
-            <div className="space-y-5">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="h-3 bg-stone-100 rounded animate-pulse w-3/4" />
-                  <div className="h-1.5 bg-stone-100 rounded-full animate-pulse" style={{ width: `${70 - i * 10}%` }} />
-                </div>
-              ))}
-            </div>
-          ) : topPages.length === 0 ? (
-            <p className="text-[14px] text-stone-600 py-8 text-center">Aucune donnée ce mois-ci.</p>
-          ) : (
-            <ul className="space-y-5">
-              {topPages.map((p, i) => {
-                const pct = Math.round((p.count / (topPages[0]?.count || 1)) * 100);
-                return (
-                  <li key={i}>
-                    <div className="flex items-baseline justify-between gap-3 mb-2 text-[14px]">
-                      <span className="text-stone-900 font-medium truncate">{label(p.page)}</span>
-                      <span className="font-medium text-stone-900 tabular-nums">{fmt(p.count)}</span>
-                    </div>
-                    <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-accent/70 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-      </div>
     </div>
   );
 }

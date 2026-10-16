@@ -58,14 +58,14 @@ function ColorField({ field, value, onChange }: { field: FieldDef; value: string
           const active = current.toLowerCase() === s.value.toLowerCase();
           return (
             <button key={s.label} type="button" title={s.label} aria-label={s.label} aria-pressed={active} onClick={() => pick(s.value)}
-              className={`h-8 w-8 rounded-full border shadow-sm transition ${active ? 'ring-2 ring-sky-500 ring-offset-2' : 'border-stone-300 hover:scale-105'}`}
+              className={`h-8 w-8 rounded-full border transition ${active ? 'ring-2 ring-sky-500 ring-offset-2' : 'border-stone-300 hover:scale-105'}`}
               style={{ background: s.value || 'linear-gradient(135deg, #FAF7F2 50%, #e7dfd2 50%)' }} />
           );
         })}
       </div>
       <div className="flex items-center gap-2">
         <input type="color" aria-label="Choisir une autre couleur" value={valid(current) ? current : '#faf7f2'}
-          onChange={(e) => pick(e.target.value)} className="h-9 w-11 cursor-pointer rounded border border-stone-200 bg-white p-0.5" />
+          onChange={(e) => pick(e.target.value)} className="h-9 w-11 cursor-pointer rounded bg-stone-50 p-0.5" />
         <input className={input} value={hex} placeholder="Par défaut (crème)" maxLength={7}
           onChange={(e) => { const x = e.target.value.trim(); setHex(x); if (x === '' || valid(x)) onChange(x); }} />
       </div>
@@ -106,7 +106,7 @@ function ListField({ field, value, onChange, showStyle }: { field: FieldDef; val
   return (
     <div className="space-y-1.5">
       {list.map((it, i) => (
-        <div key={(it.id as string) ?? i} className="rounded-lg border border-stone-200 bg-stone-50/60">
+        <div key={(it.id as string) ?? i} className="rounded-lg border border-stone-200 bg-stone-50">
           <div className="flex items-center gap-1 px-2 py-1.5">
             <button type="button" onClick={() => setOpenIdx(openIdx === i ? null : i)} className="min-w-0 flex-1 truncate text-left text-xs font-semibold text-stone-700">
               {title(it, i)}

@@ -76,7 +76,7 @@ export function CategoryTile({ label, sub, photo, icon, onClick, className = '' 
     <button
       type="button" onClick={onClick}
       style={{ background: '#292524' }}
-      className={`relative flex min-h-[132px] flex-col items-start justify-end gap-0.5 overflow-hidden rounded-2xl border border-stone-200 p-3.5 text-left shadow-[0_1px_2px_rgba(28,25,23,0.06)] cursor-pointer transition-transform duration-150 active:scale-[0.97] ${className}`}
+      className={`relative flex min-h-[132px] flex-col items-start justify-end gap-0.5 overflow-hidden rounded-xl border border-stone-200 p-3.5 text-left cursor-pointer transition-transform duration-150 active:scale-[0.97] ${className}`}
     >
       {photo ? (
         // eslint-disable-next-line @next/next/no-img-element

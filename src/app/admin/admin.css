@@ -79,6 +79,108 @@
   }
 }
 
+/* ── Trois gris, pas un de plus (2026-10-16) ─────────────────────────────────
+   Dans tout l'admin, les gris de fond se réduisent à trois valeurs chaudes :
+     stone-50  · gris 1 : aplats (panneaux, barre latérale, lignes paires)
+     stone-100 · gris 2 : survol, élément pressé, piste des sélecteurs
+     stone-200 · gris 3 : filets, quand un filet est indispensable
+   On redéfinit les variables de la palette plutôt que de toucher des centaines
+   de classes : `bg-stone-50` donne le même gris partout. Posé sur la racine
+   (`:root:has(.admin-shell)`) pour atteindre aussi les fenêtres rendues hors
+   de l'admin (portails). L'aperçu des pages (`.pb-page`) garde la palette du site. */
+:root:has(.admin-shell) {
+  --color-stone-50: #F5F5F2;
+  --color-stone-100: #EBEAE6;
+  --color-stone-200: #DEDCD6;
+}
+:root:has(.admin-shell) .pb-page {
+  --color-stone-50: oklch(98.5% 0.001 106.423);
+  --color-stone-100: oklch(97% 0.001 106.424);
+  --color-stone-200: oklch(92.3% 0.003 48.717);
+}
+
+/* ── Palette harmonisée (2026-10-16) ─────────────────────────────────────────
+   Cinq familles apparentées, au lieu d'une douzaine de teintes Tailwind qui se
+   concurrençaient (deux oranges, deux bleus, trois verts, du violet, du noir) :
+     marine  — actions et sélection ; reprend la couleur du site (accent)
+     safran  — ce qu'on regarde : chiffres clés, attention, à fixer (ex-« amber »)
+     lagon   — réussite, payé, dans la cible (ex-« emerald »), vert d'eau marin
+     brique  — erreur, rupture, annulation (ex-« red »/« rose »), rouge terre
+     neutres — trois gris (voir plus haut) et l'encre « stone »
+   Les classes existantes (`bg-amber-50`, `text-emerald-700`…) prennent ces
+   valeurs automatiquement : on remappe les variables, pas des centaines de
+   classes. `sky`, `blue`, `violet` et `purple` rejoignent le marine. L'aperçu
+   des pages (`.pb-page`) retrouve plus bas la palette Tailwind d'origine. */
+:root:has(.admin-shell) {
+  --color-amber-50: #FCF5E8; --color-amber-100: #F9E9CC; --color-amber-200: #F3D6A3; --color-amber-300: #EEC077; --color-amber-400: #EBA43F; --color-amber-500: #DD9030; --color-amber-600: #C27820; --color-amber-700: #9A5D1A; --color-amber-800: #774816; --color-amber-900: #5A3712; --color-amber-950: #36210A;
+  --color-emerald-50: #EEF6F4; --color-emerald-100: #D6EBE6; --color-emerald-200: #ADD6CD; --color-emerald-300: #7FBDB0; --color-emerald-400: #4FA192; --color-emerald-500: #2E8676; --color-emerald-600: #226E61; --color-emerald-700: #1B5950; --color-emerald-800: #164740; --color-emerald-900: #113731; --color-emerald-950: #09221E;
+  --color-sky-50: #EFF3F7; --color-sky-100: #DDE5EE; --color-sky-200: #BBCADB; --color-sky-300: #93A9C1; --color-sky-400: #6D87A4; --color-sky-500: #4F6B89; --color-sky-600: #3B566F; --color-sky-700: #2B4764; --color-sky-800: #1F364C; --color-sky-900: #14283B; --color-sky-950: #0B1825;
+  --color-blue-50: #EFF3F7; --color-blue-100: #DDE5EE; --color-blue-200: #BBCADB; --color-blue-300: #93A9C1; --color-blue-400: #6D87A4; --color-blue-500: #4F6B89; --color-blue-600: #3B566F; --color-blue-700: #2B4764; --color-blue-800: #1F364C; --color-blue-900: #14283B; --color-blue-950: #0B1825;
+  --color-violet-50: #EFF3F7; --color-violet-100: #DDE5EE; --color-violet-200: #BBCADB; --color-violet-300: #93A9C1; --color-violet-400: #6D87A4; --color-violet-500: #4F6B89; --color-violet-600: #3B566F; --color-violet-700: #2B4764; --color-violet-800: #1F364C; --color-violet-900: #14283B; --color-violet-950: #0B1825;
+  --color-purple-50: #EFF3F7; --color-purple-100: #DDE5EE; --color-purple-200: #BBCADB; --color-purple-300: #93A9C1; --color-purple-400: #6D87A4; --color-purple-500: #4F6B89; --color-purple-600: #3B566F; --color-purple-700: #2B4764; --color-purple-800: #1F364C; --color-purple-900: #14283B; --color-purple-950: #0B1825;
+  --color-red-50: #FBF0EE; --color-red-100: #F6DFDA; --color-red-200: #EDC0B6; --color-red-300: #E19A8B; --color-red-400: #D2725F; --color-red-500: #BF5641; --color-red-600: #A64433; --color-red-700: #88372A; --color-red-800: #6C2D23; --color-red-900: #55251D; --color-red-950: #33150F;
+  --color-rose-50: #FBF0EE; --color-rose-100: #F6DFDA; --color-rose-200: #EDC0B6; --color-rose-300: #E19A8B; --color-rose-400: #D2725F; --color-rose-500: #BF5641; --color-rose-600: #A64433; --color-rose-700: #88372A; --color-rose-800: #6C2D23; --color-rose-900: #55251D; --color-rose-950: #33150F;
+}
+:root:has(.admin-shell) .pb-page {
+  --color-red-50: oklch(97.1% 0.013 17.38); --color-red-100: oklch(93.6% 0.032 17.717); --color-red-200: oklch(88.5% 0.062 18.334); --color-red-300: oklch(80.8% 0.114 19.571); --color-red-400: oklch(70.4% 0.191 22.216); --color-red-500: oklch(63.7% 0.237 25.331); --color-red-600: oklch(57.7% 0.245 27.325); --color-red-700: oklch(50.5% 0.213 27.518); --color-red-800: oklch(44.4% 0.177 26.899); --color-red-900: oklch(39.6% 0.141 25.723); --color-red-950: oklch(25.8% 0.092 26.042); --color-amber-50: oklch(98.7% 0.022 95.277); --color-amber-100: oklch(96.2% 0.059 95.617); --color-amber-200: oklch(92.4% 0.12 95.746); --color-amber-300: oklch(87.9% 0.169 91.605); --color-amber-400: oklch(82.8% 0.189 84.429); --color-amber-500: oklch(76.9% 0.188 70.08); --color-amber-600: oklch(66.6% 0.179 58.318); --color-amber-700: oklch(55.5% 0.163 48.998); --color-amber-800: oklch(47.3% 0.137 46.201); --color-amber-900: oklch(41.4% 0.112 45.904); --color-amber-950: oklch(27.9% 0.077 45.635); --color-emerald-50: oklch(97.9% 0.021 166.113); --color-emerald-100: oklch(95% 0.052 163.051); --color-emerald-200: oklch(90.5% 0.093 164.15); --color-emerald-300: oklch(84.5% 0.143 164.978); --color-emerald-400: oklch(76.5% 0.177 163.223); --color-emerald-500: oklch(69.6% 0.17 162.48); --color-emerald-600: oklch(59.6% 0.145 163.225); --color-emerald-700: oklch(50.8% 0.118 165.612); --color-emerald-800: oklch(43.2% 0.095 166.913); --color-emerald-900: oklch(37.8% 0.077 168.94); --color-emerald-950: oklch(26.2% 0.051 172.552); --color-sky-50: oklch(97.7% 0.013 236.62); --color-sky-100: oklch(95.1% 0.026 236.824); --color-sky-200: oklch(90.1% 0.058 230.902); --color-sky-300: oklch(82.8% 0.111 230.318); --color-sky-400: oklch(74.6% 0.16 232.661); --color-sky-500: oklch(68.5% 0.169 237.323); --color-sky-600: oklch(58.8% 0.158 241.966); --color-sky-700: oklch(50% 0.134 242.749); --color-sky-800: oklch(44.3% 0.11 240.79); --color-sky-900: oklch(39.1% 0.09 240.876); --color-sky-950: oklch(29.3% 0.066 243.157); --color-blue-50: oklch(97% 0.014 254.604); --color-blue-100: oklch(93.2% 0.032 255.585); --color-blue-200: oklch(88.2% 0.059 254.128); --color-blue-300: oklch(80.9% 0.105 251.813); --color-blue-400: oklch(70.7% 0.165 254.624); --color-blue-500: oklch(62.3% 0.214 259.815); --color-blue-600: oklch(54.6% 0.245 262.881); --color-blue-700: oklch(48.8% 0.243 264.376); --color-blue-800: oklch(42.4% 0.199 265.638); --color-blue-900: oklch(37.9% 0.146 265.522); --color-blue-950: oklch(28.2% 0.091 267.935); --color-violet-50: oklch(96.9% 0.016 293.756); --color-violet-100: oklch(94.3% 0.029 294.588); --color-violet-200: oklch(89.4% 0.057 293.283); --color-violet-300: oklch(81.1% 0.111 293.571); --color-violet-400: oklch(70.2% 0.183 293.541); --color-violet-500: oklch(60.6% 0.25 292.717); --color-violet-600: oklch(54.1% 0.281 293.009); --color-violet-700: oklch(49.1% 0.27 292.581); --color-violet-800: oklch(43.2% 0.232 292.759); --color-violet-900: oklch(38% 0.189 293.745); --color-violet-950: oklch(28.3% 0.141 291.089); --color-purple-50: oklch(97.7% 0.014 308.299); --color-purple-100: oklch(94.6% 0.033 307.174); --color-purple-200: oklch(90.2% 0.063 306.703); --color-purple-300: oklch(82.7% 0.119 306.383); --color-purple-400: oklch(71.4% 0.203 305.504); --color-purple-500: oklch(62.7% 0.265 303.9); --color-purple-600: oklch(55.8% 0.288 302.321); --color-purple-700: oklch(49.6% 0.265 301.924); --color-purple-800: oklch(43.8% 0.218 303.724); --color-purple-900: oklch(38.1% 0.176 304.987); --color-purple-950: oklch(29.1% 0.149 302.717); --color-rose-50: oklch(96.9% 0.015 12.422); --color-rose-100: oklch(94.1% 0.03 12.58); --color-rose-200: oklch(89.2% 0.058 10.001); --color-rose-300: oklch(81% 0.117 11.638); --color-rose-400: oklch(71.2% 0.194 13.428); --color-rose-500: oklch(64.5% 0.246 16.439); --color-rose-600: oklch(58.6% 0.253 17.585); --color-rose-700: oklch(51.4% 0.222 16.935); --color-rose-800: oklch(45.5% 0.188 13.697); --color-rose-900: oklch(41% 0.159 10.272); --color-rose-950: oklch(27.1% 0.105 12.094);
+}
+
+/* ── Tableaux et listes de données (2026-10-16) ──────────────────────────────
+   Fond blanc et un filet de 1 px dans le gris clair (gris 2) tout autour :
+   `.data-frame` sur le conteneur d'une liste, et tout <table> qui n'est pas
+   déjà dans un tel cadre. L'en-tête de colonnes est blanc, souligné du même
+   filet ; les lignes alternent blanc / gris 1 (`.zebra`). */
+:root:has(.admin-shell) .data-frame { background-color: #fff; border: 1px solid var(--color-stone-100); }
+:root:has(.admin-shell) table:not(:where(.data-frame table, .pb-page table)) { border: 1px solid var(--color-stone-100); }
+:root:has(.admin-shell) table:not(:where(.pb-page table)) thead,
+:root:has(.admin-shell) table:not(:where(.pb-page table)) thead > tr { background-color: #fff; border-color: var(--color-stone-100); }
+
+/* ── Listes zébrées ─────────────────────────────────────────────────────────
+   `.zebra` sur un <ul>, un <tbody> ou une grille de lignes : lignes impaires
+   blanches, paires en gris 1 — lisible sur fond blanc comme sur un aplat gris.
+   Couche `components` : le survol (`hover:bg-row-hover`, couche `utilities`)
+   passe devant. */
+@layer components {
+  .zebra > :nth-child(odd) { background-color: #fff; }
+  .zebra > :nth-child(even) { background-color: var(--color-stone-50); }
+}
+
+/* ── Finitions ──────────────────────────────────────────────────────────────── */
+.admin-shell ::selection { background: #F7DDB0; color: #1C1917; }
+
+/* Barres de défilement fines et discrètes (ordinateur). */
+@media (min-width: 1024px) and (pointer: fine) {
+  .admin-shell { scrollbar-color: #CFCDC6 transparent; }
+  .admin-shell * { scrollbar-width: thin; }
+}
+
+/* Arrivée d'une page : un fondu bref. Opacité seule — une transformation
+   créerait un bloc conteneur et décalerait les éléments `fixed` (boutons
+   flottants, barres d'action). Coupé par `prefers-reduced-motion` plus bas. */
+@keyframes admin-enter { from { opacity: 0; } to { opacity: 1; } }
+.admin-shell .admin-main > * { animation: admin-enter 0.2s ease-out both; }
+
+/* Barres de graphique qui poussent depuis leur base, pastilles qui apparaissent
+   d'un léger rebond (quantité ajoutée au ticket, cliente comptée). Le délai de
+   chaque élément se règle en ligne (`animationDelay`) pour un effet en cascade. */
+@keyframes admin-grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.admin-grow-y { transform-origin: bottom; animation: admin-grow-y 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes admin-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.admin-pop { animation: admin-pop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* ── Arrondis très légers : 4 px (2026-10-16) ───────────────────────────────
+   Tout ce qui porte une classe `rounded-*` (panneaux, boutons, champs,
+   badges, fenêtres) reçoit le même arrondi discret ; le reste garde ses angles
+   droits. Ce qui est rond par nature le reste (`rounded-full` : points d'état,
+   pastilles de couleur, avatars, interrupteurs). Non superposé : passe devant
+   les utilitaires Tailwind, mais pas devant un style en ligne — l'aperçu du
+   style du site (Réglages › Design) garde ses arrondis, comme `.pb-page`. */
+:root:has(.admin-shell) [class*='rounded']:not(.rounded-full):not(.rounded-none):not(:where(.pb-page, .pb-page *)) { border-radius: 4px; }
+
 /* Rangées défilantes sans barre de défilement visible (pastilles, sous-navigation). */
 .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -145,7 +247,7 @@
   border-left: 4px solid #8A9A7B;
   background-color: rgba(138, 154, 123, 0.08);
   padding: 1.5rem 2rem;
-  border-radius: 0 1rem 1rem 0;
+  border-radius: 0 0.75rem 0.75rem 0;
   margin: 2rem 0;
 }
 
@@ -191,9 +293,7 @@
     display: block;
     margin: 0 0 0.75rem;
     padding: 0.5rem 0.25rem;
-    border: 1px solid var(--color-stone-200, #e7e5e4);
-    border-radius: 1rem;
-    background: #fff;
+    background: var(--color-stone-50);
   }
   .admin-main table[data-stack] td,
   .admin-main table[data-stack] th[scope='row'] {
@@ -222,10 +322,8 @@
 }
 
 /* ── Style mobile « shadcn/ui » (Refero 0fd67ec5) — hors couleurs ───────────
-   Typographie Geist à interlettrage serré, cartes à 24 px avec filet fin et
-   ombre empilée très douce, boutons / champs / pastilles à 18 px, pas de
-   dégradé décoratif. Sous `lg` seulement : le bureau reste intact. Les
-   couleurs (sauge, pierre) ne changent pas. */
+   Typographie Geist à interlettrage serré. Sous `lg` seulement ; aplats,
+   angles droits et gris sont communs au bureau (voir plus haut). */
 @media (max-width: 1023.98px) {
   .admin-shell {
     font-family: var(--font-geist), var(--font-inter, Inter), system-ui, -apple-system, sans-serif;
@@ -240,25 +338,9 @@
   }
   .admin-shell .uppercase { letter-spacing: 0.05em; }
 
-  /* Cartes : 24 px, filet fin + ombre empilée (1 px, 3 px, 2 px). */
-  .admin-shell .rounded-2xl,
-  .admin-shell .rounded-3xl { border-radius: 24px; }
-  .admin-shell :is(.rounded-2xl, .rounded-3xl):is(.border, [class*='border-stone']):not(button):not(a) {
-    box-shadow: 0 0 0 1px rgba(23, 23, 23, 0.04), 0 1px 3px rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.07);
-  }
-
-  /* Éléments interactifs : 18 px (les ronds et pastilles `rounded-full` restent ronds). */
-  .admin-shell :is(button, a, input, select, textarea, summary):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl) {
-    border-radius: 18px;
-  }
-  .admin-shell :is(input, select, textarea):not([type='checkbox']):not([type='radio']):not([type='range']) {
-    border-radius: 18px;
-  }
-  .admin-shell textarea { border-radius: 20px; }
-
   /* Pas de dégradé décoratif, sauf les voiles posés sur les photos (style en ligne). */
   .admin-shell [class*='shadow-lg'], .admin-shell [class*='shadow-md'] {
-    box-shadow: 0 0 0 1px rgba(23, 23, 23, 0.04), 0 1px 3px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   }
 
   /* Titres de page : plus grands et plus serrés, comme un titre « display » compact. */

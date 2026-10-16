@@ -756,7 +756,7 @@ export default function PageBuilderClient() {
         {/* ── Panneau gauche ──────────────────────────────────────────── */}
         <aside className="w-full lg:w-72 max-h-[50vh] lg:max-h-none bg-white border-b lg:border-b-0 lg:border-r border-stone-200 flex flex-col overflow-hidden shrink-0">
           {/* Onglets de la Sidebar */}
-          <div className="flex border-b border-stone-200 bg-stone-50/50 shrink-0">
+          <div className="flex border-b border-stone-200 bg-stone-50 shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab('content')}
@@ -823,8 +823,8 @@ export default function PageBuilderClient() {
                               isActive
                                 ? 'bg-accent-soft text-stone-900 border-2 border-accent '
                                 : isVisible
-                                ? 'bg-stone-50/90 border border-accent/20 hover:border-accent hover:shadow-xs'
-                                : 'bg-white border border-stone-200 hover:border-accent/20 hover:shadow-2xs'
+                                ? 'bg-stone-50 border border-accent/20 hover:border-accent'
+                                : 'bg-stone-50 hover:border-accent/20'
                             } rounded-xl`}
                           >
                             {/* Ligne Haute : Poignée + Titre complet + Résumé complet sans truncate */}
@@ -912,7 +912,7 @@ export default function PageBuilderClient() {
           ) : (
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* Génération IA SEO */}
-              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-3 bg-stone-50/50">
+              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-3 bg-stone-50">
                 <div className="flex items-center gap-2">
                   <Sparkles size={13} className="text-accent" />
                   <p className="text-[12px] font-semibold text-stone-600">Optimisation SEO par IA</p>
@@ -922,7 +922,7 @@ export default function PageBuilderClient() {
                   type="button"
                   onClick={generateSeoMeta}
                   disabled={genMetaStatus === 'generating' || sections.length === 0}
-                  className="bg-accent hover:bg-accent-hover w-full flex items-center justify-center gap-2 hover:opacity-95 text-accent-fg py-2.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 shadow-sm cursor-pointer"
+                  className="bg-accent hover:bg-accent-hover w-full flex items-center justify-center gap-2 hover:opacity-95 text-accent-fg py-2.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer"
                 >
                   {genMetaStatus === 'generating' ? (
                     <><Loader2 size={12} className="animate-spin" /> Génération…</>

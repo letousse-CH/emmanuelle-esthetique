@@ -374,7 +374,7 @@ export default function MenuClient() {
             </CardBody>
           </Card>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-stone-50 px-6 py-4">
             <p className={`text-[13px] ${isDirty ? 'font-medium text-amber-800' : 'text-stone-700'}`} aria-live="polite">
               {isDirty
                 ? 'Modifications non enregistrées.'

@@ -45,7 +45,7 @@ export default function OfferStrip({ offers, stats, inCart, today, onPick, mobil
               onClick={() => onPick(o)}
               className={`relative flex items-stretch gap-3 overflow-hidden rounded-xl border text-left transition-all cursor-pointer ${
                 q > 0 ? 'border-accent bg-accent/8' : 'border-accent/40 bg-accent/5 hover:border-accent hover:bg-accent/8'
-              } ${mobile ? 'min-h-[92px] rounded-2xl active:scale-[0.98]' : ''}`}
+              } ${mobile ? 'min-h-[92px] rounded-xl active:scale-[0.98]' : ''}`}
             >
               {o.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -78,7 +78,7 @@ export default function OfferStrip({ offers, stats, inCart, today, onPick, mobil
                 </span>
               </span>
               {q > 0 && (
-                <span aria-label={`${q} dans le panier`} className="absolute right-2.5 top-2.5 grid h-6 min-w-6 place-items-center rounded-full bg-accent px-1.5 text-[13px] font-bold text-accent-fg">{q}</span>
+                <span aria-label={`${q} dans le panier`} className="absolute right-2.5 top-2.5 grid h-6 min-w-6 place-items-center bg-accent px-1.5 text-[13px] font-bold text-accent-fg">{q}</span>
               )}
             </button>
           );

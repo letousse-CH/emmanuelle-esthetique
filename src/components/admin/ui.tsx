@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { AlertTriangle, Check, ChevronRight, Info, Loader2, XCircle, Search, Sparkles, ArrowRight, CornerDownLeft } from 'lucide-react';
 
 /**
@@ -39,7 +40,7 @@ const BUTTON_VARIANT: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-accent-fg hover:bg-accent-hover border border-transparent',
   secondary: 'bg-stone-100 text-stone-900 border border-transparent hover:bg-stone-200',
   ghost: 'text-stone-800 hover:bg-stone-100 hover:text-stone-950',
-  danger: 'bg-white text-red-700 border border-red-200 hover:bg-red-50 hover:border-red-300',
+  danger: 'bg-red-50 text-red-700 border border-transparent hover:bg-red-100',
 };
 
 const BUTTON_SIZE: Record<ButtonSize, string> = {
@@ -154,7 +155,7 @@ export function Card({
   return (
     <Tag
       {...props}
-      className={`rounded-xl border border-stone-200 bg-white ${className}`}
+      className={`rounded-xl bg-stone-50 ${className}`}
     >
       {children}
     </Tag>
@@ -171,7 +172,7 @@ export function CardHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 px-4 py-4 sm:px-6 sm:py-5">
+    <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
       <div className="min-w-0">
         <h2 className="text-[18px] font-semibold text-stone-950 tracking-tight">{title}</h2>
         {description && <p className="mt-1 text-[14px] leading-relaxed text-stone-600">{description}</p>}
@@ -194,7 +195,7 @@ export function CardFooter({
   hint?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-stone-200 bg-stone-50/50 px-4 py-3 sm:px-6 sm:py-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4 pt-2 sm:px-6 sm:pb-6">
       <div className="min-w-0 text-[13px] text-stone-600">{hint}</div>
       <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
@@ -300,7 +301,7 @@ export function Toggle({
         disabled:opacity-45 disabled:pointer-events-none ${checked ? 'bg-accent' : 'bg-stone-300'}`}
     >
       <span
-        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition-transform ${
+        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
           checked ? 'translate-x-[1.15rem]' : 'translate-x-[0.185rem]'
         }`}
       />
@@ -340,10 +341,11 @@ export function ToggleRow({
 type Tone = 'info' | 'success' | 'warning' | 'danger';
 
 const CALLOUT: Record<Tone, { box: string; icon: React.ElementType; iconClass: string }> = {
-  info: { box: 'border-stone-200 bg-stone-50/80 text-stone-800', icon: Info, iconClass: 'text-stone-600' },
-  success: { box: 'border-emerald-200/80 bg-emerald-50/70 text-emerald-900', icon: Check, iconClass: 'text-emerald-600' },
-  warning: { box: 'border-amber-200/80 bg-amber-50/70 text-amber-900', icon: AlertTriangle, iconClass: 'text-amber-600' },
-  danger: { box: 'border-red-200/80 bg-red-50/70 text-red-900', icon: XCircle, iconClass: 'text-red-600' },
+  // Aplats sans filet : la couleur suffit à dire le ton.
+  info: { box: 'bg-stone-50 text-stone-800', icon: Info, iconClass: 'text-stone-600' },
+  success: { box: 'bg-emerald-50 text-emerald-900', icon: Check, iconClass: 'text-emerald-700' },
+  warning: { box: 'bg-warm-soft text-warm-ink', icon: AlertTriangle, iconClass: 'text-warm-strong' },
+  danger: { box: 'bg-red-50 text-red-900', icon: XCircle, iconClass: 'text-red-600' },
 };
 
 export function Callout({
@@ -360,7 +362,7 @@ export function Callout({
   const spec = CALLOUT[tone];
   const Icon = spec.icon;
   return (
-    <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-[14px] leading-relaxed ${spec.box}`}>
+    <div className={`flex items-start gap-3 rounded-lg px-4 py-3 text-[14px] leading-relaxed ${spec.box}`}>
       <Icon size={15} className={`mt-0.5 shrink-0 ${spec.iconClass}`} />
       <div className="min-w-0 flex-1">
         {title && <p className="font-semibold text-stone-900 mb-0.5">{title}</p>}
@@ -372,11 +374,11 @@ export function Callout({
 }
 
 const BADGE: Record<Tone | 'neutral', string> = {
-  neutral: 'bg-stone-100 text-stone-700 border-stone-200',
-  info: 'bg-accent-soft text-accent border-accent/15',
-  success: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
-  warning: 'bg-amber-50 text-amber-800 border-amber-200/80',
-  danger: 'bg-red-50 text-red-800 border-red-200/80',
+  neutral: 'bg-stone-100 text-stone-700',
+  info: 'bg-accent-soft text-accent',
+  success: 'bg-emerald-50 text-emerald-800',
+  warning: 'bg-warm-soft text-warm-ink',
+  danger: 'bg-red-50 text-red-800',
 };
 
 export function Badge({
@@ -388,7 +390,7 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] font-medium tracking-tight ${BADGE[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[12px] font-medium tracking-tight ${BADGE[tone]}`}
     >
       <span className="size-1.5 rounded-full bg-current opacity-75" />
       {children}
@@ -408,9 +410,9 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-stone-200 bg-white px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center rounded-xl bg-stone-50 px-6 py-16 text-center">
       {Icon && (
-        <span className="mb-4 grid size-12 place-items-center rounded-xl bg-stone-100 text-stone-600">
+        <span className="mb-4 grid size-12 place-items-center rounded-xl bg-white text-stone-600">
           <Icon size={22} />
         </span>
       )}
@@ -418,6 +420,235 @@ export function EmptyState({
       {description && <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-stone-600">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
+  );
+}
+
+// ── Chiffres ───────────────────────────────────────────────────────────────
+
+type MetricTone = 'default' | 'warm' | 'positive' | 'negative' | 'muted';
+
+const METRIC_TONE: Record<MetricTone, string> = {
+  default: 'text-stone-950',
+  warm: 'text-warm-ink',
+  positive: 'text-emerald-700',
+  negative: 'text-red-700',
+  muted: 'text-stone-500',
+};
+
+const METRIC_SIZE = {
+  xl: 'text-[40px] sm:text-[52px] leading-none',
+  lg: 'text-[28px] leading-tight',
+  md: 'text-[20px] leading-tight',
+} as const;
+
+/**
+ * Nombre qui monte jusqu'à sa valeur à l'affichage, puis glisse d'une valeur à
+ * l'autre quand elle change (≈ 0,7 s, décélération). Les lecteurs d'écran
+ * reçoivent directement la valeur finale ; `prefers-reduced-motion` coupe l'animation.
+ */
+export function AnimatedNumber({
+  value,
+  format = (n: number) => Math.round(n).toLocaleString('fr-CH'),
+  duration = 700,
+}: {
+  value: number;
+  format?: (n: number) => string;
+  duration?: number;
+}) {
+  const [shown, setShown] = React.useState(0);
+  // Valeur réellement affichée : une nouvelle cible repart d'ici, sans à-coup.
+  const live = React.useRef(0);
+  React.useEffect(() => {
+    if (!Number.isFinite(value)) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || live.current === value) {
+      live.current = value;
+      setShown(value);
+      return;
+    }
+    const a = live.current;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / duration);
+      const v = a + (value - a) * (1 - Math.pow(1 - p, 3));
+      live.current = v;
+      setShown(v);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return (
+    <>
+      <span aria-hidden="true">{format(shown)}</span>
+      <span className="sr-only">{format(value)}</span>
+    </>
+  );
+}
+
+/**
+ * Un chiffre, sans carte autour : c'est la taille qui dit l'importance.
+ * `xl` pour LE chiffre d'une page (un seul), `lg` pour ses voisins, `md` pour
+ * le détail. À poser dans un `<dl>` (voir `MetricStrip`).
+ */
+export function Metric({
+  label,
+  value,
+  hint,
+  size = 'lg',
+  tone = 'default',
+  loading = false,
+  className = '',
+}: {
+  label: React.ReactNode;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  size?: keyof typeof METRIC_SIZE;
+  tone?: MetricTone;
+  loading?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <dt className="text-[14px] font-medium text-stone-600">{label}</dt>
+      <dd className={`mt-1.5 font-semibold tracking-tight tabular-nums ${METRIC_SIZE[size]} ${METRIC_TONE[tone]}`}>
+        {loading ? <span className="inline-block h-[0.9em] w-32 rounded-md bg-stone-100 animate-pulse align-middle" /> : value}
+      </dd>
+      {hint && <dd className="mt-1.5 text-[13.5px] leading-snug text-stone-600">{hint}</dd>}
+    </div>
+  );
+}
+
+/**
+ * Une rangée de chiffres, sans cartes ni filets : l'espace suffit à les
+ * séparer, et des chiffres voisins se lisent d'un regard. Sur téléphone, deux colonnes.
+ */
+export function MetricStrip({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <dl
+      className={`grid grid-cols-2 gap-x-6 gap-y-6 sm:flex sm:flex-wrap sm:gap-x-14 ${className}`}
+    >
+      {children}
+    </dl>
+  );
+}
+
+/**
+ * Barre de progression. `zone` dessine une fourchette cible (en % de `max`),
+ * `marker` un repère (seuil). Safran par défaut : c'est une mesure, pas une action.
+ */
+export function ProgressBar({
+  value,
+  max = 100,
+  tone = 'warm',
+  size = 'md',
+  zone,
+  marker,
+  label,
+  onColor = false,
+  className = '',
+}: {
+  value: number;
+  max?: number;
+  tone?: 'warm' | 'accent' | 'positive';
+  /** Posée sur un aplat de couleur (vert des chiffres clés) : piste translucide, remplissage blanc. */
+  onColor?: boolean;
+  size?: 'sm' | 'md' | 'lg';
+  zone?: [number, number];
+  marker?: { at: number; label: string };
+  label: string;
+  className?: string;
+}) {
+  const pct = (v: number) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`;
+  const h = size === 'lg' ? 'h-3.5' : size === 'sm' ? 'h-1.5' : 'h-2.5';
+  // La barre part de zéro à l'affichage : on voit le chemin parcouru, pas seulement le point d'arrivée.
+  const [grown, setGrown] = React.useState(false);
+  React.useEffect(() => {
+    const id = requestAnimationFrame(() => setGrown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const fill = onColor ? 'bg-white' : tone === 'accent' ? 'bg-accent' : tone === 'positive' ? 'bg-emerald-600' : 'bg-warm';
+  return (
+    <div className={`relative ${className}`}>
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={max}
+        aria-valuenow={Math.round(value)}
+        className={`relative w-full overflow-hidden rounded-full ${onColor ? 'bg-white/20' : 'bg-stone-100'} ${h}`}
+      >
+        {zone && (
+          <div className={`absolute inset-y-0 ${onColor ? 'bg-white/35' : 'bg-warm-muted/70'}`} style={{ left: pct(zone[0]), width: `calc(${pct(zone[1])} - ${pct(zone[0])})` }} />
+        )}
+        <div className={`relative h-full rounded-full transition-[width] duration-[900ms] ease-[cubic-bezier(.2,.8,.2,1)] ${fill}`} style={{ width: grown ? pct(value) : '0%' }} />
+      </div>
+      {marker && (
+        <div className={`pointer-events-none absolute -top-1 -bottom-1 w-px ${onColor ? 'bg-white/60' : 'bg-stone-400'}`} style={{ left: pct(marker.at) }} aria-hidden="true">
+          <span className={`absolute top-full mt-1.5 -translate-x-1/2 whitespace-nowrap text-[11.5px] font-medium ${onColor ? 'text-white/90' : 'text-stone-500'}`}>{marker.label}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Titre de section sans carte : titre, phrase d'aide, actions alignées à droite. */
+export function SectionHeading({
+  title,
+  description,
+  actions,
+  id,
+}: {
+  title: string;
+  description?: React.ReactNode;
+  actions?: React.ReactNode;
+  id?: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+      <div className="min-w-0">
+        <h2 id={id} className="text-[17px] font-semibold tracking-tight text-stone-950">{title}</h2>
+        {description && <p className="mt-0.5 text-[14px] text-stone-600">{description}</p>}
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+/**
+ * Sous-navigation entre pages sœurs (Prestations · Produits · Cabine) :
+ * contrôle segmenté de liens. La page active suit l'URL.
+ */
+export function SubNav({
+  items,
+  label,
+}: {
+  items: { href: string; label: string; icon?: React.ElementType }[];
+  label: string;
+}) {
+  const pathname = usePathname();
+  return (
+    <nav aria-label={label} className="max-w-full overflow-x-auto hide-scrollbar">
+      <div className="inline-flex gap-1 rounded-xl bg-stone-100 p-1">
+        {items.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? 'page' : undefined}
+              className={`flex h-11 lg:h-9 shrink-0 items-center gap-2 rounded-lg px-3.5 text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+                active ? 'bg-stone-900 font-semibold text-white' : 'font-medium text-stone-700 hover:text-stone-950'
+              }`}
+            >
+              {item.icon && <item.icon size={15} aria-hidden="true" />}
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -463,7 +694,7 @@ export function Tabs({
               className={`flex items-center gap-2 rounded-md px-3.5 h-11 lg:h-9 text-[14px] transition-colors cursor-pointer
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
                   isActive
-                    ? 'bg-white text-stone-950 font-semibold shadow-xs ring-1 ring-stone-200'
+                    ? 'bg-stone-900 text-white font-semibold'
                     : 'text-stone-700 font-medium hover:text-stone-950'
                 }`}
             >
@@ -563,7 +794,7 @@ export function FormMessage({ message }: { message: { type: 'success' | 'error';
 
 export function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex items-center gap-0.5 rounded-md border border-stone-200 bg-white px-1.5 py-0.5 font-sans text-[11px] font-medium text-stone-600">
+    <kbd className="inline-flex items-center gap-0.5 rounded-md bg-stone-50 px-1.5 py-0.5 font-sans text-[11px] font-medium text-stone-600">
       {children}
     </kbd>
   );

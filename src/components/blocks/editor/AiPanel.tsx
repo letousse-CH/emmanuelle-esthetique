@@ -36,7 +36,7 @@ export default function AiPanel({ scope, onClose, onRun }: { scope: 'page' | 'se
 
   return (
     <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/40 p-4" onClick={busy ? undefined : onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-stone-100 px-5 py-3">
           <p className="flex items-center gap-2 text-sm font-semibold text-stone-900"><Sparkles size={16} className="text-violet-600" /> {scope === 'page' ? 'Assistant IA — toute la page' : 'Assistant IA — cette section'}</p>
           <button type="button" aria-label="Fermer" onClick={onClose} disabled={busy} className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100"><X size={16} /></button>
@@ -51,7 +51,7 @@ export default function AiPanel({ scope, onClose, onRun }: { scope: 'page' | 'se
           </div>
           <div className="flex flex-wrap gap-1.5">
             {(scope === 'page' ? PAGE_IDEAS : SECTION_IDEAS).map((idea) => (
-              <button key={idea} type="button" onClick={() => setText(idea)} className="rounded-full border border-stone-200 px-2.5 py-1 text-[11px] text-stone-600 hover:border-violet-300 hover:bg-violet-50">{idea}</button>
+              <button key={idea} type="button" onClick={() => setText(idea)} className="border border-stone-200 px-2.5 py-1 text-[11px] text-stone-600 hover:border-violet-300 hover:bg-violet-50">{idea}</button>
             ))}
           </div>
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}

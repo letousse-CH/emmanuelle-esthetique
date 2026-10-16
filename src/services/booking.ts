@@ -869,7 +869,8 @@ async function bookingsImpactedBy(
   });
 }
 
-export async function createBlock(body: unknown): Promise<BookingBlockResult> {
+/** Valide un corps de requête d'indisponibilité ; même règle à la création et à la modification. */
+function parseBlockBody(body: unknown): Pick<BookingBlock, 'date_debut' | 'date_fin' | 'heure_debut' | 'heure_fin' | 'motif'> {
   if (!isPlainObject(body)) fail('Corps de requête invalide.');
   const b = body as Record<string, unknown>;
   if (!isValidDateStr(b.date_debut)) fail('Date de début invalide (YYYY-MM-DD).');
@@ -892,11 +893,33 @@ export async function createBlock(body: unknown): Promise<BookingBlockResult> {
     if (typeof b.motif !== 'string' || b.motif.length > 200) fail('Motif : 200 caractères au maximum.');
     motif = b.motif.trim() || null;
   }
+  return { date_debut: dateDebut, date_fin: dateFin as string, heure_debut: hd as string | null, heure_fin: hf as string | null, motif };
+}
 
+export async function createBlock(body: unknown): Promise<BookingBlockResult> {
+  const row = parseBlockBody(body);
   const db = adminDb();
-  const row = { date_debut: dateDebut, date_fin: dateFin, heure_debut: hd, heure_fin: hf, motif };
   const { data, error } = await db.from('booking_blocks').insert(row).select().single();
   if (error || !data) throw new BookingError(500, `Enregistrement de l'indisponibilité impossible : ${error?.message ?? ''}`.trim());
+
+  const settings = await getBookingSettings();
+  const block = normalizeBlock(data);
+  const impactes = await bookingsImpactedBy(db, block, settings);
+  return { block, impactes };
+}
+
+/**
+ * Modifie une indisponibilité (un rendez-vous personnel déplacé, renommé…).
+ * Mêmes contrôles qu'à la création ; les rendez-vous touchés sont signalés,
+ * jamais annulés.
+ */
+export async function updateBlock(id: string, body: unknown): Promise<BookingBlockResult> {
+  if (!UUID_RE.test(id)) throw new BookingError(404, 'Indisponibilité introuvable.');
+  const row = parseBlockBody(body);
+  const db = adminDb();
+  const { data, error } = await db.from('booking_blocks').update(row).eq('id', id).select().maybeSingle();
+  if (error) throw new BookingError(500, `Modification impossible : ${error.message}`);
+  if (!data) throw new BookingError(404, 'Indisponibilité introuvable.');
 
   const settings = await getBookingSettings();
   const block = normalizeBlock(data);

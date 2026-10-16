@@ -183,8 +183,8 @@ export default function ClientEmailsSection() {
                 <span className="min-w-0">
                   <span className="block text-[15px] sm:text-sm font-semibold text-stone-900">
                     {label}
-                    {custom && <span className="ml-2 rounded-full bg-accent/10 px-2 py-0.5 text-[12px] font-medium text-accent">Personnalisé</span>}
-                    {dirty && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[12px] font-medium text-amber-800">Non enregistré</span>}
+                    {custom && <span className="ml-2 bg-accent/10 px-2 py-0.5 text-[12px] font-medium text-accent rounded">Personnalisé</span>}
+                    {dirty && <span className="ml-2 bg-amber-100 px-2 py-0.5 text-[12px] font-medium text-amber-800 rounded">Non enregistré</span>}
                   </span>
                   <span className="block text-[13px] text-stone-500">{when}</span>
                 </span>
@@ -268,7 +268,7 @@ export default function ClientEmailsSection() {
                       <div className="text-[13px] lg:text-[11px] font-semibold text-stone-600">
                         Aperçu, avec une cliente fictive
                       </div>
-                      <div className="rounded-xl border border-stone-200 bg-white">
+                      <div className="rounded-xl bg-stone-50">
                         <div className="border-b border-stone-100 px-4 py-2.5 text-[14px] text-stone-800">
                           <span className="text-stone-500">Objet : </span>
                           {rendered.subject}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
-import { Check, Search, UserPlus, UserRound, X } from 'lucide-react';
+import { Check, ChevronRight, Search, UserPlus, UserRound, X } from 'lucide-react';
 import { listClients, matchClient } from '../../../services/caisse';
 import { clientFullName } from '../../../types/caisse';
 import type { Client } from '../../../types/caisse';
@@ -29,6 +29,7 @@ export default function NewBookingPanel({
   initialClientId,
   onClose,
   onCreated,
+  onSwitchToPerso,
 }: {
   catalog: Catalog;
   initialDate?: string;
@@ -37,6 +38,8 @@ export default function NewBookingPanel({
   initialClientId?: string;
   onClose: () => void;
   onCreated: (id: string | null) => void;
+  /** « Ce n'est pas une cliente » : bascule vers un rendez-vous perso au même jour et à la même heure. */
+  onSwitchToPerso?: (date: string, time: string | null) => void;
 }) {
   const fb = useFeedback();
   const [clients, setClients] = useState<Client[] | null>(null);
@@ -188,6 +191,18 @@ export default function NewBookingPanel({
       }
     >
       <div className="space-y-7">
+        {onSwitchToPerso && (
+          <button
+            type="button"
+            onClick={() => onSwitchToPerso(date, heure)}
+            className="flex w-full items-center gap-3 rounded-xl border border-warm-muted bg-warm-soft px-4 py-3 text-left text-[14.5px] text-warm-ink transition-colors hover:bg-warm-muted cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warm-strong"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="font-semibold">Ce n’est pas une cliente ?</span> Ajoutez plutôt un rendez-vous perso (dentiste, pause…).
+            </span>
+            <ChevronRight size={18} className="shrink-0" aria-hidden="true" />
+          </button>
+        )}
         {formError && (
           <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[14.5px] font-medium text-red-900">
             {formError}
@@ -256,7 +271,7 @@ export default function NewBookingPanel({
                 </p>
               )}
               {results.length > 0 && (
-                <ul className="divide-y divide-stone-200 rounded-xl border border-stone-300 bg-white">
+                <ul className="divide-y divide-stone-200 rounded-xl bg-stone-50">
                   {results.map((c) => (
                     <li key={c.id}>
                       <button

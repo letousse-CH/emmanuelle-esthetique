@@ -7,8 +7,7 @@ import {
   Printer, HelpCircle, FileCheck, CheckCircle2, Building, RefreshCw,
   Coins, Sparkles, AlertCircle, Landmark, Receipt,
 } from 'lucide-react';
-import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
-import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
+import { AnimatedNumber, Button, Callout, Metric } from '../../../../components/admin/ui';
 import { computeFinancialStats } from '../../../../services/financeService';
 import { AVS_BORNE_HAUTE, FinancialDashboardStats } from '../../../../types/finance';
 import { formatCHF } from '../../../../types/caisse';
@@ -44,7 +43,6 @@ export default function BilanClient() {
   if (error) {
     return (
       <div className="space-y-6">
-        <CaisseCatalogNav />
         <Callout
           tone="danger"
           title="Le bilan n'a pas pu être calculé"
@@ -60,7 +58,6 @@ export default function BilanClient() {
   if (loading || !stats) {
     return (
       <div className="space-y-6">
-        <CaisseCatalogNav />
         <div className="p-12 text-center text-sm text-stone-500">
           Calcul des agrégats comptables et fiscaux en cours…
         </div>
@@ -74,116 +71,85 @@ export default function BilanClient() {
 
   return (
     <div className="space-y-6">
-      <CaisseCatalogNav />
 
-      <PageHeader
-        title="Bilan, Trésorerie & Fiscalité Vaud"
-        description="Vision à 360° de votre activité : compte de résultat, rentabilité des soins, simulation des cotisations AVS de l'indépendante et données prêtes pour le formulaire fiscal de l'État de Vaud."
-        actions={
-          <div className="flex items-center gap-2">
-            <select
-              value={annee}
-              onChange={e => setAnnee(Number(e.target.value))}
-              aria-label="Sélectionner l'exercice fiscal"
-              className="h-9 px-3 text-xs font-semibold rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-accent"
-            >
-              {annees.map(a => <option key={a} value={a}>Exercice {a}</option>)}
-            </select>
-            <Button variant="secondary" icon={Printer} onClick={() => window.print()}>
-              Imprimer le bilan
-            </Button>
-            <Button variant="ghost" icon={RefreshCw} onClick={loadStats}>
-              Actualiser
-            </Button>
-          </div>
-        }
-      />
-
-      {/* Cartes KPI majeures */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Chiffre d'Affaires Brut</p>
-          <p className="text-2xl font-bold text-stone-900 mt-1">{formatCHF(stats.chiffreAffairesTotal)}</p>
-          <p className="text-[12px] text-stone-500 mt-1">
-            Prestations : {formatCHF(stats.caPrestations)} · Boutique : {formatCHF(stats.caProduitsVente)}
-            {stats.caBonsCadeaux > 0 && <> · Bons : {formatCHF(stats.caBonsCadeaux)}</>}
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
+          <p className="text-[14px] font-medium text-stone-500">Exercice {annee}</p>
+          <h1 className="sr-only mt-0.5 text-[30px] font-semibold leading-tight tracking-tight text-stone-950 lg:not-sr-only lg:block">Bilan et fiscalité</h1>
+          <p className="mt-1 text-[15px] text-stone-600">
+            Compte de résultat, trésorerie, cotisations AVS et chiffres prêts pour la déclaration vaudoise.
           </p>
         </div>
-
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Marge Brute Globale</p>
-          <p className="text-2xl font-bold text-emerald-700 mt-1">{formatCHF(stats.margeBruteTotale)}</p>
-          <p className="text-[12px] text-stone-500 mt-1">
-            Taux de marge : {stats.margeBrutePct} %
-          </p>
+        <div className="flex items-center gap-2 print:hidden">
+          <select
+            value={annee}
+            onChange={e => setAnnee(Number(e.target.value))}
+            aria-label="Exercice"
+            className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-[14px] font-semibold text-stone-900 outline-none focus:border-accent cursor-pointer"
+          >
+            {annees.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <Button variant="ghost" icon={RefreshCw} onClick={loadStats} aria-label="Actualiser" title="Actualiser" />
+          <Button icon={Printer} onClick={() => window.print()}>Imprimer</Button>
         </div>
+      </header>
 
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Bénéfice Net Fiscal (ACI)</p>
-          <p className="text-2xl font-bold text-stone-900 mt-1">{formatCHF(stats.beneficeNetFiscal)}</p>
-          <p className="text-[12px] text-stone-500 mt-1">
-            Revenu d'indépendante imposable
+      {/* Ce qui reste, en grand ; d'où ça vient, à côté */}
+      <section
+        aria-label={`Synthèse de l'exercice ${annee}`}
+        className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] lg:gap-12"
+      >
+        {/* Vert quand l'exercice est bénéficiaire, brique quand il est en perte. */}
+        <div className={`rounded-xl p-6 lg:p-8 ${stats.beneficeNetFiscal >= 0 ? 'bg-growth' : 'bg-red-600'}`}>
+          <p className="text-[15px] font-medium text-white">Bénéfice net</p>
+          <p className={`mt-2 text-[44px] font-semibold leading-none tracking-tight tabular-nums lg:text-[52px] text-white`}>
+            <AnimatedNumber value={stats.beneficeNetFiscal} format={formatCHF} />
           </p>
+          <p className="mt-3 text-[14px] text-white">Revenu d’indépendante imposable (ACI)</p>
         </div>
+        <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          <Metric
+            size="md"
+            label="Chiffre d’affaires"
+            value={formatCHF(stats.chiffreAffairesTotal)}
+            hint={<>Soins {formatCHF(stats.caPrestations)} · boutique {formatCHF(stats.caProduitsVente)}{stats.caBonsCadeaux > 0 && <> · bons {formatCHF(stats.caBonsCadeaux)}</>}</>}
+          />
+          <Metric size="md" label="Marge brute" value={formatCHF(stats.margeBruteTotale)} hint={`${stats.margeBrutePct} % du chiffre d’affaires`} />
+          <Metric
+            size="md"
+            tone={stats.soldeTresoreriePeriode >= 0 ? 'default' : 'negative'}
+            label="Trésorerie"
+            value={formatCHF(stats.soldeTresoreriePeriode)}
+            hint="encaissé − décaissé"
+          />
+        </dl>
+      </section>
 
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Trésorerie Nette Disponible</p>
-          <p className={`text-2xl font-bold mt-1 ${stats.soldeTresoreriePeriode >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-            {formatCHF(stats.soldeTresoreriePeriode)}
-          </p>
-          <p className="text-[12px] text-stone-500 mt-1">
-            Encaissements − Décaissements réels
-          </p>
-        </div>
-      </div>
-
-      {/* Onglets navigation */}
-      <div className="flex border-b border-stone-200 gap-x-6 flex-wrap text-sm font-medium pb-1">
-        <button
-          onClick={() => setActiveTab('compte_resultat')}
-          className={`pb-3 transition-colors cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'compte_resultat'
-              ? 'border-b-2 border-stone-900 text-stone-900 font-semibold'
-              : 'text-stone-500 hover:text-stone-800'
-          }`}
-        >
-          <PieChart size={16} /> Compte de Résultat (P&L)
-        </button>
-        <button
-          onClick={() => setActiveTab('tresorerie')}
-          className={`pb-3 transition-colors cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'tresorerie'
-              ? 'border-b-2 border-stone-900 text-stone-900 font-semibold'
-              : 'text-stone-500 hover:text-stone-800'
-          }`}
-        >
-          <Wallet size={16} /> Trésorerie & Prélèvements Privés
-        </button>
-        <button
-          onClick={() => setActiveTab('avs')}
-          className={`pb-3 transition-colors cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'avs'
-              ? 'border-b-2 border-stone-900 text-stone-900 font-semibold'
-              : 'text-stone-500 hover:text-stone-800'
-          }`}
-        >
-          <Coins size={16} /> Cotisations AVS Vaud ({stats.estimationAvs.tauxPct} %)
-        </button>
-        <button
-          onClick={() => setActiveTab('impots_vaud')}
-          className={`pb-3 transition-colors cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'impots_vaud'
-              ? 'border-b-2 border-stone-900 text-stone-900 font-semibold'
-              : 'text-stone-500 hover:text-stone-800'
-          }`}
-        >
-          <Landmark size={16} /> Déclaration Impôt État de Vaud
-        </button>
+      {/* Onglets */}
+      <div role="tablist" aria-label="Rubriques du bilan" className="inline-flex max-w-full flex-wrap gap-1 rounded-xl bg-stone-100 p-1 print:hidden">
+        {([
+          { id: 'compte_resultat', label: 'Compte de résultat', icon: PieChart },
+          { id: 'tresorerie', label: 'Trésorerie et prélèvements', icon: Wallet },
+          { id: 'avs', label: `AVS (${stats.estimationAvs.tauxPct} %)`, icon: Coins },
+          { id: 'impots_vaud', label: 'Impôts Vaud', icon: Landmark },
+        ] as const).map(t => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={activeTab === t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3.5 text-[14px] transition-colors cursor-pointer ${
+              activeTab === t.id ? 'bg-stone-900 font-semibold text-white' : 'font-medium text-stone-600 hover:text-stone-950'
+            }`}
+          >
+            <t.icon size={16} aria-hidden="true" /> {t.label}
+          </button>
+        ))}
       </div>
 
       {/* ── 1. COMPTE DE RÉSULTAT (P&L) ────────────────────────────────────── */}
       {activeTab === 'compte_resultat' && (
-        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden text-xs">
+        <div className="bg-stone-50 rounded-xl overflow-hidden text-xs">
           <div className="p-4 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
             <h3 className="font-bold text-stone-900 text-sm">
               Compte de Résultat Synthétique — Année {annee} (Plan Comptable Suisse)
@@ -326,7 +292,7 @@ export default function BilanClient() {
       {/* ── 2. TRÉSORERIE & RÉMUNÉRATION ──────────────────────────────────── */}
       {activeTab === 'tresorerie' && (
         <div className="space-y-4">
-          <div className="bg-white p-6 rounded-xl border border-stone-200 space-y-4 text-xs">
+          <div className="bg-stone-50 p-6 rounded-xl space-y-4 text-xs">
             <h3 className="font-bold text-stone-900 text-sm flex items-center gap-2">
               <Wallet size={18} className="text-accent" />
               Pilotage des Flux Réels de Trésorerie (Banque & Caisse)
@@ -363,7 +329,7 @@ export default function BilanClient() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border border-stone-200 space-y-4 text-xs">
+          <div className="bg-stone-50 p-6 rounded-xl space-y-4 text-xs">
             <h3 className="font-bold text-stone-900 text-sm flex items-center gap-2">
               <Building size={18} className="text-accent" />
               Situation {arreteLabel} : stock et dettes fournisseurs
@@ -407,7 +373,7 @@ export default function BilanClient() {
 
       {/* ── 3. COTISATIONS AVS VAUD ───────────────────────────────────────── */}
       {activeTab === 'avs' && (
-        <div className="bg-white p-6 rounded-xl border border-stone-200 space-y-6 text-xs">
+        <div className="bg-stone-50 p-6 rounded-xl space-y-6 text-xs">
           <div>
             <h3 className="font-bold text-stone-900 text-sm flex items-center gap-2">
               <Coins size={18} className="text-amber-600" />
@@ -444,7 +410,7 @@ export default function BilanClient() {
             </div>
           </div>
 
-          <div className="border border-stone-200 rounded-xl p-4 bg-stone-50/60 space-y-2">
+          <div className="border border-stone-200 rounded-xl p-4 bg-stone-50 space-y-2">
             <h4 className="font-semibold text-stone-800">💡 Conseil de l'équipe stratégique :</h4>
             <p className="text-stone-600 leading-relaxed">
               Pour éviter les mauvaises surprises lors de la taxation définitive de la Caisse de compensation vaudoise (qui intervient souvent 1 à 2 ans plus tard), provisionnez chaque mois <strong>{formatCHF(stats.estimationAvs.provisionMensuelle)}</strong>. Si vos acomptes versés sont inférieurs, vous aurez la trésorerie prête sans impact sur votre sérénité.
@@ -455,7 +421,7 @@ export default function BilanClient() {
 
       {/* ── 4. DÉCLARATION IMPÔT ÉTAT DE VAUD ─────────────────────────────── */}
       {activeTab === 'impots_vaud' && (
-        <div className="bg-white p-6 rounded-xl border border-stone-200 space-y-6 text-xs">
+        <div className="bg-stone-50 p-6 rounded-xl space-y-6 text-xs">
           <div>
             <h3 className="font-bold text-stone-900 text-sm flex items-center gap-2">
               <Landmark size={18} className="text-stone-800" />
@@ -476,12 +442,12 @@ export default function BilanClient() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                <tr className="hover:bg-stone-50/50">
+                <tr className="hover:bg-stone-50">
                   <td className="py-3 px-4 font-mono font-bold text-stone-700">Rubrique 1.1</td>
                   <td className="py-3 px-4 font-medium text-stone-900">Chiffre d'affaires brut (ventes + honoraires soins)</td>
                   <td className="py-3 px-4 text-right font-bold text-stone-900">{formatCHF(stats.chiffreAffairesTotal)}</td>
                 </tr>
-                <tr className="hover:bg-stone-50/50">
+                <tr className="hover:bg-stone-50">
                   <td className="py-3 px-4 font-mono font-bold text-stone-700">Rubrique 2.1</td>
                   <td className="py-3 px-4 text-stone-700">
                     <div className="font-medium text-stone-900">Achats de marchandises et de matières premières</div>
@@ -495,7 +461,7 @@ export default function BilanClient() {
                   </td>
                   <td className="py-3 px-4 text-right font-medium text-stone-900">{formatCHF(stats.achatsTotal)}</td>
                 </tr>
-                <tr className="hover:bg-stone-50/50">
+                <tr className="hover:bg-stone-50">
                   <td className="py-3 px-4 font-mono font-bold text-stone-700">Rubrique 2.2</td>
                   <td className="py-3 px-4 text-stone-700">
                     <div>Variation des stocks {arreteLabel} (stock de fin − stock de début)</div>
@@ -507,14 +473,14 @@ export default function BilanClient() {
                     {stats.variationStockEstimee >= 0 ? '− ' : '+ '}{formatCHF(Math.abs(stats.variationStockEstimee))}
                   </td>
                 </tr>
-                <tr className="hover:bg-stone-50/50">
+                <tr className="hover:bg-stone-50">
                   <td className="py-3 px-4 font-mono font-bold text-stone-700">Rubrique 3.1</td>
                   <td className="py-3 px-4 text-stone-700">Cotisations sociales de l'exploitant (AVS / AI / APG)</td>
                   <td className="py-3 px-4 text-right font-medium text-stone-900">
                     {formatCHF(stats.cotisationsAvsPayees > 0 ? stats.cotisationsAvsPayees : stats.estimationAvs.totalAnnuel)}
                   </td>
                 </tr>
-                <tr className="hover:bg-stone-50/50">
+                <tr className="hover:bg-stone-50">
                   <td className="py-3 px-4 font-mono font-bold text-stone-700">Rubrique 4.1</td>
                   <td className="py-3 px-4 text-stone-700">Autres charges d'exploitation justifiées par l'usage commercial</td>
                   <td className="py-3 px-4 text-right font-medium text-stone-900">{formatCHF(stats.chargesExploitationTotal)}</td>

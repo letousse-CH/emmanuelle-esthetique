@@ -241,7 +241,7 @@ export default function OffresClient() {
               </p>
             ) : (
               groups.years.map(([year, list], i) => (
-                <details key={year} open={i === 0} className="group rounded-xl border border-stone-200 bg-white">
+                <details key={year} open={i === 0} className="group rounded-xl bg-stone-50">
                   <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden">
                     <span className="text-[16px] font-semibold text-stone-950">
                       {year} <span className="font-normal text-stone-600">· {list.length} offre{list.length > 1 ? 's' : ''}</span>
@@ -285,7 +285,7 @@ function CurrentCard({ offer: o, stats, status, today, actions }: {
   const jours = daysLeft(o.date_fin, today);
   const pct = o.places_max ? Math.min(100, Math.round((prises / o.places_max) * 100)) : 0;
   return (
-    <article className="overflow-hidden rounded-xl border border-stone-200 bg-white">
+    <article className="overflow-hidden rounded-xl bg-stone-50">
       <div className="grid md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:items-start">
         <div className="relative aspect-square bg-stone-100 md:m-5 md:self-start md:overflow-hidden md:rounded-lg">
           {o.image_url ? (
@@ -382,7 +382,7 @@ function OfferList({ offers, statsOf, statusOf, actions, flush = false }: {
   flush?: boolean;
 }) {
   return (
-    <ul className={`divide-y divide-stone-100 ${flush ? '' : 'rounded-xl border border-stone-200 bg-white'}`}>
+    <ul className={`divide-y divide-stone-100 ${flush ? '' : 'rounded-xl bg-stone-50'}`}>
       {offers.map((o) => {
         const s = statsOf(o);
         const st = statusOf(o);

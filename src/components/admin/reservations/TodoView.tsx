@@ -64,10 +64,10 @@ export default function TodoView({
           `le ${formatDateLong(dem)} (${PERIODE_LABEL[per].toLowerCase()}). ` +
           `Quand pouvons-nous en parler ?`;
         return (
-          <li key={b.id} className="rounded-2xl border border-stone-300 bg-white p-4 shadow-xs sm:p-5">
+          <li key={b.id} className="rounded-xl bg-stone-50 p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[14px] font-semibold text-stone-700">
-                <span className="mr-2 inline-grid size-6 place-items-center rounded-full bg-stone-900 text-[12px] text-white">
+                <span className="mr-2 inline-grid size-6 place-items-center rounded-full bg-accent text-[12px] text-accent-fg">
                   {index + 1}
                 </span>
                 <span className={old ? 'text-amber-800' : ''} title={`Reçue le ${formatInstant(b.created_at)}`}>

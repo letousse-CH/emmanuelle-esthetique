@@ -114,7 +114,7 @@ export function UpsellBlock({
   return (
     <div className="space-y-3">
       {options.length > 0 && (
-        <ul className="divide-y divide-stone-200 rounded-xl border border-stone-300 bg-white">
+        <ul className="divide-y divide-stone-200 rounded-xl bg-stone-50">
           {options.map((o) => (
             <li key={o.id} className="flex items-center gap-3 px-3 py-2.5">
               <div className="min-w-0 flex-1">
@@ -148,7 +148,7 @@ export function UpsellBlock({
               {cats.map((c) => (
                 <button
                   key={c} type="button" onClick={() => setSoinsCat(c)}
-                  className="min-h-14 cursor-pointer rounded-xl border border-stone-300 bg-white px-3 py-2 text-left text-[15px] font-semibold text-stone-900 active:bg-accent-soft"
+                  className="min-h-14 cursor-pointer rounded-xl bg-stone-50 px-3 py-2 text-left text-[15px] font-semibold text-stone-900 active:bg-accent-soft"
                 >
                   {CATEGORY_LABEL[c] ?? c}
                 </button>
@@ -196,7 +196,7 @@ export function UpsellBlock({
                 type="button"
                 onClick={() => addCatalog(c)}
                 title={c.duree_minutes ? `${c.duree_minutes} min` : undefined}
-                className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-stone-300 bg-white py-1.5 pl-3 pr-4 text-left text-[14px] font-medium text-stone-900 transition-colors hover:border-accent hover:bg-accent-soft active:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full bg-stone-50 py-1.5 pl-3 pr-4 text-left text-[14px] font-medium text-stone-900 transition-colors hover:border-accent hover:bg-accent-soft active:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
                 <Plus size={16} className="shrink-0 text-accent" aria-hidden="true" />
                 <span>{c.nom}</span>
@@ -252,7 +252,7 @@ export function UpsellBlock({
 /** Total et durée recalculés à l'écran. */
 export function TotalsBar({ prix, duree }: { prix: number; duree: number }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl bg-stone-900 px-4 py-3 text-white" role="status" aria-label="Total du rendez-vous">
+    <div className="flex items-center justify-between gap-3 rounded-xl bg-accent px-4 py-3 text-accent-fg" role="status" aria-label="Total du rendez-vous">
       <div>
         <p className="text-[12.5px] uppercase tracking-wide text-stone-300">Total</p>
         <p className="text-[22px] font-semibold leading-tight">{formatCHF(prix)}</p>

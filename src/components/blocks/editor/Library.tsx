@@ -48,7 +48,7 @@ export default function Library({ onClose, onAddPreset, onAddBlock, targetLabel 
         <div className="flex gap-1 rounded-lg bg-stone-100 p-1">
           {(['sections', 'blocks'] as const).map((t) => (
             <button key={t} type="button" onClick={() => setTab(t)}
-              className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${tab === t ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
+              className={`flex-1 rounded-md py-1.5 text-xs font-semibold ${tab === t ? 'bg-white text-stone-900' : 'text-stone-500'}`}>
               {t === 'sections' ? 'Sections prêtes' : 'Blocs'}
             </button>
           ))}

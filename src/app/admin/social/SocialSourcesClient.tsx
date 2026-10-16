@@ -118,7 +118,7 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
   return (
     <div className="space-y-6">
       {/* Génération automatique */}
-      <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-4">
+      <div className="bg-stone-50 rounded-xl p-6 space-y-4">
         <div>
           <h2 className="text-[18px] font-semibold text-stone-950">Préparation automatique</h2>
           <p className="text-[14px] text-stone-700 mt-1 leading-relaxed">
@@ -182,7 +182,7 @@ export default function SocialSourcesClient({ onGenerated }: { onGenerated?: () 
       </div>
 
       {/* Flux RSS */}
-      <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-5">
+      <div className="bg-stone-50 rounded-xl p-6 space-y-5">
         <div>
           <h2 className="text-[18px] font-semibold text-stone-950 flex items-center gap-2"><Rss size={16} className="text-stone-700" /> Flux d&apos;actualités (RSS)</h2>
           <p className="text-[14px] text-stone-700 mt-1">Les sites que vous suivez (magazines beauté, marques…). Chaque nouvel article d&apos;un flux actif peut devenir un post. Un à trois flux suffisent.</p>

@@ -175,7 +175,7 @@ export default function AutoGenerateSiteModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/70 backdrop-blur-sm animate-fadein">
-      <div className="relative w-full max-w-2xl bg-white border border-stone-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-2xl bg-white border border-stone-200 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 bg-stone-950 text-white flex items-center justify-between border-b border-stone-800">
           <div className="flex items-center gap-3">
@@ -185,7 +185,7 @@ export default function AutoGenerateSiteModal({
             <div>
               <h3 className="font-semibold text-base flex items-center gap-2">
                 Création Automatique du Site
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-normal border border-amber-500/30">
+                <span className="text-[11px] px-2 py-0.5 bg-amber-500/20 text-amber-300 font-normal border border-amber-500/30">
                   IA Éditoriale
                 </span>
               </h3>
@@ -218,8 +218,8 @@ export default function AutoGenerateSiteModal({
           {/* STAGE 2: MISSING EDITORIAL */}
           {stage === 'missing_editorial' && (
             <div className="space-y-6 py-4">
-              <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <div className="p-5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
                   <BookOpen size={20} />
                 </div>
                 <div className="space-y-2">
@@ -288,7 +288,7 @@ export default function AutoGenerateSiteModal({
                     onClick={() => togglePageSelect(p.id)}
                     className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 ${
                       p.selected
-                        ? 'bg-amber-50/40 border-amber-300 shadow-sm'
+                        ? 'bg-amber-50/40 border-amber-300'
                         : 'bg-white border-stone-200 opacity-60 hover:opacity-100'
                     }`}
                   >
@@ -353,7 +353,7 @@ export default function AutoGenerateSiteModal({
           {/* STAGE 5: DONE */}
           {stage === 'done' && (
             <div className="py-8 text-center space-y-5">
-              <div className="w-16 h-16 rounded-2xl bg-green-100 text-green-600 mx-auto flex items-center justify-center shadow-sm">
+              <div className="w-16 h-16 rounded-xl bg-green-100 text-green-600 mx-auto flex items-center justify-center">
                 <CheckCircle2 size={36} />
               </div>
 
@@ -376,7 +376,7 @@ export default function AutoGenerateSiteModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-stone-600 hover:bg-stone-200/60 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-medium text-stone-600 hover:bg-stone-100 transition-colors"
               >
                 Annuler
               </button>

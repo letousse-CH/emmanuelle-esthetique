@@ -120,7 +120,7 @@ export default function SocialContentGenerator({
   }
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+    <div className="rounded-xl bg-stone-50 overflow-hidden">
       <div className="flex items-center gap-3 px-6 py-4 border-b border-stone-200">
         <div className="bg-stone-100 w-8 h-8 rounded-lg flex items-center justify-center text-stone-700">
           <Share2 size={16} aria-hidden="true" />

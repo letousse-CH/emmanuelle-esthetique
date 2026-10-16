@@ -1,14 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import {
-  Target, TrendingUp, Sparkles, Package, AlertTriangle, CheckCircle2,
-  Users, ShoppingBag, ArrowRight, Lightbulb, Award, Flame, Sliders,
-  HelpCircle, RefreshCw, Layers, Calendar, ChevronRight
+  Sparkles, Package, CheckCircle2, ShoppingBag, ArrowRight,
+  Lightbulb, Sliders, RefreshCw, ChevronDown, Target,
 } from 'lucide-react';
-import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
-import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
+import { AnimatedNumber, Button, Callout, LinkButton, Metric, MetricStrip, ProgressBar, SectionHeading } from '../../../../components/admin/ui';
 import { listProducts, listTransactions } from '../../../../services/caisse';
 import { Product, TransactionWithItems, coutAchat, formatCHF, stockLevel, isVenteProduct, recetteEncaissee } from '../../../../types/caisse';
 import { useSettings } from '../../../../hooks/useSettings';
@@ -142,12 +139,10 @@ export default function CockpitClient() {
   const CIBLE_PANIER_MIN = 250;
   const CIBLE_PANIER_MAX = 450;
   const CIBLE_PANIER_MOYEN = 350;
-  const CIBLE_CA_MIN = CIBLE_CLIENTES_HEBDO * CIBLE_PANIER_MIN; // 2'500 CHF
   const CIBLE_CA_CONFORT = CIBLE_CLIENTES_HEBDO * CIBLE_PANIER_MOYEN; // 3'500 CHF
-  const CIBLE_CA_MAX = CIBLE_CLIENTES_HEBDO * CIBLE_PANIER_MAX; // 4'500 CHF
+  const CIBLE_CA_SEUIL = CIBLE_CLIENTES_HEBDO * CIBLE_PANIER_MIN; // 2'500 CHF
 
-  // Pourcentages d'atteinte des objectifs
-  const pctClientes = Math.min(100, Math.round((weekStats.clientesCount / CIBLE_CLIENTES_HEBDO) * 100));
+  // Pourcentage d'atteinte de l'objectif de chiffre d'affaires
   const pctCA = Math.min(100, Math.round((weekStats.caTotal / CIBLE_CA_CONFORT) * 100));
 
   // ── Simulateur Personnalisé ────────────────────────────────────────────────
@@ -178,44 +173,85 @@ export default function CockpitClient() {
     };
   }, [simClientesJour, simJoursSemaine, simPanierMoyen]);
 
-  return (
-    <div className="space-y-6">
-      <CaisseCatalogNav />
+  // ── Semaine jour par jour (lundi → dimanche, heure locale) ──────────────────
+  const week = useMemo(() => {
+    const monday = new Date();
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+    const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const totals = new Map<string, number>();
+    if (demoMode) {
+      [540, 620, 0, 760, 820, 0, 0].forEach((v, i) => totals.set(key(days[i]), v));
+    } else {
+      for (const t of transactions) {
+        if (t.status === 'annulee') continue;
+        const k = key(new Date(t.created_at));
+        totals.set(k, (totals.get(k) ?? 0) + recetteEncaissee(t));
+      }
+    }
+    const todayKey = key(new Date());
+    return {
+      // « 12 au 18 octobre », ou « 28 septembre au 4 octobre » à cheval sur deux mois.
+      label: days[0].getMonth() === days[6].getMonth()
+        ? `${days[0].getDate()} au ${days[6].toLocaleDateString('fr-CH', { day: 'numeric', month: 'long' })}`
+        : `${days[0].toLocaleDateString('fr-CH', { day: 'numeric', month: 'long' })} au ${days[6].toLocaleDateString('fr-CH', { day: 'numeric', month: 'long' })}`,
+      days: days.map((d) => ({
+        key: key(d),
+        short: d.toLocaleDateString('fr-CH', { weekday: 'short' }).replace('.', ''),
+        long: d.toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' }),
+        amount: Math.round((totals.get(key(d)) ?? 0) * 100) / 100,
+        isToday: key(d) === todayKey,
+        isPast: d.getTime() < new Date().setHours(0, 0, 0, 0),
+      })),
+    };
+  }, [transactions, demoMode]);
 
-      {/* En-tête Cockpit */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-stone-900 via-stone-850 to-emerald-950 text-white p-4 sm:p-6 rounded-2xl shadow-md border border-stone-800">
+  // Un seul outil ouvert à la fois : la page reste courte.
+  const [panel, setPanel] = useState<ToolId | null>(null);
+  const togglePanel = (id: ToolId) => setPanel((p) => (p === id ? null : id));
+
+  const resteCA = Math.max(0, CIBLE_CA_CONFORT - weekStats.caTotal);
+  const clientesManquantes = Math.max(0, CIBLE_CLIENTES_HEBDO - weekStats.clientesCount);
+  // Le chemin le plus parlant vers l'objectif : le panier qu'il faudrait aux clientes qui manquent.
+  const panierNecessaire = clientesManquantes > 0 ? Math.ceil(resteCA / clientesManquantes) : 0;
+
+  const panier =
+    weekStats.clientesCount === 0
+      ? { text: 'Pas encore de passage cette semaine.', tone: 'muted' as const }
+      : weekStats.panierMoyen > CIBLE_PANIER_MAX
+        ? { text: 'Au-dessus de la fourchette visée : bravo.', tone: 'good' as const }
+        : weekStats.panierMoyen >= CIBLE_PANIER_MIN
+          ? { text: 'Dans la fourchette visée.', tone: 'good' as const }
+          : { text: `Il manque ${formatCHF(CIBLE_PANIER_MIN - weekStats.panierMoyen)} par cliente : un produit conseil suffit.`, tone: 'warn' as const };
+
+  const tools: { id: ToolId; label: string; summary: string; icon: React.ElementType }[] = [
+    { id: 'stock', label: 'Potentiel du stock', summary: `${formatCHF(stockStats.caPotentiel)} de produits en rayon`, icon: Package },
+    { id: 'conseils', label: 'Conseils de vente', summary: 'Le panier type et les 4 réflexes après le soin', icon: Lightbulb },
+    { id: 'simulateur', label: 'Simulateur de revenu', summary: 'Votre revenu net selon le rythme de travail', icon: Sliders },
+  ];
+
+  const maxDay = Math.max(...week.days.map((d) => d.amount), 1);
+
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-10">
+      {/* ── En-tête ── */}
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
-              <Sparkles size={12} className="text-emerald-400" /> Cockpit de l&apos;Esthéticienne
-            </span>
-            <span className="text-xs text-stone-400">
-              Palézieux · Objectif : 2 clientes / jour
-            </span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            Objectifs & Pilotage de la Semaine
-          </h1>
-          <p className="text-xs text-stone-300 mt-1 max-w-2xl leading-relaxed">
-            Cadencez votre activité avec sérénité : visez <strong>2 clientes par jour</strong> avec un <strong>panier moyen de 250 à 450 CHF</strong> (soin cabine + produits conseil), et exploitez tout le potentiel de votre stock boutique.
+          <p className="text-[14px] font-medium text-stone-500">Semaine du {week.label}</p>
+          <h1 className="sr-only mt-1 text-[30px] font-semibold leading-tight tracking-tight text-stone-950 lg:not-sr-only lg:block">Cockpit</h1>
+          <p className="mt-1 text-[15px] text-stone-600">
+            Le cap : 2 clientes par jour et un panier de 250 à 450 CHF.
           </p>
         </div>
-
-        <div className="flex items-center gap-2 md:shrink-0">
-          <button
-            onClick={() => setDemoMode(!demoMode)}
-            className={`text-[13px] min-h-11 md:min-h-0 px-3 py-1.5 rounded-xl border transition-colors flex items-center gap-1.5 cursor-pointer ${
-              demoMode
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                : 'bg-stone-800 text-stone-300 border-stone-700 hover:bg-stone-700'
-            }`}
-            title="Basculer entre les données réelles et la simulation hebdomadaire"
-          >
-            <RefreshCw size={12} />
-            {demoMode ? 'Données démo actives' : 'Voir simulation type'}
-          </button>
-        </div>
-      </div>
+        <Button variant="ghost" size="sm" icon={RefreshCw} onClick={() => setDemoMode(!demoMode)}>
+          {demoMode ? 'Revenir à mes chiffres' : 'Voir un exemple'}
+        </Button>
+      </header>
 
       {loadError && (
         <Callout
@@ -223,530 +259,357 @@ export default function CockpitClient() {
           title="Les ventes de la semaine n'ont pas pu être lues"
           actions={<Button size="sm" onClick={loadData}>Réessayer</Button>}
         >
-          Les jauges ci-dessous restent à zéro tant que la lecture échoue. Détail : {loadError}
+          Les chiffres ci-dessous restent à zéro tant que la lecture échoue. Détail : {loadError}
         </Callout>
       )}
       {demoMode && (
         <Callout tone="warning">
-          Chiffres de démonstration : ce ne sont pas vos ventes. Cliquez sur « Données démo actives » pour revenir aux vrais chiffres.
+          Chiffres d’exemple : ce ne sont pas vos ventes. « Revenir à mes chiffres » les rétablit.
         </Callout>
       )}
 
-      {/* ── 1. OBJECTIFS DE LA SEMAINE (Jauges 2 clientes/jour & Panier 250-450 CHF) ── */}
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-3">
-          <h2 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
-            <Target size={16} className="text-emerald-700" />
-            Objectifs Hebdomadaires en Cours
-          </h2>
-          <span className="text-xs text-stone-500">
-            Cible : 10 clientes / semaine (2 / jour) · Panier : 250 – 450 CHF
-          </span>
+      {/* ── La semaine, en grand ── */}
+      <section
+        aria-label="Objectifs de la semaine"
+        className="grid gap-10 rounded-xl bg-growth p-6 sm:p-10 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-14"
+      >
+        {/* Chiffre d'affaires : LE chiffre de la page */}
+        <div className="min-w-0">
+          <p className="text-[15px] font-medium text-white">Chiffre d’affaires de la semaine</p>
+          <p className="mt-3 text-[48px] font-semibold leading-none tracking-tight text-white tabular-nums sm:text-[64px]">
+            {loading ? <span className="inline-block h-14 w-72 rounded-xl bg-white/30 animate-pulse" /> : <AnimatedNumber value={weekStats.caTotal} format={formatCHF} />}
+          </p>
+          <p className="mt-3 text-[15px] text-white/90">
+            sur <span className="font-semibold text-white">{formatCHF(CIBLE_CA_CONFORT)}</span> visés · <span className="font-semibold text-white">{pctCA} %</span>
+          </p>
+          <ProgressBar
+            className="mt-6"
+            size="lg"
+            value={weekStats.caTotal}
+            max={CIBLE_CA_CONFORT}
+            marker={{ at: CIBLE_CA_SEUIL, label: 'seuil de rentabilité' }}
+            label="Chiffre d’affaires de la semaine par rapport à l’objectif"
+            onColor
+          />
+          <p className="mt-10 flex items-start gap-2 text-[16px] leading-snug text-white">
+            {resteCA === 0 ? (
+              <><CheckCircle2 size={20} className="mt-0.5 shrink-0 text-white" aria-hidden="true" /> Objectif de la semaine atteint.</>
+            ) : (
+              <><Target size={20} className="mt-0.5 shrink-0 text-white" aria-hidden="true" />
+                <span>
+                  Encore <strong className="font-semibold">{formatCHF(resteCA)}</strong>
+                  {clientesManquantes > 0
+                    ? <> : avec les {clientesManquantes} cliente{clientesManquantes > 1 ? 's' : ''} qui manque{clientesManquantes > 1 ? 'nt' : ''}, un panier de <strong className="font-semibold">{formatCHF(panierNecessaire)}</strong> suffit.</>
+                    : <> pour l’objectif : un produit conseil de plus à chaque passage.</>}
+                </span></>
+            )}
+          </p>
+
+          {/* Jour par jour */}
+          <ol className="mt-8 grid grid-cols-7 items-end gap-2 sm:gap-3" aria-label="Recettes jour par jour">
+            {week.days.map((d, i) => (
+              <li key={d.key} className="flex flex-col items-center gap-1.5" title={`${d.long} : ${formatCHF(d.amount)}`}>
+                <span className={`text-[11.5px] tabular-nums ${d.amount > 0 ? 'font-medium text-white' : 'text-transparent'}`}>
+                  {Math.round(d.amount)}
+                </span>
+                <span className="flex h-16 w-full items-end justify-center">
+                  <span
+                    className={`admin-grow-y w-full max-w-10 rounded-md ${d.amount > 0 ? (d.isToday ? 'bg-white' : 'bg-white/60') : 'bg-white/20'}`}
+                    style={{ height: d.amount > 0 ? `${Math.max(8, (d.amount / maxDay) * 100)}%` : '3px', animationDelay: `${120 + i * 40}ms` }}
+                  />
+                </span>
+                <span className={`text-[12.5px] capitalize ${d.isToday ? 'font-semibold text-white' : 'text-white/90'}`}>{d.short}</span>
+                <span className="sr-only">{d.long} : {formatCHF(d.amount)}</span>
+              </li>
+            ))}
+          </ol>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Jauge Fréquentation (2 clientes par jour) */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
-                <span className="text-xs font-semibold text-stone-600 uppercase">Fréquentation Semaine</span>
-                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 text-[11px] font-bold">
-                  Cible : 2 / jour
-                </span>
-              </div>
-              <div className="mt-3 flex flex-wrap items-baseline gap-x-2">
-                <span className="text-2xl sm:text-3xl font-extrabold break-words text-stone-950">{weekStats.clientesCount}</span>
-                <span className="text-stone-500 text-xs font-medium">/ {CIBLE_CLIENTES_HEBDO} clientes accueillies</span>
-              </div>
-              <p className="text-[11.5px] text-stone-600 mt-1">
-                {weekStats.clientesCount >= CIBLE_CLIENTES_HEBDO ? (
-                  <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                    <CheckCircle2 size={13} /> Objectif de fréquentation atteint !
-                  </span>
-                ) : (
-                  <span>Encore <strong>{Math.max(0, CIBLE_CLIENTES_HEBDO - weekStats.clientesCount)} clientes</strong> pour compléter l&apos;objectif.</span>
-                )}
-              </p>
-            </div>
-
-            <div className="mt-4">
-              <div className="w-full bg-stone-100 rounded-full h-2.5 overflow-hidden">
-                <div
-                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${pctClientes}%` }}
-                />
-              </div>
-              <div className="flex justify-between gap-2 text-[10.5px] text-stone-600 mt-1.5 font-medium">
-                <span>0</span>
-                <span>5 (mi-semaine)</span>
-                <span className="font-bold text-stone-900">10 clientes (Cible)</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Jauge Panier Moyen (250 à 450 CHF) */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
-                <span className="text-xs font-semibold text-stone-600 uppercase">Panier Moyen Réalisé</span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
-                  Fourchette 250 – 450 CHF
-                </span>
-              </div>
-              <div className="mt-3 flex flex-wrap items-baseline gap-x-2">
-                <span className="text-2xl sm:text-3xl font-extrabold break-words text-emerald-800">
-                  {formatCHF(weekStats.panierMoyen)}
-                </span>
-                <span className="text-stone-500 text-xs font-medium">/ cliente</span>
-              </div>
-
-              <div className="mt-1 text-[11.5px]">
-                {weekStats.panierMoyen >= CIBLE_PANIER_MIN && weekStats.panierMoyen <= CIBLE_PANIER_MAX ? (
-                  <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                    <CheckCircle2 size={13} /> Parfaitement dans la fourchette cible !
-                  </span>
-                ) : weekStats.panierMoyen > CIBLE_PANIER_MAX ? (
-                  <span className="text-purple-700 font-semibold flex items-center gap-1">
-                    <Sparkles size={13} /> Performance d&apos;excellence (&gt; 450 CHF)
-                  </span>
-                ) : (
-                  <span className="text-amber-700 font-medium">
-                    Sous la cible (viser 1 produit conseil en plus par soin)
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <div className="relative w-full bg-stone-100 rounded-full h-2.5 overflow-hidden">
-                {/* Zone cible 250 - 450 sur une échelle de 0 à 600 */}
-                <div
-                  className="absolute bg-emerald-100 h-2.5"
-                  style={{ left: `${(250 / 600) * 100}%`, width: `${((450 - 250) / 600) * 100}%` }}
-                />
-                {/* Valeur actuelle */}
-                <div
-                  className={`h-2.5 rounded-full transition-all duration-500 ${
-                    weekStats.panierMoyen >= 250 ? 'bg-emerald-600' : 'bg-amber-500'
-                  }`}
-                  style={{ width: `${Math.min(100, (weekStats.panierMoyen / 600) * 100)}%` }}
-                />
-              </div>
-              <div className="flex justify-between gap-2 text-[10.5px] text-stone-600 mt-1.5 font-medium">
-                <span>0</span>
-                <span className="text-emerald-800 font-bold">250 CHF (Min)</span>
-                <span className="text-emerald-900 font-bold">450 CHF (Haut)</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Jauge Chiffre d'Affaires Hebdomadaire */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
-                <span className="text-xs font-semibold text-stone-600 uppercase">Chiffre d&apos;Affaires Semaine</span>
-                <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11px] font-bold">
-                  Objectif 3&apos;500 CHF
-                </span>
-              </div>
-              <div className="mt-3 flex flex-wrap items-baseline gap-x-2">
-                <span className="text-2xl sm:text-3xl font-extrabold break-words text-stone-950">
-                  {formatCHF(weekStats.caTotal)}
-                </span>
-                <span className="text-stone-500 text-xs font-medium">encaissés</span>
-              </div>
-              <p className="text-[11.5px] text-stone-600 mt-1">
-                Seuil de rentabilité : <strong>{formatCHF(CIBLE_CA_MIN)}</strong> · Confort : <strong>{formatCHF(CIBLE_CA_CONFORT)}</strong>
-              </p>
-            </div>
-
-            <div className="mt-4">
-              <div className="w-full bg-stone-100 rounded-full h-2.5 overflow-hidden">
-                <div
-                  className="bg-emerald-600 h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${pctCA}%` }}
-                />
-              </div>
-              <div className="flex justify-between gap-2 text-[10.5px] text-stone-600 mt-1.5 font-medium">
-                <span>0</span>
-                <span>2&apos;500 CHF (Seuil)</span>
-                <span className="font-bold text-stone-900">3&apos;500 CHF ({pctCA}%)</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── 2. POTENTIEL DE CA DU STOCK VENTE (GISEMENT EN RAYON) ── */}
-      <div className="bg-gradient-to-br from-emerald-50/90 via-white to-stone-50 border border-emerald-200/90 rounded-2xl p-4 sm:p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-emerald-100">
+        {/* Les deux leviers */}
+        <div className="flex min-w-0 flex-col gap-10 border-t border-white/25 pt-10 lg:border-l lg:border-t-0 lg:pl-14 lg:pt-0">
           <div>
-            <div className="flex items-center gap-2">
-              <Package className="text-emerald-700" size={20} />
-              <h2 className="text-base font-bold text-stone-900">
-                Gisement & Potentiel Dormant du Stock Vente Boutique
-              </h2>
-            </div>
-            <p className="text-xs text-stone-600 mt-0.5">
-              Valeur marchande des cosmétiques Phytomer actuellement présents sur vos étagères à l&apos;institut.
+            <p className="text-[15px] font-medium text-white">Clientes accueillies</p>
+            <p className="mt-2 flex items-baseline gap-2">
+              <span className="text-[40px] font-semibold leading-none tracking-tight text-white tabular-nums">{loading ? '–' : <AnimatedNumber value={weekStats.clientesCount} />}</span>
+              <span className="text-[16px] text-white/90">sur {CIBLE_CLIENTES_HEBDO}</span>
             </p>
-          </div>
-          <Link
-            href="/admin/caisse/produits"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 hover:text-emerald-950"
-          >
-            Gérer les produits vente <ArrowRight size={13} />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-5">
-          <div className="bg-white min-w-0 p-4 rounded-xl border border-emerald-200/60 shadow-2xs">
-            <span className="text-[11.5px] text-stone-500 font-medium block">CA Potentiel Total en Rayon</span>
-            <span className="text-xl sm:text-2xl font-black break-words text-emerald-800 mt-1 block">
-              {formatCHF(stockStats.caPotentiel)}
-            </span>
-            <span className="text-[11px] text-emerald-700 mt-0.5 block">
-              Valeur de vente TTC intégrale
-            </span>
-          </div>
-
-          <div className="bg-white min-w-0 p-4 rounded-xl border border-purple-200/60 shadow-2xs">
-            <span className="text-[11.5px] text-stone-500 font-medium block">Marge Brute à Encaisser</span>
-            <span className="text-xl sm:text-2xl font-black break-words text-purple-900 mt-1 block">
-              {formatCHF(stockStats.margePotentielle)}
-            </span>
-            <span className="text-[11px] text-purple-700 mt-0.5 block">
-              Bénéfice net marchandise
-            </span>
-          </div>
-
-          <div className="bg-white min-w-0 p-4 rounded-xl border border-stone-200 shadow-2xs">
-            <span className="text-[11.5px] text-stone-500 font-medium block">Articles Vente Disponibles</span>
-            <span className="text-xl sm:text-2xl font-black break-words text-stone-900 mt-1 block">
-              {stockStats.totalUnites} flacons
-            </span>
-            <span className="text-[11px] text-stone-500 mt-0.5 block">
-              sur {stockStats.references} références actives
-            </span>
-          </div>
-
-          <div className="bg-white min-w-0 p-4 rounded-xl border border-blue-200/60 shadow-2xs">
-            <span className="text-[11.5px] text-stone-500 font-medium block">Potentiel en Clientes Équipées</span>
-            <span className="text-xl sm:text-2xl font-black break-words text-blue-900 mt-1 block">
-              ~{Math.round(stockStats.totalUnites / 2)} clientes
-            </span>
-            <span className="text-[11px] text-blue-700 mt-0.5 block">
-              à 2 produits par routine beauté
-            </span>
-          </div>
-        </div>
-
-        {/* Message d'impact pour l'esthéticienne */}
-        <div className="mt-4 p-3.5 bg-white/90 border border-emerald-200 rounded-xl flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2.5">
-            <Lightbulb className="text-amber-500 shrink-0" size={18} />
-            <p className="text-stone-700 text-[11.5px] leading-snug">
-              <strong>Levier direct sans temps cabine :</strong> En conseillant une routine beauté (1 crème + 1 sérum ou nettoyant) à seulement <strong>1 cliente sur 2</strong> parmi vos 10 clientes hebdomadaires, vous débloquez environ <strong>CHF 600.00 à CHF 900.00 de CA supplémentaire</strong> chaque semaine sans rajouter une seule heure de travail.
-            </p>
-          </div>
-        </div>
-
-        {/* Top 5 Produits à plus fort potentiel */}
-        {stockStats.topPotentiel.length > 0 && (
-          <div className="mt-5">
-            <h3 className="text-xs font-bold text-stone-900 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <Award size={14} className="text-emerald-700" />
-              Top 5 des produits à plus fort potentiel en rayon
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-              {stockStats.topPotentiel.map((item, idx) => (
-                <div key={idx} className="bg-white border border-stone-200 rounded-xl p-3 flex flex-col justify-between text-xs">
-                  <div>
-                    <span className="font-semibold text-stone-900 line-clamp-2 leading-tight">
-                      {item.product.nom}
-                    </span>
-                    <span className="text-[11px] text-stone-500 font-mono mt-0.5 block">
-                      Réf. {item.product.reference || '—'}
-                    </span>
-                  </div>
-                  <div className="mt-2.5 pt-2 border-t border-stone-100 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                    <span className="bg-stone-100 text-stone-800 px-1.5 py-0.5 rounded font-bold text-[11px]">
-                      {item.product.stock} en stock
-                    </span>
-                    <span className="text-emerald-800 font-extrabold text-[12px]">
-                      {formatCHF(item.ca)}
-                    </span>
-                  </div>
-                </div>
+            <ul className="mt-4 flex flex-wrap gap-1.5" aria-label={`${weekStats.clientesCount} clientes sur ${CIBLE_CLIENTES_HEBDO}`}>
+              {Array.from({ length: Math.max(CIBLE_CLIENTES_HEBDO, weekStats.clientesCount) }, (_, i) => (
+                <li
+                  key={i}
+                  aria-hidden="true"
+                  className={`size-5 rounded-full ${i < weekStats.clientesCount ? 'admin-pop bg-white' : 'border-2 border-dashed border-white/45'}`}
+                  style={i < weekStats.clientesCount ? { animationDelay: `${200 + i * 60}ms` } : undefined}
+                />
               ))}
-            </div>
+            </ul>
+            <p className="mt-3 text-[14px] text-white/90">
+              {clientesManquantes === 0 ? 'Objectif de fréquentation atteint.' : `Encore ${clientesManquantes} pour l’objectif.`}
+            </p>
           </div>
+
+          <div>
+            <p className="text-[15px] font-medium text-white">Panier moyen</p>
+            <p className="mt-2 flex items-baseline gap-2">
+              <span className="text-[40px] font-semibold leading-none tracking-tight text-white tabular-nums">{loading ? '–' : <AnimatedNumber value={weekStats.panierMoyen} format={formatCHF} />}</span>
+              <span className="text-[16px] text-white/90">par cliente</span>
+            </p>
+            <ProgressBar
+              className="mt-5 mb-6"
+              value={weekStats.panierMoyen}
+              max={600}
+              zone={[CIBLE_PANIER_MIN, CIBLE_PANIER_MAX]}
+              label="Panier moyen, la zone claire marque la fourchette visée de 250 à 450 CHF"
+              onColor
+            />
+            <p className={`flex items-start gap-1.5 text-[14px] ${panier.tone === 'muted' ? 'text-white/90' : 'font-medium text-white'}`}>
+              {panier.tone === 'good' && <CheckCircle2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />}
+              {panier.text}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── À surveiller : seulement s'il y a lieu ── */}
+      {!loading && (stockStats.ruptures.length > 0 || stockStats.bas.length > 0) && (
+        <section aria-labelledby="cockpit-watch" className="space-y-3">
+          <SectionHeading id="cockpit-watch" title="À surveiller" />
+          <ul className="divide-y divide-stone-200 border-y border-stone-200">
+            {stockStats.ruptures.length > 0 && (
+              <WatchRow
+                tone="danger"
+                title={`${stockStats.ruptures.length} produit${stockStats.ruptures.length > 1 ? 's' : ''} en rupture`}
+                detail={stockStats.ruptures.map((p) => p.nom).join(', ')}
+              />
+            )}
+            {stockStats.bas.length > 0 && (
+              <WatchRow
+                tone="warn"
+                title={`${stockStats.bas.length} produit${stockStats.bas.length > 1 ? 's' : ''} sous le seuil d’alerte`}
+                detail="À proposer en priorité aux prochaines clientes, et à recommander."
+              />
+            )}
+          </ul>
+        </section>
+      )}
+
+      {/* ── Pour aller plus loin : à la demande ── */}
+      <section aria-labelledby="cockpit-tools" className="space-y-3">
+        <SectionHeading id="cockpit-tools" title="Pour aller plus loin" />
+        <ul className="divide-y divide-stone-200 border-y border-stone-200">
+          {tools.map((t) => {
+            const open = panel === t.id;
+            return (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-controls={`cockpit-panel-${t.id}`}
+                  onClick={() => togglePanel(t.id)}
+                  className="group flex w-full cursor-pointer items-center gap-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-lg"
+                >
+                  <span className={`grid size-11 shrink-0 place-items-center rounded-xl transition-colors ${open ? 'bg-warm text-warm-ink' : 'bg-warm-soft text-warm-ink group-hover:bg-warm-muted'}`}>
+                    <t.icon size={19} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[16px] font-semibold text-stone-950">{t.label}</span>
+                    <span className="block text-[14px] text-stone-600">{t.summary}</span>
+                  </span>
+                  <ChevronDown size={20} aria-hidden="true" className={`shrink-0 text-stone-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                </button>
+                {open && (
+                  <div id={`cockpit-panel-${t.id}`} className="pb-8 pt-2 sm:pl-15">
+                    {t.id === 'stock' && <StockPanel stats={stockStats} />}
+                    {t.id === 'conseils' && <ConseilsPanel stats={stockStats} />}
+                    {t.id === 'simulateur' && (
+                      <SimulateurPanel
+                        clientesJour={simClientesJour} onClientesJour={setSimClientesJour}
+                        joursSemaine={simJoursSemaine} onJoursSemaine={setSimJoursSemaine}
+                        panierMoyen={simPanierMoyen} onPanierMoyen={setSimPanierMoyen}
+                        results={simResults}
+                      />
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+type ToolId = 'stock' | 'conseils' | 'simulateur';
+type StockStats = {
+  references: number;
+  totalUnites: number;
+  caPotentiel: number;
+  margePotentielle: number;
+  ruptures: Product[];
+  bas: Product[];
+  topPotentiel: { product: Product; ca: number }[];
+};
+
+function WatchRow({ tone, title, detail }: { tone: 'danger' | 'warn'; title: string; detail: string }) {
+  return (
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5">
+      <span className={`size-2.5 shrink-0 rounded-full ${tone === 'danger' ? 'bg-red-600' : 'bg-warm'}`} aria-hidden="true" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold text-stone-950">{title}</span>
+        <span className="block truncate text-[14px] text-stone-600">{detail}</span>
+      </span>
+      <LinkButton size="sm" href="/admin/caisse/produits" icon={ArrowRight}>Voir les produits</LinkButton>
+    </li>
+  );
+}
+
+function StockPanel({ stats }: { stats: StockStats }) {
+  return (
+    <div className="space-y-6">
+      <MetricStrip>
+        <Metric size="lg" tone="warm" label="En rayon, au prix de vente" value={formatCHF(stats.caPotentiel)} />
+        <Metric size="lg" label="Marge à réaliser" value={formatCHF(stats.margePotentielle)} />
+        <Metric size="lg" label="Articles disponibles" value={stats.totalUnites} hint={`${stats.references} références`} />
+      </MetricStrip>
+      <p className="max-w-2xl text-[14.5px] leading-relaxed text-stone-700">
+        Conseiller une routine (une crème et un sérum ou un nettoyant) à une cliente sur deux représente environ <strong>CHF 600 à 900 de plus par semaine</strong>, sans temps de cabine.
+      </p>
+      {stats.topPotentiel.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-[14px] font-semibold text-stone-900">Les produits qui pèsent le plus en rayon</h3>
+          <table className="w-full max-w-2xl text-[14px]">
+            <tbody className="zebra">
+              {stats.topPotentiel.map((item) => (
+                <tr key={item.product.id}>
+                  <td className="py-2 pr-3 font-medium text-stone-900">{item.product.nom}</td>
+                  <td className="py-2 pr-3 text-right text-stone-500 tabular-nums whitespace-nowrap">{item.product.stock} en stock</td>
+                  <td className="py-2 text-right font-semibold text-stone-950 tabular-nums whitespace-nowrap">{formatCHF(item.ca)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <LinkButton href="/admin/caisse/produits" size="sm" icon={ArrowRight}>Gérer les produits</LinkButton>
+    </div>
+  );
+}
+
+function ConseilsPanel({ stats }: { stats: StockStats }) {
+  return (
+    <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      <div>
+        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-stone-950">
+          <ShoppingBag size={17} className="text-warm-strong" aria-hidden="true" /> Le panier de 250 à 450 CHF
+        </h3>
+        <dl className="mt-3 divide-y divide-stone-100 text-[14.5px]">
+          <div className="flex justify-between gap-3 py-2"><dt className="text-stone-800">Soin expert en cabine</dt><dd className="tabular-nums text-stone-900">140 – 180</dd></div>
+          <div className="flex justify-between gap-3 py-2"><dt className="text-stone-800">+ une crème hydratante ou anti-âge</dt><dd className="tabular-nums text-stone-900">75 – 110</dd></div>
+          <div className="flex justify-between gap-3 py-2"><dt className="text-stone-800">+ un sérum Oligoforce ou un nettoyant</dt><dd className="tabular-nums text-stone-900">45 – 105</dd></div>
+          <div className="flex justify-between gap-3 py-2 font-semibold"><dt className="text-stone-950">Panier moyen</dt><dd className="tabular-nums text-warm-ink">260 – 395 CHF</dd></div>
+        </dl>
+        <p className="mt-3 text-[14px] leading-relaxed text-stone-600">
+          Rédiger une ordonnance de soin de deux minutes pendant la tisane de fin de soin.
+        </p>
+        {(stats.ruptures.length > 0 || stats.bas.length > 0) && (
+          <p className="mt-4 text-[14px] leading-relaxed text-stone-600">
+            Les commandes Coskyn arrivent en général sous 48 h : commander dès qu’une référence phare tombe à un exemplaire.
+          </p>
         )}
       </div>
-
-      {/* ── 3. MESSAGES CIBLÉS & COACHING ESTHÉTIQUE POUR EMMANUELLE ── */}
       <div>
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-3">
-          <h2 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
-            <Flame size={16} className="text-accent" />
-            Messages Ciblés & Recommandations du Coach
-          </h2>
-          <span className="text-xs text-stone-500">
-            Conseils personnalisés selon votre stock et vos rendez-vous
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Carte 1 : Alertes Stock et Réassort */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
-            <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
-              <AlertTriangle className="text-amber-500" size={17} />
-              <span>Priorités Stock & Ruptures</span>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              {stockStats.ruptures.length > 0 ? (
-                <div className="p-2.5 rounded-xl bg-red-50/80 border border-red-200 text-red-900">
-                  <p className="font-bold flex items-center gap-1 text-[11.5px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-600 inline-block" />
-                    {stockStats.ruptures.length} produit{stockStats.ruptures.length > 1 ? 's' : ''} en rupture totale :
-                  </p>
-                  <p className="text-[11px] text-red-800 mt-1 line-clamp-2">
-                    {stockStats.ruptures.map(p => p.nom).join(', ')}
-                  </p>
-                  <p className="text-[10.5px] text-red-700 mt-1 italic">
-                    → Prévoyez une commande Coskyn pour ne pas bloquer les ventes conseil post-soin.
-                  </p>
-                </div>
-              ) : (
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11.5px]">
-                  ✓ Aucune rupture critique sur vos produits vente.
-                </div>
-              )}
-
-              {stockStats.bas.length > 0 && (
-                <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900">
-                  <p className="font-bold flex items-center gap-1 text-[11.5px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600 inline-block" />
-                    {stockStats.bas.length} produit{stockStats.bas.length > 1 ? 's' : ''} sous le seuil d&apos;alerte :
-                  </p>
-                  <p className="text-[11px] text-amber-800 mt-0.5">
-                    Proposez-les en priorité aux 2 prochaines clientes !
-                  </p>
-                </div>
-              )}
-
-              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-stone-700 text-[11px]">
-                💡 <strong>Conseil réassort :</strong> Vos commandes Coskyn sont généralement livrées sous 48h. Anticipez votre commande dès qu&apos;une référence phare passe à 1 exemplaire.
-              </div>
-            </div>
-          </div>
-
-          {/* Carte 2 : La Méthode "Panier 250 - 450 CHF" */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
-            <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
-              <ShoppingBag className="text-emerald-700" size={17} />
-              <span>La Formule Panier 250 – 450 CHF</span>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <p className="text-stone-600 text-[11.5px] leading-relaxed">
-                Comment atteindre facilement 350 CHF par cliente sans forcer la vente ?
-              </p>
-
-              <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-950 space-y-1 text-[11.5px]">
-                <div className="flex justify-between gap-3 font-semibold">
-                  <span>1. Soin Expert Cabine</span>
-                  <span>140 – 180 CHF</span>
-                </div>
-                <div className="flex justify-between gap-3 text-stone-700">
-                  <span>+ 1 Crème hydratante / anti-âge</span>
-                  <span>75 – 110 CHF</span>
-                </div>
-                <div className="flex justify-between gap-3 text-stone-700">
-                  <span>+ 1 Sérum Oligoforce ou Nettoyant</span>
-                  <span>45 – 105 CHF</span>
-                </div>
-                <div className="pt-1 border-t border-emerald-200 flex justify-between gap-3 font-extrabold text-emerald-900 text-xs">
-                  <span>= Panier Total Moyen</span>
-                  <span>260 – 395 CHF</span>
-                </div>
-              </div>
-
-              <p className="text-[11px] text-stone-600 leading-snug">
-                <strong>Le secret d&apos;Emmanuelle :</strong> Rédigez une ordonnance de soin personnalisée de 2 minutes pendant la tisane de fin de soin. Le taux de transformation dépasse alors 60 %.
-              </p>
-            </div>
-          </div>
-
-          {/* Carte 3 : Les 4 Réflexes en Cabine */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
-            <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
-              <Sparkles className="text-purple-700" size={17} />
-              <span>Les 4 Réflexes Post-Soin</span>
-            </div>
-
-            <ul className="space-y-2 text-xs text-stone-700">
-              <li className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
-                <span className="text-[11.5px]"><strong>Faire tester la texture</strong> sur le dos de la main de la cliente dès la fin du modelage.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
-                <span className="text-[11.5px]"><strong>Nommer les actifs marins</strong> pendant la pose du masque (ex: Oligomer®, eau d&apos;ajonc).</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
-                <span className="text-[11.5px]"><strong>Prescrire, ne pas vendre</strong> : « Pour conserver cet éclat pendant 4 semaines, appliquez ceci matin et soir ».</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">4</span>
-                <span className="text-[11.5px]"><strong>Glisser 2 échantillons ciblés</strong> dans son sac pour amorcer le prochain achat.</span>
-              </li>
-            </ul>
-          </div>
-        </div>
+        <h3 className="flex items-center gap-2 text-[15px] font-semibold text-stone-950">
+          <Sparkles size={17} className="text-warm-strong" aria-hidden="true" /> Les 4 réflexes après le soin
+        </h3>
+        <ol className="mt-3 space-y-3 text-[14.5px] leading-relaxed text-stone-700">
+          {[
+            ['Faire tester la texture', 'sur le dos de la main, dès la fin du modelage.'],
+            ['Nommer les actifs marins', 'pendant la pose du masque (Oligomer®, eau d’ajonc).'],
+            ['Prescrire, ne pas vendre', ': « Pour garder cet éclat quatre semaines, appliquez ceci matin et soir. »'],
+            ['Glisser deux échantillons ciblés', 'dans son sac pour amorcer le prochain achat.'],
+          ].map(([strong, rest], i) => (
+            <li key={i} className="flex gap-3">
+              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-warm-soft text-[12.5px] font-bold text-warm-ink">{i + 1}</span>
+              <span><strong className="font-semibold text-stone-900">{strong}</strong> {rest}</span>
+            </li>
+          ))}
+        </ol>
       </div>
+    </div>
+  );
+}
 
-      {/* ── 4. SIMULATEUR INTERACTIF DE REVENU & AVS (CANTON DE VAUD) ── */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-stone-200">
-          <div>
-            <div className="flex items-center gap-2">
-              <Sliders className="text-emerald-700" size={18} />
-              <h2 className="text-base font-bold text-stone-900">
-                Simulateur Interactif de Rentabilité & Rémunération
-              </h2>
-            </div>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Ajustez vos hypothèses d&apos;activité pour visualiser votre chiffre d&apos;affaires et votre revenu net d&apos;indépendante (après cotisations AVS Vaud).
-            </p>
-          </div>
-          <span className="px-2.5 py-1 rounded-full bg-stone-100 text-stone-700 text-xs font-semibold">
-            Barème AVS Vaud 2026 inclus
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
-          {/* Curseurs de réglage */}
-          <div className="lg:col-span-6 space-y-5">
-            {/* Curseur Clientes par jour */}
-            <div>
-              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-0.5 mb-1.5">
-                <label className="text-xs font-semibold text-stone-800">
-                  Clientes par jour : <span className="text-emerald-800 text-sm font-bold">{simClientesJour} cliente{simClientesJour > 1 ? 's' : ''} / jour</span>
-                </label>
-                <span className="text-[11px] text-stone-500">Cible à terme : 2</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="4"
-                step="1"
-                value={simClientesJour}
-                onChange={e => setSimClientesJour(Number(e.target.value))}
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-emerald-700"
-              />
-              <div className="flex flex-wrap justify-between gap-x-3 text-[10px] text-stone-400 mt-1">
-                <span>1 (démarrage)</span>
-                <span className="font-bold text-emerald-800">2 (rythme cible)</span>
-                <span>3</span>
-                <span>4 (rythme max)</span>
-              </div>
-            </div>
-
-            {/* Curseur Jours travaillés */}
-            <div>
-              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-0.5 mb-1.5">
-                <label className="text-xs font-semibold text-stone-800">
-                  Jours d&apos;ouverture par semaine : <span className="text-emerald-800 text-sm font-bold">{simJoursSemaine} jours</span>
-                </label>
-                <span className="text-[11px] text-stone-500">{simClientesJour * simJoursSemaine} clientes / semaine</span>
-              </div>
-              <input
-                type="range"
-                min="3"
-                max="6"
-                step="1"
-                value={simJoursSemaine}
-                onChange={e => setSimJoursSemaine(Number(e.target.value))}
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-emerald-700"
-              />
-              <div className="flex flex-wrap justify-between gap-x-3 text-[10px] text-stone-400 mt-1">
-                <span>3 jours</span>
-                <span>4 jours</span>
-                <span className="font-bold text-emerald-800">5 jours (Mar - Sam)</span>
-                <span>6 jours</span>
-              </div>
-            </div>
-
-            {/* Curseur Panier Moyen */}
-            <div>
-              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-0.5 mb-1.5">
-                <label className="text-xs font-semibold text-stone-800">
-                  Panier moyen par cliente : <span className="text-emerald-800 text-sm font-bold">{formatCHF(simPanierMoyen)}</span>
-                </label>
-                <span className="text-[11px] text-stone-500">Fourchette : 250 à 450 CHF</span>
-              </div>
-              <input
-                type="range"
-                min="150"
-                max="500"
-                step="25"
-                value={simPanierMoyen}
-                onChange={e => setSimPanierMoyen(Number(e.target.value))}
-                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-emerald-700"
-              />
-              <div className="flex flex-wrap justify-between gap-x-3 text-[10px] text-stone-400 mt-1">
-                <span>150 CHF (Soin seul)</span>
-                <span className="font-semibold text-emerald-700">250 CHF (Soin + 1 produit)</span>
-                <span className="font-bold text-emerald-800">350 CHF (Soin + Routine)</span>
-                <span>450 CHF (Haute gamme)</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Résultats projetés */}
-          <div className="lg:col-span-6 bg-stone-50 p-4 sm:p-5 rounded-2xl border border-stone-200 flex flex-col justify-between">
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-stone-900 uppercase tracking-wider block">
-                Projection Financière Réalisable
-              </span>
-
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 text-xs">
-                <div className="p-3 min-w-0 bg-white rounded-xl border border-stone-200">
-                  <span className="text-stone-500 text-[11px]">CA Hebdomadaire</span>
-                  <p className="text-base sm:text-lg font-bold text-stone-950 mt-0.5 break-words">{formatCHF(simResults.caSemaine)}</p>
-                  <p className="text-[10.5px] text-stone-400">sur {simResults.clientesSemaine} clientes</p>
-                </div>
-
-                <div className="p-3 min-w-0 bg-white rounded-xl border border-stone-200">
-                  <span className="text-stone-500 text-[11px]">CA Mensuel Estimé</span>
-                  <p className="text-base sm:text-lg font-bold text-stone-950 mt-0.5 break-words">{formatCHF(simResults.caMois)}</p>
-                  <p className="text-[10.5px] text-stone-400">base 4.2 semaines</p>
-                </div>
-              </div>
-
-              <div className="p-3.5 bg-emerald-50/80 min-w-0 border border-emerald-200 rounded-xl text-xs space-y-1">
-                <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-emerald-950 font-bold">
-                  <span>Rémunération Nette Mensuelle Estimée</span>
-                  <span className="text-sm font-extrabold text-emerald-800">
-                    {formatCHF(simResults.remunerationNetteMensuelle)} / mois
-                  </span>
-                </div>
-                <p className="text-[11px] text-emerald-800">
-                  Après déduction du coût matières (produits cabine + revente), des charges de fonctionnement de l&apos;institut (~20&apos;000 CHF/an) et de la provision pour cotisations AVS ({formatCHF(Math.round(simResults.avsAnnuel / 12))}/mois).
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-stone-200 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
-              <span className="text-stone-500 text-[11px]">Chiffre d&apos;affaires annuel projeté :</span>
-              <span className="font-bold text-stone-900">{formatCHF(simResults.caAn)} / an</span>
-            </div>
-          </div>
-        </div>
+function SimulateurPanel({
+  clientesJour, onClientesJour, joursSemaine, onJoursSemaine, panierMoyen, onPanierMoyen, results,
+}: {
+  clientesJour: number; onClientesJour: (v: number) => void;
+  joursSemaine: number; onJoursSemaine: (v: number) => void;
+  panierMoyen: number; onPanierMoyen: (v: number) => void;
+  results: { clientesSemaine: number; caSemaine: number; caMois: number; caAn: number; avsAnnuel: number; remunerationNetteMensuelle: number };
+}) {
+  return (
+    <div className="grid gap-10 lg:grid-cols-2">
+      <div className="space-y-6">
+        <SimSlider label="Clientes par jour" shown={`${clientesJour}`} hint="Cible : 2" min={1} max={4} step={1} value={clientesJour} onChange={onClientesJour} />
+        <SimSlider label="Jours d’ouverture par semaine" shown={`${joursSemaine}`} hint={`${clientesJour * joursSemaine} clientes par semaine`} min={3} max={6} step={1} value={joursSemaine} onChange={onJoursSemaine} />
+        <SimSlider label="Panier moyen" shown={formatCHF(panierMoyen)} hint="Cible : 250 à 450 CHF" min={150} max={500} step={25} value={panierMoyen} onChange={onPanierMoyen} />
       </div>
+      <div>
+        <p className="text-[14px] font-medium text-stone-600">Revenu net estimé</p>
+        <p className="mt-1.5 text-[40px] font-semibold leading-none tracking-tight text-warm-ink tabular-nums">
+          {formatCHF(results.remunerationNetteMensuelle)}<span className="ml-1 text-[18px] font-medium text-stone-500">/ mois</span>
+        </p>
+        <p className="mt-2 text-[13.5px] leading-snug text-stone-600">
+          Après coût matières, charges de l’institut (~20&apos;000 CHF par an) et AVS ({formatCHF(Math.round(results.avsAnnuel / 12))} par mois, barème Vaud 2026).
+        </p>
+        <MetricStrip className="mt-8">
+          <Metric size="md" label="Par semaine" value={formatCHF(results.caSemaine)} hint={`${results.clientesSemaine} clientes`} />
+          <Metric size="md" label="Par mois" value={formatCHF(results.caMois)} hint="4.2 semaines" />
+          <Metric size="md" label="Par an" value={formatCHF(results.caAn)} hint="48 semaines" />
+        </MetricStrip>
+      </div>
+    </div>
+  );
+}
+
+function SimSlider({
+  label,
+  shown,
+  hint,
+  min,
+  max,
+  step,
+  value,
+  onChange,
+}: {
+  label: string;
+  shown: string;
+  hint: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const id = React.useId();
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3">
+        <label htmlFor={id} className="text-[14.5px] font-medium text-stone-800">{label}</label>
+        <span className="text-[18px] font-semibold text-stone-950 tabular-nums">{shown}</span>
+      </div>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full h-2 cursor-pointer appearance-none rounded-lg bg-stone-200 accent-warm-strong"
+      />
+      <p className="mt-1.5 text-[12.5px] text-stone-500">{hint}</p>
     </div>
   );
 }

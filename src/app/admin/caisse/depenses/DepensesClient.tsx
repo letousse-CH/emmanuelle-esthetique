@@ -13,8 +13,7 @@ import FactureImportModal from './FactureImportModal';
 import DrivePanel from './DrivePanel';
 import { attachJustificatif, openJustificatif } from '../../../../services/receipts';
 import { downloadExpensesCsv } from '../../../../utils/expensesExport';
-import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
-import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
+import { AnimatedNumber, Button, Callout, Metric, MetricStrip } from '../../../../components/admin/ui';
 import {
   createExpense,
   deleteExpense,
@@ -273,45 +272,30 @@ export default function DepensesClient() {
 
   return (
     <div className="space-y-6">
-      <CaisseCatalogNav />
 
-      <PageHeader
-        title="Factures & Dépenses"
-        description="Photographiez un ticket de caisse : l'IA lit le fournisseur, le montant et la TVA, propose le compte, et la photo est archivée avec la dépense. Les bons de commande Coskyn se ventilent dans le stock boutique ou cabine."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                className="hidden"
-                onChange={handleTicketPicked}
-              />
-              <span className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13.5px] font-medium hover:bg-accent-hover transition-colors shadow-xs">
-                <Camera size={16} /> Photographier un ticket
-              </span>
-            </label>
-            <label className="cursor-pointer" title="Facture fournisseur détaillée (PDF ou photo) : ses articles entrent en stock">
-              <input
-                type="file"
-                accept="application/pdf,image/*"
-                className="hidden"
-                onChange={handleFacturePicked}
-              />
-              <span className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-stone-900 text-white text-[13.5px] font-medium hover:bg-stone-800 transition-colors shadow-xs">
-                <UploadCloud size={16} /> Facture fournisseur → stock
-              </span>
-            </label>
-            <Button
-              variant="secondary"
-              icon={Plus}
-              onClick={() => setManualModalOpen(true)}
-            >
-              Autre dépense
-            </Button>
-          </div>
-        }
-      />
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
+          <h1 className="sr-only text-[30px] font-semibold leading-tight tracking-tight text-stone-950 lg:not-sr-only">Factures et dépenses</h1>
+          <p className="mt-1 text-[15px] text-stone-600">
+            Photographiez un ticket ou importez une facture : l’IA lit la pièce, vous relisez, elle est archivée avec la dépense.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="ghost" icon={Plus} onClick={() => setManualModalOpen(true)}>Autre dépense</Button>
+          <label className="cursor-pointer" title="Facture fournisseur détaillée (PDF ou photo) : ses articles entrent en stock">
+            <input type="file" accept="application/pdf,image/*" className="sr-only" onChange={handleFacturePicked} />
+            <span className="inline-flex h-11 items-center gap-2 rounded-lg bg-stone-100 px-4 text-[15px] font-semibold text-stone-900 transition-colors hover:bg-stone-200 lg:h-10 lg:text-[14px]">
+              <UploadCloud size={16} /> Facture fournisseur → stock
+            </span>
+          </label>
+          <label className="cursor-pointer">
+            <input type="file" accept="image/*,application/pdf" className="sr-only" onChange={handleTicketPicked} />
+            <span className="inline-flex h-11 items-center gap-2 rounded-lg bg-accent px-4 text-[15px] font-semibold text-accent-fg transition-colors hover:bg-accent-hover lg:h-10 lg:text-[14px]">
+              <Camera size={16} /> Photographier un ticket
+            </span>
+          </label>
+        </div>
+      </header>
 
       <DrivePanel onNotice={setNotice} />
       <input ref={attachInput} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleAttachPicked} />
@@ -328,49 +312,38 @@ export default function DepensesClient() {
         </Callout>
       )}
 
-      {/* Cartes de synthèse */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Total Dépenses</p>
-          <p className="text-2xl font-bold text-stone-900 mt-1">{formatCHF(totalTTC)}</p>
-          <p className="text-[12px] text-stone-500 mt-1">{expenses.length} factures enregistrées</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Factures à payer</p>
-          <p className={`text-2xl font-bold mt-1 ${countAPayer > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-            {formatCHF(totalAPayer)}
-          </p>
-          <p className="text-[12px] text-stone-500 mt-1">{countAPayer} facture{countAPayer > 1 ? 's' : ''} en attente</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-emerald-800 uppercase tracking-wide font-semibold">Ventilation Vente (4000)</p>
-          <p className="text-2xl font-bold text-emerald-800 mt-1">{formatCHF(ventilationTotals.vente)}</p>
-          <p className="text-[12px] text-stone-500 mt-1">Cosmétiques revente cliente</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-purple-800 uppercase tracking-wide font-semibold">Ventilation Cabine (4200)</p>
-          <p className="text-2xl font-bold text-purple-900 mt-1">{formatCHF(ventilationTotals.cabine)}</p>
-          <p className="text-[12px] text-stone-500 mt-1">Produits pro & matières soins</p>
-        </div>
-      </div>
+      {/* Synthèse */}
+      <MetricStrip className="py-2">
+        <Metric
+          size="lg"
+          tone={countAPayer > 0 ? 'warm' : 'muted'}
+          label="À payer"
+          value={<AnimatedNumber value={totalAPayer} format={formatCHF} />}
+          hint={countAPayer > 0 ? `${countAPayer} facture${countAPayer > 1 ? 's' : ''} en attente` : 'Tout est réglé'}
+        />
+        <Metric size="lg" label="Total des dépenses" value={formatCHF(totalTTC)} hint={`${expenses.length} pièce${expenses.length > 1 ? 's' : ''}`} />
+        <Metric size="lg" label="Achats revente" value={formatCHF(ventilationTotals.vente)} hint="compte 4000" />
+        <Metric size="lg" label="Achats cabine" value={formatCHF(ventilationTotals.cabine)} hint="compte 4200" />
+      </MetricStrip>
 
       {/* Barre de filtres */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-stone-200">
-        <div className="flex items-center gap-1 flex-wrap w-full sm:w-auto">
+      <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+        <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
           {[
             { id: 'tous', label: 'Toutes' },
             { id: 'a_payer', label: `À payer (${countAPayer})` },
-            { id: 'marchandises', label: 'Achats & Stocks (4000/4200)' },
-            { id: 'exploitation', label: 'Charges d’exploitation (6000+)' },
-            { id: 'avs', label: 'Cotisations AVS (5000)' },
+            { id: 'marchandises', label: 'Achats et stock' },
+            { id: 'exploitation', label: 'Charges' },
+            { id: 'avs', label: 'AVS' },
           ].map(f => (
             <button
               key={f.id}
               onClick={() => setActiveGroup(f.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+              aria-pressed={activeGroup === f.id}
+              className={`inline-flex h-9 items-center whitespace-nowrap border px-3.5 text-[13.5px] font-medium transition-colors cursor-pointer ${
                 activeGroup === f.id
-                  ? 'bg-stone-900 text-white'
-                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                  ? 'border-stone-900 bg-accent text-white'
+                  : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
               }`}
             >
               {f.label}
@@ -384,13 +357,13 @@ export default function DepensesClient() {
             placeholder="Rechercher fournisseur, n°..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="flex-1 sm:w-56 px-3 py-1.5 text-xs rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-accent"
+            className="h-9 flex-1 rounded-lg border border-stone-200 bg-white px-3 text-[13.5px] outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 sm:w-56"
           />
           <select
             value={exportYear}
             onChange={e => setExportYear(Number(e.target.value))}
             aria-label="Année à exporter"
-            className="px-2 py-1.5 text-xs rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-accent"
+            className="h-9 rounded-lg border border-stone-200 bg-white px-2 text-[13.5px] outline-none focus:border-accent"
           >
             {exportYears.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
@@ -398,7 +371,7 @@ export default function DepensesClient() {
             type="button"
             onClick={() => downloadExpensesCsv(expenses, exportYear, payments)}
             title="Export CSV pour la fiduciaire : fournisseur, adresse, n° IDE, compte, TVA par taux, justificatif"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-stone-100 text-stone-700 hover:bg-stone-200 whitespace-nowrap cursor-pointer"
+            className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-stone-100 px-3 text-[13.5px] font-medium text-stone-800 hover:bg-stone-200 cursor-pointer"
           >
             <Download size={13} /> Export fiduciaire
           </button>
@@ -406,7 +379,7 @@ export default function DepensesClient() {
       </div>
 
       {/* Liste des factures */}
-      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-2xs">
+      <div className="data-frame overflow-hidden rounded-xl">
         {loading ? (
           <div className="p-8 text-center text-sm text-stone-500">Chargement des dépenses…</div>
         ) : filteredExpenses.length === 0 ? (
@@ -423,33 +396,33 @@ export default function DepensesClient() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-[13px]">
               <thead>
-                <tr className="border-b border-stone-200 bg-stone-50/70 text-stone-500 font-semibold uppercase tracking-wider">
-                  <th className="py-3 px-4">Fournisseur & Libellé</th>
-                  <th className="py-3 px-4">Catégorie Comptable</th>
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4">Statut</th>
-                  <th className="py-3 px-4 text-right">Montant TTC</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                <tr className="border-b border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-500">
+                  <th className="py-2.5 px-4">Fournisseur</th>
+                  <th className="py-2.5 px-4">Compte</th>
+                  <th className="py-2.5 px-4">Date</th>
+                  <th className="py-2.5 px-4">Paiement</th>
+                  <th className="py-2.5 px-4 text-right">Montant TTC</th>
+                  <th className="py-2.5 px-4" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="zebra">
                 {filteredExpenses.map(exp => {
                   const stat = EXPENSE_STATUS_LABELS[exp.statut] || { label: exp.statut, color: 'bg-stone-100 text-stone-600' };
                   const sit = situationPaiement(exp, payments);
                   return (
-                    <tr key={exp.id} className="hover:bg-stone-50/50 transition-colors">
+                    <tr key={exp.id} className="transition-colors hover:bg-row-hover">
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-stone-900 flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 text-[14px] font-semibold text-stone-950">
                           {exp.fournisseur}
                           {exp.is_stock_invoice && (
-                            <span className="text-[10.5px] px-1.5 py-0.5 rounded-sm font-normal bg-purple-100 text-purple-800">
+                            <span className="bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-700 rounded">
                               Stock lié
                             </span>
                           )}
                           {exp.type_piece === 'ticket' && (
-                            <span className="text-[10.5px] px-1.5 py-0.5 rounded-sm font-normal bg-stone-100 text-stone-700">
+                            <span className="bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-700 rounded">
                               Ticket
                             </span>
                           )}
@@ -476,19 +449,10 @@ export default function DepensesClient() {
                                 </span>
                               </div>
                               {vent.hasVentilation && (
-                                <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
-                                  <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
-                                    Vente: {formatCHF(vent.partVenteTTC)}
-                                  </span>
-                                  <span className="bg-purple-50 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded font-medium">
-                                    Cabine: {formatCHF(vent.partCabineTTC)}
-                                  </span>
-                                  {vent.partConsommablesTTC > 0 && (
-                                    <span className="bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
-                                      Matériel: {formatCHF(vent.partConsommablesTTC)}
-                                    </span>
-                                  )}
-                                </div>
+                                <p className="mt-1 text-[12px] text-stone-500 tabular-nums">
+                                  Vente {formatCHF(vent.partVenteTTC)} · Cabine {formatCHF(vent.partCabineTTC)}
+                                  {vent.partConsommablesTTC > 0 && <> · Matériel {formatCHF(vent.partConsommablesTTC)}</>}
+                                </p>
                               )}
                             </div>
                           );
@@ -502,11 +466,11 @@ export default function DepensesClient() {
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {sit.etat === 'partielle' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border bg-sky-50 text-sky-800 border-sky-200">
+                          <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 border bg-sky-50 text-sky-800 border-sky-200 rounded">
                             Payée {sit.nbPayes}/{sit.nbEcheances}
                           </span>
                         ) : (
-                          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${stat.color}`}>
+                          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 border ${stat.color}`}>
                             {stat.label}
                           </span>
                         )}
@@ -607,7 +571,7 @@ export default function DepensesClient() {
       {/* Modale de consultation des articles d'une facture existante */}
       {viewExpense && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-3xl w-full border border-stone-200 shadow-xl overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="bg-white rounded-xl max-w-3xl w-full border border-stone-200 shadow-xl overflow-hidden max-h-[85vh] flex flex-col">
             <div className="p-5 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-stone-900 text-base">
@@ -633,7 +597,7 @@ export default function DepensesClient() {
                       <th className="py-2 px-3 text-right">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-stone-100">
+                  <tbody className="zebra">
                     {viewExpense.items.map((it, idx) => (
                       <tr key={idx}>
                         <td className="py-2 px-3 font-mono text-stone-400">{it.reference || '—'}</td>
@@ -689,7 +653,7 @@ export default function DepensesClient() {
       {/* Modale de saisie manuelle d'une charge d'exploitation */}
       {manualModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-stone-200 shadow-xl overflow-hidden">
+          <div className="bg-white rounded-xl max-w-lg w-full border border-stone-200 shadow-xl overflow-hidden">
             <div className="p-5 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
               <h3 className="font-bold text-stone-900 text-base">Enregistrer une facture de dépense</h3>
               <button onClick={() => setManualModalOpen(false)} className="text-stone-400 hover:text-stone-600">✕</button>

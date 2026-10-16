@@ -129,7 +129,7 @@ function RichTextarea({
   };
 
   const btn =
-    'px-2 py-1 border border-zinc-300 rounded-[5px] text-[11px] font-semibold text-zinc-800 bg-white hover:bg-zinc-900 hover:text-white transition-all cursor-pointer shadow-2xs';
+    'px-2 py-1 border-zinc-300 rounded-[5px] text-[11px] font-semibold text-zinc-800 bg-stone-50 hover:bg-zinc-900 hover:text-white transition-all cursor-pointer';
 
   return (
     <div>
@@ -498,7 +498,7 @@ function ThemeChoice({
                 }`}
             >
               <span
-                className="grid size-6 shrink-0 place-items-center rounded-md border border-stone-300 shadow-xs"
+                className="grid size-6 shrink-0 place-items-center rounded-md border border-stone-300"
                 style={{ backgroundColor: option.bg, color: option.fg }}
               >
                 {option.icon}
@@ -563,7 +563,7 @@ function PatternChoice({
       </div>
 
       {pattern && pattern !== 'none' && (
-        <div className="rounded-xl border border-stone-200 bg-stone-50/80 p-3 space-y-3 mt-2">
+        <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 space-y-3 mt-2">
           {/* Échelle / Taille */}
           <div className="space-y-1">
             <label className="text-[11.5px] font-medium text-stone-700">Taille du motif (Échelle)</label>
@@ -763,7 +763,7 @@ function AccordionGroup({
   };
 
   return (
-    <div className="border border-zinc-200 rounded-xl overflow-hidden shadow-2xs transition-all bg-white mb-3 hover:border-zinc-300">
+    <div className="border-zinc-200 rounded-xl overflow-hidden transition-all bg-stone-50 mb-3 hover:border-zinc-300">
       <button
         type="button"
         onClick={handleToggle}
@@ -811,7 +811,7 @@ export default function FieldEditor({
 
   const px = compact ? 'px-2 py-1' : 'px-3 py-2';
   const sz = compact ? 'text-xs' : 'text-sm';
-  const inputCls = `w-full border border-zinc-300 rounded-[5px] ${px} ${sz} focus:outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 font-medium leading-relaxed bg-white shadow-2xs`;
+  const inputCls = `w-full border border-zinc-300 rounded-[5px] ${px} ${sz} focus:outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 font-medium leading-relaxed bg-white`;
 
   const cardsKey = Array.isArray(data.plans) ? 'plans' : 'cards';
   const cards = Array.isArray(data[cardsKey]) ? (data[cardsKey] as Record<string, unknown>[]) : null;
@@ -1535,7 +1535,7 @@ export default function FieldEditor({
             const cardTitle = (card.title || card.name || card.question || card.label || card.metric || '') as string;
             const displayTitle = cardTitle ? cardTitle : (cardsKey === 'plans' ? 'Formule' : 'Carte');
             return (
-              <div key={j} className="border border-zinc-300 mb-2 bg-white overflow-hidden rounded-none">
+              <div key={j} className="border-zinc-300 mb-2 bg-stone-50 overflow-hidden rounded-none">
                 {/* Header de carte cliquable */}
                 <div
                   onClick={() => setOpenCardIdx(isCardOpen ? null : j)}
@@ -1815,7 +1815,7 @@ export default function FieldEditor({
               const displayTitle = itemTitle ? itemTitle : `${groupTitle} #${j + 1}`;
 
               return (
-                <div key={j} className="border border-zinc-300 mb-2 bg-white overflow-hidden rounded-none">
+                <div key={j} className="border-zinc-300 mb-2 bg-stone-50 overflow-hidden rounded-none">
                   {/* Header */}
                   <div
                     onClick={() => setOpenCardIdx(isItemOpen ? null : uniqueIndex)}

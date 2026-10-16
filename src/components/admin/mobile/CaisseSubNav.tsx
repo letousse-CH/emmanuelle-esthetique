@@ -37,7 +37,7 @@ export default function CaisseSubNav({ pathname }: { pathname: string }) {
               <Link
                 key={l.path} href={l.path} onClick={() => setOpen(false)}
                 aria-current={sel ? 'page' : undefined}
-                className={`flex min-h-[88px] flex-col items-start justify-between rounded-2xl border p-3.5 active:scale-[0.97] ${
+                className={`flex min-h-[88px] flex-col items-start justify-between rounded-xl border p-3.5 active:scale-[0.97] ${
                   sel ? 'border-accent bg-accent/10' : 'border-stone-200 bg-white'
                 }`}
               >

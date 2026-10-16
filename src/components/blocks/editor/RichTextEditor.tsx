@@ -38,7 +38,7 @@ export default function RichTextEditor({ value, onChange }: { value: string; onC
   };
 
   return (
-    <div className="rounded-lg border border-stone-200 bg-white" style={{ ['--pb-fg' as string]: '#1c1917', ['--pb-fg-muted' as string]: '#44403c' }}>
+    <div className="rounded-lg bg-stone-50" style={{ ['--pb-fg' as string]: '#1c1917', ['--pb-fg-muted' as string]: '#44403c' }}>
       <div className="flex flex-wrap items-center gap-0.5 border-b border-stone-100 px-1.5 py-1">
         {btn(editor.isActive('bold'), () => editor.chain().focus().toggleBold().run(), <Bold size={14} />, 'Gras')}
         {btn(editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run(), <Italic size={14} />, 'Italique')}

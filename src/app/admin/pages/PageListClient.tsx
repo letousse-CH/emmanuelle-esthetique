@@ -203,12 +203,12 @@ export default function PageList() {
           action={<LinkButton href="/admin/pages/new" variant="primary" icon={Plus}>Nouvelle page</LinkButton>}
         />
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="bg-stone-50 rounded-xl overflow-hidden">
           {/* Tableau — écrans sm et plus */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-stone-200 bg-stone-50/50">
+                <tr className="border-b border-stone-200 bg-stone-50">
                   <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-700 text-left">Titre</th>
                   <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-700 text-left">Adresse</th>
                   <th className="px-6 py-3.5 text-[12px] font-semibold uppercase tracking-wide text-stone-700 text-left">Sections</th>
@@ -219,13 +219,13 @@ export default function PageList() {
               </thead>
               <tbody>
                 {pages.map(page => (
-                  <tr key={page.id} className="border-b border-stone-100 last:border-b-0 hover:bg-stone-50/50 transition-colors group">
+                  <tr key={page.id} className="border-b border-stone-100 last:border-b-0 hover:bg-stone-50 transition-colors group">
                     <td className="px-6 py-4 font-medium text-stone-900">{page.title}</td>
                     <td className="px-6 py-4 font-mono text-[13px] text-stone-600">
                       <span className="inline-flex items-center gap-1.5">
                         {getPagePath(page.slug)}
                         {page.slug === effectiveHomeSlug && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-soft text-accent text-[12px] font-sans font-medium">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent-soft text-accent text-[12px] font-sans font-medium rounded">
                             <Home size={12} /> Accueil
                           </span>
                         )}
@@ -280,7 +280,7 @@ export default function PageList() {
                 <div className="flex flex-wrap items-center gap-1.5">
                   <PageStatusBadge published={page.published} />
                   {page.slug === effectiveHomeSlug && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent-soft text-accent text-[12px] font-medium">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-accent-soft text-accent text-[12px] font-medium">
                       <Home size={12} /> Accueil
                     </span>
                   )}
@@ -352,7 +352,7 @@ export default function PageList() {
 
 function PageStatusBadge({ published }: { published: boolean }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold ${published ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-600'}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-semibold ${published ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-600'}`}>
       {published ? <Eye size={12} /> : <EyeOff size={12} />}
       {published ? 'Publié' : 'Brouillon'}
     </span>

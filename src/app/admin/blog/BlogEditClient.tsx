@@ -491,7 +491,7 @@ export default function BlogEdit() {
     <form onSubmit={handleSubmit} className="min-h-screen">
 
       {/* ── Topbar sticky ─────────────────────────────── */}
-      <div className="sticky top-16 z-10 bg-white border-b border-stone-200 shadow-sm">
+      <div className="sticky top-16 z-10 bg-white border-b border-stone-200">
         <div className="flex items-center gap-3 px-6 h-14">
           <Link href="/admin/blog" aria-label="Retour à la liste des articles" title="Retour aux articles" className="shrink-0 p-1.5 -ml-1.5 rounded-lg text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors">
             <ArrowLeft size={18} />
@@ -513,7 +513,7 @@ export default function BlogEdit() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 rounded-full ${
+            <span className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 ${
               publishMode === 'published' ? 'bg-emerald-50 text-emerald-700'
               : publishMode === 'scheduled' ? 'bg-amber-50 text-amber-800'
               : 'bg-stone-100 text-stone-700'
@@ -599,7 +599,7 @@ export default function BlogEdit() {
 
             {/* Cover + catégorie */}
             <div className="grid sm:grid-cols-2 gap-4">
-              <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
+              <div className="bg-stone-50 rounded-xl p-5 space-y-3">
                 <h3 className="text-[13px] font-medium text-stone-800">Image de couverture</h3>
                 {formData.cover_image ? (
                   <div className="relative group">
@@ -640,7 +640,7 @@ export default function BlogEdit() {
                 </div>
               </div>
 
-              <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
+              <div className="bg-stone-50 rounded-xl p-5 space-y-3">
                 <label htmlFor="article-category" className="block text-[13px] font-medium text-stone-800">Catégorie</label>
                 <select
                   id="article-category"
@@ -683,7 +683,7 @@ export default function BlogEdit() {
             </div>
 
             {/* Éditeur */}
-            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+            <div className="bg-stone-50 rounded-xl overflow-hidden">
               <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
                 <h2 className="text-[13px] font-medium text-stone-800">Contenu</h2>
                 <div className="flex items-center gap-4">
@@ -721,7 +721,7 @@ export default function BlogEdit() {
         {/* ════ ONGLET SEO ════ */}
         {activeTab === 'seo' && (
           <div className="space-y-6">
-            <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-6">
+            <div className="bg-stone-50 rounded-xl p-6 space-y-6">
               <div className="flex items-center justify-between pb-3 border-b border-stone-200">
                 <h2 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
                   <Search size={15} className="text-accent" /> Apparence dans Google
@@ -799,7 +799,7 @@ export default function BlogEdit() {
 
             {/* SEO Cluster Checklist */}
             {seoTotalKws > 0 && (
-              <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-4">
+              <div className="bg-stone-50 rounded-xl p-6 space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-stone-200">
                   <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
                     <Target size={15} className="text-accent" /> Mots-clés du sujet présents dans le texte
@@ -848,7 +848,7 @@ export default function BlogEdit() {
 
             {/* Brief SEO */}
             {seoBrief && (
-              <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+              <div className="bg-stone-50 rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
@@ -916,7 +916,7 @@ export default function BlogEdit() {
                         <p className="text-[12.5px] font-medium text-stone-700 mb-2">Mots-clés associés ({seoBrief.secondaryKeywords.length})</p>
                         <div className="flex flex-wrap gap-1.5">
                           {seoBrief.secondaryKeywords.map((kw, i) => (
-                            <span key={i} className="text-[12px] font-mono bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full">{kw}</span>
+                            <span key={i} className="text-[12px] font-mono bg-stone-100 text-stone-700 px-2 py-0.5 rounded">{kw}</span>
                           ))}
                         </div>
                       </div>
@@ -958,7 +958,7 @@ export default function BlogEdit() {
 
             {/* Génération article */}
             {moduleFlags.ai_generation && (
-              <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+              <div className="bg-stone-50 rounded-xl overflow-hidden">
                 <div className="flex items-center gap-3 px-6 py-4 border-b border-stone-200">
                   <div className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center">
                     <Wand2 size={15} className="text-stone-700" />
@@ -1061,7 +1061,7 @@ export default function BlogEdit() {
         {/* ════ ONGLET PROGRAMMATION ════ */}
         {activeTab === 'programmation' && (
           <div className="space-y-6 max-w-lg">
-            <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-5">
+            <div className="bg-stone-50 rounded-xl p-6 space-y-5">
               <h2 className="text-sm font-semibold text-stone-900 flex items-center gap-2 pb-3 border-b border-stone-200">
                 <CalendarClock size={15} className="text-accent" /> Mode de publication
               </h2>

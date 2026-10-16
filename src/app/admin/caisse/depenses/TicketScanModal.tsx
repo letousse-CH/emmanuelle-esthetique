@@ -216,7 +216,7 @@ export default function TicketScanModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-stone-900/60 backdrop-blur-xs">
-      <div className="bg-white w-full sm:max-w-5xl sm:rounded-2xl rounded-t-2xl border border-stone-200 shadow-xl overflow-hidden max-h-[94vh] flex flex-col">
+      <div className="bg-white w-full sm:max-w-5xl sm:rounded-xl rounded-t-xl border border-stone-200 shadow-xl overflow-hidden max-h-[94vh] flex flex-col">
         <div className="px-5 py-4 border-b border-stone-200 bg-stone-50 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h3 className="font-bold text-stone-900 text-base flex items-center gap-2">
@@ -378,7 +378,7 @@ export default function TicketScanModal({
                       {form.parts.map((p, i) => {
                         const amount = parseAmount(p.montant);
                         return (
-                          <div key={i} className="rounded-xl border border-stone-200 p-3 space-y-2.5 bg-white">
+                          <div key={i} className="rounded-xl p-3 space-y-2.5 bg-stone-50">
                             <div className="flex items-start gap-2">
                               <Select value={p.compte} onChange={(e) => setPart(i, { compte: e.target.value })} className="flex-1 min-w-0">
                                 {!codes.includes(p.compte) && <option value={p.compte}>{p.compte} · compte à choisir</option>}

@@ -105,7 +105,7 @@ const ScoreBadge = ({ score }: { score: number }) => {
   }
 
   return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${colorClass}`}>
+    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 border text-xs font-semibold ${colorClass}`}>
       <Star size={13} className="fill-current shrink-0" />
       <span>Score SEO/GEO : {score}/100</span>
     </div>
@@ -956,7 +956,7 @@ export default function SeoHub() {
                     {analysis.aiPrompts?.length ? (
                       <ul className="space-y-1.5">
                         {analysis.aiPrompts.map((p, i) => (
-                          <li key={i} className="text-[14px] text-stone-700 bg-white p-2.5 rounded-lg border border-stone-200">
+                          <li key={i} className="text-[14px] text-stone-700 bg-stone-50 p-2.5 rounded-lg">
                             « {p} »
                           </li>
                         ))}
@@ -973,7 +973,7 @@ export default function SeoHub() {
                     {analysis.communityQuestions?.length ? (
                       <ul className="space-y-1.5">
                         {analysis.communityQuestions.map((q, i) => (
-                          <li key={i} className="text-[14px] text-stone-700 bg-white p-2.5 rounded-lg border border-stone-200">
+                          <li key={i} className="text-[14px] text-stone-700 bg-stone-50 p-2.5 rounded-lg">
                             {q}
                           </li>
                         ))}

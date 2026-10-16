@@ -36,7 +36,7 @@ function Segmented<T extends string>({ value, options, onChange }: { value: T | 
     <div className="flex flex-wrap gap-1 rounded-lg bg-stone-100 p-1">
       {options.map((o) => (
         <button key={o.value} type="button" onClick={() => onChange(o.value)}
-          className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${value === o.value ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}>
+          className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${value === o.value ? 'bg-white text-stone-900' : 'text-stone-500 hover:text-stone-800'}`}>
           {o.label}
         </button>
       ))}

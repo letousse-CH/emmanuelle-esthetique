@@ -50,7 +50,7 @@ export default function PlusPage() {
           aria-label="Chercher un outil"
           enterKeyHint="search"
           autoComplete="off"
-          className="h-13 w-full rounded-2xl border border-stone-300 bg-white pl-12 pr-12 text-[16px] text-stone-900 placeholder:text-stone-500 focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/15 [&::-webkit-search-cancel-button]:hidden"
+          className="h-13 w-full rounded-xl border border-stone-300 bg-white pl-12 pr-12 text-[16px] text-stone-900 placeholder:text-stone-500 focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/15 [&::-webkit-search-cancel-button]:hidden"
         />
         {query && (
           <button

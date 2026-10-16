@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '../../../utils/supabaseAdmin';
 import { isAdminEmail } from '../../../utils/apiAuth';
+import { TZ, firstOfMonth, zurichDate, zurichMidnightISO } from '../../../components/admin/mobile/home/zurich';
 
 
 export async function GET(req: NextRequest) {
@@ -19,10 +20,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
   }
 
+  // « Aujourd'hui » et « ce mois-ci » en heure de Zurich : le serveur (Netlify)
+  // tourne en UTC, ce qui décalait le début de journée de une à deux heures.
   const now        = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const today      = zurichDate(now);
+  const todayStart = zurichMidnightISO(today);
   const weekStart  = new Date(now.getTime() - 6 * 86400000).toISOString();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const monthStart = zurichMidnightISO(firstOfMonth(today));
+  const dayKey = (d: Date) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', timeZone: TZ });
 
   try {
     const [
@@ -46,13 +51,10 @@ export async function GET(req: NextRequest) {
     // Agréger par jour côté serveur
     const dayCounts: Record<string, number> = {};
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400000);
-      const key = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
-      dayCounts[key] = 0;
+      dayCounts[dayKey(new Date(now.getTime() - i * 86400000))] = 0;
     }
     for (const r of rawDays ?? []) {
-      const key = new Date((r as { created_at: string }).created_at)
-        .toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
+      const key = dayKey(new Date((r as { created_at: string }).created_at));
       if (key in dayCounts) dayCounts[key]++;
     }
     const days = Object.entries(dayCounts).map(([date, count]) => ({ date, count }));

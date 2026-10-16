@@ -418,7 +418,7 @@ export default function UniversalPageEditor() {
   return (
     <div className="admin-exclude">
       {/* Floating Bottom Left Control Panel */}
-      <div className="fixed bottom-6 left-6 z-[99999] bg-stone-950/95 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-white/10 backdrop-blur-md flex items-center gap-4 select-none animate-in slide-in-from-bottom duration-300">
+      <div className="fixed bottom-6 left-6 z-[99999] bg-stone-950/95 text-white px-5 py-3.5 rounded-xl shadow-2xl border border-white/10 backdrop-blur-md flex items-center gap-4 select-none animate-in slide-in-from-bottom duration-300">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>

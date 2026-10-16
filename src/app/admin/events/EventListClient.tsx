@@ -70,7 +70,7 @@ export default function EventList() {
       <FormMessage message={message} />
 
       {loading ? (
-        <div className="flex items-center justify-center rounded-xl border border-stone-200 bg-white py-12">
+        <div className="flex items-center justify-center rounded-xl bg-stone-50 py-12">
           <Spinner label="Chargement des événements" />
         </div>
       ) : events.length === 0 ? (
@@ -81,7 +81,7 @@ export default function EventList() {
           action={<LinkButton href="/admin/events/new" variant="secondary" icon={Plus}>Créer un événement</LinkButton>}
         />
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="bg-stone-50 rounded-xl overflow-hidden">
           {/* Tableau — écrans sm et plus */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left text-[14px]">

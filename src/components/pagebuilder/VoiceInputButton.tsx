@@ -109,7 +109,7 @@ export default function VoiceInputButton({ onTranscript, className = '' }: Voice
       type="button"
       onClick={toggleRecording}
       title={isRecording ? "Microphone actif - Cliquez pour arrêter" : "Cliquez pour parler à voix haute"}
-      className={`relative p-2.5 rounded-[5px] transition-all cursor-pointer shadow-xs flex items-center justify-center shrink-0 ${
+      className={`relative p-2.5 rounded-[5px] transition-all cursor-pointer flex items-center justify-center shrink-0 ${
         isRecording
           ? 'bg-red-600 text-white ring-2 ring-red-300 animate-pulse scale-105 shadow-red-500/20'
           : 'bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-800 active:scale-95'

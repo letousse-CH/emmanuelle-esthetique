@@ -304,7 +304,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
           )}
 
           {/* ── Canal ───────────────────────────────────────────────────── */}
-          <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+          <section className="bg-stone-50 rounded-xl p-4 space-y-3">
             <p className="text-[12.5px] font-medium text-stone-700">Canal</p>
             <div className="grid grid-cols-3 gap-2">
               {(['email', 'whatsapp', 'les_deux'] as PromotionCanal[]).map(c => (
@@ -321,7 +321,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
           </section>
 
           {/* ── Segment ─────────────────────────────────────────────────── */}
-          <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+          <section className="bg-stone-50 rounded-xl p-4 space-y-3">
             <p className="text-[12.5px] font-medium text-stone-700">Destinataires</p>
             <div>
               <label htmlFor="promo-segment" className="sr-only">Segment</label>
@@ -419,7 +419,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
 
           {/* ── Rédaction e-mail ────────────────────────────────────────── */}
           {utiliseEmail && (
-            <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+            <section className="bg-stone-50 rounded-xl p-4 space-y-3">
               <p className="text-[12.5px] font-medium text-stone-700 flex items-center gap-1.5">
                 <Mail size={12} /> Message e-mail
               </p>
@@ -494,7 +494,7 @@ export default function PromotionEditor({ promotion, onClose, onChanged }: {
 
           {/* ── Rédaction WhatsApp ──────────────────────────────────────── */}
           {utiliseWa && (
-            <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+            <section className="bg-stone-50 rounded-xl p-4 space-y-3">
               <p className="text-[12.5px] font-medium text-stone-700 flex items-center gap-1.5">
                 <MessageCircle size={12} /> Message WhatsApp
               </p>

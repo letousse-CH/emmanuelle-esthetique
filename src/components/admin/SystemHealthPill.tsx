@@ -83,7 +83,7 @@ export default function SystemHealthPill({ compact = false }: { compact?: boolea
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="hidden sm:inline-flex items-center gap-2 px-3 h-8 rounded-full border border-stone-200 bg-white text-[13px] font-medium text-stone-800 transition-colors cursor-pointer hover:bg-stone-100"
+        className="hidden sm:inline-flex items-center gap-2 px-3 h-8 bg-stone-50 text-[13px] font-medium text-stone-800 transition-colors cursor-pointer hover:bg-stone-100"
         title="Voir l'état des services du site"
       >
         <span className={`size-2 rounded-full ${dot}`} aria-hidden="true" />

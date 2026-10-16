@@ -6,7 +6,7 @@
  * qui permet de tester la vue avec des données d'exemple.
  */
 
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSettings } from '../../../../hooks/useSettings';
 import {
@@ -15,7 +15,6 @@ import {
   CalendarPlus,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CreditCard,
   Gift,
@@ -40,15 +39,13 @@ export interface MobileHomeViewProps {
   /** Module Caisse actif : sinon encaisser, clientes, recettes et alertes disparaissent. */
   caisseEnabled: boolean;
   onRetry: (key: HomeBlockKey) => void;
-  /** Appelé à la première ouverture de la carte « Statistiques du site ». */
-  onSiteStatsOpen: () => void;
   /** Forcer l'heure (tests visuels). Sinon l'horloge réelle, mise à jour chaque minute. */
   now?: Date;
 }
 
 const FOCUS =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
-const CARD = 'rounded-2xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)]';
+const CARD = 'rounded-xl bg-stone-50';
 const BTN =
   'inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 text-[15px] font-semibold active:scale-[0.98] transition-transform';
 
@@ -127,7 +124,7 @@ const isLive = (b: Booking) => b.statut !== 'annule' && b.statut !== 'refuse';
 
 function ErrorCard({ message, onRetry, className = '' }: { message: string; onRetry: () => void; className?: string }) {
   return (
-    <div role="alert" className={`flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 ${className}`}>
+    <div role="alert" className={`flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 ${className}`}>
       <AlertTriangle size={20} className="mt-0.5 shrink-0 text-red-700" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="text-[15px] font-medium leading-snug text-red-950">{message}</p>
@@ -147,7 +144,7 @@ function LinkButton({ href, children, tone = 'accent' }: { href: string; childre
   return (
     <Link
       href={href}
-      className={`${BTN} w-full ${FOCUS} ${tone === 'accent' ? 'bg-accent text-accent-fg' : 'border border-stone-300 bg-white text-stone-900'}`}
+      className={`${BTN} w-full ${FOCUS} ${tone === 'accent' ? 'bg-accent text-accent-fg' : 'bg-stone-50 text-stone-900'}`}
     >
       {children}
     </Link>
@@ -236,7 +233,7 @@ function TodaySection({
           <>
             {now && (
               <p
-                className={`rounded-2xl px-4 py-3 text-[15px] leading-snug ${
+                className={`rounded-xl px-4 py-3 text-[15px] leading-snug ${
                   nextLine ? 'bg-accent-soft text-stone-900' : 'bg-stone-100 text-stone-700'
                 }`}
               >
@@ -279,7 +276,7 @@ function TimelineRow({ b }: { b: Booking }) {
           <span className="line-clamp-2 text-[14px] leading-snug text-stone-600">{soins(b)}</span>
           {b.statut !== 'confirme' && (
             <span
-              className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold ${
+              className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 text-[12px] font-semibold ${
                 done ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
               }`}
             >
@@ -332,7 +329,7 @@ function CallbackCard({ b, now }: { b: Booking; now: Date | null }) {
       </p>
       <div className="mt-3 grid grid-cols-3 gap-2">
         {b.telephone ? (
-          <a href={telHref(b.telephone)} className={`${BTN} border border-stone-300 bg-white px-2 text-stone-900 ${FOCUS}`}>
+          <a href={telHref(b.telephone)} className={`${BTN} bg-stone-50 px-2 text-stone-900 ${FOCUS}`}>
             Appeler
           </a>
         ) : (
@@ -343,7 +340,7 @@ function CallbackCard({ b, now }: { b: Booking; now: Date | null }) {
             href={`https://wa.me/${waNumber(b.telephone)}?text=${msg}`}
             target="_blank"
             rel="noopener noreferrer"
-            className={`${BTN} border border-stone-300 bg-white px-2 text-stone-900 ${FOCUS}`}
+            className={`${BTN} bg-stone-50 px-2 text-stone-900 ${FOCUS}`}
           >
             WhatsApp
           </a>
@@ -371,7 +368,7 @@ function CallbackSection({ block, now, onRetry }: { block: Block<Booking[]>; now
       title="À rappeler"
       description={block.status === 'ready' && list.length > 0 ? 'Appelez-les pour fixer l’horaire.' : undefined}
     >
-      {block.status === 'loading' && <Skeleton className="h-36 w-full rounded-2xl" />}
+      {block.status === 'loading' && <Skeleton className="h-36 w-full rounded-xl" />}
       {block.status === 'error' && <ErrorCard message={block.message} onRetry={onRetry} />}
       {block.status === 'ready' &&
         (list.length === 0 ? (
@@ -428,6 +425,7 @@ function FiguresSection({
       : null;
 
   const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
+  const salesHint = (n: number) => (n > 0 ? plural(n, 'encaissement', 'encaissements') : 'Aucun encaissement');
 
   return (
     <PageSection title="Chiffres">
@@ -438,23 +436,28 @@ function FiguresSection({
           ) : (
             <>
               <StatTile
-                label="Encaissé aujourd’hui"
-                amount={money.status === 'ready' ? money.data.today : undefined}
-                loading={money.status === 'loading'}
-                hint={
-                  money.status === 'ready'
-                    ? money.data.todayCount > 0
-                      ? plural(money.data.todayCount, 'encaissement', 'encaissements')
-                      : 'Aucun encaissement'
-                    : undefined
-                }
-                href="/admin/caisse/journal"
-              />
-              <StatTile
+                className="col-span-2"
+                tone="accent"
                 label="Encaissé ce mois"
                 amount={money.status === 'ready' ? money.data.month : undefined}
                 loading={money.status === 'loading'}
                 delta={delta}
+                deltaLabel="vs mois dernier"
+                hint={money.status === 'ready' ? salesHint(money.data.monthCount) : undefined}
+                href="/admin/caisse/journal"
+              />
+              <StatTile
+                label="Cette semaine"
+                amount={money.status === 'ready' ? money.data.week : undefined}
+                loading={money.status === 'loading'}
+                hint={money.status === 'ready' ? salesHint(money.data.weekCount) : undefined}
+                href="/admin/caisse/journal"
+              />
+              <StatTile
+                label="Aujourd’hui"
+                amount={money.status === 'ready' ? money.data.today : undefined}
+                loading={money.status === 'loading'}
+                hint={money.status === 'ready' ? salesHint(money.data.todayCount) : undefined}
                 href="/admin/caisse/journal"
               />
             </>
@@ -464,14 +467,14 @@ function FiguresSection({
         ) : (
           <>
             <StatTile
-              label="Demain"
-              value={counts ? plural(counts.tomorrow, 'rendez-vous', 'rendez-vous') : undefined}
+              label="Rendez-vous demain"
+              value={counts ? String(counts.tomorrow) : undefined}
               loading={schedule.status === 'loading'}
               href={`/admin/reservations?date=${tomorrow}`}
             />
             <StatTile
-              label="Cette semaine"
-              value={counts ? plural(counts.week, 'rendez-vous', 'rendez-vous') : undefined}
+              label="Rendez-vous semaine"
+              value={counts ? String(counts.week) : undefined}
               loading={schedule.status === 'loading'}
               href="/admin/reservations"
             />
@@ -560,55 +563,6 @@ function AlertsSection({ block, onRetry }: { block: Block<import('./homeTypes').
   );
 }
 
-// ── Statistiques du site ─────────────────────────────────────────────────────
-
-function SiteStatsCard({ block, onOpen, onRetry }: { block: Block<import('./homeTypes').SiteStatsData>; onOpen: () => void; onRetry: () => void }) {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
-  const fmt = (n: number) => n.toLocaleString('fr-CH');
-  return (
-    <section className={CARD} aria-label="Statistiques du site">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => {
-          if (!open) onOpen();
-          setOpen(!open);
-        }}
-        className={`flex min-h-[60px] w-full cursor-pointer items-center gap-3 rounded-2xl px-4 py-2.5 text-left ${FOCUS}`}
-      >
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
-          <BarChart3 size={20} aria-hidden="true" />
-        </span>
-        <span className="min-w-0 flex-1 text-[16px] font-medium text-stone-950">Statistiques du site</span>
-        <ChevronDown size={20} className={`shrink-0 text-stone-500 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
-      </button>
-      {open && (
-        <div id={panelId} className="space-y-3 border-t border-stone-100 px-4 py-4">
-          {block.status === 'loading' && <Skeleton className="h-16 w-full" />}
-          {block.status === 'error' && <ErrorCard message={block.message} onRetry={onRetry} />}
-          {block.status === 'ready' && (
-            <dl className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-stone-50 p-3">
-                <dt className="text-[14px] text-stone-600">Visites aujourd’hui</dt>
-                <dd className="mt-0.5 text-[24px] font-semibold tabular-nums text-stone-950">{fmt(block.data.today)}</dd>
-              </div>
-              <div className="rounded-xl bg-stone-50 p-3">
-                <dt className="text-[14px] text-stone-600">7 derniers jours</dt>
-                <dd className="mt-0.5 text-[24px] font-semibold tabular-nums text-stone-950">{fmt(block.data.week)}</dd>
-              </div>
-            </dl>
-          )}
-          <Link href="/admin/analytics" className={`inline-flex min-h-11 items-center gap-1 text-[15px] font-semibold text-accent ${FOCUS} rounded-xl`}>
-            Voir les statistiques détaillées <ChevronRight size={16} aria-hidden="true" />
-          </Link>
-        </div>
-      )}
-    </section>
-  );
-}
-
 // ── Vue ──────────────────────────────────────────────────────────────────────
 
 /** Logo du site (réglage `global_logo`), centré en tête de l'accueil ; le nom de l'entreprise sert de repli. */
@@ -629,7 +583,7 @@ function HomeLogo() {
   );
 }
 
-export default function MobileHomeView({ data, caisseEnabled, onRetry, onSiteStatsOpen, now: nowProp }: MobileHomeViewProps) {
+export default function MobileHomeView({ data, caisseEnabled, onRetry, now: nowProp }: MobileHomeViewProps) {
   const now = useNow(nowProp);
   const pendingN = data.pending.status === 'ready' ? data.pending.data.length : 0;
   const pendingState = data.pending.status;
@@ -693,8 +647,20 @@ export default function MobileHomeView({ data, caisseEnabled, onRetry, onSiteSta
       {caisseEnabled && <AlertsSection block={data.alerts} onRetry={() => onRetry('alerts')} />}
 
       <div className="space-y-3">
-        <SiteStatsCard block={data.siteStats} onOpen={onSiteStatsOpen} onRetry={() => onRetry('siteStats')} />
         <InstallCard />
+        <Link
+          href="/admin/analytics"
+          className={`${CARD} flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-stone-100 ${FOCUS}`}
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+            <BarChart3 size={20} aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[16px] font-medium text-stone-950">Statistiques du site</span>
+            <span className="block text-[14px] text-stone-600">Visites et pages vues</span>
+          </span>
+          <ChevronRight size={18} className="shrink-0 text-stone-400" aria-hidden="true" />
+        </Link>
         <Link
           href="/admin/plus"
           className={`${CARD} flex min-h-[60px] items-center gap-3 px-4 py-2.5 active:bg-stone-100 ${FOCUS}`}

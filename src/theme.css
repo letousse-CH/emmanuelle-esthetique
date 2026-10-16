@@ -33,6 +33,29 @@
    posée sur <html> par le layout admin (voir useAdminAccent). Les teintes
    dérivées sont recalculées sur le même élément, donc suivent la couleur lue.
    `--admin-accent-fg` bascule en encre foncée si la couleur est claire. */
+@theme {
+  /* ── Back-office : la touche chaleureuse ──
+     Safran, complémentaire du bleu marine de l'accent. L'accent reste la
+     couleur des ACTIONS (boutons, liens, page active) ; le safran est celle de
+     ce qu'on regarde : chiffres clés, objectifs et leur progression, ce qui
+     demande l'attention, rendez-vous personnels. `warm-ink` (encre marine) est
+     la seule encre à poser sur `warm` ou `warm-soft` : le couple safran /
+     marine est complémentaire, et le contraste reste AA. */
+  --color-warm: #EBA43F;          /* safran 400 */
+  --color-warm-strong: #C27820;   /* safran 600 */
+  --color-warm-muted: #F3D6A3;    /* safran 200 */
+  --color-warm-soft: #FCF5E8;     /* safran 50 */
+  --color-warm-ink: #14283B;      /* encre marine : le texte posé sur le safran clair */
+  /* Vert « dans le vert » : les grands aplats des chiffres clés (chiffre
+     d'affaires, objectifs, bénéfice), contenu en BLANC (4.8:1, AA). De la
+     famille lagon des réussites, il se détache du marine des actions. */
+  --color-growth: #2C8160;
+
+  /* Survol d'une ligne de liste : plus marqué que le zébrage (gris 1), sinon
+     on ne voit pas où l'on est. Même valeur que le gris 2 de l'admin. */
+  --color-row-hover: #EBEAE6;
+}
+
 @theme inline {
   --color-accent: var(--admin-accent);
   --color-accent-hover: var(--admin-accent-hover);

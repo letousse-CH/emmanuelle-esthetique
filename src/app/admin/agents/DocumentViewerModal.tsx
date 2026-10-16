@@ -90,7 +90,7 @@ export default function DocumentViewerModal({ doc, onClose, onSaved }: DocumentV
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-xs transition-opacity animate-in fade-in">
       <div role="dialog" aria-modal="true" aria-label={doc.title} className="relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-stone-200 bg-stone-50/80 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-stone-200 bg-stone-50 px-6 py-4">
           <div className="flex items-center gap-3 min-w-0 pr-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent font-semibold border border-accent/20">
               <FileText size={20} />
@@ -117,7 +117,7 @@ export default function DocumentViewerModal({ doc, onClose, onSaved }: DocumentV
         </div>
 
         {/* Action bar for switching mode */}
-        <div className="flex items-center justify-between bg-stone-100/70 px-6 py-2 border-b border-stone-200">
+        <div className="flex items-center justify-between bg-stone-100 px-6 py-2 border-b border-stone-200">
           <span className="text-[13px] font-medium text-stone-700">
             {isEditing
               ? 'Modifiez le texte, puis enregistrez.'
@@ -169,7 +169,7 @@ export default function DocumentViewerModal({ doc, onClose, onSaved }: DocumentV
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-stone-200 bg-stone-50/50 px-6 py-3.5">
+        <div className="flex items-center justify-between border-t border-stone-200 bg-stone-50 px-6 py-3.5">
           <p className="text-[13px] text-stone-600">
             {content.length.toLocaleString('fr-CH')} caractères
           </p>

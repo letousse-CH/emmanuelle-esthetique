@@ -224,7 +224,7 @@ export default function AgentsClient() {
   return (
     <div className="space-y-6">
       {/* ── En-tête de l'agent ─────────────────────────────────────── */}
-      <div className="rounded-xl border border-stone-200 bg-white p-6">
+      <div className="rounded-xl bg-stone-50 p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-stone-100 text-2xl">
@@ -336,7 +336,7 @@ export default function AgentsClient() {
 
       {/* ── CONTENU DE L'ÉTAPE 1 : IDENTITÉ & APPARENCE ──────────────── */}
       {step === 1 && agent && form && (
-        <Card className="border-stone-200 shadow-xs">
+        <Card className="border-stone-200">
           <CardHeader
             title="Étape 1 : identité"
             description="Son avatar, son nom et la phrase qu'il dit à l'ouverture de la conversation."
@@ -450,7 +450,7 @@ export default function AgentsClient() {
               <button
                 type="button"
                 onClick={() => setIsBriefModalOpen(true)}
-                className="rounded-xl border border-stone-200 bg-white p-4 text-left transition-colors hover:bg-stone-50 cursor-pointer"
+                className="rounded-xl bg-stone-50 p-4 text-left transition-colors hover:bg-stone-50 cursor-pointer"
               >
                 <span className="flex items-center justify-between text-[13px] font-medium text-stone-600">
                   Brief éditorial
@@ -464,7 +464,7 @@ export default function AgentsClient() {
                 <span className="mt-1 block text-[13px] font-medium text-accent">Modifier le brief</span>
               </button>
 
-              <div className="rounded-xl border border-stone-200 bg-white p-4">
+              <div className="rounded-xl bg-stone-50 p-4">
                 <span className="flex items-center justify-between text-[13px] font-medium text-stone-600">
                   Pages du site <Globe size={16} className="text-stone-500" />
                 </span>
@@ -473,7 +473,7 @@ export default function AgentsClient() {
                 </span>
               </div>
 
-              <div className="rounded-xl border border-stone-200 bg-white p-4">
+              <div className="rounded-xl bg-stone-50 p-4">
                 <span className="flex items-center justify-between text-[13px] font-medium text-stone-600">
                   Articles du blog <BookOpen size={16} className="text-stone-500" />
                 </span>
@@ -482,7 +482,7 @@ export default function AgentsClient() {
                 </span>
               </div>
 
-              <div className="rounded-xl border border-stone-200 bg-white p-4">
+              <div className="rounded-xl bg-stone-50 p-4">
                 <span className="flex items-center justify-between text-[13px] font-medium text-stone-600">
                   Textes ajoutés <FileText size={16} className="text-stone-500" />
                 </span>
@@ -509,7 +509,7 @@ export default function AgentsClient() {
                     return (
                       <li
                         key={doc.id}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3"
+                        className="flex items-center justify-between gap-3 rounded-lg bg-stone-50 px-4 py-3"
                       >
                         <span className="flex min-w-0 items-center gap-3">
                           {isBrief ? (
@@ -623,7 +623,7 @@ export default function AgentsClient() {
                 )}
                 <ul className="space-y-2">
                   {form.collect.map((field, index) => (
-                    <li key={index} className="flex flex-wrap items-center gap-3 rounded-lg border border-stone-200 bg-white p-3">
+                    <li key={index} className="flex flex-wrap items-center gap-3 rounded-lg bg-stone-50 p-3">
                       <Input
                         value={field.label}
                         placeholder="Ex. Téléphone"
@@ -845,7 +845,7 @@ function AgentTester({ agent }: { agent: Agent }) {
               className={`flex items-start gap-2.5 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {message.role === 'assistant' && (
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-sm">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-stone-50 text-sm">
                   {agent.avatar || '🤖'}
                 </div>
               )}
@@ -853,7 +853,7 @@ function AgentTester({ agent }: { agent: Agent }) {
                 className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-4 py-2.5 text-[14px] leading-relaxed ${
                   message.role === 'user'
                     ? 'bg-accent text-accent-fg'
-                    : 'border border-stone-200 bg-white text-stone-800'
+                    : 'bg-stone-50 text-stone-800'
                 }`}
               >
                 {message.content}

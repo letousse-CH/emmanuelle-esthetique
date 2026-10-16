@@ -298,7 +298,7 @@ export default function EventEdit() {
                 htmlFor="ev-slug"
                 hint="Remplie automatiquement à partir du titre. Évitez de la changer une fois l'événement partagé."
               >
-                <div className="flex items-center rounded-lg border border-stone-300 bg-white focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/15 transition-colors overflow-hidden">
+                <div className="flex items-center rounded-lg bg-stone-50 focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/15 transition-colors overflow-hidden">
                   <span className="px-3 h-10 flex items-center bg-stone-50 text-stone-600 text-[14px] border-r border-stone-200 whitespace-nowrap">/ateliers/</span>
                   <input
                     id="ev-slug"

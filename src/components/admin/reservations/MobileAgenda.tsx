@@ -1,14 +1,15 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarCheck, CalendarOff, ChevronDown, ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react';
-import type { AgendaData, Booking, BookingPeriode } from '../../../types/booking';
+import { CalendarCheck, CalendarOff, ChevronDown, ChevronLeft, ChevronRight, Plus, RefreshCw, User } from 'lucide-react';
+import type { AgendaData, Booking, BookingBlock, BookingPeriode } from '../../../types/booking';
 import { ACTIVE_STATUSES, PERIODE_LABEL, minutesToTime, timeToMinutes } from '../../../types/booking';
 import { Button } from '../ui';
 import { BottomSheet, EmptyState, Skeleton } from '../mobile/ui';
 import { HATCH, bookingClass, bookingEnd, buildDay, layoutLanes, shortName } from './AgendaView';
 import type { DayModel } from './AgendaView';
 import ListView from './ListView';
+import { isPersoBlock } from './PersoPanel';
 import SwipeArea from './SwipeArea';
 import SyncClientsButton from './SyncClientsButton';
 import TodoView from './TodoView';
@@ -67,6 +68,8 @@ export interface MobileAgendaProps {
   onOpen: (id: string) => void;
   onNew: (date?: string, time?: string | null) => void;
   onOpenBlocks: (date?: string) => void;
+  /** Rendez-vous perso : `block` pour en modifier un ; sinon création au jour (et à l'heure) donnés. */
+  onPerso: (arg: { block?: BookingBlock; date?: string; time?: string | null }) => void;
   onReload: () => void;
 }
 
@@ -127,7 +130,7 @@ export default function MobileAgenda(p: MobileAgendaProps) {
       />
 
       {p.bookingsError && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-[15px] text-red-950">
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-[15px] text-red-950">
           <span>{p.bookingsError}</span>
           <Button onClick={p.onRetryBookings} icon={RefreshCw}>
             Réessayer
@@ -145,7 +148,7 @@ export default function MobileAgenda(p: MobileAgendaProps) {
       )}
 
       {p.agendaError && showDates && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-[15px] text-red-950">
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-[15px] text-red-950">
           <span>{p.agendaError}</span>
           <Button onClick={p.onRetryAgenda} icon={RefreshCw}>
             Réessayer
@@ -164,6 +167,7 @@ export default function MobileAgenda(p: MobileAgendaProps) {
               onOpen={p.onOpen}
               onNewAt={(t) => p.onNew(date, t)}
               onOpenBlocks={() => p.onOpenBlocks(date)}
+              onPerso={p.onPerso}
             />
           ) : p.agendaError ? null : (
             <div className="space-y-3" aria-busy="true" aria-label="Chargement de la journée">
@@ -187,6 +191,7 @@ export default function MobileAgenda(p: MobileAgendaProps) {
               onOpen={p.onOpen}
               onNewAt={(d) => p.onNew(d, null)}
               onOpenBlocks={() => p.onOpenBlocks(date)}
+              onPerso={p.onPerso}
             />
           ) : p.agendaError ? null : (
             <div className="space-y-3" aria-busy="true" aria-label="Chargement de la semaine">
@@ -215,7 +220,7 @@ export default function MobileAgenda(p: MobileAgendaProps) {
           <TodoView bookings={bookings} visitsByClient={p.visitsByClient} coupure={coupure} onOpen={p.onOpen} />
         ))}
 
-      <details className="rounded-2xl border border-stone-200 bg-white">
+      <details className="rounded-xl bg-stone-50">
         <summary className="flex min-h-12 cursor-pointer items-center px-4 text-[15px] font-semibold text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
           Outils
         </summary>
@@ -262,7 +267,7 @@ function VueSwitch({
   options: { value: MobileVue; label: string; count?: number }[];
 }) {
   return (
-    <div role="radiogroup" aria-label="Vue de l’agenda" className="flex w-full gap-0.5 rounded-2xl bg-stone-100 p-1">
+    <div role="radiogroup" aria-label="Vue de l’agenda" className="flex w-full gap-0.5 rounded-xl bg-stone-100 p-1">
       {options.map((o, i) => {
         const active = o.value === value;
         return (
@@ -280,12 +285,12 @@ function VueSwitch({
               onChange(options[(i + dir + options.length) % options.length].value);
             }}
             className={`flex min-h-11 min-w-0 flex-auto cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-2 text-[15px] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
-              active ? 'bg-white font-semibold text-stone-950 shadow-[0_1px_3px_rgba(28,25,23,0.12)]' : 'font-medium text-stone-700 active:bg-white/60'
+              active ? 'bg-stone-900 font-semibold text-white' : 'font-medium text-stone-700 active:bg-white/60'
             }`}
           >
             {o.label}
             {o.count ? (
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-600 px-1.5 text-[12px] font-bold leading-none text-white">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center bg-warm px-1.5 text-[12px] font-bold leading-none text-warm-ink rounded">
                 <span className="sr-only">{`${o.count} demande${o.count > 1 ? 's' : ''}`}</span>
                 <span aria-hidden="true">{o.count}</span>
               </span>
@@ -301,7 +306,7 @@ function VueSwitch({
  * Bouton « + » flottant, au-dessus de la barre d'onglets. Écrit ici plutôt que
  * pris du kit : la feuille de style du site public (`main button.rounded-full`)
  * force `position: relative` sur les boutons ronds d'un <main> et le `Fab` du
- * kit cesserait de flotter ; `rounded-[28px]` dessine le même rond sans cette règle.
+ * kit cesserait de flotter ; `rounded-xl` dessine le même rond sans cette règle.
  */
 function AgendaFab({ onClick }: { onClick: () => void }) {
   return (
@@ -309,7 +314,7 @@ function AgendaFab({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       aria-label="Nouveau rendez-vous"
-      className="admin-fab fixed right-4 z-30 inline-flex size-14 cursor-pointer items-center justify-center rounded-[28px] bg-accent text-accent-fg shadow-[0_6px_20px_rgba(28,25,23,0.22)] transition-transform duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white lg:hidden"
+      className="admin-fab fixed right-4 z-30 inline-flex size-14 cursor-pointer items-center justify-center rounded-xl bg-accent text-accent-fg shadow-[0_6px_20px_rgba(28,25,23,0.22)] transition-transform duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white lg:hidden"
       style={{ bottom: 'calc(var(--admin-tabbar-h, 0px) + env(safe-area-inset-bottom) + 1rem)' }}
     >
       <Plus size={24} strokeWidth={2} aria-hidden="true" />
@@ -354,7 +359,7 @@ function DateBar({
     : dayTitle(date, today);
   const nav = (n: number) => onDate(addDays(date, n * step));
   const arrow =
-    'grid size-11 shrink-0 cursor-pointer place-items-center rounded-full border border-stone-200 bg-white text-stone-900 active:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50';
+    'grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-stone-50 text-stone-900 active:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50';
   return (
     <div className="flex items-center gap-2">
       <button
@@ -374,7 +379,7 @@ function DateBar({
         <button
           type="button"
           onClick={() => onDate(today)}
-          className="inline-flex h-11 shrink-0 cursor-pointer items-center rounded-full bg-accent-soft px-3.5 text-[14px] font-semibold text-accent active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          className="inline-flex h-11 shrink-0 cursor-pointer items-center bg-accent-soft px-3.5 text-[14px] font-semibold text-accent active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
         >
           Aujourd’hui
         </button>
@@ -410,7 +415,7 @@ function DayStrip({
     <div
       role="group"
       aria-label="Jours de la semaine"
-      className="sticky z-20 -mx-4 border-b border-stone-200 bg-stone-50/95 px-3 py-2 backdrop-blur sm:-mx-6 sm:px-5"
+      className="sticky z-20 -mx-4 border-b border-stone-200 bg-stone-50 px-3 py-2 backdrop-blur sm:-mx-6 sm:px-5"
       style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}
     >
       <div className="flex gap-1">
@@ -432,8 +437,8 @@ function DayStrip({
               aria-label={label}
               aria-current={sel ? 'date' : undefined}
               data-selected={sel}
-              className={`flex min-h-[4.75rem] min-w-0 flex-1 cursor-pointer flex-col items-center gap-0.5 rounded-2xl px-0.5 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
-                sel ? 'bg-accent text-accent-fg shadow-sm' : 'text-stone-900 active:bg-stone-200/70'
+              className={`flex min-h-[4.75rem] min-w-0 flex-1 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
+                sel ? 'bg-accent text-accent-fg' : 'text-stone-900 active:bg-stone-100'
               }`}
             >
               <span className={`text-[12px] font-medium uppercase ${sel ? 'text-accent-fg/85' : closed ? 'text-stone-400' : 'text-stone-600'}`}>
@@ -450,7 +455,7 @@ function DayStrip({
               <span className="mt-auto flex h-5 items-center gap-0.5" aria-hidden="true">
                 {c?.rdv ? (
                   <span
-                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[12px] font-bold leading-none ${
+                    className={`inline-flex h-5 min-w-5 items-center justify-center px-1 text-[12px] font-bold leading-none ${
                       sel ? 'bg-white text-stone-900' : 'bg-accent text-accent-fg'
                     }`}
                   >
@@ -458,7 +463,7 @@ function DayStrip({
                   </span>
                 ) : null}
                 {c?.demandes ? (
-                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-600 px-1 text-[12px] font-bold leading-none text-white">
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center bg-warm px-1 text-[12px] font-bold leading-none text-warm-ink rounded">
                     {c.demandes}
                   </span>
                 ) : null}
@@ -497,7 +502,7 @@ function MonthSheet({
   const month = cursor.slice(0, 7);
   const cells = daysBetween(gridStart, addDays(gridStart, 41)).filter((_, i, a) => i < 35 || a[i].slice(0, 7) === month);
   const arrow =
-    'grid size-11 cursor-pointer place-items-center rounded-full border border-stone-200 bg-white text-stone-900 active:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50';
+    'grid size-11 cursor-pointer place-items-center rounded-full bg-stone-50 text-stone-900 active:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50';
   return (
     <BottomSheet
       open={open}
@@ -572,6 +577,7 @@ function DayContent({
   onOpen,
   onNewAt,
   onOpenBlocks,
+  onPerso,
 }: {
   day: DayModel;
   today: string;
@@ -580,6 +586,7 @@ function DayContent({
   onOpen: (id: string) => void;
   onNewAt: (time: string | null) => void;
   onOpenBlocks: () => void;
+  onPerso: MobileAgendaProps['onPerso'];
 }) {
   const nSoft = day.soft.matin.length + day.soft.apres_midi.length;
   const closedEmpty = day.plages.length === 0 && day.fixed.length === 0;
@@ -592,9 +599,14 @@ function DayContent({
             {day.fixed.length} rendez-vous{nSoft > 0 ? ` · ${nSoft} demande${nSoft > 1 ? 's' : ''} à fixer` : ''}
           </span>
         </p>
-        <Button icon={CalendarOff} onClick={onOpenBlocks} className="shrink-0">
-          Je ne travaille pas
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button icon={User} onClick={() => onPerso({ date: day.date })} aria-label="Ajouter un rendez-vous perso">
+            Perso
+          </Button>
+          <Button icon={CalendarOff} onClick={onOpenBlocks} aria-label="Je ne travaille pas ce jour-là">
+            <span className="sr-only">Je ne travaille pas</span>
+          </Button>
+        </div>
       </div>
 
       {nSoft > 0 && (
@@ -605,7 +617,7 @@ function DayContent({
                 <button
                   type="button"
                   onClick={() => onOpen(b.id)}
-                  className="flex min-h-16 w-full cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed border-amber-500 bg-amber-50 px-4 py-2.5 text-left text-amber-950 active:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                  className="flex min-h-16 w-full cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-amber-500 bg-amber-50 px-4 py-2.5 text-left text-amber-950 active:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block text-[12px] font-bold uppercase tracking-wide text-amber-900">{PERIODE_LABEL[per]} · à fixer</span>
@@ -633,7 +645,7 @@ function DayContent({
         />
       ) : (
         <>
-          <Timeline day={day} today={today} pas={pas} coupure={coupure} onOpen={onOpen} onNewAt={onNewAt} />
+          <Timeline day={day} today={today} pas={pas} coupure={coupure} onOpen={onOpen} onNewAt={onNewAt} onOpenPerso={(block) => onPerso({ block })} />
           {day.fixed.length === 0 && nSoft === 0 && (
             <p className="text-center text-[14px] text-stone-600">Rien de prévu. Touchez une heure libre pour ajouter un rendez-vous.</p>
           )}
@@ -650,6 +662,7 @@ function Timeline({
   coupure,
   onOpen,
   onNewAt,
+  onOpenPerso,
 }: {
   day: DayModel;
   today: string;
@@ -657,6 +670,7 @@ function Timeline({
   coupure: string;
   onOpen: (id: string) => void;
   onNewAt: (time: string | null) => void;
+  onOpenPerso: (block: BookingBlock) => void;
 }) {
   const [nowMin, setNowMin] = useState(() => nowMinutesZurich());
   useEffect(() => {
@@ -708,7 +722,7 @@ function Timeline({
   }, [isToday, day.date]);
 
   return (
-    <div className="flex select-none rounded-2xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
+    <div className="flex select-none rounded-xl bg-stone-50">
       <div className="relative w-12 shrink-0" style={{ height }} aria-hidden="true">
         {hours.map((m, i) => (
           <span
@@ -723,7 +737,7 @@ function Timeline({
       <div
         role="group"
         aria-label="Chronologie de la journée. Touchez une heure libre pour ajouter un rendez-vous."
-        className="relative min-w-0 flex-1 cursor-copy overflow-hidden rounded-r-2xl bg-stone-100"
+        className="relative min-w-0 flex-1 cursor-copy overflow-hidden rounded-r-xl bg-stone-100"
         style={{ height }}
         onClick={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
@@ -743,16 +757,33 @@ function Timeline({
         ))}
 
         {day.blocks.map((b) => {
-          const partial = Boolean(b.heure_debut && b.heure_fin);
-          const top = partial ? y(timeToMinutes(b.heure_debut as string)) : 0;
-          const h = partial ? (timeToMinutes(b.heure_fin as string) - timeToMinutes(b.heure_debut as string)) * PX_PER_MIN : height;
+          if (isPersoBlock(b)) {
+            const top = y(timeToMinutes(b.heure_debut as string));
+            const h = Math.max(30, (timeToMinutes(b.heure_fin as string) - timeToMinutes(b.heure_debut as string)) * PX_PER_MIN - 2);
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenPerso(b);
+                }}
+                aria-label={`Rendez-vous perso de ${b.heure_debut} à ${b.heure_fin} : ${b.motif || 'sans titre'}`}
+                className="absolute inset-x-1 z-20 flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-xl border-l-4 border-warm-strong bg-warm-soft px-2.5 py-1 text-left leading-tight text-warm-ink active:bg-warm-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warm-strong"
+                style={{ top: top + 1, height: h }}
+              >
+                <span className="block truncate text-[14px] font-bold">{b.heure_debut} · {b.motif || 'Perso'}</span>
+                {h >= 52 && <span className="block truncate text-[13px] opacity-80">jusqu’à {b.heure_fin}</span>}
+              </button>
+            );
+          }
           return (
             <div
               key={b.id}
               className="pointer-events-none absolute inset-x-0 z-10 overflow-hidden border-y border-stone-400 px-2 py-1.5 text-[13px] font-semibold text-stone-900"
-              style={{ ...HATCH, top, height: h }}
+              style={{ ...HATCH, top: 0, height }}
             >
-              <span className="rounded bg-white/90 px-1.5 py-0.5">{b.motif || 'Indisponible'}</span>
+              <span className="rounded bg-white/90 px-1.5 py-0.5">{b.motif || 'Fermé'}</span>
             </div>
           );
         })}
@@ -765,7 +796,7 @@ function Timeline({
               className="pointer-events-none absolute inset-x-1 z-20 rounded-xl border-2 border-dashed border-amber-500 bg-amber-100/40"
               style={{ top: y(band.from) + 1, height: (band.to - band.from) * PX_PER_MIN - 2 }}
             >
-              <span className="absolute right-1.5 top-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[12px] font-bold text-amber-900">
+              <span className="absolute right-1.5 top-1.5 bg-amber-50 px-2 py-0.5 text-[12px] font-bold text-amber-900 rounded">
                 {PERIODE_LABEL[band.periode]} · {n} à fixer
               </span>
             </div>
@@ -824,6 +855,7 @@ function WeekCompact({
   onOpen,
   onNewAt,
   onOpenBlocks,
+  onPerso,
 }: {
   days: DayModel[];
   today: string;
@@ -831,10 +863,14 @@ function WeekCompact({
   onOpen: (id: string) => void;
   onNewAt: (d: string) => void;
   onOpenBlocks: () => void;
+  onPerso: MobileAgendaProps['onPerso'];
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button icon={User} onClick={() => onPerso({})}>
+          Rendez-vous perso
+        </Button>
         <Button icon={CalendarOff} onClick={onOpenBlocks}>
           Je ne travaille pas
         </Button>
@@ -847,7 +883,7 @@ function WeekCompact({
           return (
             <li
               key={d.date}
-              className={`flex items-stretch overflow-hidden rounded-2xl border bg-white ${isToday ? 'border-accent' : 'border-stone-200'}`}
+              className={`flex items-stretch overflow-hidden rounded-xl border bg-white ${isToday ? 'border-accent' : 'border-stone-100'}`}
             >
               <button
                 type="button"
@@ -861,13 +897,23 @@ function WeekCompact({
                 <span className="text-[22px] font-semibold leading-none tabular-nums">{dayOfMonth(d.date)}</span>
               </button>
               <div className="min-w-0 flex-1 space-y-1.5 px-3 py-2.5">
-                {d.blocks.map((b) => (
-                  <p key={b.id} className="rounded-lg border border-stone-400 px-2 py-1 text-[13px] font-semibold text-stone-900" style={HATCH}>
-                    <span className="rounded bg-white/90 px-1">
-                      {b.heure_debut && b.heure_fin ? `${b.heure_debut}–${b.heure_fin}` : 'Toute la journée'} · {b.motif || 'Indisponible'}
-                    </span>
-                  </p>
-                ))}
+                {d.blocks.map((b) =>
+                  isPersoBlock(b) ? (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => onPerso({ block: b })}
+                      className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl border-l-4 border-warm-strong bg-warm-soft px-2.5 py-1 text-left text-[14px] text-warm-ink active:bg-warm-muted"
+                    >
+                      <span className="shrink-0 font-bold tabular-nums">{b.heure_debut}</span>
+                      <span className="min-w-0 flex-1 truncate font-semibold">{b.motif || 'Rendez-vous perso'}</span>
+                    </button>
+                  ) : (
+                    <p key={b.id} className="rounded-lg border border-stone-400 px-2 py-1 text-[13px] font-semibold text-stone-900" style={HATCH}>
+                      <span className="rounded bg-white/90 px-1">Toute la journée · {b.motif || 'Fermé'}</span>
+                    </p>
+                  ),
+                )}
                 {(['matin', 'apres_midi'] as BookingPeriode[]).flatMap((per) =>
                   d.soft[per].map((b) => (
                     <button

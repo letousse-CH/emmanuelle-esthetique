@@ -155,7 +155,7 @@ export default function Subscribers() {
           : <EmptyState icon={Mail} title="Aucun abonné pour le moment"
               description="Les personnes qui s'inscrivent à votre lettre d'information depuis le site apparaîtront ici." />
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="bg-stone-50 rounded-xl overflow-hidden">
           {/* Tableau — écrans sm et plus */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-[14px]">

@@ -8,19 +8,13 @@
 import type React from 'react';
 import {
   LayoutDashboard,
-  FileText,
   Settings,
   Image as ImageIcon,
-  Mail,
   Send,
-  BarChart2,
   CalendarDays,
-  Layers,
   Menu,
   Share2,
   CreditCard,
-  Users,
-  BookOpenCheck,
   Sparkles,
   Gift,
   Megaphone,
@@ -30,11 +24,24 @@ import {
   TrendingUp,
   Rocket,
   Receipt,
-  PieChart,
-  Target,
   Package,
   FlaskConical,
   BadgePercent,
+  Wallet,
+  Briefcase,
+  Globe,
+  Files,
+  PenLine,
+  Ticket,
+  Newspaper,
+  Gauge,
+  ScrollText,
+  UsersRound,
+  Boxes,
+  Landmark,
+  Search,
+  MailCheck,
+  Eye,
 } from 'lucide-react';
 import type { ModuleFlags } from '../../../config/moduleFlags';
 
@@ -48,7 +55,12 @@ export type NavItem = {
   /** Pastille de compte (ex. demandes à rappeler). */
   badge?: number;
 };
-export type NavGroup = { label?: string; items: NavItem[] };
+/**
+ * Groupe de la barre latérale. Sans `label` : toujours déplié (le quotidien).
+ * Avec : rubrique repliable, ouverte seulement quand on y travaille ; `icon`
+ * la représente quand la barre est réduite à ses icônes.
+ */
+export type NavGroup = { id: string; label?: string; icon?: React.ElementType; items: NavItem[] };
 
 export function isItemActive(item: NavItem, pathname: string) {
   const match = (p: string) => pathname === p || pathname.startsWith(`${p}/`);
@@ -67,31 +79,31 @@ const I = {
   dashboard: { name: 'Tableau de bord', path: '/admin', icon: LayoutDashboard, exact: true },
   reservations: { name: 'Réservations', path: '/admin/reservations', icon: CalendarDays },
   offres: { name: 'Offre du moment', path: '/admin/offres', icon: BadgePercent },
-  pages: { name: 'Pages', path: '/admin/pages', icon: Layers },
+  pages: { name: 'Pages', path: '/admin/pages', icon: Files },
   medias: { name: 'Médiathèque', path: '/admin/medias', icon: ImageIcon },
   menu: { name: 'Menu', path: '/admin/menu', icon: Menu },
   entete: { name: 'En-tête et pied de page', path: '/admin/entete-pied', icon: PanelsTopLeft },
-  blog: { name: 'Articles', path: '/admin/blog', icon: FileText },
-  events: { name: 'Événements', path: '/admin/events', icon: CalendarDays },
-  newsletter: { name: 'Newsletter', path: '/admin/newsletter', icon: Send },
+  blog: { name: 'Articles', path: '/admin/blog', icon: PenLine },
+  events: { name: 'Événements', path: '/admin/events', icon: Ticket },
+  newsletter: { name: 'Newsletter', path: '/admin/newsletter', icon: Newspaper },
   social: { name: 'Réseaux sociaux', path: '/admin/social', icon: Share2 },
-  cockpit: { name: 'Cockpit Hebdo', path: '/admin/caisse/cockpit', icon: Target },
+  cockpit: { name: 'Cockpit', path: '/admin/caisse/cockpit', icon: Gauge },
   caisse: { name: 'Encaisser', path: '/admin/caisse', icon: CreditCard, exact: true },
-  journal: { name: 'Journal', path: '/admin/caisse/journal', icon: BookOpenCheck },
-  clients: { name: 'Clientes', path: '/admin/caisse/clients', icon: Users },
+  journal: { name: 'Journal des ventes', path: '/admin/caisse/journal', icon: ScrollText },
+  clients: { name: 'Clientes', path: '/admin/caisse/clients', icon: UsersRound },
   catalogue: {
     name: 'Catalogue & Stock',
     path: '/admin/caisse/prestations',
-    icon: Sparkles,
-    also: ['/admin/caisse/produits', '/admin/caisse/cabine', '/admin/caisse/cockpit'],
+    icon: Boxes,
+    also: ['/admin/caisse/produits', '/admin/caisse/cabine'],
   },
   depenses: { name: 'Factures & Dépenses', path: '/admin/caisse/depenses', icon: Receipt },
-  bilan: { name: 'Bilan & Fiscalité', path: '/admin/caisse/bilan', icon: PieChart },
+  bilan: { name: 'Bilan & Fiscalité', path: '/admin/caisse/bilan', icon: Landmark },
   bons: { name: 'Bons cadeaux', path: '/admin/caisse/bons', icon: Gift },
-  promotions: { name: 'Promotions', path: '/admin/promotions', icon: Megaphone },
+  promotions: { name: 'Promotions', path: '/admin/promotions', icon: Send },
   analytics: { name: 'Statistiques', path: '/admin/analytics', icon: TrendingUp },
-  seo: { name: 'SEO et mots-clés', path: '/admin/seo', icon: BarChart2 },
-  subscribers: { name: 'Abonnés', path: '/admin/subscribers', icon: Mail },
+  seo: { name: 'SEO et mots-clés', path: '/admin/seo', icon: Search },
+  subscribers: { name: 'Abonnés', path: '/admin/subscribers', icon: MailCheck },
   autopilot: { name: 'Pilote automatique', path: '/admin/autopilot', icon: Rocket },
   agents: { name: 'Agent IA', path: '/admin/agents', icon: Bot },
   automations: { name: 'Automatisations', path: '/admin/automations', icon: Workflow },
@@ -101,42 +113,57 @@ const I = {
 export const SETTINGS_ITEM: NavItem = I.settings;
 
 /*
- * Navigation rangée par usage : ce que l'on modifie sur le site, ce que l'on
- * publie, ce que l'on encaisse, ce que l'on mesure, ce que l'on délègue.
+ * Navigation rangée par usage. En tête, toujours visible, ce qui sert chaque
+ * jour ; puis des rubriques repliées — encaisser, gérer, communiquer, tenir le
+ * site, mesurer l'audience, déléguer — qui ne s'ouvrent que quand on y travaille.
  * Les réglages vivent en pied de barre, à part du travail quotidien.
  */
 export function buildNavGroups(flags: ModuleFlags, toCallCount = 0): NavGroup[] {
   const groups: NavGroup[] = [
     {
-      items: [I.dashboard, { ...I.reservations, badge: toCallCount }, I.offres],
+      id: 'quotidien',
+      items: [I.dashboard, { ...I.reservations, badge: toCallCount }, ...(flags.caisse ? [I.caisse] : [])],
     },
+    ...(flags.caisse
+      ? [
+          { id: 'caisse', label: 'Caisse', icon: Wallet, items: [I.journal, I.clients, I.bons] },
+          { id: 'gestion', label: 'Gestion', icon: Briefcase, items: [I.cockpit, I.catalogue, I.depenses, I.bilan] },
+        ]
+      : []),
     {
-      label: 'Site',
-      items: [I.pages, I.medias, I.menu, I.entete],
-    },
-    {
-      label: 'Contenu',
+      id: 'communication',
+      label: 'Communication',
+      icon: Megaphone,
       items: [
-        ...(flags.blog ? [I.blog] : []),
-        ...(flags.events ? [I.events] : []),
+        I.offres,
+        ...(flags.caisse ? [I.promotions] : []),
         ...(flags.newsletter ? [I.newsletter] : []),
         ...(flags.social ? [I.social] : []),
       ],
     },
-    ...(flags.caisse
-      ? [
-          {
-            label: 'Caisse & Finances',
-            items: [I.cockpit, I.caisse, I.journal, I.clients, I.catalogue, I.depenses, I.bilan, I.bons, I.promotions],
-          },
-        ]
-      : []),
     {
+      id: 'site',
+      label: 'Site web',
+      icon: Globe,
+      items: [
+        I.pages,
+        ...(flags.blog ? [I.blog] : []),
+        ...(flags.events ? [I.events] : []),
+        I.medias,
+        I.menu,
+        I.entete,
+      ],
+    },
+    {
+      id: 'audience',
       label: 'Audience',
+      icon: Eye,
       items: [I.analytics, ...(flags.keywords ? [I.seo] : []), I.subscribers],
     },
     {
+      id: 'assistants',
       label: 'Assistants',
+      icon: Sparkles,
       items: [
         I.autopilot,
         ...(flags.agents ? [I.agents] : []),
@@ -145,6 +172,17 @@ export function buildNavGroups(flags: ModuleFlags, toCallCount = 0): NavGroup[] 
     },
   ];
   return groups.filter((group) => group.items.length > 0);
+}
+
+/** Le groupe qui contient la page affichée (l'entrée au chemin le plus long l'emporte). */
+export function activeGroupId(groups: NavGroup[], pathname: string): string | null {
+  let best: { id: string; len: number } | null = null;
+  for (const g of groups) {
+    for (const item of g.items) {
+      if (isItemActive(item, pathname) && (!best || item.path.length > best.len)) best = { id: g.id, len: item.path.length };
+    }
+  }
+  return best?.id ?? null;
 }
 
 export function buildCommandItems(groups: NavGroup[]) {
@@ -263,15 +301,15 @@ export function buildPlusGroups(flags: ModuleFlags, toCallCount = 0): PlusGroup[
 
 export const CAISSE_SUBNAV: { name: string; path: string; exact?: boolean; icon: React.ElementType; also?: string[] }[] = [
   { name: 'Encaisser', path: '/admin/caisse', exact: true, icon: CreditCard },
-  { name: 'Journal', path: '/admin/caisse/journal', icon: BookOpenCheck },
+  { name: 'Journal', path: '/admin/caisse/journal', icon: ScrollText },
   { name: 'Bons', path: '/admin/caisse/bons', icon: Gift },
-  { name: 'Clientes', path: '/admin/caisse/clients', icon: Users },
+  { name: 'Clientes', path: '/admin/caisse/clients', icon: UsersRound },
   { name: 'Catalogue', path: '/admin/caisse/prestations', icon: Sparkles },
   { name: 'Produits', path: '/admin/caisse/produits', icon: Package },
   { name: 'Cabine', path: '/admin/caisse/cabine', icon: FlaskConical },
   { name: 'Dépenses', path: '/admin/caisse/depenses', icon: Receipt },
-  { name: 'Bilan', path: '/admin/caisse/bilan', icon: PieChart },
-  { name: 'Cockpit', path: '/admin/caisse/cockpit', icon: Target },
+  { name: 'Bilan', path: '/admin/caisse/bilan', icon: Landmark },
+  { name: 'Cockpit', path: '/admin/caisse/cockpit', icon: Gauge },
 ];
 
 // ── Onglets du bas ───────────────────────────────────────────────────────────
@@ -310,7 +348,7 @@ const TITLES: [string, string][] = [
   ['/admin/caisse/cabine', 'Stock cabine'],
   ['/admin/caisse/depenses', 'Dépenses'],
   ['/admin/caisse/bilan', 'Bilan'],
-  ['/admin/caisse/cockpit', 'Cockpit hebdo'],
+  ['/admin/caisse/cockpit', 'Cockpit'],
   ['/admin/promotions', 'Promotions'],
   ['/admin/pages', 'Pages'],
   ['/admin/pages/new', 'Nouvelle page'],

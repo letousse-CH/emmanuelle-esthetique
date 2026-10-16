@@ -71,6 +71,37 @@ Il n'y a plus de `server.ts` Express ni de prerender Puppeteer : Next.js gère l
 SSR/SSG/ISR nativement. `vite_legacy_backup/` (gitignoré, local) est l'ancienne
 stack Vite/Express conservée pour référence historique — pas utilisée par l'app.
 
+## Admin : navigation et design (2026-10-16)
+
+- **Menu** (`components/admin/mobile/nav.ts`) : en tête, toujours visibles,
+  Tableau de bord · Réservations · Encaisser ; le reste en rubriques repliables
+  (Caisse, Gestion, Communication, Site web, Audience, Assistants), une seule
+  ouverte à la fois — celle de la page affichée.
+- **Tableau de bord** : chiffre d'affaires du mois (en grand), de la semaine et
+  du jour (`loadMoney`, même règle `recetteEncaissee` qu'ailleurs), puis
+  rendez-vous et demandes. Les statistiques de visites vivent sur `/admin/analytics`.
+- **Palette** (`src/theme.css`, `src/app/admin/admin.css`) — cinq familles apparentées :
+  **marine** = actions et sélection (accent, couleur du site ; plus d'aplats
+  noirs) ; **vert** `growth` (#2C8160) = grands aplats des chiffres clés, contenu
+  en blanc (AA) — « être dans le vert » ; **safran** `warm*` = petits accents
+  (attention, objectifs, rendez-vous perso), encre marine `warm-ink` dessus ;
+  **lagon** = réussite ; **brique** = erreur. `admin.css` remappe les variables
+  Tailwind dans l'admin (`amber`→safran, `emerald`→lagon, `sky/blue/violet/purple`
+  →marine, `red/rose`→brique) et réduit les gris à trois (`stone-50/100/200`) ;
+  l'aperçu `.pb-page` retrouve la palette d'origine. Un aplat vert ne se pose que
+  sur une bonne nouvelle (bénéfice négatif → brique, dette des bons → gris).
+- **Épuré** : pas de cartes à filet ni d'ombres décoratives — aplats gris
+  (`bg-stone-50`) ; les tableaux et listes de données ont fond blanc, filet 1 px
+  gris clair (`.data-frame`, ou tout `<table>`) et lignes zébrées (`.zebra`).
+- **Chiffres sans cartes** : `Metric` / `MetricStrip` / `ProgressBar` (`onColor`
+  sur aplat) / `AnimatedNumber` / `SectionHeading` / `SubNav`
+  (`components/admin/ui.tsx`). Un seul chiffre en grand par page.
+- **Arrondis très légers : 4 px** pour tout élément `rounded-*` (règle dans
+  `admin.css`) ; `rounded-full` seulement pour ce qui est rond (points, avatars,
+  interrupteurs). L'aperçu `.pb-page` et les styles en ligne gardent les leurs.
+- Couleurs des catégories de soins : `components/admin/categoryColors.ts`, les
+  mêmes en caisse et dans le catalogue.
+
 ## Modules & template
 
 Le site a un système de modules activables/désactivables depuis
@@ -178,6 +209,16 @@ Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
   Google Calendar à activer. Connecter active la synchro et envoie les rendez-vous à
   venir ; le dernier refus de Google s'affiche dans la carte. Avant ce jour, le code
   attendait un jeton d'accès figé jamais saisi : rien n'arrivait dans l'agenda.
+- **Rendez-vous perso** (2026-10-16) : dentiste, pause, banque… = une
+  indisponibilité **sur une plage horaire** nommée (`booking_blocks` avec
+  `heure_debut`/`heure_fin` et `motif` = le titre). Pas de migration : la règle
+  est `isPersoBlock()` (`reservations/PersoPanel.tsx`) — plage horaire = perso,
+  journée entière = jour fermé (hachuré). Affiché en safran dans l'agenda,
+  cliquable pour le modifier (`PATCH /api/admin/booking-blocks/[id]`, mêmes
+  contrôles qu'à la création via `parseBlockBody`) ou le supprimer ; bloque la
+  réservation en ligne ; les rendez-vous clientes touchés sont signalés, jamais
+  annulés. Création : bouton « Rendez-vous perso », ou « Ce n'est pas une
+  cliente ? » dans « Nouveau rendez-vous ».
 - Pas encore fait : passage « Encaisser » vers la caisse, pièce jointe .ics
   (`sendEmail` ne la gère pas).
 

@@ -130,7 +130,7 @@ export default function FactureImportModal({ file, categories, products, expense
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-stone-900/60 backdrop-blur-xs">
       <div role="dialog" aria-modal="true" aria-label="Importer une facture d'achat"
-        className="bg-white rounded-2xl w-full max-w-6xl max-h-[94vh] flex flex-col border border-stone-200 shadow-xl overflow-hidden">
+        className="bg-white rounded-xl w-full max-w-6xl max-h-[94vh] flex flex-col border border-stone-200 shadow-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-stone-200 bg-stone-50 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-bold text-stone-900 text-base flex items-center gap-2">

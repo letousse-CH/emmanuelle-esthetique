@@ -69,7 +69,7 @@ export default function AiPageModal({
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs animate-fade-in select-none">
-      <div className="bg-white rounded-2xl shadow-2xl border border-stone-200 w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-xl shadow-2xl border border-stone-200 w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header Épuré Admin */}
         <div className="bg-stone-900 px-6 py-4 text-white flex items-center justify-between shrink-0">
@@ -104,7 +104,7 @@ export default function AiPageModal({
               onClick={() => setMode('generate')}
               className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 mode === 'generate'
-                  ? 'bg-stone-900 text-white shadow-xs'
+                  ? 'bg-stone-900 text-white'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
               }`}
             >
@@ -117,7 +117,7 @@ export default function AiPageModal({
               onClick={() => setMode('modify')}
               className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 mode === 'modify'
-                  ? 'bg-stone-900 text-white shadow-xs'
+                  ? 'bg-stone-900 text-white'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
               }`}
             >
@@ -202,7 +202,7 @@ export default function AiPageModal({
             <button
               type="submit"
               disabled={isLoading || !prompt.trim()}
-              className="flex items-center gap-2 bg-stone-900 hover:bg-stone-800 text-white px-5 py-2 rounded-xl text-xs font-extrabold transition-all disabled:opacity-40 shadow-sm cursor-pointer"
+              className="flex items-center gap-2 bg-stone-900 hover:bg-stone-800 text-white px-5 py-2 rounded-xl text-xs font-extrabold transition-all disabled:opacity-40 cursor-pointer"
             >
               {isLoading ? (
                 <>

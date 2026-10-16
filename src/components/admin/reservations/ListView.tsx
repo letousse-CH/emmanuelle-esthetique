@@ -93,12 +93,12 @@ export default function ListView({
               onClick={() => setTab(t.id)}
               className={`flex h-11 items-center gap-2 rounded-lg px-4 text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
                 tab === t.id
-                  ? 'bg-white font-semibold text-stone-950 shadow-xs ring-1 ring-stone-200'
+                  ? 'bg-stone-900 font-semibold text-white'
                   : 'font-medium text-stone-700 hover:text-stone-950'
               }`}
             >
               {t.label}
-              <span className="rounded-full bg-stone-200 px-2 text-[12px] font-bold text-stone-800">{t.count}</span>
+              <span className="bg-stone-200 px-2 text-[12px] font-bold text-stone-800">{t.count}</span>
             </button>
           ))}
         </div>
@@ -166,7 +166,7 @@ export default function ListView({
           description={filtersActive ? 'Essayez d’élargir la recherche.' : 'Rien à afficher dans cet onglet pour le moment.'}
         />
       ) : (
-        <ul className="divide-y divide-stone-200 overflow-hidden rounded-2xl border border-stone-300 bg-white">
+        <ul className="zebra data-frame overflow-hidden rounded-xl">
           {rows.map((b) => {
             const total = b.total_chf ?? bookingTotal(b);
             return (
@@ -174,7 +174,7 @@ export default function ListView({
                 <button
                   type="button"
                   onClick={() => onOpen(b.id)}
-                  className="flex min-h-[4.5rem] min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-stone-50 focus-visible:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
+                  className="flex min-h-[4.5rem] min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-row-hover focus-visible:bg-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
                 >
                   <div className="w-24 shrink-0 text-[14px] leading-snug text-stone-800 sm:w-32">
                     <p className="font-semibold text-stone-950">{cap(formatDateShort(b.date_rdv))}</p>

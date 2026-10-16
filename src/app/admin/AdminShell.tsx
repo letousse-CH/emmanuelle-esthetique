@@ -22,10 +22,12 @@ import {
   CalendarDays,
   CreditCard,
   Users,
+  ChevronDown,
 } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { CommandMenu, Kbd } from '../../components/admin/ui';
 import {
+  activeGroupId,
   buildCommandItems,
   buildNavGroups,
   isItemActive,
@@ -226,6 +228,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   const commandItems = useMemo(() => buildCommandItems(navGroups), [navGroups]);
 
+  // Rubriques repliables : une seule ouverte à la fois — celle de la page
+  // affichée. Ouvrir une autre rubrique referme la précédente ; changer de page
+  // rouvre celle qui la contient. Le menu ne montre ainsi que l'outil du moment.
+  const activeGroup = activeGroupId(navGroups, pathname);
+  const [openGroup, setOpenGroup] = useState<string | null>(activeGroup);
+  React.useEffect(() => { setOpenGroup(activeGroup); }, [activeGroup, pathname]);
+
   const quickCreate = [
     ...(moduleFlags.blog ? [{ label: 'Article', href: '/admin/blog/new', icon: FileText }] : []),
     { label: 'Page', href: '/admin/pages/new', icon: Layers },
@@ -264,35 +273,94 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   if (!user) return null;
 
-  const navLink = (item: NavItem) => {
-    const active = isItemActive(item, pathname);
+  const navLink = (item: NavItem, nested = false) => {
+    // Une seule entrée allumée : la plus précise (Catalogue ne s'allume pas sur le Cockpit).
+    const active = currentItem?.path === item.path;
     return (
       <Link
         key={item.path}
         href={item.path}
         title={collapsed ? item.name : undefined}
         aria-current={active ? 'page' : undefined}
-        className={`group flex items-center gap-3 rounded-lg px-3 h-10 text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+        className={`group flex items-center gap-3 rounded-lg px-3 ${nested ? 'h-9 text-[14.5px]' : 'h-10 text-[15px]'} transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
           active
-            ? 'bg-white text-accent font-semibold ring-1 ring-stone-200 shadow-xs'
-            : 'text-stone-900 font-medium hover:bg-stone-200/60'
+            ? 'bg-accent text-accent-fg font-semibold'
+            : 'text-stone-900 font-medium hover:bg-stone-100'
         } ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
       >
         <item.icon
-          size={17}
+          size={nested ? 16 : 17}
           strokeWidth={active ? 2.2 : 1.9}
-          className={`shrink-0 ${active ? 'text-accent' : 'text-stone-700'}`}
+          className={`shrink-0 ${active ? 'text-accent-fg' : 'text-stone-700'}`}
         />
         <span className={`truncate ${collapsed ? 'lg:hidden' : ''}`}>{item.name}</span>
         {item.badge ? (
           <span
-            className={`ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-amber-600 px-1.5 text-[11.5px] font-bold leading-5 text-white ${collapsed ? 'lg:hidden' : ''}`}
+            className={`ml-auto inline-flex min-w-5 items-center justify-center bg-warm px-1.5 text-[11.5px] font-bold leading-5 text-warm-ink ${collapsed ? 'lg:hidden' : ''}`}
             aria-label={`${item.badge} demande${item.badge > 1 ? 's' : ''} à appeler`}
           >
             {item.badge}
           </span>
         ) : null}
       </Link>
+    );
+  };
+
+  const navGroup = (group: (typeof navGroups)[number]) => {
+    if (!group.label) {
+      return <div key={group.id} className="space-y-0.5 pb-2 mb-2 border-b border-stone-200">{group.items.map((item) => navLink(item))}</div>;
+    }
+    const open = openGroup === group.id && !collapsed;
+    const holdsActive = activeGroup === group.id;
+    const badge = group.items.reduce((n, item) => n + (item.badge ?? 0), 0);
+    const GroupIcon = group.icon ?? Layers;
+    const panelId = `admin-nav-${group.id}`;
+    return (
+      <div key={group.id}>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          title={collapsed ? group.label : undefined}
+          onClick={() => {
+            // Barre réduite : on la déplie sur la rubrique demandée.
+            if (collapsed) { setCollapsed(false); setOpenGroup(group.id); return; }
+            setOpenGroup(open ? null : group.id);
+          }}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 h-10 text-[15px] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+            holdsActive && !open
+              ? 'text-accent font-semibold'
+              : open
+                ? 'text-stone-950 font-semibold'
+                : 'text-stone-800 font-medium hover:bg-stone-100'
+          } ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
+        >
+          <GroupIcon size={17} strokeWidth={holdsActive ? 2.2 : 1.9} className={`shrink-0 ${holdsActive ? 'text-accent' : 'text-stone-600'}`} />
+          <span className={`flex-1 truncate text-left ${collapsed ? 'lg:hidden' : ''}`}>{group.label}</span>
+          {badge > 0 && !open && (
+            <span className={`inline-flex min-w-5 items-center justify-center bg-warm px-1.5 text-[11.5px] font-bold leading-5 text-warm-ink ${collapsed ? 'lg:hidden' : ''}`}>
+              {badge}
+            </span>
+          )}
+          <ChevronDown
+            size={16}
+            aria-hidden="true"
+            className={`shrink-0 text-stone-500 transition-transform duration-200 motion-reduce:transition-none ${open ? 'rotate-180' : ''} ${collapsed ? 'lg:hidden' : ''}`}
+          />
+        </button>
+        {/* Repli animé par la hauteur de grille ; `inert` retire les liens repliés du parcours au clavier. */}
+        <div
+          id={panelId}
+          inert={!open}
+          className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <div className="ml-4 mt-0.5 mb-1.5 space-y-0.5 pl-2">
+              {group.items.map((item) => navLink(item, true))}
+            </div>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -315,7 +383,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         aria-label="Navigation principale"
         className={`hidden lg:flex lg:sticky lg:top-0 lg:h-screen ${
           collapsed ? 'lg:w-[68px]' : 'lg:w-64'
-        } shrink-0 bg-stone-50 border-r border-stone-200 flex-col transition-[width] duration-200 ease-out`}
+        } shrink-0 bg-stone-50 flex-col transition-[width] duration-200 ease-out`}
       >
         {/* Marque */}
         <div className={`h-16 flex items-center shrink-0 ${collapsed ? 'lg:justify-center px-4 lg:px-0' : 'px-5'}`}>
@@ -336,18 +404,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </div>
 
         {/* Navigation */}
-        <nav aria-label="Rubriques de l'administration" className="flex-1 overflow-y-auto px-3 pb-4 pt-1 space-y-6">
-          {navGroups.map((group, gi) => (
-            <div key={group.label ?? `g${gi}`}>
-              {group.label && (
-                <p className={`px-3 mb-1.5 text-[13px] font-semibold text-stone-600 ${collapsed ? 'lg:hidden' : ''}`}>
-                  {group.label}
-                </p>
-              )}
-              {group.label && collapsed && <div className="hidden lg:block mx-3 mb-2 border-t border-stone-200" />}
-              <div className="space-y-0.5">{group.items.map(navLink)}</div>
-            </div>
-          ))}
+        <nav aria-label="Rubriques de l'administration" className="flex-1 overflow-y-auto px-3 pb-4 pt-1 space-y-0.5">
+          {navGroups.map(navGroup)}
         </nav>
 
         {/* Pied de barre */}
@@ -356,7 +414,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           <button
             onClick={handleLogout}
             title={collapsed ? 'Déconnexion' : undefined}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 h-10 text-[15px] font-medium text-stone-900 hover:bg-stone-200/60 transition-colors cursor-pointer ${
+            className={`flex w-full items-center gap-3 rounded-lg px-3 h-10 text-[15px] font-medium text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer ${
               collapsed ? 'lg:justify-center lg:px-0' : ''
             }`}
           >
@@ -368,7 +426,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             aria-label={collapsed ? 'Déplier la navigation' : 'Replier la navigation'}
             aria-pressed={collapsed}
             title={collapsed ? 'Déplier' : 'Replier'}
-            className={`hidden lg:flex w-full items-center gap-3 rounded-lg px-3 h-10 text-[15px] font-medium text-stone-700 hover:bg-stone-200/60 hover:text-stone-900 transition-colors cursor-pointer ${
+            className={`hidden lg:flex w-full items-center gap-3 rounded-lg px-3 h-10 text-[15px] font-medium text-stone-700 hover:bg-stone-100 hover:text-stone-900 transition-colors cursor-pointer ${
               collapsed ? 'justify-center px-0' : ''
             }`}
           >
@@ -379,7 +437,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       </aside>
 
       {/* Zone principale */}
-      <div className="flex-1 min-w-0 flex flex-col bg-stone-50 lg:bg-white">
+      <div className="flex-1 min-w-0 flex flex-col bg-white">
         {/* En-tête mobile (+ sous-navigation de la caisse) : collé en haut */}
         <div className="sticky top-0 z-30 lg:hidden">
           <MobileHeader pathname={pathname} title={pageTitle} siteUrl="/" />
@@ -398,7 +456,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <button
               type="button"
               onClick={() => setCmdOpen(true)}
-              className="hidden md:flex items-center gap-2 h-9 w-64 px-3 rounded-lg bg-stone-100 text-[14px] font-medium text-stone-700 hover:bg-stone-200/70 transition-colors cursor-pointer"
+              className="hidden md:flex items-center gap-2 h-9 w-64 px-3 rounded-lg bg-stone-100 text-[14px] font-medium text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
             >
               <Search size={15} className="text-stone-700" />
               <span className="flex-1 text-left">Rechercher</span>

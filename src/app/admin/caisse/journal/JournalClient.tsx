@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { cancelTransaction, listGiftCardsForSale, listProducts, listTransactions } from '../../../../services/caisse';
 import { useSettings } from '../../../../hooks/useSettings';
-import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
+import { AnimatedNumber, Button, Callout, Metric, MetricStrip } from '../../../../components/admin/ui';
 import {
   BottomSheet, Chip, EmptyState, ListGroup, ListRow, SegmentedControl, Skeleton, StatTile,
 } from '../../../../components/admin/mobile/ui';
@@ -368,25 +368,21 @@ export default function JournalClient() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="hidden lg:block">
-        <PageHeader
-          title="Journal et chiffre d'affaires"
-          description={`Livre de caisse — ${periodLabel}`}
-          actions={
-            <>
-              <Button icon={RefreshCw} onClick={load} loading={loading} aria-label="Actualiser" title="Actualiser">
-                <span className="hidden sm:inline">Actualiser</span>
-              </Button>
-              <Button
-                variant="primary" icon={Download} onClick={exportCSV} disabled={rows.length === 0}
-                title="Fichier CSV de la période affichée, à transmettre à la fiducie"
-              >
-                Exporter pour la fiducie
-              </Button>
-            </>
-          }
-        />
-      </div>
+      <header className="hidden lg:flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[14px] font-medium text-stone-500">Livre de caisse</p>
+          <h1 className="mt-0.5 text-[30px] font-semibold leading-tight tracking-tight text-stone-950">Journal des ventes</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" icon={RefreshCw} onClick={load} loading={loading} aria-label="Actualiser" title="Actualiser" />
+          <Button
+            variant="primary" icon={Download} onClick={exportCSV} disabled={rows.length === 0}
+            title="Fichier CSV de la période affichée, à transmettre à la fiducie"
+          >
+            Exporter pour la fiducie
+          </Button>
+        </div>
+      </header>
 
       {error && (
         <Callout
@@ -409,13 +405,13 @@ export default function JournalClient() {
         <div className="flex items-center gap-2">
           <button
             type="button" onClick={() => shiftPeriod(-1)} aria-label={mode === 'mois' ? 'Mois précédent' : 'Année précédente'}
-            className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full border border-stone-200 bg-white text-stone-800 active:bg-stone-100"
+            className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-stone-50 text-stone-800 active:bg-stone-100"
           >
             <ChevronLeft size={20} aria-hidden="true" />
           </button>
           <button
             type="button" onClick={() => setPeriodOpen(true)} aria-haspopup="dialog"
-            className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-[16px] font-semibold text-stone-950 active:bg-stone-100"
+            className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 bg-stone-50 px-4 text-[16px] font-semibold text-stone-950 active:bg-stone-100"
           >
             <CalendarDays size={18} className="text-accent" aria-hidden="true" />
             <span className="truncate">{periodLabel}</span>
@@ -423,7 +419,7 @@ export default function JournalClient() {
           </button>
           <button
             type="button" onClick={() => shiftPeriod(1)} aria-label={mode === 'mois' ? 'Mois suivant' : 'Année suivante'}
-            className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full border border-stone-200 bg-white text-stone-800 active:bg-stone-100"
+            className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-stone-50 text-stone-800 active:bg-stone-100"
           >
             <ChevronRight size={20} aria-hidden="true" />
           </button>
@@ -440,128 +436,129 @@ export default function JournalClient() {
         </div>
       </div>
 
-      {/* KPIs — toujours « à maintenant », quelle que soit la période affichée */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 max-lg:order-2">
+      {/* KPIs — toujours « à maintenant », quelle que soit la période affichée (téléphone) */}
+      <div className="grid grid-cols-2 gap-3 max-lg:order-2 lg:hidden">
         <Kpi label="Aujourd'hui"    value={formatCHF(kpis.jour)}    loading={loading} />
         <Kpi label="Cette semaine"  value={formatCHF(kpis.semaine)} loading={loading} />
         <Kpi label="Ce mois"        value={formatCHF(kpis.mois)}    loading={loading} />
         <Kpi label={`Depuis le 1er janvier ${new Date().getFullYear()}`} value={formatCHF(kpis.annee)} loading={loading} accent />
       </div>
 
-      {/* Sélecteur de période */}
-      <div className="hidden lg:flex bg-white border border-stone-200 rounded-xl p-4 flex-wrap items-center gap-3">
-        <div className="flex rounded-lg border border-stone-200 overflow-hidden">
+      {/* Période affichée — bureau */}
+      <div className="hidden lg:flex flex-wrap items-center gap-3">
+        <div className="flex items-center">
+          <button
+            type="button" onClick={() => shiftPeriod(-1)} aria-label={mode === 'mois' ? 'Mois précédent' : 'Année précédente'}
+            className="grid size-10 place-items-center rounded-l-lg bg-stone-50 text-stone-700 hover:bg-stone-50 cursor-pointer"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          {mode === 'mois' && (
+            <>
+              <label htmlFor="journal-month" className="sr-only">Mois</label>
+              <select
+                id="journal-month" value={month} onChange={e => setMonth(Number(e.target.value))}
+                className="h-10 border-y border-stone-200 bg-white px-3 text-[14.5px] font-semibold text-stone-900 outline-none cursor-pointer"
+              >
+                {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+            </>
+          )}
+          <label htmlFor="journal-year" className="sr-only">Année</label>
+          <select
+            id="journal-year" value={year} onChange={e => setYear(Number(e.target.value))}
+            className={`h-10 border-y border-stone-200 bg-white px-3 text-[14.5px] font-semibold text-stone-900 outline-none cursor-pointer ${mode === 'mois' ? 'border-l' : ''}`}
+          >
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <button
+            type="button" onClick={() => shiftPeriod(1)} aria-label={mode === 'mois' ? 'Mois suivant' : 'Année suivante'}
+            className="grid size-10 place-items-center rounded-r-lg bg-stone-50 text-stone-700 hover:bg-stone-50 cursor-pointer"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <div role="group" aria-label="Type de période" className="inline-flex rounded-lg bg-stone-100 p-1">
           {(['mois', 'annee'] as PeriodMode[]).map(m => (
             <button
               key={m}
               onClick={() => setMode(m)}
               aria-pressed={mode === m}
-              className={`px-4 py-2 text-sm transition-colors cursor-pointer ${
-                mode === m ? 'bg-accent-soft text-accent font-semibold' : 'text-stone-700 hover:bg-stone-50'
+              className={`h-8 rounded-md px-3.5 text-[13.5px] transition-colors cursor-pointer ${
+                mode === m ? 'bg-stone-900 font-semibold text-white' : 'font-medium text-stone-600 hover:text-stone-900'
               }`}
             >
-              {m === 'mois' ? 'Par mois' : 'Par année'}
+              {m === 'mois' ? 'Mois' : 'Année'}
             </button>
           ))}
-        </div>
-
-        {mode === 'mois' && (
-          <>
-            <label htmlFor="journal-month" className="sr-only">Mois</label>
-            <select
-              id="journal-month" value={month} onChange={e => setMonth(Number(e.target.value))}
-              className="px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
-            >
-              {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
-            </select>
-          </>
-        )}
-
-        <label htmlFor="journal-year" className="sr-only">Année</label>
-        <select
-          id="journal-year" value={year} onChange={e => setYear(Number(e.target.value))}
-          className="px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 focus:border-stone-900 outline-none cursor-pointer"
-        >
-          {years.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-
-        <div className="ml-auto flex items-baseline gap-2">
-          <span className="text-[13px] text-stone-600">Recettes {periodLabel}</span>
-          <span className="text-lg font-semibold text-stone-900 tabular-nums">{formatCHF(totals.ttc)}</span>
         </div>
       </div>
 
       {/* Marge sur marchandises — délibérément séparée du CA, qu'elle ne
           complète pas : c'est un indicateur de rentabilité, pas de recette. */}
       {margeProduits.articles > 0 && (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 lg:p-5 max-lg:order-2">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                <Package size={16} className="text-accent" />
-              </span>
-              <div>
-                <p className="text-[13px] font-medium text-stone-800">
-                  Marge sur produits — {periodLabel}
-                </p>
-                <p className="text-[12.5px] text-stone-600 mt-0.5">
-                  {qteLabel(margeProduits.articles)} article{margeProduits.articles > 1 ? 's' : ''} vendu
-                  {margeProduits.articles > 1 ? 's' : ''} pour {formatCHF(margeProduits.ventes)}
-                </p>
-              </div>
-            </div>
-            <p className={`text-2xl font-semibold tabular-nums ${margeProduits.marge >= 0 ? 'text-stone-900' : 'text-red-600'}`}>
-              {formatCHF(margeProduits.marge)}
+        <div className="flex flex-wrap items-start gap-x-8 gap-y-2 rounded-xl bg-stone-50 px-5 py-4 max-lg:order-2 lg:order-last">
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-2 text-[14.5px] font-semibold text-stone-900">
+              <Package size={16} className="text-stone-500" /> Marge sur produits · {periodLabel}
+            </p>
+            <p className="mt-1 text-[13px] leading-relaxed text-stone-600">
+              {qteLabel(margeProduits.articles)} article{margeProduits.articles > 1 ? 's' : ''} vendu{margeProduits.articles > 1 ? 's' : ''} pour {formatCHF(margeProduits.ventes)}.
+              Vente hors taxe moins le prix d&apos;achat figé à chaque vente : ce n&apos;est pas une recette, elle ne s&apos;ajoute pas au chiffre d&apos;affaires.
+              {margeProduits.sansCout > 0 && (
+                <span className="text-amber-700">
+                  {' '}{margeProduits.sansCout} ligne{margeProduits.sansCout > 1 ? 's' : ''} sans prix d&apos;achat {margeProduits.sansCout > 1 ? 'sont exclues' : 'est exclue'}.
+                </span>
+              )}
             </p>
           </div>
-          <p className="text-[12px] text-stone-600 leading-relaxed mt-3 pt-3 border-t border-stone-50">
-            Vente hors taxe moins le prix d&apos;achat figé au moment de chaque vente. Ce montant
-            n&apos;est pas une recette et ne s&apos;ajoute pas au chiffre d&apos;affaires : il dit ce
-            que la marchandise a rapporté au-delà de ce qu&apos;elle a coûté.
-            {margeProduits.sansCout > 0 && (
-              <span className="text-amber-700">
-                {' '}{margeProduits.sansCout} ligne{margeProduits.sansCout > 1 ? 's' : ''} sans prix
-                d&apos;achat enregistré {margeProduits.sansCout > 1 ? 'sont exclues' : 'est exclue'} du calcul.
-              </span>
-            )}
+          <p className={`text-[24px] font-semibold tabular-nums ${margeProduits.marge >= 0 ? 'text-stone-950' : 'text-red-600'}`}>
+            {formatCHF(margeProduits.marge)}
           </p>
         </div>
       )}
 
-      {/* Graphiques */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 max-lg:order-2">
-        <div className="lg:col-span-3 bg-white border border-stone-200 rounded-xl p-4 lg:p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-[13px] font-medium text-stone-800">
-              {mode === 'mois' ? 'Recettes par jour' : 'Recettes par mois'}
-            </h2>
-            <span className="text-[12.5px] text-stone-600 font-medium">{paidRows.length} encaissement{paidRows.length !== 1 ? 's' : ''}</span>
+      {/* La période en grand : recettes, rythme, modes de paiement */}
+      <section
+        aria-label={`Recettes ${periodLabel}`}
+        className="grid gap-8 rounded-xl bg-stone-50 p-5 max-lg:order-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-12 lg:p-8"
+      >
+        <div className="min-w-0">
+          <p className="text-[15px] font-medium text-stone-600">Recettes · {periodLabel}</p>
+          <p className="mt-2 text-[40px] font-semibold leading-none tracking-tight text-stone-950 tabular-nums lg:text-[52px]">
+            {loading ? <span className="inline-block h-12 w-60 rounded-xl bg-stone-100 animate-pulse" /> : <AnimatedNumber value={totals.ttc} format={formatCHF} />}
+          </p>
+          <p className="mt-3 text-[14.5px] text-stone-600">
+            {paidRows.length} encaissement{paidRows.length !== 1 ? 's' : ''}
+            {paidRows.length > 0 && <> · en moyenne <span className="font-medium text-stone-800">{formatCHF(totals.ttc / paidRows.length)}</span></>}
+          </p>
+          <div className="mt-8">
+            <SeriesChart data={series} loading={loading} />
           </div>
-          <SeriesChart data={series} loading={loading} />
         </div>
 
-        <div className="lg:col-span-2 bg-white border border-stone-200 rounded-xl p-4 lg:p-6">
-          <h2 className="text-[13px] font-medium text-stone-800 mb-6">Par mode de paiement</h2>
+        <div className="min-w-0 lg:border-l lg:border-stone-200 lg:pl-12">
+          <h2 className="text-[15px] font-medium text-stone-600">Par mode de paiement</h2>
           {loading ? (
-            <div className="space-y-4">
-              {[...Array(4)].map((_, i) => <div key={i} className="h-8 bg-stone-100 rounded animate-pulse" />)}
+            <div className="mt-5 space-y-4">
+              {[...Array(4)].map((_, i) => <div key={i} className="h-8 rounded bg-stone-100 animate-pulse" />)}
             </div>
           ) : totals.ttc === 0 ? (
-            <p className="text-sm text-stone-700">Aucune recette sur la période.</p>
+            <p className="mt-5 text-[14px] text-stone-600">Aucune recette sur la période.</p>
           ) : (
-            <ul className="space-y-4">
+            <ul className="mt-5 space-y-4">
               {byPayment.map(m => {
                 const pct = totals.ttc > 0 ? (m.total / totals.ttc) * 100 : 0;
                 return (
-                  <li key={m.value}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-sm text-stone-700 font-medium">{m.label}</span>
-                      <span className="text-[12.5px] text-stone-600 tabular-nums">
-                        {formatCHF(m.total)} <span className="text-stone-600">· {Math.round(pct)} %</span>
+                  <li key={m.value} className={m.total === 0 ? 'opacity-50' : ''}>
+                    <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                      <span className="text-[14.5px] font-medium text-stone-800">{m.label}</span>
+                      <span className="text-[14px] text-stone-900 tabular-nums">
+                        {formatCHF(m.total)} <span className="text-stone-500">· {Math.round(pct)} %</span>
                       </span>
                     </div>
-                    <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-accent/50 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    <div className="h-1.5 overflow-hidden rounded-full bg-stone-100">
+                      <div className="h-full rounded-full bg-warm transition-all" style={{ width: `${pct}%` }} />
                     </div>
                   </li>
                 );
@@ -569,28 +566,36 @@ export default function JournalClient() {
             </ul>
           )}
 
-          <dl className="mt-6 pt-4 border-t border-stone-200 space-y-1.5">
-            <div className="flex justify-between text-xs"><dt className="text-stone-600">Total HT</dt><dd className="text-stone-700 tabular-nums">{formatCHF(totals.ht)}</dd></div>
-            <div className="flex justify-between text-xs"><dt className="text-stone-600">TVA</dt><dd className="text-stone-700 tabular-nums">{formatCHF(totals.tva)}</dd></div>
-            <div className="flex justify-between text-sm pt-1.5 border-t border-stone-50"><dt className="text-stone-700 font-medium">Recettes encaissées</dt><dd className="text-stone-900 font-semibold tabular-nums">{formatCHF(totals.ttc)}</dd></div>
+          <dl className="mt-6 space-y-1.5 border-t border-stone-200 pt-4 text-[13.5px]">
+            <div className="flex justify-between"><dt className="text-stone-600">Total HT</dt><dd className="text-stone-800 tabular-nums">{formatCHF(totals.ht)}</dd></div>
+            <div className="flex justify-between"><dt className="text-stone-600">TVA</dt><dd className="text-stone-800 tabular-nums">{formatCHF(totals.tva)}</dd></div>
           </dl>
 
           {totals.bons > 0 && (
-            <div className="mt-3 rounded-lg bg-accent/5 border border-accent/20 px-3.5 py-2.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-stone-600 flex items-center gap-1.5">
-                  <Ticket size={11} className="text-accent" /> Prestations réglées par bon
+            <div className="mt-4 rounded-xl bg-warm-soft px-3.5 py-3">
+              <div className="flex justify-between text-[13px]">
+                <span className="flex items-center gap-1.5 font-medium text-warm-ink">
+                  <Ticket size={13} /> Soins réglés par bon
                 </span>
-                <span className="text-stone-700 tabular-nums">{formatCHF(totals.bons)}</span>
+                <span className="text-warm-ink tabular-nums">{formatCHF(totals.bons)}</span>
               </div>
-              <p className="text-[12px] text-stone-600 mt-1.5 leading-relaxed">
-                Hors recettes : cet argent est entré en caisse le jour où les bons
-                ont été vendus. L&apos;ajouter ici doublerait le chiffre d&apos;affaires.
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-stone-700">
+                Hors recettes : cet argent est entré le jour où les bons ont été vendus.
               </p>
             </div>
           )}
         </div>
-      </div>
+      </section>
+
+      {/* Repères à ce jour — bureau (le téléphone a ses tuiles plus haut) */}
+      <section aria-label="Repères à ce jour" className="hidden lg:block">
+        <MetricStrip>
+          <Metric size="md" label="Aujourd’hui" value={formatCHF(kpis.jour)} loading={loading} />
+          <Metric size="md" label="Cette semaine" value={formatCHF(kpis.semaine)} loading={loading} />
+          <Metric size="md" label="Ce mois" value={formatCHF(kpis.mois)} loading={loading} />
+          <Metric size="md" tone="warm" label={`Depuis le 1er janvier ${new Date().getFullYear()}`} value={formatCHF(kpis.annee)} loading={loading} />
+        </MetricStrip>
+      </section>
 
       {/* Journal — mobile : cartes groupées par jour, détail en feuille du bas */}
       <section aria-label="Journal des recettes" className="space-y-3 max-lg:order-1 lg:hidden">
@@ -644,10 +649,14 @@ export default function JournalClient() {
       </section>
 
       {/* Journal — bureau */}
-      <div className="hidden lg:block bg-white border border-stone-200 rounded-xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between">
-          <h2 className="text-[13px] font-medium text-stone-800">Journal des recettes</h2>
-          <span className="text-[12.5px] text-stone-600">{rows.length} écriture{rows.length !== 1 ? 's' : ''}</span>
+      <section aria-labelledby="journal-list-title" className="hidden lg:block space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 id="journal-list-title" className="text-[17px] font-semibold tracking-tight text-stone-950">Écritures · {periodLabel}</h2>
+          <span className="text-[13.5px] text-stone-500">{rows.length} écriture{rows.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="data-frame overflow-hidden rounded-xl">
+        <div className="grid grid-cols-[2rem_4.5rem_minmax(0,1fr)_9rem_8.5rem_6.5rem] items-center gap-3 border-b border-stone-100 bg-white px-5 py-2.5 text-[12.5px] font-semibold text-stone-500">
+          <span /><span>Heure</span><span>Cliente</span><span>Paiement</span><span className="text-right">Recette</span><span />
         </div>
 
         {loading ? (
@@ -660,22 +669,37 @@ export default function JournalClient() {
             <Link href="/admin/caisse" className="text-accent text-sm font-medium hover:underline">Encaisser un soin →</Link>
           </div>
         ) : (
-          <ul className="divide-y divide-stone-50">
-            {rows.map(t => (
-              <JournalRow
-                key={t.id}
-                tx={t}
-                open={expanded.has(t.id)}
-                downloading={downloading === t.id}
-                onToggle={() => toggle(t.id)}
-                onDownload={() => handleDownload(t)}
-                onCancel={() => setDialog({ tx: t, intent: 'cancel' })}
-                onCorrect={() => setDialog({ tx: t, intent: 'correct' })}
-              />
-            ))}
-          </ul>
+          // Un groupe par jour : la date et la recette du jour en tête, puis ses écritures zébrées.
+          dayGroups.map(g => {
+            const dayTotal = g.items.reduce((acc, t) => acc + recetteEncaissee(t), 0);
+            return (
+              <div key={g.key} className="border-t border-stone-100 first:border-t-0">
+                <div className="flex items-baseline justify-between gap-3 bg-white px-5 pb-2 pt-4">
+                  <h3 className="text-[13.5px] font-semibold text-stone-800">{g.label}</h3>
+                  <span className="text-[13px] text-stone-500 tabular-nums">
+                    {g.items.length} · <span className="font-semibold text-stone-800">{formatCHF(dayTotal)}</span>
+                  </span>
+                </div>
+                <ul className="zebra">
+                  {g.items.map(t => (
+                    <JournalRow
+                      key={t.id}
+                      tx={t}
+                      open={expanded.has(t.id)}
+                      downloading={downloading === t.id}
+                      onToggle={() => toggle(t.id)}
+                      onDownload={() => handleDownload(t)}
+                      onCancel={() => setDialog({ tx: t, intent: 'cancel' })}
+                      onCorrect={() => setDialog({ tx: t, intent: 'correct' })}
+                    />
+                  ))}
+                </ul>
+              </div>
+            );
+          })
         )}
-      </div>
+        </div>
+      </section>
 
       {/* Mobile : choix de la période */}
       <BottomSheet
@@ -784,7 +808,7 @@ function Kpi({ label, value, loading, accent }: {
   return (
     <>
       <StatTile className="lg:hidden" label={label} value={value} loading={loading} />
-      <div className={`hidden lg:block bg-white border rounded-xl p-5 space-y-2 ${accent ? 'border-accent/30' : 'border-stone-200'}`}>
+      <div className={`hidden lg:block bg-stone-50 rounded-xl p-5 space-y-2 ${accent ? 'border-accent/30' : 'border-stone-200'}`}>
         <p className="text-[13px] text-stone-600 font-medium flex items-center gap-1.5">
           {accent && <TrendingUp size={13} className="text-accent" />}{label}
         </p>
@@ -810,7 +834,7 @@ function JournalDetail({ tx }: { tx: TransactionWithItems }) {
           {formatCHF(recetteEncaissee(tx))}
         </span>
       </div>
-      <ul className="divide-y divide-stone-100 rounded-2xl border border-stone-200">
+      <ul className="divide-y divide-stone-100 rounded-xl border border-stone-200">
         {tx.transaction_items.map(item => (
           <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3 text-[15px]">
             <span className="min-w-0 text-stone-900">
@@ -868,8 +892,8 @@ function SeriesChart({ data, loading }: { data: { label: string; value: number }
               {formatAmount(d.value)}
             </span>
             <div
-              className="w-full rounded-t bg-accent/25 group-hover:bg-accent/50 transition-colors duration-150"
-              style={{ height: `${h}%` }}
+              className="admin-grow-y w-full rounded-t-md bg-warm/70 group-hover:bg-warm-strong transition-colors duration-150"
+              style={{ height: `${h}%`, animationDelay: `${Math.min(i * 18, 500)}ms` }}
               title={`${d.label} — ${formatCHF(d.value)}`}
             />
             {/* Sur un mois, un repère tous les cinq jours : 31 libellés côte à
@@ -900,77 +924,73 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
 
   return (
     <li className={cancelled ? 'opacity-55' : ''}>
-      <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-stone-50/50 transition-colors">
+      <div className="grid grid-cols-[2rem_4.5rem_minmax(0,1fr)_9rem_8.5rem_6.5rem] items-center gap-3 px-5 py-3 transition-colors hover:bg-row-hover">
         <button
           onClick={onToggle}
           aria-expanded={open}
           aria-label={`${open ? 'Masquer' : 'Afficher'} le détail de la facture ${tx.numero}`}
-          className="shrink-0 p-1 text-stone-600 hover:text-stone-900 transition-colors cursor-pointer"
+          className="grid size-8 place-items-center rounded-md text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer"
         >
-          {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </button>
 
-        <div className="w-28 shrink-0 hidden sm:block">
-          <p className="text-xs text-stone-600 tabular-nums">{d.toLocaleDateString('fr-CH')}</p>
-          <p className="text-[12px] text-stone-600 tabular-nums">{d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}</p>
-        </div>
+        <p className="text-[14px] font-medium text-stone-700 tabular-nums">
+          {d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}
+        </p>
 
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-stone-900 font-medium truncate">
-            {tx.client_label}
-            {cancelled && <span className="ml-2 text-[12px] font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">Annulée</span>}
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 truncate text-[14.5px] font-medium text-stone-950">
+            <span className="truncate">{tx.client_label}</span>
+            {cancelled && <span className="shrink-0 bg-red-50 px-2 py-0.5 text-[11.5px] font-semibold text-red-700 rounded">Annulée</span>}
+            {tx.corrige_transaction_id && <span className="shrink-0 bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-800 rounded">Rectificative</span>}
           </p>
-          <p className="text-[12.5px] text-stone-600 tabular-nums flex items-center gap-1.5 flex-wrap">
-            <span>{tx.numero} · {MODE_PAIEMENT_LABELS[tx.mode_paiement]}</span>
-            {bon > 0 && (
-              <span className="inline-flex items-center gap-1 text-accent" title="Part réglée par bon cadeau">
-                <Ticket size={12} /> bon {formatCHF(bon)}
-              </span>
-            )}
-            {tx.corrige_transaction_id && (
-              <span className="inline-flex items-center gap-1 text-amber-700">
-                <PenLine size={12} /> rectificative
-              </span>
-            )}
-            <span className="sm:hidden">· {d.toLocaleDateString('fr-CH')}</span>
+          <p className="truncate text-[12.5px] text-stone-500 tabular-nums">
+            {tx.numero} · {tx.transaction_items.length} ligne{tx.transaction_items.length > 1 ? 's' : ''}
           </p>
         </div>
 
-        <div className="shrink-0 text-right">
-          <span className={`block text-sm font-medium tabular-nums ${cancelled ? 'text-stone-600 line-through' : 'text-stone-900'}`}>
-            {formatCHF(recette)}
-          </span>
-          {bon > 0 && !cancelled && (
-            <span className="block text-[12px] text-stone-600 tabular-nums">
-              sur {formatCHF(tx.total_ttc)}
+        <div className="min-w-0 text-[13.5px] text-stone-700">
+          {MODE_PAIEMENT_LABELS[tx.mode_paiement]}
+          {bon > 0 && (
+            <span className="ml-1.5 inline-flex items-center gap-1 text-warm-ink" title="Part réglée par bon cadeau">
+              <Ticket size={12} /> {formatCHF(bon)}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="text-right">
+          <span className={`block text-[15px] font-semibold tabular-nums ${cancelled ? 'text-stone-500 line-through' : 'text-stone-950'}`}>
+            {formatCHF(recette)}
+          </span>
+          {bon > 0 && !cancelled && (
+            <span className="block text-[12px] text-stone-500 tabular-nums">sur {formatCHF(tx.total_ttc)}</span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-0.5">
           <button
             onClick={onDownload}
             disabled={downloading}
             aria-label={`Télécharger la facture ${tx.numero}`} title="Quittance PDF"
-            className="p-1.5 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-colors disabled:opacity-40 cursor-pointer"
+            className="grid size-8 place-items-center rounded-md text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:opacity-40 cursor-pointer"
           >
-            {downloading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+            {downloading ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
           </button>
           {!cancelled && (
             <>
               <button
                 onClick={onCorrect}
                 aria-label={`Corriger la facture ${tx.numero}`} title="Corriger cette écriture"
-                className="p-1.5 text-stone-600 hover:text-amber-700 rounded-md hover:bg-amber-50 transition-all cursor-pointer"
+                className="grid size-8 place-items-center rounded-md text-stone-500 transition-colors hover:bg-amber-50 hover:text-amber-700 cursor-pointer"
               >
-                <PenLine size={14} />
+                <PenLine size={15} />
               </button>
               <button
                 onClick={onCancel}
                 aria-label={`Annuler la facture ${tx.numero}`} title="Annuler cette écriture"
-                className="p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-all cursor-pointer"
+                className="grid size-8 place-items-center rounded-md text-stone-500 transition-colors hover:bg-red-50 hover:text-red-700 cursor-pointer"
               >
-                <Ban size={14} />
+                <Ban size={15} />
               </button>
             </>
           )}
@@ -978,7 +998,7 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
       </div>
 
       {open && (
-        <div className="px-5 pb-4 pl-14 space-y-1.5 bg-stone-50/40">
+        <div className="space-y-1.5 px-5 pb-4 pl-[3.75rem] pt-1 text-[13px]">
           {tx.transaction_items.map(item => (
             <div key={item.id} className="flex items-center justify-between text-xs text-stone-600 gap-3">
               <span className="truncate">

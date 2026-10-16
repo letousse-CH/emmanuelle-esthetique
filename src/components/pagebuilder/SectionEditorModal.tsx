@@ -159,17 +159,17 @@ export default function SectionEditorModal({
         <div className="flex items-center justify-between gap-4 px-5 py-4 bg-white text-zinc-900 border-b border-zinc-200">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white text-[10.5px] font-extrabold uppercase tracking-wider shadow-[0_2px_10px_rgba(168,85,247,0.25)]">
+              <span className="px-3 py-1 bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white text-[10.5px] font-extrabold uppercase tracking-wider shadow-[0_2px_10px_rgba(168,85,247,0.25)]">
                 Édition de section
               </span>
-              <span className="text-[11px] font-mono font-extrabold text-zinc-700 bg-zinc-100 px-2.5 py-0.5 rounded-full border border-zinc-200">
+              <span className="text-[11px] font-mono font-extrabold text-zinc-700 bg-zinc-100 px-2.5 py-0.5 border border-zinc-200">
                 {section.type}
               </span>
               {onSwapType && (
                 <button
                   type="button"
                   onClick={() => setTab('variante')}
-                  className="flex items-center gap-1.5 text-[11px] font-extrabold text-white bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 px-3 py-1 rounded-full shadow-[0_2px_10px_rgba(249,115,22,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 text-[11px] font-extrabold text-white bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 px-3 py-1 shadow-[0_2px_10px_rgba(249,115,22,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
                   title="Changer la variante de cette section"
                 >
                   <RefreshCw size={11} className="text-white" />
@@ -217,7 +217,7 @@ export default function SectionEditorModal({
         <div className="flex items-center justify-between px-5 py-2.5 text-[11px] font-medium text-zinc-500 bg-zinc-50 border-t border-zinc-200">
           <span>Déplacez par l'en-tête, redimensionnez en bas à droite.</span>
           <span className="hidden sm:inline-flex items-center gap-1 font-mono">
-            <kbd className="border border-zinc-200 bg-white px-1.5 py-0.5 rounded shadow-2xs">Échap</kbd> ferme
+            <kbd className="border-zinc-200 bg-stone-50 px-1.5 py-0.5 rounded">Échap</kbd> ferme
           </span>
         </div>
       }
@@ -234,7 +234,7 @@ export default function SectionEditorModal({
                 aria-selected={isActive}
                 title={hint}
                 onClick={() => setTab(id)}
-                className={`flex flex-1 items-center justify-center gap-1.5 py-2 px-3 text-xs font-extrabold rounded-full transition-all cursor-pointer ${
+                className={`flex flex-1 items-center justify-center gap-1.5 py-2 px-3 text-xs font-extrabold transition-all cursor-pointer ${
                   isActive
                     ? 'bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 text-white shadow-[0_4px_12px_rgba(168,85,247,0.3)] scale-[1.02]'
                     : 'text-zinc-700 hover:bg-white hover:text-purple-900 border border-transparent hover:border-purple-200'
@@ -250,9 +250,9 @@ export default function SectionEditorModal({
         <div className="flex-1 overflow-y-auto p-4 sm:p-5">
           {tab === 'ia' && (
             <div className="space-y-6">
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
                 <div className="flex items-start gap-3">
-                  <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-amber-500 text-stone-950 shadow-sm font-bold">
+                  <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-amber-500 text-stone-950 font-bold">
                     <Sparkles size={18} />
                   </div>
                   <div>
@@ -275,7 +275,7 @@ export default function SectionEditorModal({
                     type="button"
                     disabled={modalAiLoading}
                     onClick={() => handleModalAi('Rends les titres et descriptions plus vendeurs, percutants et captivants')}
-                    className="p-3 text-left bg-white border border-stone-200 hover:border-stone-900 hover:shadow-xs rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                    className="p-3 text-left bg-stone-50 hover:border-stone-900 rounded-xl transition-all cursor-pointer disabled:opacity-50"
                   >
                     <p className="text-xs font-bold text-stone-900">🚀 Plus Vendeur & Accrocheur</p>
                     <p className="text-[11px] text-stone-500 mt-0.5">Mots-clés percutants et accroche marketing</p>
@@ -284,7 +284,7 @@ export default function SectionEditorModal({
                     type="button"
                     disabled={modalAiLoading}
                     onClick={() => handleModalAi('Raccourcis les paragraphes et va droit à l\'essentiel')}
-                    className="p-3 text-left bg-white border border-stone-200 hover:border-stone-900 hover:shadow-xs rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                    className="p-3 text-left bg-stone-50 hover:border-stone-900 rounded-xl transition-all cursor-pointer disabled:opacity-50"
                   >
                     <p className="text-xs font-bold text-stone-900">✂️ Raccourcir & Simplifier</p>
                     <p className="text-[11px] text-stone-500 mt-0.5">Style concis, fluide et percutant</p>
@@ -293,7 +293,7 @@ export default function SectionEditorModal({
                     type="button"
                     disabled={modalAiLoading}
                     onClick={() => handleModalAi('Adopte un ton chaleureux, humain, rassurant et bienveillant')}
-                    className="p-3 text-left bg-white border border-stone-200 hover:border-stone-900 hover:shadow-xs rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                    className="p-3 text-left bg-stone-50 hover:border-stone-900 rounded-xl transition-all cursor-pointer disabled:opacity-50"
                   >
                     <p className="text-xs font-bold text-stone-900">🤝 Chaleureux & Humain</p>
                     <p className="text-[11px] text-stone-500 mt-0.5">Style naturel et rassurant</p>
@@ -302,7 +302,7 @@ export default function SectionEditorModal({
                     type="button"
                     disabled={modalAiLoading}
                     onClick={() => handleModalAi('Optimise les textes pour maximiser la conversion et le clic CTA')}
-                    className="p-3 text-left bg-white border border-stone-200 hover:border-stone-900 hover:shadow-xs rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                    className="p-3 text-left bg-stone-50 hover:border-stone-900 rounded-xl transition-all cursor-pointer disabled:opacity-50"
                   >
                     <p className="text-xs font-bold text-stone-900">🎯 Focus Conversion</p>
                     <p className="text-[11px] text-stone-500 mt-0.5">Appel à l'action clair et incitatif</p>
@@ -403,9 +403,9 @@ export default function SectionEditorModal({
                               const el = document.getElementById('add-section-catalog');
                               if (el) el.scrollIntoView({ behavior: 'smooth' });
                             }}
-                            className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-full border transition-all cursor-pointer ${
+                            className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold border transition-all cursor-pointer ${
                               isTargetingHere
-                                ? 'bg-amber-500 text-stone-950 border-amber-500 font-extrabold shadow-sm'
+                                ? 'bg-amber-500 text-stone-950 border-amber-500 font-extrabold'
                                 : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-900 hover:text-white hover:border-stone-900'
                             }`}
                           >
@@ -463,7 +463,7 @@ export default function SectionEditorModal({
                             ? 'border-amber-500 bg-amber-50 shadow-md ring-2 ring-amber-400'
                             : isCurrent
                             ? 'border-zinc-900 bg-zinc-900 text-white shadow-md'
-                            : 'border-zinc-200 bg-white hover:border-zinc-400 hover:shadow-xs text-zinc-900'
+                            : 'border-zinc-200 bg-white hover:border-zinc-400 text-zinc-900'
                         }`}
                       >
                         {/* Ligne Haute : Poignée + Titre complet + Badges */}
@@ -598,7 +598,7 @@ export default function SectionEditorModal({
                           onAddSection(typeKey as SectionType, insertTargetIdx ?? undefined);
                           setInsertTargetIdx(null);
                         }}
-                        className="flex items-center gap-2 p-2.5 rounded-xl border border-stone-200 bg-white text-left hover:border-stone-900 hover:shadow-xs transition-all cursor-pointer"
+                        className="flex items-center gap-2 p-2.5 rounded-xl bg-stone-50 text-left hover:border-stone-900 transition-all cursor-pointer"
                       >
                         <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-stone-100 text-stone-700">
                           <Plus size={14} />
@@ -676,7 +676,7 @@ export default function SectionEditorModal({
                           className={`group flex flex-col justify-between rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
                             active
                               ? 'border-stone-900 bg-stone-900 text-white shadow-md'
-                              : 'border-stone-200 bg-white hover:border-amber-400 hover:shadow-sm text-stone-800'
+                              : 'border-stone-200 bg-white hover:border-amber-400 text-stone-800'
                           }`}
                         >
                           <div>

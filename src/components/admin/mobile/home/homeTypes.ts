@@ -10,8 +10,12 @@ export interface MoneyData {
   /** Recette encaissée aujourd'hui (`recetteEncaissee`, jamais la somme de total_ttc). */
   today: number;
   todayCount: number;
+  /** Recette encaissée depuis lundi (semaine civile, même découpage que le Cockpit). */
+  week: number;
+  weekCount: number;
   /** Recette encaissée depuis le 1er du mois. */
   month: number;
+  monthCount: number;
   /** Recette du mois précédent, jusqu'au même jour du mois (comparaison à durée égale). */
   prevMonthToDate: number;
 }
@@ -37,12 +41,7 @@ export interface AlertsData {
   expiringCards: ExpiringCard[];
 }
 
-export interface SiteStatsData {
-  today: number;
-  week: number;
-}
-
-export type HomeBlockKey = 'schedule' | 'pending' | 'money' | 'alerts' | 'siteStats';
+export type HomeBlockKey = 'schedule' | 'pending' | 'money' | 'alerts';
 
 export interface HomeData {
   /** Jour civil à Zurich (`YYYY-MM-DD`). */
@@ -53,5 +52,4 @@ export interface HomeData {
   pending: Block<Booking[]>;
   money: Block<MoneyData>;
   alerts: Block<AlertsData>;
-  siteStats: Block<SiteStatsData>;
 }

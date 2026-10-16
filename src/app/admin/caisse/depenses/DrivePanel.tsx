@@ -69,7 +69,7 @@ export default function DrivePanel({ onNotice }: { onNotice: (message: string) =
   const expanded = open || !ready;
 
   return (
-    <div className="bg-white rounded-xl border border-stone-200 text-[13px]">
+    <div className="bg-stone-50 rounded-xl text-[13px]">
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
         <div className="flex items-center gap-2 min-w-0">
           <FolderOpen size={16} className={ready ? 'text-emerald-700' : 'text-stone-500'} />

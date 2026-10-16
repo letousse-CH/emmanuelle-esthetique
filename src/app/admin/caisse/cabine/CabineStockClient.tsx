@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { ArrowDownUp, FlaskConical, Pencil, Plus, Sparkles } from 'lucide-react';
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
-import { Button, Callout, PageHeader } from '../../../../components/admin/ui';
+import { AnimatedNumber, Button, Callout, LinkButton, Metric, MetricStrip } from '../../../../components/admin/ui';
 import { useSettings } from '../../../../hooks/useSettings';
 import { listProducts, listServices, stockMovement, stockInventaire } from '../../../../services/caisse';
 import { listFacturesAchat, listServiceSupplies, saveServiceSupplies } from '../../../../services/financeService';
@@ -199,18 +198,18 @@ export default function CabineStockClient() {
     <div className="space-y-6">
       <CaisseCatalogNav />
 
-      <PageHeader
-        title="Stock cabine & coût matière des soins"
-        description="Les produits qui ne sont pas revendus : flacons professionnels, consommables, testeurs et échantillons. Leur coût par soin se calcule à partir du nombre de soins que permet un flacon."
-        actions={
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" icon={Plus} onClick={() => setEditing('new')}>Ajouter un produit cabine</Button>
-            <Link href="/admin/caisse/depenses">
-              <Button variant="secondary">Factures fournisseur</Button>
-            </Link>
-          </div>
-        }
-      />
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
+          <h1 className="sr-only text-[30px] font-semibold leading-tight tracking-tight text-stone-950 lg:not-sr-only">Stock cabine</h1>
+          <p className="mt-1 text-[15px] text-stone-600">
+            Ce qui sert en cabine sans être revendu : flacons professionnels, consommables, testeurs, échantillons — et ce que chaque soin coûte en produits.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <LinkButton href="/admin/caisse/depenses" variant="ghost">Factures fournisseur</LinkButton>
+          <Button variant="primary" icon={Plus} onClick={() => setEditing('new')}>Ajouter un produit</Button>
+        </div>
+      </header>
 
       <ReclassementCallout products={products} onDone={async () => {
         await loadAll();
@@ -229,26 +228,12 @@ export default function CabineStockClient() {
         </Callout>
       )}
 
-      {/* Cartes de synthèse */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Références hors vente</p>
-          <p className="text-2xl font-bold text-stone-900 mt-1">{statsCabine.totalRef}</p>
-          <p className="text-[12px] text-stone-500 mt-1">Cabine, consommables, testeurs, échantillons</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Valeur du stock</p>
-          <p className="text-2xl font-bold text-purple-900 mt-1">{formatCHF(statsCabine.valeurAchat)}</p>
-          <p className="text-[12px] text-stone-500 mt-1">Au coût d&apos;achat{tvaActive ? ' HT' : ', TVA non récupérable comprise'}</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-stone-200">
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Épuisés</p>
-          <p className={`text-2xl font-bold mt-1 ${statsCabine.ruptures > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-            {statsCabine.ruptures}
-          </p>
-          <p className="text-[12px] text-stone-500 mt-1">Stock à zéro : à renouveler ou à inventorier</p>
-        </div>
-      </div>
+      {/* Synthèse */}
+      <MetricStrip className="py-2">
+        <Metric size="lg" tone="warm" label="Valeur du stock" value={<AnimatedNumber value={statsCabine.valeurAchat} format={formatCHF} />} hint={`Au coût d’achat${tvaActive ? ' HT' : ', TVA non récupérable comprise'}`} />
+        <Metric size="lg" label="Références" value={statsCabine.totalRef} hint="cabine, consommables, testeurs, échantillons" />
+        <Metric size="lg" tone={statsCabine.ruptures > 0 ? 'negative' : 'muted'} label="Épuisés" value={statsCabine.ruptures} hint="à renouveler ou à inventorier" />
+      </MetricStrip>
 
       {/* Onglets navigation */}
       <div className="flex border-b border-stone-200 gap-6 text-sm font-medium">
@@ -290,7 +275,7 @@ export default function CabineStockClient() {
             ))}
           </div>
 
-          <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+          <div className="bg-stone-50 rounded-xl overflow-hidden">
             {loading ? (
               <div className="p-8 text-center text-sm text-stone-500">Chargement du stock cabine…</div>
             ) : affiches.length === 0 ? (
@@ -306,7 +291,7 @@ export default function CabineStockClient() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-stone-200 bg-stone-50/70 text-stone-500 font-semibold uppercase tracking-wider">
+                    <tr className="border-b border-stone-200 bg-stone-50 text-stone-500 font-semibold uppercase tracking-wider">
                       <th className="py-3 px-4">Produit</th>
                       <th className="py-3 px-4">Réf.</th>
                       <th className="py-3 px-4 text-right">Coût d&apos;achat</th>
@@ -315,13 +300,13 @@ export default function CabineStockClient() {
                       <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-stone-100">
+                  <tbody className="zebra">
                     {affiches.map(p => {
                       const stock = Number(p.stock || 0);
                       const cout = coutAchat(p, tvaActive);
                       const u = PRODUCT_USAGE_LABELS[(p.usage_type ?? 'cabine') as ProductUsageType];
                       return (
-                        <tr key={p.id} className={`hover:bg-stone-50/50 transition-colors ${!p.active ? 'opacity-60' : ''}`}>
+                        <tr key={p.id} className={`transition-colors hover:bg-row-hover ${!p.active ? 'opacity-60' : ''}`}>
                           <td className="py-3.5 px-4">
                             <div className="font-semibold text-stone-900">{p.nom}</div>
                             <div className="flex items-center gap-1.5 mt-0.5">
@@ -333,7 +318,7 @@ export default function CabineStockClient() {
                           <td className="py-3.5 px-4 font-mono text-stone-500">{p.reference || '—'}</td>
                           <td className="py-3.5 px-4 text-right text-stone-700">{formatCHF(cout)}</td>
                           <td className="py-3.5 px-4 text-center">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full font-bold text-xs ${
+                            <span className={`inline-flex px-2 py-0.5 font-bold text-xs ${
                               stock <= 0
                                 ? 'bg-red-50 text-red-700 border border-red-200'
                                 : stock <= Number(p.seuil_alerte || 0)
@@ -383,10 +368,10 @@ export default function CabineStockClient() {
             Un soin sans fiche n&apos;a pas de coût affiché : aucun chiffre n&apos;est inventé.
           </div>
 
-          <div className="bg-white rounded-xl border border-stone-200 overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-stone-200 bg-stone-50/70 text-stone-500 font-semibold uppercase tracking-wider">
+                <tr className="border-b border-stone-200 bg-stone-50 text-stone-500 font-semibold uppercase tracking-wider">
                   <th className="py-3 px-4">Soin</th>
                   <th className="py-3 px-4 text-right">Tarif</th>
                   <th className="py-3 px-4">Produits utilisés</th>
@@ -395,7 +380,7 @@ export default function CabineStockClient() {
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="zebra">
                 {services.map(s => {
                   const servSupplies = supplies.filter(sup => sup.service_id === s.id);
                   const renseigne = servSupplies.length > 0;
@@ -403,7 +388,7 @@ export default function CabineStockClient() {
                   const marge = Number(s.prix_chf) - cout;
                   const margePct = Number(s.prix_chf) > 0 ? (marge / Number(s.prix_chf)) * 100 : 0;
                   return (
-                    <tr key={s.id} className="hover:bg-stone-50/50 transition-colors">
+                    <tr key={s.id} className="transition-colors hover:bg-row-hover">
                       <td className="py-3.5 px-4 font-semibold text-stone-900">{s.nom}</td>
                       <td className="py-3.5 px-4 text-right font-bold text-stone-900">{formatCHF(s.prix_chf)}</td>
                       <td className="py-3.5 px-4 text-stone-600">
@@ -451,7 +436,7 @@ export default function CabineStockClient() {
       {/* Mouvement de stock */}
       {adjusting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-stone-200 shadow-xl overflow-hidden p-6 space-y-4">
+          <div className="bg-white rounded-xl max-w-md w-full border border-stone-200 shadow-xl overflow-hidden p-6 space-y-4">
             <h3 className="font-bold text-stone-900 text-base">Stock : {adjusting.nom}</h3>
             <p className="text-xs text-stone-500">
               Stock enregistré : <strong>{qte(Number(adjusting.stock))}</strong>
@@ -518,7 +503,7 @@ export default function CabineStockClient() {
       {/* Fiche technique d'un soin */}
       {editingService && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-stone-200 shadow-xl overflow-hidden p-6 space-y-4">
+          <div className="bg-white rounded-xl max-w-lg w-full border border-stone-200 shadow-xl overflow-hidden p-6 space-y-4">
             <h3 className="font-bold text-stone-900 text-base">Fiche technique : {editingService.nom}</h3>
             <p className="text-xs text-stone-500">
               Cochez les produits utilisés et indiquez combien de soins permet un flacon (ou pot, rouleau).

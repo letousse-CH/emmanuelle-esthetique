@@ -269,14 +269,14 @@ export default function PageBuilder({ pageId, mode, onClose }: Props) {
           <div className="flex rounded-lg bg-stone-100 p-1" role="tablist" aria-label="Mode d'édition">
             {(['content', 'layout'] as const).map((m) => (
               <button key={m} type="button" role="tab" aria-selected={editMode === m} onClick={() => setEditMode(m)}
-                className={`rounded-md px-3 py-1 text-xs font-semibold ${editMode === m ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}>
+                className={`rounded-md px-3 py-1 text-xs font-semibold ${editMode === m ? 'bg-white text-stone-900' : 'text-stone-500 hover:text-stone-800'}`}>
                 {m === 'content' ? 'Contenu' : 'Mise en page'}
               </button>
             ))}
           </div>
           <div className="hidden rounded-lg bg-stone-100 p-1 sm:flex">
-            <button type="button" title="Ordinateur" aria-label="Aperçu ordinateur" onClick={() => setViewport('desktop')} className={`rounded-md px-2 py-1 ${viewport === 'desktop' ? 'bg-white shadow-sm' : 'text-stone-500'}`}><Monitor size={15} /></button>
-            <button type="button" title="Mobile (aperçu)" aria-label="Aperçu mobile" onClick={() => setViewport('mobile')} className={`rounded-md px-2 py-1 ${viewport === 'mobile' ? 'bg-white shadow-sm' : 'text-stone-500'}`}><Smartphone size={15} /></button>
+            <button type="button" title="Ordinateur" aria-label="Aperçu ordinateur" onClick={() => setViewport('desktop')} className={`rounded-md px-2 py-1 ${viewport === 'desktop' ? 'bg-white' : 'text-stone-500'}`}><Monitor size={15} /></button>
+            <button type="button" title="Mobile (aperçu)" aria-label="Aperçu mobile" onClick={() => setViewport('mobile')} className={`rounded-md px-2 py-1 ${viewport === 'mobile' ? 'bg-white' : 'text-stone-500'}`}><Smartphone size={15} /></button>
           </div>
         </div>
 
@@ -294,7 +294,7 @@ export default function PageBuilder({ pageId, mode, onClose }: Props) {
             title={meta.published ? 'Visible sur le site — cliquer pour masquer' : 'Brouillon — cliquer pour publier'}>
             {meta.published ? <Eye size={15} /> : <EyeOff size={15} />} {meta.published ? 'Publiée' : 'Brouillon'}
           </button>
-          <button type="button" onClick={persist} disabled={save === 'saving'} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-stone-900 px-3.5 text-[13px] font-semibold text-white hover:bg-stone-700 disabled:opacity-60">
+          <button type="button" onClick={persist} disabled={save === 'saving'} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-[13px] font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-60">
             Enregistrer
           </button>
         </div>
@@ -320,13 +320,13 @@ export default function PageBuilder({ pageId, mode, onClose }: Props) {
           ) : !page ? (
             <div className="grid h-full place-items-center text-stone-400"><Loader2 className="animate-spin" /></div>
           ) : viewport === 'mobile' ? (
-            <div className="mx-auto w-[390px] overflow-hidden rounded-[28px] border-[6px] border-stone-800 bg-white shadow-xl" style={{ height: 'calc(100% - 8px)' }}>
+            <div className="mx-auto w-[390px] overflow-hidden rounded-xl border-[6px] border-stone-800 bg-white shadow-xl" style={{ height: 'calc(100% - 8px)' }}>
               <PreviewFrame width={378}>
                 <div data-site-theme><GlobalStyles /><BlockRenderer content={content} data={{ offers }} /></div>
               </PreviewFrame>
             </div>
           ) : (
-            <div data-site-theme className="mx-auto min-h-full max-w-[1440px] overflow-hidden bg-white shadow-sm ring-1 ring-stone-200">
+            <div data-site-theme className="mx-auto min-h-full max-w-[1440px] overflow-hidden bg-accent text-accent-fg">
               <GlobalStyles />
               {content.length === 0 ? (
                 <div className="mx-auto max-w-2xl px-6 py-16 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>

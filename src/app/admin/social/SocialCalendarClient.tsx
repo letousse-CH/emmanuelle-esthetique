@@ -303,7 +303,7 @@ export default function SocialCalendarClient() {
 
       {/* ── Chiffres clés ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center gap-3">
+        <div className="bg-stone-50 rounded-xl p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-stone-100 text-stone-700 flex items-center justify-center shrink-0">
             <CalendarDays size={20} />
           </div>
@@ -313,7 +313,7 @@ export default function SocialCalendarClient() {
           </div>
         </div>
 
-        <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center gap-3">
+        <div className="bg-stone-50 rounded-xl p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
             <Clock size={20} />
           </div>
@@ -323,7 +323,7 @@ export default function SocialCalendarClient() {
           </div>
         </div>
 
-        <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center gap-3">
+        <div className="bg-stone-50 rounded-xl p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
             <CheckCircle2 size={20} />
           </div>
@@ -333,7 +333,7 @@ export default function SocialCalendarClient() {
           </div>
         </div>
 
-        <div className={`bg-white border rounded-xl p-4 flex items-center gap-3 ${lateCount > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-stone-200'}`}>
+        <div className={`bg-stone-50 rounded-xl p-4 flex items-center gap-3 ${lateCount > 0 ? 'border-amber-300 bg-amber-50/30' : 'border-stone-200'}`}>
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${lateCount > 0 ? 'bg-amber-100 text-amber-800 font-semibold' : 'bg-stone-100 text-stone-600'}`}>
             <AlertCircle size={20} />
           </div>
@@ -345,7 +345,7 @@ export default function SocialCalendarClient() {
       </div>
 
       {/* ── Barre d'outils Principale ───────────────────────────────────────── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white border border-stone-200 rounded-xl p-4 ">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-stone-50 rounded-xl p-4 ">
         {/* Bascule Mode Calendrier vs Liste */}
         <div role="group" aria-label="Mode d'affichage" className="flex items-center gap-1 bg-stone-100 p-1 rounded-lg shrink-0">
           {([['calendar', 'Calendrier', CalendarDays], ['list', 'Liste', List]] as const).map(([id, label, Icon]) => (
@@ -355,7 +355,7 @@ export default function SocialCalendarClient() {
               aria-pressed={view === id}
               onClick={() => setView(id)}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] font-semibold transition-colors cursor-pointer ${
-                view === id ? 'bg-white text-stone-950 shadow-xs' : 'text-stone-700 hover:text-stone-950'
+                view === id ? 'bg-white text-stone-950' : 'text-stone-700 hover:text-stone-950'
               }`}
             >
               <Icon size={14} /> {label}
@@ -402,7 +402,7 @@ export default function SocialCalendarClient() {
       </div>
 
       {/* Lentille par réseau social */}
-      <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-xl border border-stone-200">
+      <div className="flex flex-wrap items-center gap-2 bg-stone-50 p-3 rounded-xl">
         <span className="text-[13px] font-semibold text-stone-900 ml-1 mr-1">Afficher l&apos;aperçu pour :</span>
         <div role="group" aria-label="Réseau affiché" className="flex flex-wrap gap-1.5">
           {PLATFORM_LENSES.map(({ id, label, icon: Icon, color }) => (
@@ -456,16 +456,16 @@ export default function SocialCalendarClient() {
       {view === 'calendar' ? (
         <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
           {/* Grille du mois avec cartes visuelles pour chaque post */}
-          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="bg-stone-50 rounded-xl overflow-hidden">
             {/* Header du mois */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-stone-50/50">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-stone-50">
               <h2 className="text-base font-semibold text-stone-900 capitalize">{MONTH_LABEL.format(currentMonth)}</h2>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
                   aria-label="Mois précédent"
-                  className="p-1.5 text-stone-700 hover:text-stone-900 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 text-stone-700 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -480,7 +480,7 @@ export default function SocialCalendarClient() {
                   type="button"
                   onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
                   aria-label="Mois suivant"
-                  className="p-1.5 text-stone-700 hover:text-stone-900 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 text-stone-700 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -488,7 +488,7 @@ export default function SocialCalendarClient() {
             </div>
 
             {/* Jours de la semaine */}
-            <div className="grid grid-cols-7 border-b border-stone-200 bg-stone-50/80">
+            <div className="grid grid-cols-7 border-b border-stone-200 bg-stone-50">
               {WEEKDAYS.map((w) => (
                 <div key={w} className="text-center text-[13px] font-semibold text-stone-700 py-2.5 border-r border-stone-200 last:border-r-0">
                   {w}
@@ -499,7 +499,7 @@ export default function SocialCalendarClient() {
             {/* Grille des cellules du mois */}
             <div className={`grid grid-cols-7 transition-opacity ${loading ? 'opacity-50' : ''}`}>
               {cells.map((dateStr, i) => {
-                if (!dateStr) return <div key={`blank-${i}`} className="min-h-[120px] border-b border-r border-stone-200 bg-stone-50/30" />;
+                if (!dateStr) return <div key={`blank-${i}`} className="min-h-[120px] border-b border-r border-stone-200 bg-stone-50" />;
                 const dayPosts = postsByDate[dateStr] || [];
                 const isToday = dateStr === today;
                 const isSelected = dateStr === selectedDate;
@@ -538,7 +538,7 @@ export default function SocialCalendarClient() {
                         type="button"
                         title="Planifier un post ce jour-là"
                         aria-label={`Planifier un post le ${DAY_LABEL.format(fromDateKey(dateStr))}`}
-                        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-200/60 transition-opacity cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 text-stone-600 hover:text-stone-900 rounded-md hover:bg-stone-100 transition-opacity cursor-pointer"
                       >
                         <Plus size={14} />
                       </button>
@@ -605,7 +605,7 @@ export default function SocialCalendarClient() {
           </div>
 
           {/* Détail de la journée sélectionnée */}
-          <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-4 lg:sticky lg:top-6">
+          <div className="bg-stone-50 rounded-xl p-6 space-y-4 lg:sticky lg:top-6">
             {!selectedDate ? (
               <div className="text-center py-8 space-y-2">
                 <CalendarDays className="mx-auto text-stone-500" size={28} />
@@ -654,7 +654,7 @@ export default function SocialCalendarClient() {
         </div>
       ) : (
         /* ── Vue Liste Visuelle ───────────────────────────────── */
-        <div className="bg-white border border-stone-200 rounded-xl p-6">
+        <div className="bg-stone-50 rounded-xl p-6">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-stone-600 text-sm">
               <Loader2 size={18} className="animate-spin text-stone-700" /> Chargement des publications…
@@ -679,9 +679,9 @@ export default function SocialCalendarClient() {
                       <CalendarDays size={14} className="text-stone-600" />
                       {SHORT_DAY_LABEL.format(fromDateKey(date))}
                     </button>
-                    {date === today && <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Aujourd'hui</span>}
+                    {date === today && <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">Aujourd'hui</span>}
                     {date < today && items.some((p) => p.status === 'ready') && (
-                      <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">En retard</span>
+                      <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">En retard</span>
                     )}
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">{items.map(renderPost)}</div>
@@ -712,7 +712,7 @@ function SocialPostItem({ post, today, lens, brand, onPreview, onStatus, onDate,
   const isLate = post.status === 'ready' && post.planned_date < today;
 
   return (
-    <div className={`border rounded-xl overflow-hidden bg-white ${isLate ? 'border-amber-300' : 'border-stone-200'}`}>
+    <div className={`rounded-xl overflow-hidden bg-stone-50 ${isLate ? 'border-amber-300' : 'border-stone-200'}`}>
       <div className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -852,7 +852,7 @@ function PlatformPreview({ content, platform, brand, onOpen }: {
       >
         <canvas
           ref={canvasRef}
-          className={`w-full ${PLATFORM_ASPECT[format]} block rounded-lg border border-stone-200 bg-stone-100 shadow-2xs`}
+          className={`w-full ${PLATFORM_ASPECT[format]} block rounded-lg border border-stone-200 bg-stone-100`}
         />
       </button>
     </div>
@@ -900,7 +900,7 @@ function SocialPostPreviewDialog({ post, brand, initialPlatform, onClose }: {
         onClick={(e) => e.stopPropagation()}
         className="bg-white w-full max-w-3xl max-h-[88vh] flex flex-col rounded-xl shadow-2xl overflow-hidden outline-none border border-stone-200"
       >
-        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-stone-200 bg-stone-50/50 shrink-0">
+        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-stone-200 bg-stone-50 shrink-0">
           <div className="min-w-0">
             <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-0.5 rounded-md mb-1 border ${meta.color}`}>
               <meta.icon size={12} /> {meta.label}
@@ -914,7 +914,7 @@ function SocialPostPreviewDialog({ post, brand, initialPlatform, onClose }: {
             type="button"
             onClick={onClose}
             aria-label="Fermer l'aperçu"
-            className="p-1.5 text-stone-500 hover:text-stone-800 hover:bg-stone-200/60 rounded-lg transition-colors shrink-0 cursor-pointer"
+            className="p-1.5 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-colors shrink-0 cursor-pointer"
           >
             <X size={18} />
           </button>

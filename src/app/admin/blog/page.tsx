@@ -109,7 +109,7 @@ export default function BlogList() {
       <FormMessage message={meshingMessage} />
 
       {loading ? (
-        <div className="flex items-center justify-center rounded-xl border border-stone-200 bg-white py-12">
+        <div className="flex items-center justify-center rounded-xl bg-stone-50 py-12">
           <Spinner label="Chargement des articles" />
         </div>
       ) : articlesState.length === 0 ? (
@@ -120,7 +120,7 @@ export default function BlogList() {
           action={<LinkButton href="/admin/blog/new" variant="secondary" icon={Plus}>Écrire un article</LinkButton>}
         />
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="bg-stone-50 rounded-xl overflow-hidden">
           {/* Tableau — écrans sm et plus */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left text-[14px]">

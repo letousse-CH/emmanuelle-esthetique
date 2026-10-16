@@ -6,10 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, UserPlus, X, Plus, Minus, Trash2, Check, Download,
   Receipt, AlertCircle, Loader2, Pencil, Gift, Ticket, PenLine, Layers, Package,
-  Cake, Mail, MessageCircle, Target, CheckCircle2, Sparkles, CalendarCheck, ChevronRight, ChevronLeft, User, Percent,
+  Cake, Mail, MessageCircle, CalendarCheck, ChevronRight, ChevronLeft, User, Percent,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
-import { Button, Callout, LinkButton, PageHeader } from '../../../components/admin/ui';
+import { AnimatedNumber, Button, Callout, Kbd, LinkButton, ProgressBar } from '../../../components/admin/ui';
 import {
   createClient, createTransaction, findGiftCardByCode, listClients, listGiftCardsForSale,
   listProducts, listServiceCategories, listServices, matchClient,
@@ -33,6 +33,7 @@ import { offerLineLabel } from '../../../types/offers';
 import type { Offer, OfferStats } from '../../../types/offers';
 import { todayZurich } from '../../(public)/reservation/dates';
 import OfferStrip from './OfferStrip';
+import { PRODUCT_COLOR, categoryColor } from '../../../components/admin/categoryColors';
 import { notifyAutomationEvent } from '../../../utils/automationEvent';
 import type {
   CartLine, Client, GiftCard, ModePaiement, Product, Service, ServiceCategory, Transaction,
@@ -344,6 +345,16 @@ export default function CaisseClient() {
     return map;
   }, [lines]);
 
+  // Même chose pour les soins : la tuile affiche combien sont déjà au ticket.
+  const cartQtyByService = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const l of lines) {
+      if (!l.service_id) continue;
+      map.set(l.service_id, (map.get(l.service_id) ?? 0) + Number(l.quantite || 0));
+    }
+    return map;
+  }, [lines]);
+
   // Le bon règle autant qu'il peut, sans jamais dépasser la facture : le solde
   // éventuel reste sur le bon pour une prochaine visite.
   const montantBon = useMemo(() => {
@@ -586,7 +597,7 @@ export default function CaisseClient() {
       )}
 
       {rdvLoading && (
-        <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700">
+        <div className="flex items-center gap-2 rounded-xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
           <Loader2 size={15} className="animate-spin" /> Chargement du rendez-vous…
         </div>
       )}
@@ -604,26 +615,24 @@ export default function CaisseClient() {
   return (
     <>
     <div className="hidden lg:block space-y-6">
-      <PageHeader
-        title="Encaissement"
-        description={new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        actions={
-          <div className="flex items-center gap-2">
-            <LinkButton href="/admin/caisse/cockpit" icon={Target} variant="secondary">
-              Cockpit Hebdo (2 clientes/j)
-            </LinkButton>
-            <LinkButton href="/admin/caisse/journal" icon={Receipt}>
-              Journal des recettes
-            </LinkButton>
-          </div>
-        }
-      />
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[14px] font-medium text-stone-500 first-letter:uppercase">
+            {new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+          <h1 className="mt-0.5 text-[30px] font-semibold leading-tight tracking-tight text-stone-950">Encaissement</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button icon={Gift} onClick={() => setShowGiftSale(true)}>Vendre un bon cadeau</Button>
+          <LinkButton href="/admin/caisse/journal" icon={Receipt} variant="ghost">Journal des ventes</LinkButton>
+        </div>
+      </header>
 
       {banners}
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
-        {/* ── Colonne gauche : cliente + catalogue ─────────────────────── */}
-        <div className="lg:col-span-3 space-y-4">
+      <div className="grid grid-cols-[minmax(0,1fr)_23rem] xl:grid-cols-[minmax(0,1fr)_27rem] items-start gap-8 xl:gap-10">
+        {/* ── Gauche : qui, puis quoi ─────────────────────────────────── */}
+        <div className="min-w-0 space-y-8">
           <ClientPicker
             clients={clients}
             selected={client}
@@ -635,39 +644,45 @@ export default function CaisseClient() {
             categories={categories}
             products={products}
             cartQtyByProduct={cartQtyByProduct}
+            cartQtyByService={cartQtyByService}
             offers={offers} offerStats={offerStats} cartQtyByOffer={cartQtyByOffer} onPickOffer={addOffer}
             loading={loading}
             onPick={addService}
             onPickProduct={addProduct}
             onCustom={addCustomLine}
-            onSellGiftCard={() => setShowGiftSale(true)}
           />
         </div>
 
-        {/* ── Colonne droite : panier ──────────────────────────────────── */}
-        <div className="lg:col-span-2 lg:sticky lg:top-20 space-y-4">
-          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between">
-              <h2 className="text-[13px] font-medium text-stone-800">Panier</h2>
+        {/* ── Droite : le ticket, un seul objet du début à la fin ─────── */}
+        <aside aria-label="Ticket en cours" className="sticky top-20">
+          <div className="overflow-hidden rounded-xl bg-stone-50">
+            <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-stone-500">Ticket</p>
+                <p className="truncate text-[17px] font-semibold text-stone-950">
+                  {client ? clientFullName(client) : CLIENT_DE_PASSAGE}
+                </p>
+              </div>
               {lines.length > 0 && (
                 <button
                   onClick={() => {
-                    if (lines.length > 1 && !confirm(`Retirer les ${lines.length} lignes du panier ?`)) return;
+                    if (lines.length > 1 && !confirm(`Retirer les ${lines.length} lignes du ticket ?`)) return;
                     setLines([]);
                   }}
-                  className="text-[13px] text-stone-600 hover:text-red-700 transition-colors cursor-pointer"
+                  className="shrink-0 rounded-lg px-2 py-1 text-[13px] font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-700 cursor-pointer"
                 >
-                  Vider le panier
+                  Vider
                 </button>
               )}
             </div>
 
             {lines.length === 0 ? (
-              <p className="p-8 text-center text-sm text-stone-700">
-                Choisissez une prestation dans le catalogue pour commencer.
-              </p>
+              <div className="mx-5 mb-5 rounded-xl border border-dashed border-stone-300 px-5 py-8 text-center">
+                <p className="text-[15px] font-medium text-stone-800">Le ticket est vide</p>
+                <p className="mt-1 text-[13.5px] text-stone-500">Touchez un soin ou un produit pour l’ajouter.</p>
+              </div>
             ) : (
-              <ul className="divide-y divide-stone-50">
+              <ul className="max-h-[38vh] overflow-y-auto overscroll-contain divide-y divide-stone-100 border-y border-stone-100">
                 {lines.map(line => (
                   <CartRow
                     key={line.key}
@@ -680,7 +695,8 @@ export default function CaisseClient() {
               </ul>
             )}
 
-            <div className="px-5 py-4 border-t border-stone-200 bg-stone-50/50 space-y-1.5 text-sm">
+            {/* Totaux */}
+            <div className="space-y-1.5 px-5 pt-4 pb-5 text-[14px]">
               {tvaActive && (
                 <>
                   <Row label="Total HT" value={formatCHF(totals.ht)} />
@@ -693,86 +709,70 @@ export default function CaisseClient() {
                   <Row label={`Bon ${giftCard?.code ?? ''}`} value={`− ${formatCHF(montantBon)}`} />
                 </>
               )}
-              <div className="flex items-center justify-between pt-1.5 border-t border-stone-200">
-                <span className="text-sm font-medium text-stone-800">
-                  {montantBon > 0 ? 'Reste à encaisser' : 'Total à encaisser'}
+              <div className="flex items-baseline justify-between gap-3 pt-1">
+                <span className="text-[15px] font-medium text-stone-700">
+                  {montantBon > 0 ? 'Reste à encaisser' : 'Total'}
                 </span>
-                <span className="text-xl font-semibold text-stone-900 tabular-nums">{formatCHF(resteAPayer)}</span>
+                <span className="text-[34px] font-semibold leading-none tracking-tight text-stone-950 tabular-nums"><AnimatedNumber value={resteAPayer} format={formatCHF} duration={350} /></span>
               </div>
-              {!tvaActive && (
-                <p className="text-[12px] text-stone-600 pt-1">TVA 0 % — activité non assujettie</p>
-              )}
+              {!tvaActive && <p className="text-right text-[12px] text-stone-500">TVA 0 % — activité non assujettie</p>}
+              {lines.length > 0 && resteAPayer > 0 && <PanierGauge amount={resteAPayer} />}
             </div>
-          </div>
 
-          {/* ── Bon cadeau présenté en paiement ────────────────────────── */}
-          <div className="bg-white border border-stone-200 rounded-xl p-5">
-            {giftCard ? (
-              <div className="space-y-2.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-stone-900 flex items-center gap-2">
-                      <Ticket size={14} className="text-accent shrink-0" /> {giftCard.code}
+            {/* Bon cadeau présenté en paiement */}
+            <div className="border-t border-stone-100 px-5 py-3">
+              {giftCard ? (
+                <div className="space-y-2 py-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="flex min-w-0 items-center gap-2 text-[14px] font-semibold text-stone-900">
+                      <Ticket size={15} className="shrink-0 text-warm-strong" /> {giftCard.code}
+                      <span className="truncate font-normal text-stone-500">{giftCard.libelle}</span>
                     </p>
-                    <p className="truncate text-[12.5px] text-stone-600">{giftCard.libelle}</p>
+                    <button
+                      onClick={() => setGiftCard(null)}
+                      aria-label="Retirer le bon cadeau"
+                      className="shrink-0 rounded-md p-1.5 text-stone-500 transition-colors hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setGiftCard(null)}
-                    aria-label="Retirer le bon cadeau"
-                    className="shrink-0 p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-                <dl className="text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <dt className="text-stone-600">Solde du bon</dt>
-                    <dd className="text-stone-700 tabular-nums">{formatCHF(giftCard.montant_restant)}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-stone-600">Appliqué à cette vente</dt>
-                    <dd className="text-accent font-medium tabular-nums">− {formatCHF(montantBon)}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-stone-600">Restera sur le bon</dt>
-                    <dd className="text-stone-700 tabular-nums">
-                      {formatCHF(Number(giftCard.montant_restant) - montantBon)}
-                    </dd>
-                  </div>
-                </dl>
-                <p className="text-[12px] text-stone-600 leading-relaxed pt-1">
-                  Cette part n&apos;entre pas dans les recettes : elle a été encaissée
-                  le jour où le bon a été vendu.
-                </p>
-              </div>
-            ) : (
-              <Button icon={Ticket} onClick={() => setShowGiftUse(true)} className="w-full">
-                Utiliser un bon cadeau
-              </Button>
-            )}
-          </div>
-
-          <div ref={paymentRef} className="bg-white border border-stone-200 rounded-xl p-5 space-y-4 scroll-mt-4">
-            <div>
-              <p className="text-[13px] font-medium text-stone-800 mb-2.5">
-                {montantBon > 0 ? 'Reste à régler' : 'Mode de paiement'}
-              </p>
-              {resteAPayer === 0 && montantBon > 0 ? (
-                <div className="flex items-center gap-2.5 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-stone-700">
-                  <Ticket size={15} className="text-accent shrink-0" />
-                  Intégralement réglé par le bon {giftCard?.code}. Rien à encaisser.
+                  <dl className="grid grid-cols-3 gap-2 text-[12.5px]">
+                    <div><dt className="text-stone-500">Solde</dt><dd className="font-medium text-stone-800 tabular-nums">{formatCHF(giftCard.montant_restant)}</dd></div>
+                    <div><dt className="text-stone-500">Appliqué</dt><dd className="font-semibold text-warm-ink tabular-nums">− {formatCHF(montantBon)}</dd></div>
+                    <div><dt className="text-stone-500">Restera</dt><dd className="font-medium text-stone-800 tabular-nums">{formatCHF(Number(giftCard.montant_restant) - montantBon)}</dd></div>
+                  </dl>
+                  <p className="text-[12px] leading-relaxed text-stone-500">
+                    Cette part n&apos;entre pas dans les recettes : elle a été encaissée à la vente du bon.
+                  </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setShowGiftUse(true)}
+                  className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-[14px] font-medium text-stone-700 transition-colors hover:text-stone-950 cursor-pointer"
+                >
+                  <Ticket size={16} className="text-stone-500" /> Payer avec un bon cadeau
+                  <ChevronRight size={16} className="ml-auto text-stone-400" />
+                </button>
+              )}
+            </div>
+
+            {/* Paiement */}
+            <div ref={paymentRef} className="space-y-4 border-t border-stone-100 bg-stone-50 px-5 py-5 scroll-mt-4">
+              {resteAPayer === 0 && montantBon > 0 ? (
+                <p className="flex items-center gap-2.5 rounded-lg bg-warm-soft px-4 py-3 text-[14px] text-warm-ink">
+                  <Ticket size={15} className="shrink-0" />
+                  Intégralement réglé par le bon {giftCard?.code}.
+                </p>
+              ) : (
+                <div role="radiogroup" aria-label={montantBon > 0 ? 'Mode de règlement du reste' : 'Mode de paiement'} className="grid grid-cols-4 gap-1 rounded-xl bg-stone-100 p-1">
                   {MODES_PAIEMENT.map(m => (
                     <button
                       key={m.value}
+                      role="radio"
+                      aria-checked={mode === m.value}
                       onClick={() => setMode(m.value)}
-                      aria-pressed={mode === m.value}
-                      className={`py-2.5 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
-                        mode === m.value
-                          ? 'border-accent bg-accent/8 text-accent'
-                          : 'border-stone-200 text-stone-600 hover:border-stone-300 hover:text-stone-700'
+                      className={`h-10 rounded-lg text-[13.5px] font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+                        mode === m.value ? 'bg-stone-900 text-white' : 'text-stone-600 hover:text-stone-900'
                       }`}
                     >
                       {m.label}
@@ -780,75 +780,44 @@ export default function CaisseClient() {
                   ))}
                 </div>
               )}
-            </div>
 
-            <div>
-              <label htmlFor="caisse-note" className="block text-[13px] font-medium text-stone-800 mb-2">
-                Note <span className="normal-case tracking-normal font-normal text-stone-600">(facultatif)</span>
-              </label>
-              <input
-                id="caisse-note"
-                type="text"
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                placeholder="Bon cadeau, remarque…"
-                className="w-full px-3.5 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
-              />
-            </div>
-
-            {submitError && (
-              <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] text-red-700">
-                <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                <span>{submitError}</span>
+              <div>
+                <label htmlFor="caisse-note" className="sr-only">Note (facultatif)</label>
+                <input
+                  id="caisse-note"
+                  type="text"
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  placeholder="Note sur la facture (facultatif)"
+                  className="h-10 w-full rounded-lg border border-stone-200 bg-white px-3.5 text-[14px] text-stone-800 placeholder:text-stone-500 outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15"
+                />
               </div>
-            )}
 
-            {lines.length > 0 && resteAPayer > 0 && (
-              <div className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 transition-all ${
-                resteAPayer >= 250 && resteAPayer <= 450
-                  ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
-                  : resteAPayer > 450
-                  ? 'bg-purple-50 text-purple-950 border-purple-200'
-                  : 'bg-amber-50/80 text-amber-950 border-amber-200'
-              }`}>
-                {resteAPayer >= 250 && resteAPayer <= 450 ? (
-                  <>
-                    <CheckCircle2 size={15} className="text-emerald-700 shrink-0" />
-                    <span><strong>Panier cible atteint :</strong> {formatCHF(resteAPayer)} est parfaitement dans la fourchette 250–450 CHF !</span>
-                  </>
-                ) : resteAPayer > 450 ? (
-                  <>
-                    <Sparkles size={15} className="text-purple-700 shrink-0" />
-                    <span><strong>Panier d&apos;excellence (&gt; 450 CHF) :</strong> Bravo pour cette belle vente conseil !</span>
-                  </>
-                ) : (
-                  <>
-                    <Target size={15} className="text-amber-700 shrink-0" />
-                    <span><strong>Objectif panier (250–450 CHF) :</strong> Proposez 1 produit conseil en plus pour atteindre le palier.</span>
-                  </>
-                )}
-              </div>
-            )}
+              {submitError && (
+                <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] text-red-700">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  <span>{submitError}</span>
+                </div>
+              )}
 
-            <button
-              onClick={handleSubmit}
-              disabled={lines.length === 0 || submitting}
-              className="bg-accent hover:bg-accent-hover w-full inline-flex h-12 items-center justify-center gap-2 rounded-lg text-accent-fg text-[15px] font-semibold transition-colors disabled:opacity-40 cursor-pointer"
-            >
-              {submitting
-                ? <><Loader2 size={15} className="animate-spin" /> Encaissement…</>
-                : resteAPayer === 0 && montantBon > 0
-                  ? <><Check size={15} /> Valider la prestation</>
-                  : <><Check size={15} /> Encaisser {formatCHF(resteAPayer)}</>}
-            </button>
-            <p className="text-[12px] text-stone-600 text-center leading-relaxed">
-              La facture est numérotée et enregistrée définitivement.
-              Une erreur se corrige depuis le journal, avec le bouton « Corriger ».
-            </p>
+              <button
+                onClick={handleSubmit}
+                disabled={lines.length === 0 || submitting}
+                className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-accent text-[16px] font-semibold text-accent-fg transition-colors hover:bg-accent-hover disabled:opacity-40 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2"
+              >
+                {submitting
+                  ? <><Loader2 size={17} className="animate-spin" /> Encaissement…</>
+                  : resteAPayer === 0 && montantBon > 0
+                    ? <><Check size={17} /> Valider la prestation</>
+                    : <><Check size={17} /> Encaisser {formatCHF(resteAPayer)}</>}
+              </button>
+              <p className="text-center text-[12px] leading-relaxed text-stone-500">
+                La facture est numérotée et enregistrée définitivement. Une erreur se corrige depuis le journal (« Corriger »).
+              </p>
+            </div>
           </div>
-        </div>
+        </aside>
       </div>
-
     </div>
 
     {/* ── Téléphone : parcours d'encaissement à une main ─────────────────── */}
@@ -998,7 +967,7 @@ function ClientSuggestions({ clients, term, onPick }: {
   );
   if (results.length === 0) return null;
   return (
-    <ul aria-label="Clientes inscrites" className="mt-1 rounded-lg border border-stone-200 bg-white divide-y divide-stone-100 max-h-48 overflow-y-auto">
+    <ul aria-label="Clientes inscrites" className="mt-1 rounded-lg bg-stone-50 divide-y divide-stone-100 max-h-48 overflow-y-auto">
       {results.map(c => (
         <li key={c.id}>
           <button
@@ -1265,85 +1234,90 @@ function ClientPicker({ clients, selected, onSelect, onCreated }: {
     [clients, search],
   );
 
+  const initials = (c: Client) => clientFullName(c).split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase();
+
   return (
-    <div ref={containerRef} className="bg-white border border-stone-200 rounded-xl p-5 relative">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[13px] font-medium text-stone-800">Cliente</h2>
+    <section ref={containerRef} aria-labelledby="caisse-client-title" className="relative space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 id="caisse-client-title" className="text-[17px] font-semibold tracking-tight text-stone-950">Cliente</h2>
         <button
           onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 text-[13px] text-accent hover:underline font-semibold cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-accent hover:underline underline-offset-4 cursor-pointer"
         >
-          <UserPlus size={14} /> Nouvelle cliente
+          <UserPlus size={15} /> Nouvelle cliente
         </button>
       </div>
 
       {selected ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-stone-900 truncate">{clientFullName(selected)}</p>
+        <div className="flex items-center gap-3 rounded-xl bg-stone-50 px-3.5 py-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-warm-soft text-[14px] font-semibold text-warm-ink" aria-hidden="true">
+            {initials(selected)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15.5px] font-semibold text-stone-950">{clientFullName(selected)}</p>
             {(selected.telephone || selected.email) && (
-              <p className="truncate text-[12.5px] text-stone-600">
+              <p className="truncate text-[13px] text-stone-500">
                 {[selected.telephone, selected.email].filter(Boolean).join(' · ')}
               </p>
             )}
           </div>
           <button
             onClick={() => { onSelect(null); setSearch(''); }}
-            aria-label="Retirer la cliente sélectionnée"
-            className="shrink-0 p-1.5 text-stone-600 hover:text-red-700 rounded-md hover:bg-red-50 transition-colors cursor-pointer"
+            className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer"
           >
-            <X size={14} />
+            Changer
           </button>
         </div>
       ) : (
-        <>
-          {/* Le menu est ancré sur le champ lui-même (`top-full`) : pas de
-              décalage codé en dur qui casserait si le libellé change. */}
-          <div className="relative">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-600 pointer-events-none" />
-            <label htmlFor="caisse-client-search" className="sr-only">Rechercher une cliente</label>
-            <input
-              id="caisse-client-search"
-              type="text"
-              value={search}
-              onChange={e => { setSearch(e.target.value); setOpen(true); }}
-              onFocus={() => setOpen(true)}
-              placeholder="Nom, prénom ou téléphone…"
-              autoComplete="off"
-              className="w-full pl-9 pr-4 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
-            />
+        <div className="relative">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-500" />
+          <label htmlFor="caisse-client-search" className="sr-only">Rechercher une cliente</label>
+          <input
+            id="caisse-client-search"
+            type="text"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            placeholder={`Nom, prénom ou téléphone… (sinon : ${CLIENT_DE_PASSAGE.toLowerCase()})`}
+            autoComplete="off"
+            className="h-12 w-full rounded-xl border border-stone-200 bg-white pl-10 pr-4 text-[15px] text-stone-900 placeholder:text-stone-500 outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15"
+          />
 
-            {open && search.trim() !== '' && (
-              <ul className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden max-h-72 overflow-y-auto">
-                {results.length === 0 ? (
-                  <li className="px-4 py-3 text-sm text-stone-700 italic">Aucune cliente trouvée.</li>
-                ) : results.map(c => (
-                  <li key={c.id}>
-                    <button
-                      onClick={() => { onSelect(c); setOpen(false); setSearch(''); }}
-                      className="w-full text-left px-4 py-2.5 hover:bg-stone-50 transition-colors cursor-pointer"
-                    >
-                      <span className="block text-sm text-stone-800">{clientFullName(c)}</span>
-                      {c.telephone && <span className="block text-[12.5px] text-stone-600">{c.telephone}</span>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <p className="mt-2 text-[12.5px] text-stone-600">
-            Sans cliente choisie, la facture est établie au nom de <strong className="font-medium text-stone-700">{CLIENT_DE_PASSAGE}</strong>.
-          </p>
-        </>
+          {/* Le menu est ancré sur le champ lui-même (`top-full`). */}
+          {open && search.trim() !== '' && (
+            <ul className="absolute left-0 right-0 top-full z-20 mt-1.5 max-h-80 overflow-y-auto rounded-xl border border-stone-200 bg-white p-1.5 shadow-lg">
+              {results.length === 0 ? (
+                <li className="flex items-center justify-between gap-3 px-3 py-2.5 text-[14px] text-stone-600">
+                  Aucune cliente trouvée.
+                  <button onClick={() => setCreating(true)} className="font-semibold text-accent hover:underline cursor-pointer">Créer la fiche</button>
+                </li>
+              ) : results.map(c => (
+                <li key={c.id}>
+                  <button
+                    onClick={() => { onSelect(c); setOpen(false); setSearch(''); }}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-stone-100 cursor-pointer"
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-stone-100 text-[12px] font-semibold text-stone-600" aria-hidden="true">{initials(c)}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[14.5px] font-medium text-stone-900">{clientFullName(c)}</span>
+                      {c.telephone && <span className="block text-[12.5px] text-stone-500">{c.telephone}</span>}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {creating && (
         <QuickClientDialog
+          initial={search}
           onClose={() => setCreating(false)}
           onCreated={(c) => { onCreated(c); setCreating(false); setSearch(''); }}
         />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -1535,23 +1509,92 @@ function Field({ label, value, onChange, type = 'text', required, autoFocus }: {
 
 // ── Catalogue ───────────────────────────────────────────────────────────────
 
+/** Pastille de quantité déjà au ticket, ou « + » au survol. */
+function TileCorner({ qty }: { qty: number }) {
+  return qty > 0 ? (
+    // `key` : la pastille rebondit à chaque ajout, pas seulement au premier.
+    <span key={qty} className="admin-pop absolute right-2.5 top-2.5 grid min-w-6 h-6 place-items-center bg-warm px-1.5 text-[12.5px] font-bold text-warm-ink tabular-nums rounded" aria-label={`${qty} au ticket`}>
+      {qty}
+    </span>
+  ) : (
+    <span className="absolute right-2.5 top-2.5 grid size-6 place-items-center rounded-full bg-stone-100 text-stone-500 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true">
+      <Plus size={14} />
+    </span>
+  );
+}
+
+const TILE =
+  'group relative flex min-h-[96px] flex-col rounded-xl bg-stone-50 py-3 pl-4 pr-3 text-left transition-all cursor-pointer ' +
+  'hover:border-stone-400 hover:bg-stone-50 active:scale-[0.985] ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50';
+
+function ServiceTile({ service, color, qty, onPick }: { service: Service; color: string; qty: number; onPick: () => void }) {
+  const detail = service.description?.trim();
+  return (
+    <button onClick={onPick} className={`${TILE} ${qty > 0 ? 'border-warm-muted bg-warm-soft/40' : 'border-stone-200'}`}>
+      <span className="absolute inset-y-3 left-0 w-[3px] rounded-r-full" style={{ background: color }} aria-hidden="true" />
+      <span className="pr-7 text-[14.5px] font-semibold leading-snug text-stone-900 line-clamp-3">{service.nom}</span>
+      {detail && <span className="mt-0.5 truncate pr-2 text-[12.5px] text-stone-500">{detail}</span>}
+      <span className="mt-auto flex items-center gap-2 pt-2">
+        <span className="text-[15.5px] font-semibold text-stone-950 tabular-nums">{formatCHF(service.prix_chf)}</span>
+        {service.type === 'forfait' && (
+          <span className="inline-flex items-center gap-1 bg-stone-100 px-2 py-0.5 text-[11.5px] font-medium text-stone-600 rounded">
+            <Layers size={11} aria-hidden="true" /> Forfait
+          </span>
+        )}
+      </span>
+      <TileCorner qty={qty} />
+    </button>
+  );
+}
+
+function ProductTile({ product, qty, onPick }: { product: Product; qty: number; onPick: () => void }) {
+  // Le stock affiché tient compte du ticket en cours. Il peut devenir négatif :
+  // on le signale sans jamais bloquer la vente — la cliente tient le produit en
+  // main, c'est l'inventaire qui a tort, pas elle.
+  const restant = Math.round((Number(product.stock) - qty) * 100) / 100;
+  const niveau = stockLevel({ stock: restant, seuil_alerte: product.seuil_alerte });
+  return (
+    <button onClick={onPick} className={`${TILE} ${qty > 0 ? 'border-warm-muted bg-warm-soft/40' : 'border-stone-200'}`}>
+      <span className="absolute inset-y-3 left-0 w-[3px] rounded-r-full" style={{ background: PRODUCT_COLOR }} aria-hidden="true" />
+      {product.marque && <span className="pr-7 text-[11.5px] font-medium uppercase tracking-wide text-stone-500">{product.marque}</span>}
+      <span className="pr-7 text-[14.5px] font-semibold leading-snug text-stone-900 line-clamp-3">{product.nom}</span>
+      <span className="mt-auto flex items-center justify-between gap-2 pt-2">
+        <span className="text-[15.5px] font-semibold text-stone-950 tabular-nums">{formatCHF(product.prix_vente_chf)}</span>
+        <span
+          className={`px-2 py-0.5 text-[11.5px] font-semibold tabular-nums ${
+            niveau === 'rupture' ? 'bg-red-50 text-red-700' : niveau === 'bas' ? 'bg-warm-soft text-warm-ink' : 'bg-stone-100 text-stone-600'
+          }`}
+          title={niveau === 'rupture' ? 'Stock épuisé — la vente reste possible' : 'Stock restant après ce ticket'}
+        >
+          {niveau === 'rupture' ? 'Rupture' : `${restant} en stock`}
+        </span>
+      </span>
+      <TileCorner qty={qty} />
+    </button>
+  );
+}
+
+const TILE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3';
+
 /**
  * Catalogue de l'écran d'encaissement.
  *
- * Les catégories deviennent des onglets — c'est tout leur intérêt côté caisse :
- * atteindre « Épilation aisselles » sans faire défiler les soins du visage. Un
- * onglet « Produits » referme la marchandise, dont la vignette affiche le stock
- * qu'il RESTERA après la vente en cours.
+ * « Tout » range les soins par catégorie, sous un titre : on cherche
+ * « Aisselles » dans « Épilation », pas dans une grille de quarante tuiles.
+ * Une catégorie précise, ou une recherche, donne une grille simple. Les
+ * produits affichent le stock qu'il RESTERA après la vente en cours.
  */
 function ServiceCatalog({
-  services, categories, products, cartQtyByProduct, loading,
+  services, categories, products, cartQtyByProduct, cartQtyByService, loading,
   offers, offerStats, cartQtyByOffer, onPickOffer,
-  onPick, onPickProduct, onCustom, onSellGiftCard,
+  onPick, onPickProduct, onCustom,
 }: {
   services: Service[];
   categories: ServiceCategory[];
   products: Product[];
   cartQtyByProduct: Map<string, number>;
+  cartQtyByService: Map<string, number>;
   offers: Offer[];
   offerStats: Map<string, OfferStats>;
   cartQtyByOffer: Map<string, number>;
@@ -1560,46 +1603,59 @@ function ServiceCatalog({
   onPick: (s: Service) => void;
   onPickProduct: (p: Product) => void;
   onCustom: (description: string, prix: number) => void;
-  onSellGiftCard: () => void;
 }) {
   const [tab, setTab] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+
+  // « / » place le curseur dans la recherche, depuis n'importe où sur l'écran
+  // (sauf pendant une saisie, ou quand une fenêtre est ouverte).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target instanceof Element ? e.target : null;
+      if (t && (t.closest('input, textarea, select, [contenteditable="true"]') || t.closest('[role="dialog"]'))) return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const [customLabel, setCustomLabel] = useState('');
   const [customAmount, setCustomAmount] = useState('');
   const [customError, setCustomError] = useState<string | null>(null);
 
-  // Seules les catégories qui ont quelque chose à montrer deviennent un onglet :
-  // une rangée d'onglets vides ferait perdre plus de temps qu'elle n'en gagne.
-  const tabs = useMemo(() => {
-    const list: { id: string; label: string }[] = [{ id: 'all', label: 'Tout' }];
-    for (const c of categories) {
-      if (services.some(s => s.category_id === c.id)) list.push({ id: c.id, label: c.nom });
-    }
-    if (services.some(s => !s.category_id || !categories.some(c => c.id === s.category_id))) {
-      list.push({ id: 'none', label: 'Divers' });
-    }
-    if (products.length > 0) list.push({ id: 'produits', label: 'Produits' });
-    return list;
-  }, [categories, services, products]);
+  const isOrphan = useCallback(
+    (s: Service) => !s.category_id || !categories.some(c => c.id === s.category_id),
+    [categories],
+  );
 
-  // L'onglet actif peut disparaître (catégorie vidée pendant la session) :
-  // on retombe alors sur « Tout » plutôt que d'afficher une grille vide.
-  const hasMenu = tabs.length > 2;
+  // Seules les catégories qui ont quelque chose à montrer deviennent un onglet.
+  const tabs = useMemo(() => {
+    const list: { id: string; label: string; color?: string; count: number }[] = [
+      { id: 'all', label: 'Tout', count: services.length + products.length },
+    ];
+    for (const c of categories) {
+      const n = services.filter(s => s.category_id === c.id).length;
+      if (n > 0) list.push({ id: c.id, label: c.nom, color: categoryColor(categories, c.id), count: n });
+    }
+    const orphans = services.filter(isOrphan).length;
+    if (orphans > 0) list.push({ id: 'none', label: 'Divers', color: categoryColor(categories, null), count: orphans });
+    if (products.length > 0) list.push({ id: 'produits', label: 'Produits', color: PRODUCT_COLOR, count: products.length });
+    return list;
+  }, [categories, services, products, isOrphan]);
+
   const term = search.trim().toLowerCase();
-  const activeTab = tab === 'menu' && hasMenu && !term ? 'menu'
-    : tabs.some(t => t.id === tab) ? tab : 'all';
-  const countOf = (id: string) => id === 'produits' ? products.length
-    : id === 'all' ? services.length
-    : services.filter(s => id === 'none'
-      ? (!s.category_id || !categories.some(c => c.id === s.category_id))
-      : s.category_id === id).length;
+  const activeTab = tabs.some(t => t.id === tab) ? tab : 'all';
 
   const filteredServices = useMemo(() => services.filter(s => {
     if (!s.nom.toLowerCase().includes(term)) return false;
     if (activeTab === 'all') return true;
-    if (activeTab === 'none') return !s.category_id || !categories.some(c => c.id === s.category_id);
+    if (activeTab === 'none') return isOrphan(s);
     return s.category_id === activeTab;
-  }), [services, categories, activeTab, term]);
+  }), [services, activeTab, term, isOrphan]);
 
   const filteredProducts = useMemo(
     () => products.filter(p => `${p.nom} ${p.marque ?? ''}`.toLowerCase().includes(term)),
@@ -1607,10 +1663,22 @@ function ServiceCatalog({
   );
 
   // « Tout » veut dire tout, marchandise comprise : vendre un flacon seul ne
-  // doit pas coûter un changement d'onglet. Les produits gardent leur sous-titre
-  // pour rester distincts des soins dans la grille.
+  // doit pas coûter un changement d'onglet.
   const showProducts = (activeTab === 'produits' || activeTab === 'all') && filteredProducts.length > 0;
   const showServices = activeTab !== 'produits' && filteredServices.length > 0;
+  const grouped = activeTab === 'all' && !term;
+
+  const groups = useMemo(() => {
+    if (!grouped) return [];
+    const out: { id: string; label: string; color: string; items: Service[] }[] = [];
+    for (const c of categories) {
+      const items = services.filter(s => s.category_id === c.id);
+      if (items.length) out.push({ id: c.id, label: c.nom, color: categoryColor(categories, c.id), items });
+    }
+    const orphans = services.filter(isOrphan);
+    if (orphans.length) out.push({ id: 'none', label: 'Divers', color: categoryColor(categories, null), items: orphans });
+    return out;
+  }, [grouped, categories, services, isOrphan]);
 
   const submitCustom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1624,34 +1692,58 @@ function ServiceCatalog({
     setCustomLabel(''); setCustomAmount('');
   };
 
+  const serviceTile = (s: Service) => (
+    <ServiceTile key={s.id} service={s} color={categoryColor(categories, s.category_id)} qty={cartQtyByService.get(s.id) ?? 0} onPick={() => onPick(s)} />
+  );
+
   return (
-    <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h2 className="text-[13px] font-medium text-stone-800 flex items-center gap-2">
-          Catalogue
-          {/* Seul accès au catalogue en mode app : la barre d'onglets n'a que
-              quatre places, et la barre latérale de l'admin y est masquée. */}
-          <Link href="/admin/caisse/prestations" className="font-normal text-[13px] text-stone-600 underline underline-offset-2 hover:text-stone-900 transition-colors">
-            Gérer le catalogue
-          </Link>
-        </h2>
-        <button
-          onClick={onSellGiftCard}
-          className="flex items-center gap-1.5 text-[13px] text-accent hover:underline font-semibold cursor-pointer self-start sm:order-last"
-        >
-          <Gift size={14} /> Vendre un bon cadeau
-        </button>
-        {(services.length + products.length > 6) && (
-          <div className="relative sm:w-56">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-600" />
-            <label htmlFor="caisse-service-search" className="sr-only">Filtrer le catalogue</label>
-            <input
-              id="caisse-service-search"
-              type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Filtrer…"
-              className="w-full pl-8 pr-3 py-1.5 border border-stone-200 rounded-lg text-[13px] text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900/20 outline-none"
-            />
-          </div>
+    <section aria-labelledby="caisse-catalog-title" className="space-y-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 id="caisse-catalog-title" className="text-[17px] font-semibold tracking-tight text-stone-950">Soins et produits</h2>
+        {/* Seul accès au catalogue en mode app : la barre latérale y est masquée. */}
+        <Link href="/admin/caisse/prestations" className="text-[13.5px] font-medium text-stone-500 underline-offset-4 hover:text-stone-900 hover:underline">
+          Gérer le catalogue
+        </Link>
+      </div>
+
+      <div className="relative">
+        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-500" aria-hidden="true" />
+        <label htmlFor="caisse-service-search" className="sr-only">Rechercher un soin ou un produit</label>
+        <input
+          ref={searchRef}
+          id="caisse-service-search"
+          type="search" value={search} onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => {
+            // Entrée : ajoute le premier résultat et vide le champ, prêt pour l'article suivant.
+            if (e.key === 'Enter' && term) {
+              e.preventDefault();
+              const s0 = activeTab !== 'produits' ? filteredServices[0] : undefined;
+              const p0 = filteredProducts[0];
+              if (s0) onPick(s0); else if (p0) onPickProduct(p0); else return;
+              setSearch('');
+            }
+            if (e.key === 'Escape') setSearch('');
+          }}
+          placeholder="Rechercher un soin ou un produit…"
+          autoComplete="off"
+          aria-describedby="caisse-search-hint"
+          className="h-12 w-full rounded-xl border border-stone-200 bg-white pl-10 pr-10 text-[15px] text-stone-900 placeholder:text-stone-500 outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15 [&::-webkit-search-cancel-button]:hidden"
+        />
+        <span id="caisse-search-hint" className="sr-only">Touche barre oblique pour rechercher, Entrée pour ajouter le premier résultat.</span>
+        {!search && (
+          <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1.5 text-[12px] text-stone-400 lg:flex" aria-hidden="true">
+            <Kbd>/</Kbd>
+          </span>
+        )}
+        {search && (
+          <span className="pointer-events-none absolute right-12 top-1/2 hidden -translate-y-1/2 items-center gap-1.5 text-[12px] text-stone-400 lg:flex" aria-hidden="true">
+            <Kbd>Entrée</Kbd> ajoute
+          </span>
+        )}
+        {search && (
+          <button type="button" onClick={() => setSearch('')} aria-label="Effacer la recherche" className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-stone-500 hover:bg-stone-100 cursor-pointer">
+            <X size={16} />
+          </button>
         )}
       </div>
 
@@ -1659,135 +1751,129 @@ function ServiceCatalog({
         <OfferStrip offers={offers} stats={offerStats} inCart={cartQtyByOffer} today={todayZurich()} onPick={onPickOffer} />
       )}
 
-      {tabs.length > 2 && (
-        <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
-          {tabs.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              aria-pressed={activeTab === t.id}
-              className={`shrink-0 px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors cursor-pointer ${
-                activeTab === t.id
-                  ? 'border-accent bg-accent/8 text-accent'
-                  : 'border-stone-200 text-stone-600 hover:border-stone-300 hover:text-stone-700'
-              }`}
-            >
-              {t.id === 'produits' && <Package size={13} className="inline mr-1 -mt-0.5" />}
-              {t.label}
-            </button>
-          ))}
+      {tabs.length > 2 && !term && (
+        <div role="tablist" aria-label="Catégories" className="flex flex-wrap gap-1.5">
+          {tabs.map(t => {
+            const active = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(t.id)}
+                className={`inline-flex h-9 items-center gap-2 border px-3.5 text-[13.5px] font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+                  active ? 'border-stone-900 bg-accent text-white' : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+                }`}
+              >
+                {t.color && <span className="size-2 rounded-full" style={{ background: t.color }} aria-hidden="true" />}
+                {t.label}
+                <span className={`tabular-nums ${active ? 'text-white/70' : 'text-stone-400'}`}>{t.count}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-[68px] bg-stone-100 rounded-xl animate-pulse" />)}
+        <div className={TILE_GRID}>
+          {[...Array(9)].map((_, i) => <div key={i} className="h-[96px] rounded-xl bg-stone-100 animate-pulse" />)}
         </div>
       ) : services.length === 0 && products.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-stone-200 px-5 py-6 text-center">
-          <p className="text-sm text-stone-700 mb-2">Le catalogue est vide.</p>
-          <Link href="/admin/caisse/prestations" className="text-accent text-sm font-medium hover:underline">
-            Créer le catalogue →
-          </Link>
+        <div className="rounded-xl border border-dashed border-stone-300 px-5 py-8 text-center">
+          <p className="mb-2 text-[15px] text-stone-700">Le catalogue est vide.</p>
+          <Link href="/admin/caisse/prestations" className="text-[14px] font-semibold text-accent hover:underline">Créer le catalogue →</Link>
         </div>
       ) : (
-        <div className="space-y-3">
-          {showServices && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {filteredServices.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => onPick(s)}
-                  className="text-left px-3.5 py-3 rounded-xl border border-stone-200 hover:border-accent hover:bg-accent/5 transition-all cursor-pointer group"
-                >
-                  <span className="block text-sm text-stone-800 font-medium leading-snug line-clamp-2 group-hover:text-stone-900">{s.nom}</span>
-                  <span className="flex items-center gap-1.5 text-[12.5px] text-stone-600 mt-1 tabular-nums">
-                    {s.type === 'forfait' && <Layers size={12} className="text-accent shrink-0" aria-label="Forfait" />}
-                    {formatCHF(s.prix_chf)}
-                  </span>
-                </button>
-              ))}
-            </div>
+        <div className="space-y-7">
+          {grouped ? (
+            groups.map(g => (
+              <div key={g.id}>
+                <h3 className="mb-2.5 flex items-center gap-2 text-[13.5px] font-semibold text-stone-700">
+                  <span className="size-2 rounded-full" style={{ background: g.color }} aria-hidden="true" />
+                  {g.label}
+                </h3>
+                <div className={TILE_GRID}>{g.items.map(serviceTile)}</div>
+              </div>
+            ))
+          ) : (
+            showServices && <div className={TILE_GRID}>{filteredServices.map(serviceTile)}</div>
           )}
 
           {showProducts && (
-            <div className="space-y-2">
-              {activeTab === 'all' && (
-                <p className="text-[13px] font-semibold text-stone-700">Produits</p>
+            <div>
+              {(grouped || (activeTab === 'all' && showServices)) && (
+                <h3 className="mb-2.5 flex items-center gap-2 text-[13.5px] font-semibold text-stone-700">
+                  <span className="size-2 rounded-full" style={{ background: PRODUCT_COLOR }} aria-hidden="true" />
+                  Produits
+                </h3>
               )}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                {filteredProducts.map(p => {
-                  // Le stock affiché tient compte du panier en cours. Il peut
-                  // devenir négatif : on le signale sans jamais bloquer la
-                  // vente — la cliente tient le produit en main, c'est
-                  // l'inventaire qui a tort, pas elle.
-                  const restant = Number(p.stock) - (cartQtyByProduct.get(p.id) ?? 0);
-                  const niveau = stockLevel({ stock: restant, seuil_alerte: p.seuil_alerte });
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => onPickProduct(p)}
-                      className="text-left px-3.5 py-3 rounded-xl border border-stone-200 hover:border-accent hover:bg-accent/5 transition-all cursor-pointer group"
-                    >
-                      <span className="block text-sm text-stone-800 font-medium leading-snug line-clamp-2 group-hover:text-stone-900">{p.nom}</span>
-                      <span className="flex items-center justify-between gap-2 mt-1">
-                        <span className="text-[12.5px] text-stone-600 tabular-nums">{formatCHF(p.prix_vente_chf)}</span>
-                        <span
-                          className={`text-[12px] font-semibold tabular-nums px-1.5 py-0.5 rounded ${
-                            niveau === 'rupture' ? 'bg-red-50 text-red-600'
-                            : niveau === 'bas' ? 'bg-amber-50 text-amber-700'
-                            : 'bg-stone-100 text-stone-600'
-                          }`}
-                          title={niveau === 'rupture' ? 'Stock épuisé — la vente reste possible' : 'Stock restant'}
-                        >
-                          {Math.round(restant * 100) / 100}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className={TILE_GRID}>
+                {filteredProducts.map(p => (
+                  <ProductTile key={p.id} product={p} qty={cartQtyByProduct.get(p.id) ?? 0} onPick={() => onPickProduct(p)} />
+                ))}
               </div>
             </div>
           )}
 
           {!showServices && !showProducts && (
-            <p className="rounded-xl border border-dashed border-stone-200 px-5 py-6 text-center text-sm text-stone-700">
-              Rien ne correspond{term ? ' à ce filtre' : ' dans cette catégorie'}.
+            <p className="rounded-xl border border-dashed border-stone-300 px-5 py-8 text-center text-[14.5px] text-stone-700">
+              Rien ne correspond{term ? ` à « ${search.trim()} »` : ' dans cette catégorie'}.
             </p>
           )}
         </div>
       )}
 
       {/* Montant libre — geste commercial, article hors catalogue, forfait négocié… */}
-      <form onSubmit={submitCustom} className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-stone-50">
-        <label htmlFor="caisse-custom-label" className="sr-only">Libellé du montant libre</label>
-        <input
-          id="caisse-custom-label"
-          type="text" value={customLabel} onChange={e => setCustomLabel(e.target.value)}
-          placeholder="Montant libre — libellé"
-          className="flex-1 px-3.5 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
-        />
-        <label htmlFor="caisse-custom-amount" className="sr-only">Montant en francs</label>
-        <input
-          id="caisse-custom-amount"
-          type="text" inputMode="decimal" value={customAmount} onChange={e => { setCustomAmount(e.target.value); setCustomError(null); }}
-          placeholder="CHF"
-          className="sm:w-28 px-3.5 py-2.5 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors tabular-nums"
-        />
-        <button
-          type="submit"
-          disabled={!customAmount.trim()}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-stone-100 text-stone-900 font-semibold hover:bg-stone-200 text-sm transition-colors disabled:opacity-40 cursor-pointer"
-        >
-          <Plus size={14} /> Ajouter
-        </button>
-      </form>
-      {customError && <p role="alert" className="-mt-2 text-[13px] text-red-700">{customError}</p>}
+      <div className="border-t border-stone-200 pt-4">
+        {!customOpen ? (
+          <button type="button" onClick={() => setCustomOpen(true)} className="inline-flex items-center gap-2 text-[14px] font-medium text-stone-600 hover:text-stone-950 cursor-pointer">
+            <Plus size={16} /> Ajouter un montant libre
+          </button>
+        ) : (
+          <form onSubmit={submitCustom} className="flex flex-col gap-2 sm:flex-row">
+            <label htmlFor="caisse-custom-label" className="sr-only">Libellé du montant libre</label>
+            <input
+              id="caisse-custom-label"
+              type="text" value={customLabel} onChange={e => setCustomLabel(e.target.value)}
+              placeholder="Libellé (geste commercial, article hors catalogue…)"
+              autoFocus
+              className="h-11 flex-1 rounded-lg border border-stone-200 px-3.5 text-[14px] text-stone-800 placeholder:text-stone-500 outline-none focus:border-accent focus:ring-2 focus:ring-accent/15"
+            />
+            <label htmlFor="caisse-custom-amount" className="sr-only">Montant en francs</label>
+            <input
+              id="caisse-custom-amount"
+              type="text" inputMode="decimal" value={customAmount} onChange={e => { setCustomAmount(e.target.value); setCustomError(null); }}
+              placeholder="CHF"
+              className="h-11 rounded-lg border border-stone-200 px-3.5 text-[14px] text-stone-800 placeholder:text-stone-500 tabular-nums outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 sm:w-28"
+            />
+            <Button type="submit" disabled={!customAmount.trim()} icon={Plus} className="!h-11">Ajouter</Button>
+            <Button type="button" variant="ghost" className="!h-11" onClick={() => { setCustomOpen(false); setCustomError(null); }}>Fermer</Button>
+          </form>
+        )}
+        {customError && <p role="alert" className="mt-2 text-[13px] text-red-700">{customError}</p>}
+      </div>
+    </section>
+  );
+}
+
+/** Repère du panier visé (250–450 CHF), discret : une barre et une phrase. */
+function PanierGauge({ amount }: { amount: number }) {
+  const inRange = amount >= 250 && amount <= 450;
+  return (
+    <div className="pt-3">
+      <ProgressBar size="sm" value={amount} max={600} zone={[250, 450]} label="Montant du ticket par rapport à la fourchette visée de 250 à 450 CHF" />
+      <p className={`mt-2 text-[12.5px] ${inRange || amount > 450 ? 'text-emerald-700' : 'text-stone-600'}`}>
+        {inRange
+          ? 'Dans la fourchette visée (250 – 450 CHF).'
+          : amount > 450
+            ? 'Au-dessus de la fourchette visée : belle vente conseil.'
+            : `Encore ${formatCHF(250 - amount)} pour la fourchette visée : un produit conseil ?`}
+      </p>
     </div>
   );
 }
 
-// ── Ligne de panier ─────────────────────────────────────────────────────────
+// ── Ligne de ticket ─────────────────────────────────────────────────────────
 
 function CartRow({ line, tvaActive, onPatch, onRemove }: {
   line: CartLine;
@@ -1799,39 +1885,39 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
   const total = line.prix_unitaire_ttc * line.quantite;
 
   return (
-    <li className="px-5 py-3.5 space-y-2">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm text-stone-800 leading-snug flex-1 min-w-0">{line.description}</p>
-        <span className="text-sm font-medium text-stone-900 tabular-nums shrink-0">{formatCHF(total)}</span>
+    <li className="group space-y-2 px-5 py-3.5 [animation:admin-enter_0.25s_ease-out_both]">
+      <div className="flex items-start gap-3">
+        <p className="min-w-0 flex-1 text-[14.5px] font-medium leading-snug text-stone-900">{line.description}</p>
+        <span className="shrink-0 text-[14.5px] font-semibold text-stone-950 tabular-nums">{formatCHF(total)}</span>
         <button
           onClick={onRemove}
           aria-label={`Retirer ${line.description}`}
-          className="shrink-0 p-1 text-stone-600 hover:text-red-700 rounded hover:bg-red-50 transition-all cursor-pointer"
+          className="-mr-1.5 -mt-0.5 shrink-0 rounded-md p-1 text-stone-400 transition-colors hover:bg-red-50 hover:text-red-700 cursor-pointer"
         >
-          <Trash2 size={13} />
+          <X size={15} />
         </button>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Un bon = une ligne : pour en vendre deux, on ajoute un second bon. */}
         {!line.gift_card && (
-        <div className="flex items-center border border-stone-200 rounded-lg overflow-hidden">
-          <button
-            onClick={() => onPatch({ quantite: Math.max(1, line.quantite - 1) })}
-            aria-label="Diminuer la quantité"
-            className="px-2 py-1 text-stone-600 hover:text-stone-800 hover:bg-stone-50 transition-colors cursor-pointer"
-          >
-            <Minus size={12} />
-          </button>
-          <span className="px-2.5 text-xs tabular-nums text-stone-700 min-w-[2rem] text-center">{line.quantite}</span>
-          <button
-            onClick={() => onPatch({ quantite: line.quantite + 1 })}
-            aria-label="Augmenter la quantité"
-            className="px-2 py-1 text-stone-600 hover:text-stone-800 hover:bg-stone-50 transition-colors cursor-pointer"
-          >
-            <Plus size={12} />
-          </button>
-        </div>
+          <div className="flex items-center rounded-lg bg-stone-50">
+            <button
+              onClick={() => onPatch({ quantite: Math.max(1, line.quantite - 1) })}
+              aria-label="Diminuer la quantité"
+              className="grid size-7 place-items-center text-stone-500 transition-colors hover:text-stone-900 cursor-pointer"
+            >
+              <Minus size={13} />
+            </button>
+            <span className="min-w-[1.5rem] text-center text-[13px] font-medium tabular-nums text-stone-800">{line.quantite}</span>
+            <button
+              onClick={() => onPatch({ quantite: line.quantite + 1 })}
+              aria-label="Augmenter la quantité"
+              className="grid size-7 place-items-center text-stone-500 transition-colors hover:text-stone-900 cursor-pointer"
+            >
+              <Plus size={13} />
+            </button>
+          </div>
         )}
 
         {editingPrice ? (
@@ -1847,14 +1933,15 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
               setEditingPrice(false);
             }}
             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-            className="w-24 px-2 py-1 border border-accent rounded-lg text-xs tabular-nums text-stone-700 outline-none"
+            className="h-7 w-24 rounded-lg border border-accent px-2 text-[13px] tabular-nums text-stone-800 outline-none"
           />
         ) : (
           <button
             onClick={() => setEditingPrice(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-stone-200 text-[12.5px] text-stone-600 hover:text-stone-700 hover:border-stone-300 transition-all cursor-pointer tabular-nums"
+            title="Modifier le prix unitaire"
+            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[12.5px] text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 cursor-pointer tabular-nums"
           >
-            <Pencil size={10} /> {formatCHF(line.prix_unitaire_ttc)}
+            {line.quantite > 1 ? `${line.quantite} × ` : ''}{formatCHF(line.prix_unitaire_ttc)} <Pencil size={11} />
           </button>
         )}
 
@@ -1865,7 +1952,7 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
               id={`tva-${line.key}`}
               value={line.taux_tva}
               onChange={e => onPatch({ taux_tva: Number(e.target.value) })}
-              className="px-2 py-1 border border-stone-200 rounded-lg text-xs text-stone-600 focus:border-stone-900 outline-none cursor-pointer"
+              className="h-7 rounded-lg border border-stone-200 px-2 text-[12.5px] text-stone-600 outline-none focus:border-accent cursor-pointer"
             >
               {TAUX_TVA_CH.map(t => (
                 <option key={t.value} value={t.value}>TVA {t.value} %</option>
@@ -1980,7 +2067,7 @@ export function ReceiptPanel({ transaction, onNew, rdvId = null, rdvOutcome = nu
 
   return (
     <div className="max-w-md mx-auto py-2 lg:py-8">
-      <div className="bg-white border border-stone-200 rounded-2xl lg:rounded-xl p-6 lg:p-8 text-center space-y-5">
+      <div className="bg-stone-50 rounded-xl lg:rounded-xl p-6 lg:p-8 text-center space-y-5">
         <div className="w-14 h-14 rounded-full bg-accent/10 text-accent flex items-center justify-center mx-auto">
           <Check size={26} />
         </div>
@@ -2145,7 +2232,7 @@ export function MobileCheckout(p: MobileCheckoutProps) {
           else setConfirmClear(true);
         }}
         className={`min-h-12 shrink-0 rounded-xl px-4 text-[15px] font-semibold cursor-pointer ${
-          confirmClear ? 'bg-red-600 text-white' : 'bg-white text-stone-700 border border-stone-300'
+          confirmClear ? 'bg-red-600 text-white' : 'bg-stone-50 text-stone-700'
         }`}
       >
         {confirmClear ? 'Confirmer ?' : 'Vider'}
@@ -2166,7 +2253,7 @@ export function MobileCheckout(p: MobileCheckoutProps) {
       <button
         type="button"
         onClick={() => setSheet('cart')}
-        className="min-h-12 shrink-0 rounded-xl border border-stone-300 bg-white px-4 text-[15px] font-semibold text-stone-700 cursor-pointer"
+        className="min-h-12 shrink-0 rounded-xl bg-stone-50 px-4 text-[15px] font-semibold text-stone-700 cursor-pointer"
       >
         Retour
       </button>
@@ -2193,7 +2280,7 @@ export function MobileCheckout(p: MobileCheckoutProps) {
       <button
         type="button"
         onClick={() => setClientSheet(true)}
-        className="flex min-h-[60px] w-full items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 text-left shadow-[0_1px_2px_rgba(28,25,23,0.04)] cursor-pointer active:bg-stone-50"
+        className="flex min-h-[60px] w-full items-center gap-3 rounded-xl bg-stone-50 px-4 text-left cursor-pointer active:bg-stone-50"
       >
         <span className="grid size-10 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
           <User size={20} aria-hidden="true" />
@@ -2224,10 +2311,10 @@ export function MobileCheckout(p: MobileCheckoutProps) {
           <button
             type="button"
             onClick={() => setSheet('cart')}
-            className="flex min-h-[64px] w-full items-center justify-between gap-3 rounded-2xl bg-accent pl-4 pr-5 text-accent-fg shadow-[0_8px_24px_rgba(28,25,23,0.25)] cursor-pointer active:bg-accent-hover"
+            className="flex min-h-[64px] w-full items-center justify-between gap-3 rounded-xl bg-accent pl-4 pr-5 text-accent-fg shadow-[0_8px_24px_rgba(28,25,23,0.25)] cursor-pointer active:bg-accent-hover"
           >
             <span className="flex items-center gap-3">
-              <span className="grid h-8 min-w-8 place-items-center rounded-full bg-white/25 px-2 text-[15px] font-bold tabular-nums">{itemCount}</span>
+              <span className="grid h-8 min-w-8 place-items-center bg-white/25 px-2 text-[15px] font-bold tabular-nums">{itemCount}</span>
               <span className="text-left leading-tight">
                 <span className="block text-[13px] text-accent-fg/80">{itemCount > 1 ? 'articles' : 'article'}</span>
                 <span className="block text-[15px] font-semibold">Voir le panier</span>
@@ -2251,7 +2338,7 @@ export function MobileCheckout(p: MobileCheckoutProps) {
       >
         {sheet === 'pay' ? (
           <div className="space-y-5">
-            <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4 text-center">
+            <div className="rounded-xl bg-stone-50 border border-stone-200 p-4 text-center">
               <p className="text-[14px] text-stone-600">{p.montantBon > 0 ? 'Reste à encaisser' : 'Total à encaisser'}</p>
               <p className="mt-1 text-[34px] font-bold leading-none tracking-tight text-stone-950 tabular-nums">{formatCHF(p.resteAPayer)}</p>
               <p className="mt-2 text-[13px] text-stone-600">
@@ -2281,7 +2368,7 @@ export function MobileCheckout(p: MobileCheckoutProps) {
             <button
               type="button"
               onClick={() => setClientSheet(true)}
-              className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 text-left cursor-pointer active:bg-stone-50"
+              className="flex min-h-14 w-full items-center gap-3 rounded-xl bg-stone-50 px-4 text-left cursor-pointer active:bg-stone-50"
             >
               <User size={20} className="shrink-0 text-accent" aria-hidden="true" />
               <span className="min-w-0 flex-1">
@@ -2293,7 +2380,7 @@ export function MobileCheckout(p: MobileCheckoutProps) {
 
             {/* Bon cadeau présenté en paiement */}
             {p.giftCard ? (
-              <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-2">
+              <div className="rounded-xl bg-stone-50 p-4 space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 text-[16px] font-semibold text-stone-950"><Ticket size={16} className="text-accent shrink-0" aria-hidden="true" /> {p.giftCard.code}</p>
@@ -2318,7 +2405,7 @@ export function MobileCheckout(p: MobileCheckoutProps) {
             ) : (
               <button
                 type="button" onClick={p.onUseGift}
-                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-stone-50 text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
               >
                 <Ticket size={18} aria-hidden="true" /> Utiliser un bon cadeau
               </button>
@@ -2358,7 +2445,7 @@ export function MobileCheckout(p: MobileCheckoutProps) {
                 />
               ))}
             </ul>
-            <div className="mt-2 space-y-1.5 rounded-2xl bg-stone-50 border border-stone-200 p-4 text-[15px]">
+            <div className="mt-2 space-y-1.5 rounded-xl bg-stone-50 border border-stone-200 p-4 text-[15px]">
               {p.tvaActive && (
                 <>
                   <MRow label="Total HT" value={formatCHF(p.totals.ht)} />
@@ -2410,22 +2497,10 @@ function MRow({ label, value }: { label: string; value: string }) {
 
 /** Rappel du panier cible du Cockpit Hebdo (250–450 CHF), version compacte. */
 function BasketTarget({ reste }: { reste: number }) {
-  const inRange = reste >= 250 && reste <= 450;
-  const above = reste > 450;
+  // Même repère que le ticket du bureau (`PanierGauge`) : une barre, une phrase.
   return (
-    <div className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-[14px] leading-snug ${
-      inRange ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
-      : above ? 'bg-purple-50 text-purple-950 border-purple-200'
-      : 'bg-amber-50/80 text-amber-950 border-amber-200'
-    }`}>
-      {inRange ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden="true" />
-        : above ? <Sparkles size={17} className="mt-0.5 shrink-0 text-purple-700" aria-hidden="true" />
-        : <Target size={17} className="mt-0.5 shrink-0 text-amber-700" aria-hidden="true" />}
-      <span>
-        {inRange ? <><strong>Panier cible atteint</strong> : dans la fourchette 250–450 CHF.</>
-          : above ? <><strong>Panier d&apos;excellence</strong> (plus de 450 CHF) : bravo pour cette vente conseil.</>
-          : <><strong>Objectif panier 250–450 CHF</strong> : proposez 1 produit conseil pour atteindre le palier.</>}
-      </span>
+    <div className="rounded-xl bg-stone-50 px-3.5 py-3">
+      <PanierGauge amount={reste} />
     </div>
   );
 }
@@ -2502,7 +2577,7 @@ function MobileCatalog({ services, categories, products, offers, offerStats, onP
     return m;
   }, [lines]);
 
-  const tileCls = 'relative flex min-h-[92px] w-full flex-col justify-between gap-2 rounded-2xl border border-stone-200 bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(28,25,23,0.04)] cursor-pointer transition-transform duration-150 active:scale-[0.97] active:bg-accent/5';
+  const tileCls = 'relative flex min-h-[96px] w-full flex-col justify-between gap-2 rounded-xl bg-stone-50 py-3.5 pl-4 pr-3.5 text-left cursor-pointer transition-transform duration-150 active:scale-[0.97] active:bg-warm-soft/60';
 
   return (
     <div className="space-y-4">
@@ -2548,17 +2623,17 @@ function MobileCatalog({ services, categories, products, offers, offerStats, onP
           ))}
           <button
             type="button" onClick={() => setTab('all')}
-            className="col-span-2 flex min-h-12 items-center justify-center rounded-xl border border-stone-300 bg-white text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
+            className="col-span-2 flex min-h-12 items-center justify-center rounded-xl bg-stone-50 text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
           >
             Voir tout le catalogue
           </button>
         </div>
       ) : loading ? (
         <div className="grid grid-cols-2 gap-3">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-[92px] animate-pulse rounded-2xl bg-stone-200/70" />)}
+          {[...Array(6)].map((_, i) => <div key={i} className="h-[92px] animate-pulse rounded-xl bg-stone-100" />)}
         </div>
       ) : services.length === 0 && products.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-5 py-8 text-center">
+        <div className="rounded-xl border border-dashed border-stone-300 bg-white px-5 py-8 text-center">
           <p className="mb-2 text-[16px] text-stone-800">Le catalogue est vide.</p>
           <Link href="/admin/caisse/prestations" className="inline-flex min-h-11 items-center text-[15px] font-semibold text-accent">Créer le catalogue →</Link>
         </div>
@@ -2572,15 +2647,19 @@ function MobileCatalog({ services, categories, products, offers, offerStats, onP
                   <button
                     key={s.id} type="button"
                     onClick={() => { onPickService(s); setAnnounce(`${s.nom} ajouté`); }}
-                    className={`${tileCls} ${q > 0 ? 'border-accent/60 bg-accent/5' : ''}`}
+                    className={`${tileCls} ${q > 0 ? 'border-warm-muted bg-warm-soft/50' : ''}`}
                   >
-                    <span className="block pr-6 text-[15px] font-medium leading-snug text-stone-950 line-clamp-3">{s.nom}</span>
-                    <span className="flex items-center gap-1.5 text-[16px] font-semibold tabular-nums text-stone-800">
-                      {s.type === 'forfait' && <Layers size={14} className="shrink-0 text-accent" aria-label="Forfait" />}
+                    <span className="absolute inset-y-3.5 left-0 w-[3px] rounded-r-full" style={{ background: categoryColor(categories, s.category_id) }} aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="block pr-6 text-[15px] font-semibold leading-snug text-stone-950 line-clamp-3">{s.nom}</span>
+                      {s.description?.trim() && <span className="mt-0.5 block truncate text-[13px] text-stone-500">{s.description}</span>}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[16px] font-semibold tabular-nums text-stone-950">
+                      {s.type === 'forfait' && <Layers size={14} className="shrink-0 text-stone-500" aria-label="Forfait" />}
                       {formatCHF(s.prix_chf)}
                     </span>
                     {q > 0 && (
-                      <span aria-label={`${q} dans le panier`} className="absolute right-2.5 top-2.5 grid h-6 min-w-6 place-items-center rounded-full bg-accent px-1.5 text-[13px] font-bold text-accent-fg">{q}</span>
+                      <span aria-label={`${q} dans le panier`} className="absolute right-2.5 top-2.5 grid h-6 min-w-6 place-items-center bg-warm px-1.5 text-[13px] font-bold text-warm-ink rounded">{q}</span>
                     )}
                   </button>
                 );
@@ -2602,19 +2681,20 @@ function MobileCatalog({ services, categories, products, offers, offerStats, onP
                     <button
                       key={pr.id} type="button"
                       onClick={() => { onPickProduct(pr); setAnnounce(`${pr.nom} ajouté`); }}
-                      className={`${tileCls} ${q > 0 ? 'border-accent/60 bg-accent/5' : ''}`}
+                      className={`${tileCls} ${q > 0 ? 'border-warm-muted bg-warm-soft/50' : ''}`}
                     >
-                      <span className="block pr-6 text-[15px] font-medium leading-snug text-stone-950 line-clamp-3">{pr.nom}</span>
+                      <span className="absolute inset-y-3.5 left-0 w-[3px] rounded-r-full" style={{ background: PRODUCT_COLOR }} aria-hidden="true" />
+                      <span className="block pr-6 text-[15px] font-semibold leading-snug text-stone-950 line-clamp-3">{pr.nom}</span>
                       <span className="flex items-center justify-between gap-2">
                         <span className="text-[16px] font-semibold tabular-nums text-stone-800">{formatCHF(pr.prix_vente_chf)}</span>
                         <span className={`rounded px-1.5 py-0.5 text-[12px] font-semibold tabular-nums ${
-                          niveau === 'rupture' ? 'bg-red-50 text-red-700' : niveau === 'bas' ? 'bg-amber-50 text-amber-800' : 'bg-stone-100 text-stone-700'
+                          niveau === 'rupture' ? 'bg-red-50 text-red-700' : niveau === 'bas' ? 'bg-warm-soft text-warm-ink' : 'bg-stone-100 text-stone-700'
                         }`}>
                           <span className="sr-only">Stock restant : </span>{Math.round(restant * 100) / 100}
                         </span>
                       </span>
                       {q > 0 && (
-                        <span aria-label={`${q} dans le panier`} className="absolute right-2.5 top-2.5 grid h-6 min-w-6 place-items-center rounded-full bg-accent px-1.5 text-[13px] font-bold text-accent-fg">{q}</span>
+                        <span aria-label={`${q} dans le panier`} className="absolute right-2.5 top-2.5 grid h-6 min-w-6 place-items-center bg-warm px-1.5 text-[13px] font-bold text-warm-ink rounded">{q}</span>
                       )}
                     </button>
                   );
@@ -2624,7 +2704,7 @@ function MobileCatalog({ services, categories, products, offers, offerStats, onP
           )}
 
           {!showServices && !showProducts && (
-            <p className="rounded-2xl border border-dashed border-stone-300 bg-white px-5 py-8 text-center text-[15px] text-stone-700">
+            <p className="rounded-xl border border-dashed border-stone-300 bg-white px-5 py-8 text-center text-[15px] text-stone-700">
               Rien ne correspond{term ? ' à cette recherche' : ' dans cette catégorie'}.
             </p>
           )}
@@ -2635,13 +2715,13 @@ function MobileCatalog({ services, categories, products, offers, offerStats, onP
       <div className="grid grid-cols-2 gap-3 pt-1">
         <button
           type="button" onClick={onCustom}
-          className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
+          className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-stone-50 text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
         >
           <PenLine size={17} aria-hidden="true" /> Montant libre
         </button>
         <button
           type="button" onClick={onSellGift}
-          className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
+          className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-stone-50 text-[15px] font-semibold text-stone-800 cursor-pointer active:bg-stone-50"
         >
           <Gift size={17} aria-hidden="true" /> Vendre un bon
         </button>
@@ -2677,11 +2757,11 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
 
       <div className="flex items-center justify-between gap-3">
         {line.gift_card ? <span /> : (
-        <div className="flex items-center gap-1 rounded-2xl bg-stone-100 p-1" role="group" aria-label={`Quantité de ${line.description}`}>
+        <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-1" role="group" aria-label={`Quantité de ${line.description}`}>
           <button
             type="button" aria-label="Diminuer la quantité" disabled={line.quantite <= 1}
             onClick={() => onPatch({ quantite: Math.max(1, line.quantite - 1) })}
-            className="grid size-11 place-items-center rounded-xl bg-white text-stone-800 shadow-sm disabled:opacity-35 cursor-pointer"
+            className="grid size-11 place-items-center rounded-xl bg-white text-stone-800 disabled:opacity-35 cursor-pointer"
           >
             <Minus size={20} aria-hidden="true" />
           </button>
@@ -2689,7 +2769,7 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
           <button
             type="button" aria-label="Augmenter la quantité"
             onClick={() => onPatch({ quantite: line.quantite + 1 })}
-            className="grid size-11 place-items-center rounded-xl bg-white text-stone-800 shadow-sm cursor-pointer"
+            className="grid size-11 place-items-center rounded-xl bg-white text-stone-800 cursor-pointer"
           >
             <Plus size={20} aria-hidden="true" />
           </button>
@@ -2727,7 +2807,7 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
           <select
             id={`m-tva-${line.key}`} value={line.taux_tva}
             onChange={e => onPatch({ taux_tva: Number(e.target.value) })}
-            className="min-h-11 rounded-xl border border-stone-300 bg-white px-3 text-[16px] text-stone-800"
+            className="min-h-11 rounded-xl bg-stone-50 px-3 text-[16px] text-stone-800"
           >
             {TAUX_TVA_CH.map(t => <option key={t.value} value={t.value}>TVA {t.value} %</option>)}
           </select>
@@ -2774,7 +2854,7 @@ function MobileClientSheet({ open, onClose, clients, selected, onSelect, onNew }
           {term ? `Créer « ${term} »` : 'Nouvelle cliente'}
         </button>
 
-        <ul className="divide-y divide-stone-100 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+        <ul className="divide-y divide-stone-100 overflow-hidden rounded-xl bg-stone-50">
           <li>
             <button
               type="button" onClick={() => onSelect(null)}

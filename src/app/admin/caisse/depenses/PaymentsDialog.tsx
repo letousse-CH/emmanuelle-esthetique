@@ -90,7 +90,7 @@ export default function PaymentsDialog({ expense, payments, onClose, onChanged }
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-stone-900/60 backdrop-blur-xs">
       <div
         role="dialog" aria-modal="true" aria-label={`Paiements de la facture ${expense.fournisseur}`}
-        className="bg-white w-full sm:max-w-2xl max-h-[92vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-stone-200 shadow-xl overflow-hidden"
+        className="bg-white w-full sm:max-w-2xl max-h-[92vh] flex flex-col rounded-t-xl sm:rounded-xl border border-stone-200 shadow-xl overflow-hidden"
       >
         <div className="px-5 py-4 border-b border-stone-200 bg-stone-50 flex items-start justify-between gap-3">
           <div className="min-w-0">

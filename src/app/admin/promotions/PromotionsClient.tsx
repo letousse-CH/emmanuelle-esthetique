@@ -119,7 +119,7 @@ export default function PromotionsClient() {
 
       {/* Le consentement n'est pas un détail de conformité : c'est ce qui
           décide qui reçoit. Autant le dire là où on crée les envois. */}
-      <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-[13px] max-lg:text-[14px] text-stone-600 leading-relaxed">
+      <div className="rounded-xl bg-stone-50 px-4 py-3 text-[13px] max-lg:text-[14px] text-stone-600 leading-relaxed">
         Une promotion ne part qu&apos;aux personnes qui ont donné leur accord : les cases
         <strong className="text-stone-700"> Accords publicitaires </strong> de chaque
         <Link href="/admin/caisse/clients" className="text-accent hover:underline mx-1">fiche cliente</Link>
@@ -136,7 +136,7 @@ export default function PromotionsClient() {
         </Callout>
       )}
 
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <div className="bg-stone-50 rounded-xl overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center gap-2 p-8 text-stone-600 text-sm">
             <div className="w-4 h-4 rounded-full border-2 border-stone-200 border-t-stone-700 animate-spin" /> Chargement…
@@ -169,7 +169,7 @@ export default function PromotionsClient() {
                 </span>
               );
               return (
-                <li key={p.id} className="flex items-center gap-3 px-5 py-4 max-lg:px-4 max-lg:py-2 hover:bg-stone-50/50 transition-colors">
+                <li key={p.id} className="flex items-center gap-3 px-5 py-4 max-lg:px-4 max-lg:py-2 hover:bg-stone-50 transition-colors">
                   <button
                     onClick={() => setEditing(p)}
                     className="flex-1 min-w-0 text-left cursor-pointer max-lg:min-h-[64px] max-lg:py-2"

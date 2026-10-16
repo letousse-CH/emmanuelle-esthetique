@@ -218,7 +218,7 @@ export function ClientDetailView({
       {!desktop && <UpcomingBookings clientId={client.id} preset={upcomingPreset} />}
 
       {(client.date_naissance || client.notes) && (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-2.5 text-sm">
+        <div className="bg-stone-50 rounded-xl p-4 space-y-2.5 text-sm">
           {client.date_naissance && (
             <p className="flex items-center gap-2 text-stone-700">
               <Cake size={14} className="text-accent shrink-0" />
@@ -233,7 +233,7 @@ export function ClientDetailView({
       )}
 
       {/* ── Consentements ───────────────────────────────────────────── */}
-      <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+      <section className="bg-stone-50 rounded-xl p-4 space-y-3">
         <div>
           <p className="text-[14px] lg:text-[12.5px] font-medium text-stone-700">Accords publicitaires</p>
           <p className="text-[13px] lg:text-[12px] text-stone-600 mt-1 leading-relaxed">
@@ -289,13 +289,13 @@ export function ClientDetailView({
       </p>
 
       {loading ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-8 flex items-center justify-center gap-2 text-stone-600 text-sm">
+        <div className="bg-stone-50 rounded-xl p-8 flex items-center justify-center gap-2 text-stone-600 text-sm">
           <Loader2 size={15} className="animate-spin" /> Chargement…
         </div>
       ) : (
         <section className="space-y-3">
           {produitsAchetes.length > 0 && (
-            <div className="bg-white border border-stone-200 rounded-xl p-4">
+            <div className="bg-stone-50 rounded-xl p-4">
               <p className="text-[14px] lg:text-[12.5px] font-medium text-stone-700 flex items-center gap-1.5 mb-2.5">
                 <Package size={12} /> Produits emportés
               </p>
@@ -313,7 +313,7 @@ export function ClientDetailView({
           )}
 
           {transactions.length === 0 ? (
-            <div className="bg-white border border-stone-200 rounded-xl p-6 text-center">
+            <div className="bg-stone-50 rounded-xl p-6 text-center">
               <p className="text-sm text-stone-700">Aucun passage enregistré.</p>
             </div>
           ) : (
@@ -321,7 +321,7 @@ export function ClientDetailView({
               {transactions.map(t => (
                 <li
                   key={t.id}
-                  className={`bg-white border border-stone-200 rounded-xl p-4 ${t.status === 'annulee' ? 'opacity-60' : ''}`}
+                  className={`bg-stone-50 rounded-xl p-4 ${t.status === 'annulee' ? 'opacity-60' : ''}`}
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="text-sm font-medium text-stone-800">
@@ -370,7 +370,7 @@ export function ClientDetailView({
         footer={onEdit && !client.archived ? (
           <button
             type="button" onClick={onEdit}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-[15px] font-semibold text-stone-900 cursor-pointer active:bg-stone-50"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-stone-50 text-[15px] font-semibold text-stone-900 cursor-pointer active:bg-stone-50"
           >
             <Pencil size={16} aria-hidden="true" /> Modifier la fiche
           </button>
@@ -422,7 +422,7 @@ export function ClientDetailView({
 function QuickAction({ icon: Icon, label, href, external, tone }: {
   icon: React.ElementType; label: string; href?: string; external?: boolean; tone?: 'accent';
 }) {
-  const cls = `flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl border px-1 text-[13px] font-semibold ${
+  const cls = `flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl border px-1 text-[13px] font-semibold ${
     tone === 'accent' ? 'border-transparent bg-accent text-accent-fg' : 'border-stone-200 bg-white text-stone-900'
   } ${href ? 'cursor-pointer active:scale-[0.97]' : 'opacity-40'}`;
   const body = <><Icon size={22} aria-hidden="true" />{label}</>;
@@ -478,16 +478,16 @@ function UpcomingBookings({ clientId, preset }: { clientId: string; preset?: Boo
         <CalendarDays size={14} aria-hidden="true" /> Rendez-vous à venir
       </p>
       {failed ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-[14px] text-stone-700">
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-stone-50 px-4 py-3 text-[14px] text-stone-700">
           Les rendez-vous n&apos;ont pas pu être chargés.
           <button type="button" onClick={() => void load()} className="min-h-11 shrink-0 px-2 font-semibold text-accent cursor-pointer">Réessayer</button>
         </div>
       ) : items === null ? (
-        <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-4 text-[14px] text-stone-600">
+        <div className="flex items-center gap-2 rounded-xl bg-stone-50 px-4 py-4 text-[14px] text-stone-600">
           <Loader2 size={15} className="animate-spin" aria-hidden="true" /> Chargement…
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-[14px] text-stone-700">
+        <div className="rounded-xl bg-stone-50 px-4 py-3 text-[14px] text-stone-700">
           Aucun rendez-vous à venir.{' '}
           <Link href={`/admin/reservations?nouveau=1&client=${clientId}`} className="font-semibold text-accent">En fixer un</Link>
         </div>
@@ -499,7 +499,7 @@ function UpcomingBookings({ clientId, preset }: { clientId: string; preset?: Boo
               href={`/admin/reservations?id=${b.id}`}
               title={when(b)}
               subtitle={b.service_nom}
-              trailing={<span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${
+              trailing={<span className={`px-2 py-0.5 text-[12px] font-semibold ${
                 b.statut === 'confirme' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
               }`}>{STATUT_LABEL[b.statut]}</span>}
             />
@@ -514,7 +514,7 @@ function Metric({ label, value, hint, tone }: {
   label: string; value: string; hint?: string; tone?: 'warn';
 }) {
   return (
-    <div className="bg-white border border-stone-200 rounded-xl px-3 py-2.5">
+    <div className="bg-stone-50 rounded-xl px-3 py-2.5">
       <p className="text-[12.5px] font-semibold text-stone-600">{label}</p>
       <p className={`text-sm font-semibold tabular-nums mt-0.5 ${tone === 'warn' ? 'text-amber-700' : 'text-stone-900'}`}>{value}</p>
       {hint && <p className="text-[12.5px] text-amber-700 mt-0.5">{hint}</p>}

@@ -349,7 +349,7 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
                           {DAY_LABEL.format(fromDateKey(topic.date))}
                         </span>
                         {topic.pillar && (
-                          <span className="text-[12px] font-medium px-2 py-0.5 rounded-full border border-stone-200 bg-stone-100 text-stone-700">
+                          <span className="text-[12px] font-medium px-2 py-0.5 border border-stone-200 bg-stone-100 text-stone-700 rounded">
                             {topic.pillar}
                           </span>
                         )}
