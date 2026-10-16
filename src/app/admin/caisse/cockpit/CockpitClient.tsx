@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Sparkles, Package, CheckCircle2, ShoppingBag, ArrowRight,
-  Lightbulb, Sliders, RefreshCw, ChevronDown, Target,
+  Lightbulb, Sliders, ChevronDown, Target, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import { AnimatedNumber, Button, Callout, LinkButton, Metric, MetricStrip, ProgressBar, SectionHeading } from '../../../../components/admin/ui';
 import { listProducts, listTransactions } from '../../../../services/caisse';
@@ -19,9 +19,6 @@ export default function CockpitClient() {
   const [transactions, setTransactions] = useState<TransactionWithItems[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Simulation affichée à la demande seulement : un lundi matin sans vente doit
-  // montrer 0, jamais des chiffres inventés à la place des vrais.
-  const [demoMode, setDemoMode] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Paramètres du simulateur interactif
@@ -36,19 +33,15 @@ export default function CockpitClient() {
   const loadData = async () => {
     setLoading(true); setLoadError(null);
     try {
-      // Semaine en cours, du lundi 00:00 au dimanche 23:59 : une vente faite
-      // un dimanche compte aussi.
-      const monday = new Date();
-      monday.setHours(0, 0, 0, 0);
-      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
+      // Du 1er du mois précédent à la fin du mois en cours : le mois affiché,
+      // plus de quoi le comparer au précédent à la même date.
+      const now = new Date();
+      const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
       const [prods, txs] = await Promise.all([
         listProducts(true),
-        listTransactions(monday.toISOString(), sunday.toISOString()),
+        listTransactions(prevStart.toISOString(), monthEnd.toISOString()),
       ]);
 
       setProducts(prods.filter(isVenteProduct));
@@ -94,56 +87,84 @@ export default function CockpitClient() {
     };
   }, [products, tvaRecuperable]);
 
-  // ── Données Semaine en Cours ────────────────────────────────────────────────
-  const weekStats = useMemo(() => {
-    // Si mode démo actif : chiffres simulés pour 2 clientes / jour sur 4 jours
-    if (demoMode) {
-      const demoClientes = 8;
-      const demoCA = 2740;
-      const demoPanier = Math.round(demoCA / demoClientes);
-      return {
-        clientesCount: demoClientes,
-        caTotal: demoCA,
-        panierMoyen: demoPanier,
-        isDemo: true,
-      };
+  // ── Le mois en cours, jour par jour ─────────────────────────────────────────
+  const month = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const today = now.getDate();
+    const dim = new Date(y, m + 1, 0).getDate();
+    const prevDim = new Date(y, m, 0).getDate();
+    const inMonth = (d: Date, yy: number, mm: number) => d.getFullYear() === yy && d.getMonth() === mm;
+
+    const daily = Array.from({ length: dim }, () => 0);
+    let caTotal = 0;
+    let prevToDate = 0;
+    const visites: number[] = [];
+
+    for (const t of transactions) {
+      if (t.status === 'annulee') continue;
+      const d = new Date(t.created_at);
+      // CA = recettes encaissées (règle du module) : un soin réglé par bon cadeau
+      // a été encaissé à la vente du bon, il ne compte pas une seconde fois.
+      const r = recetteEncaissee(t);
+      if (inMonth(d, y, m)) {
+        daily[d.getDate() - 1] += r;
+        caTotal += r;
+        // Une cliente accueillie = un passage avec soin ou produit ; acheter
+        // seulement un bon cadeau n'est pas une visite. Le panier mesure ce
+        // qu'elle a reçu (soins + produits), quelle que soit la façon de payer.
+        const items = t.transaction_items.filter(i => !i.gift_card_id);
+        if (items.length > 0) visites.push(items.reduce((acc, i) => acc + Number(i.total_ttc || 0), 0));
+      } else if (inMonth(d, m === 0 ? y - 1 : y, (m + 11) % 12) && d.getDate() <= Math.min(today, prevDim)) {
+        prevToDate += r;
+      }
     }
 
-    const validTxs = transactions.filter(t => t.status !== 'annulee');
-    // CA = recettes encaissées (règle du module) : un soin réglé par bon cadeau
-    // a été encaissé à la vente du bon, il ne compte pas une seconde fois.
-    const caTotal = Math.round(validTxs.reduce((acc, t) => acc + recetteEncaissee(t), 0) * 100) / 100;
-    // Une cliente accueillie = un passage avec soin ou produit ; acheter
-    // seulement un bon cadeau n'est pas une visite. Le panier mesure ce qu'elle
-    // a reçu (soins + produits), quelle que soit la façon dont elle a payé.
-    const visites = validTxs
-      .map(t => t.transaction_items.filter(i => !i.gift_card_id))
-      .filter(items => items.length > 0)
-      .map(items => items.reduce((acc, i) => acc + Number(i.total_ttc || 0), 0));
     const clientesCount = visites.length;
-    const panierMoyen = clientesCount > 0
-      ? Math.round((visites.reduce((a, v) => a + v, 0) / clientesCount) * 10) / 10
-      : 0;
+    const panierMoyen = clientesCount > 0 ? Math.round((visites.reduce((a, v) => a + v, 0) / clientesCount) * 10) / 10 : 0;
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const label = now.toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' });
+    const prevLabel = new Date(y, m - 1, 1).toLocaleDateString('fr-CH', { month: 'long' });
 
     return {
+      label: label.charAt(0).toUpperCase() + label.slice(1),
+      prevLabel,
+      today,
+      dim,
+      caTotal: r2(caTotal),
+      prevToDate: r2(prevToDate),
       clientesCount,
-      caTotal,
       panierMoyen,
-      isDemo: false,
+      days: daily.map((amount, i) => {
+        const d = new Date(y, m, i + 1);
+        return {
+          day: i + 1,
+          amount: r2(amount),
+          isToday: i + 1 === today,
+          isFuture: i + 1 > today,
+          long: d.toLocaleDateString('fr-CH', { weekday: 'short', day: 'numeric', month: 'long' }),
+        };
+      }),
     };
-  }, [transactions, demoMode]);
+  }, [transactions]);
 
-  // Cibles Hebdomadaires
-  // Environ 2 clientes par jour sur 5 jours = 10 clientes
+  // Cibles : le cap de la semaine (2 clientes par jour, 10 par semaine, panier
+  // de 250 à 450 CHF) ramené à la longueur du mois.
   const CIBLE_CLIENTES_HEBDO = 10;
   const CIBLE_PANIER_MIN = 250;
   const CIBLE_PANIER_MAX = 450;
   const CIBLE_PANIER_MOYEN = 350;
-  const CIBLE_CA_CONFORT = CIBLE_CLIENTES_HEBDO * CIBLE_PANIER_MOYEN; // 3'500 CHF
-  const CIBLE_CA_SEUIL = CIBLE_CLIENTES_HEBDO * CIBLE_PANIER_MIN; // 2'500 CHF
+  const semainesDuMois = month.dim / 7;
+  const CIBLE_CLIENTES_MOIS = Math.round(CIBLE_CLIENTES_HEBDO * semainesDuMois);
+  const CIBLE_CA_MOIS = Math.round((CIBLE_CLIENTES_HEBDO * CIBLE_PANIER_MOYEN * semainesDuMois) / 100) * 100; // ≈ 15'500 CHF sur 31 jours
+  const CIBLE_CA_SEUIL = Math.round((CIBLE_CLIENTES_HEBDO * CIBLE_PANIER_MIN * semainesDuMois) / 100) * 100; // ≈ 11'100 CHF
 
   // Pourcentage d'atteinte de l'objectif de chiffre d'affaires
-  const pctCA = Math.min(100, Math.round((weekStats.caTotal / CIBLE_CA_CONFORT) * 100));
+  const pctCA = Math.min(100, Math.round((month.caTotal / CIBLE_CA_MOIS) * 100));
+  // À ce rythme : le CA du mois prolongé jusqu'au dernier jour.
+  const projection = month.today > 0 ? Math.round((month.caTotal / month.today) * month.dim) : 0;
+  const deltaPrev = month.prevToDate > 0 ? Math.round(((month.caTotal - month.prevToDate) / month.prevToDate) * 100) : null;
 
   // ── Simulateur Personnalisé ────────────────────────────────────────────────
   const simResults = useMemo(() => {
@@ -173,61 +194,23 @@ export default function CockpitClient() {
     };
   }, [simClientesJour, simJoursSemaine, simPanierMoyen]);
 
-  // ── Semaine jour par jour (lundi → dimanche, heure locale) ──────────────────
-  const week = useMemo(() => {
-    const monday = new Date();
-    monday.setHours(0, 0, 0, 0);
-    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d;
-    });
-    const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    const totals = new Map<string, number>();
-    if (demoMode) {
-      [540, 620, 0, 760, 820, 0, 0].forEach((v, i) => totals.set(key(days[i]), v));
-    } else {
-      for (const t of transactions) {
-        if (t.status === 'annulee') continue;
-        const k = key(new Date(t.created_at));
-        totals.set(k, (totals.get(k) ?? 0) + recetteEncaissee(t));
-      }
-    }
-    const todayKey = key(new Date());
-    return {
-      // « 12 au 18 octobre », ou « 28 septembre au 4 octobre » à cheval sur deux mois.
-      label: days[0].getMonth() === days[6].getMonth()
-        ? `${days[0].getDate()} au ${days[6].toLocaleDateString('fr-CH', { day: 'numeric', month: 'long' })}`
-        : `${days[0].toLocaleDateString('fr-CH', { day: 'numeric', month: 'long' })} au ${days[6].toLocaleDateString('fr-CH', { day: 'numeric', month: 'long' })}`,
-      days: days.map((d) => ({
-        key: key(d),
-        short: d.toLocaleDateString('fr-CH', { weekday: 'short' }).replace('.', ''),
-        long: d.toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' }),
-        amount: Math.round((totals.get(key(d)) ?? 0) * 100) / 100,
-        isToday: key(d) === todayKey,
-        isPast: d.getTime() < new Date().setHours(0, 0, 0, 0),
-      })),
-    };
-  }, [transactions, demoMode]);
-
   // Un seul outil ouvert à la fois : la page reste courte.
   const [panel, setPanel] = useState<ToolId | null>(null);
   const togglePanel = (id: ToolId) => setPanel((p) => (p === id ? null : id));
 
-  const resteCA = Math.max(0, CIBLE_CA_CONFORT - weekStats.caTotal);
-  const clientesManquantes = Math.max(0, CIBLE_CLIENTES_HEBDO - weekStats.clientesCount);
+  const resteCA = Math.max(0, CIBLE_CA_MOIS - month.caTotal);
+  const clientesManquantes = Math.max(0, CIBLE_CLIENTES_MOIS - month.clientesCount);
   // Le chemin le plus parlant vers l'objectif : le panier qu'il faudrait aux clientes qui manquent.
   const panierNecessaire = clientesManquantes > 0 ? Math.ceil(resteCA / clientesManquantes) : 0;
 
   const panier =
-    weekStats.clientesCount === 0
-      ? { text: 'Pas encore de passage cette semaine.', tone: 'muted' as const }
-      : weekStats.panierMoyen > CIBLE_PANIER_MAX
+    month.clientesCount === 0
+      ? { text: 'Pas encore de passage ce mois-ci.', tone: 'muted' as const }
+      : month.panierMoyen > CIBLE_PANIER_MAX
         ? { text: 'Au-dessus de la fourchette visée : bravo.', tone: 'good' as const }
-        : weekStats.panierMoyen >= CIBLE_PANIER_MIN
+        : month.panierMoyen >= CIBLE_PANIER_MIN
           ? { text: 'Dans la fourchette visée.', tone: 'good' as const }
-          : { text: `Il manque ${formatCHF(CIBLE_PANIER_MIN - weekStats.panierMoyen)} par cliente : un produit conseil suffit.`, tone: 'warn' as const };
+          : { text: `Il manque ${formatCHF(CIBLE_PANIER_MIN - month.panierMoyen)} par cliente : un produit conseil suffit.`, tone: 'warn' as const };
 
   const tools: { id: ToolId; label: string; summary: string; icon: React.ElementType }[] = [
     { id: 'stock', label: 'Potentiel du stock', summary: `${formatCHF(stockStats.caPotentiel)} de produits en rayon`, icon: Package },
@@ -235,128 +218,103 @@ export default function CockpitClient() {
     { id: 'simulateur', label: 'Simulateur de revenu', summary: 'Votre revenu net selon le rythme de travail', icon: Sliders },
   ];
 
-  const maxDay = Math.max(...week.days.map((d) => d.amount), 1);
-
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10">
       {/* ── En-tête ── */}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[14px] font-medium text-stone-500">Semaine du {week.label}</p>
+          <p className="text-[14px] font-medium text-stone-500">{month.label} · jour {month.today} sur {month.dim}</p>
           <h1 className="sr-only mt-1 text-[30px] font-semibold leading-tight tracking-tight text-stone-950 lg:not-sr-only lg:block">Cockpit</h1>
           <p className="mt-1 text-[15px] text-stone-600">
             Le cap : 2 clientes par jour et un panier de 250 à 450 CHF.
           </p>
         </div>
-        <Button variant="ghost" size="sm" icon={RefreshCw} onClick={() => setDemoMode(!demoMode)}>
-          {demoMode ? 'Revenir à mes chiffres' : 'Voir un exemple'}
-        </Button>
       </header>
 
       {loadError && (
         <Callout
           tone="danger"
-          title="Les ventes de la semaine n'ont pas pu être lues"
+          title="Les ventes du mois n'ont pas pu être lues"
           actions={<Button size="sm" onClick={loadData}>Réessayer</Button>}
         >
           Les chiffres ci-dessous restent à zéro tant que la lecture échoue. Détail : {loadError}
         </Callout>
       )}
-      {demoMode && (
-        <Callout tone="warning">
-          Chiffres d’exemple : ce ne sont pas vos ventes. « Revenir à mes chiffres » les rétablit.
-        </Callout>
-      )}
 
-      {/* ── La semaine, en grand ── */}
+      {/* ── Le mois, en grand ── */}
       <section
-        aria-label="Objectifs de la semaine"
-        className="grid gap-10 rounded-xl bg-growth p-6 sm:p-10 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-14"
+        aria-label={`Objectifs du mois de ${month.label}`}
+        className="grid gap-10 rounded-xl bg-growth p-6 sm:p-10 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-14"
       >
-        {/* Chiffre d'affaires : LE chiffre de la page */}
+        {/* Chiffre d'affaires du mois : LE chiffre de la page */}
         <div className="min-w-0">
-          <p className="text-[15px] font-medium text-white">Chiffre d’affaires de la semaine</p>
+          <p className="text-[15px] font-medium text-white">Chiffre d’affaires du mois</p>
           <p className="mt-3 text-[48px] font-semibold leading-none tracking-tight text-white tabular-nums sm:text-[64px]">
-            {loading ? <span className="inline-block h-14 w-72 rounded-xl bg-white/30 animate-pulse" /> : <AnimatedNumber value={weekStats.caTotal} format={formatCHF} />}
+            {loading ? <span className="inline-block h-14 w-72 rounded-xl bg-white/30 animate-pulse" /> : <AnimatedNumber value={month.caTotal} format={formatCHF} />}
           </p>
-          <p className="mt-3 text-[15px] text-white/90">
-            sur <span className="font-semibold text-white">{formatCHF(CIBLE_CA_CONFORT)}</span> visés · <span className="font-semibold text-white">{pctCA} %</span>
+          <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px] text-white/90">
+            <span>sur <span className="font-semibold text-white">{formatCHF(CIBLE_CA_MOIS)}</span> visés · <span className="font-semibold text-white">{pctCA} %</span></span>
+            {deltaPrev !== null && (
+              <span className="inline-flex items-center gap-1 font-semibold text-white">
+                {deltaPrev >= 0 ? <TrendingUp size={16} aria-hidden="true" /> : <TrendingDown size={16} aria-hidden="true" />}
+                {deltaPrev >= 0 ? '+' : '−'}{Math.abs(deltaPrev)} %
+                <span className="font-normal text-white/90">vs {month.prevLabel} à la même date</span>
+              </span>
+            )}
           </p>
           <ProgressBar
             className="mt-6"
             size="lg"
-            value={weekStats.caTotal}
-            max={CIBLE_CA_CONFORT}
+            value={month.caTotal}
+            max={CIBLE_CA_MOIS}
             marker={{ at: CIBLE_CA_SEUIL, label: 'seuil de rentabilité' }}
-            label="Chiffre d’affaires de la semaine par rapport à l’objectif"
+            label="Chiffre d’affaires du mois par rapport à l’objectif"
             onColor
           />
-          <p className="mt-10 flex items-start gap-2 text-[16px] leading-snug text-white">
-            {resteCA === 0 ? (
-              <><CheckCircle2 size={20} className="mt-0.5 shrink-0 text-white" aria-hidden="true" /> Objectif de la semaine atteint.</>
-            ) : (
-              <><Target size={20} className="mt-0.5 shrink-0 text-white" aria-hidden="true" />
-                <span>
-                  Encore <strong className="font-semibold">{formatCHF(resteCA)}</strong>
-                  {clientesManquantes > 0
-                    ? <> : avec les {clientesManquantes} cliente{clientesManquantes > 1 ? 's' : ''} qui manque{clientesManquantes > 1 ? 'nt' : ''}, un panier de <strong className="font-semibold">{formatCHF(panierNecessaire)}</strong> suffit.</>
-                    : <> pour l’objectif : un produit conseil de plus à chaque passage.</>}
-                </span></>
-            )}
-          </p>
 
-          {/* Jour par jour */}
-          <ol className="mt-8 grid grid-cols-7 items-end gap-2 sm:gap-3" aria-label="Recettes jour par jour">
-            {week.days.map((d, i) => (
-              <li key={d.key} className="flex flex-col items-center gap-1.5" title={`${d.long} : ${formatCHF(d.amount)}`}>
-                <span className={`text-[11.5px] tabular-nums ${d.amount > 0 ? 'font-medium text-white' : 'text-transparent'}`}>
-                  {Math.round(d.amount)}
-                </span>
-                <span className="flex h-16 w-full items-end justify-center">
-                  <span
-                    className={`admin-grow-y w-full max-w-10 rounded-md ${d.amount > 0 ? (d.isToday ? 'bg-white' : 'bg-white/60') : 'bg-white/20'}`}
-                    style={{ height: d.amount > 0 ? `${Math.max(8, (d.amount / maxDay) * 100)}%` : '3px', animationDelay: `${120 + i * 40}ms` }}
-                  />
-                </span>
-                <span className={`text-[12.5px] capitalize ${d.isToday ? 'font-semibold text-white' : 'text-white/90'}`}>{d.short}</span>
-                <span className="sr-only">{d.long} : {formatCHF(d.amount)}</span>
-              </li>
-            ))}
-          </ol>
+          {/* Jour par jour : la courbe */}
+          <div className="mt-12">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <p className="text-[14px] font-medium text-white">Recettes jour par jour</p>
+              {!loading && month.caTotal > 0 && (
+                <p className="text-[13.5px] text-white/90">
+                  À ce rythme : <span className="font-semibold text-white">{formatCHF(projection)}</span> en fin de mois
+                </p>
+              )}
+            </div>
+            <DailyCurve days={month.days} loading={loading} />
+          </div>
         </div>
 
-        {/* Les deux leviers */}
+        {/* Ce qui fait le chiffre */}
         <div className="flex min-w-0 flex-col gap-10 border-t border-white/25 pt-10 lg:border-l lg:border-t-0 lg:pl-14 lg:pt-0">
           <div>
             <p className="text-[15px] font-medium text-white">Clientes accueillies</p>
             <p className="mt-2 flex items-baseline gap-2">
-              <span className="text-[40px] font-semibold leading-none tracking-tight text-white tabular-nums">{loading ? '–' : <AnimatedNumber value={weekStats.clientesCount} />}</span>
-              <span className="text-[16px] text-white/90">sur {CIBLE_CLIENTES_HEBDO}</span>
+              <span className="text-[40px] font-semibold leading-none tracking-tight text-white tabular-nums">{loading ? '–' : <AnimatedNumber value={month.clientesCount} />}</span>
+              <span className="text-[16px] text-white/90">sur {CIBLE_CLIENTES_MOIS}</span>
             </p>
-            <ul className="mt-4 flex flex-wrap gap-1.5" aria-label={`${weekStats.clientesCount} clientes sur ${CIBLE_CLIENTES_HEBDO}`}>
-              {Array.from({ length: Math.max(CIBLE_CLIENTES_HEBDO, weekStats.clientesCount) }, (_, i) => (
-                <li
-                  key={i}
-                  aria-hidden="true"
-                  className={`size-5 rounded-full ${i < weekStats.clientesCount ? 'admin-pop bg-white' : 'border-2 border-dashed border-white/45'}`}
-                  style={i < weekStats.clientesCount ? { animationDelay: `${200 + i * 60}ms` } : undefined}
-                />
-              ))}
-            </ul>
+            <ProgressBar
+              className="mt-5"
+              value={month.clientesCount}
+              max={CIBLE_CLIENTES_MOIS}
+              label={`${month.clientesCount} clientes sur ${CIBLE_CLIENTES_MOIS} visées ce mois-ci`}
+              onColor
+            />
             <p className="mt-3 text-[14px] text-white/90">
-              {clientesManquantes === 0 ? 'Objectif de fréquentation atteint.' : `Encore ${clientesManquantes} pour l’objectif.`}
+              {clientesManquantes === 0 ? 'Objectif de fréquentation atteint.' : `Encore ${clientesManquantes} pour l’objectif (2 par jour).`}
             </p>
           </div>
 
           <div>
             <p className="text-[15px] font-medium text-white">Panier moyen</p>
             <p className="mt-2 flex items-baseline gap-2">
-              <span className="text-[40px] font-semibold leading-none tracking-tight text-white tabular-nums">{loading ? '–' : <AnimatedNumber value={weekStats.panierMoyen} format={formatCHF} />}</span>
+              <span className="text-[40px] font-semibold leading-none tracking-tight text-white tabular-nums">{loading ? '–' : <AnimatedNumber value={month.panierMoyen} format={formatCHF} />}</span>
               <span className="text-[16px] text-white/90">par cliente</span>
             </p>
             <ProgressBar
               className="mt-5 mb-6"
-              value={weekStats.panierMoyen}
+              value={month.panierMoyen}
               max={600}
               zone={[CIBLE_PANIER_MIN, CIBLE_PANIER_MAX]}
               label="Panier moyen, la zone claire marque la fourchette visée de 250 à 450 CHF"
@@ -367,6 +325,20 @@ export default function CockpitClient() {
               {panier.text}
             </p>
           </div>
+
+          <p className="flex items-start gap-2 text-[15px] leading-snug text-white">
+            {resteCA === 0 ? (
+              <><CheckCircle2 size={19} className="mt-0.5 shrink-0" aria-hidden="true" /> Objectif du mois atteint.</>
+            ) : (
+              <><Target size={19} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <span>
+                  Encore <strong className="font-semibold">{formatCHF(resteCA)}</strong>
+                  {clientesManquantes > 0
+                    ? <> : avec les {clientesManquantes} cliente{clientesManquantes > 1 ? 's' : ''} qui manque{clientesManquantes > 1 ? 'nt' : ''}, un panier de <strong className="font-semibold">{formatCHF(panierNecessaire)}</strong> suffit.</>
+                    : <> : un produit conseil de plus à chaque passage.</>}
+                </span></>
+            )}
+          </p>
         </div>
       </section>
 
@@ -610,6 +582,127 @@ function SimSlider({
         className="w-full h-2 cursor-pointer appearance-none rounded-lg bg-stone-200 accent-warm-strong"
       />
       <p className="mt-1.5 text-[12.5px] text-stone-500">{hint}</p>
+    </div>
+  );
+}
+
+/**
+ * Courbe des recettes jour par jour sur l'aplat vert : une ligne blanche
+ * lissée et son aire translucide, jusqu'à aujourd'hui ; les jours à venir en
+ * pointillé. Le survol (ou le clavier) affiche la recette du jour.
+ */
+function DailyCurve({
+  days,
+  loading,
+}: {
+  days: { day: number; amount: number; isToday: boolean; isFuture: boolean; long: string }[];
+  loading: boolean;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 100;
+  const H = 40;
+  const n = days.length;
+  const past = days.filter((d) => !d.isFuture);
+  const max = Math.max(...past.map((d) => d.amount), 1);
+  const x = (i: number) => (n > 1 ? (i / (n - 1)) * W : 0);
+  const y = (v: number) => H - 1 - (v / max) * (H - 6);
+  const pts = past.map((d, i) => [x(i), y(d.amount)] as const);
+
+  // Catmull-Rom → Bézier : une ligne douce qui passe par chaque jour, sans
+  // descendre sous la ligne de base.
+  let line = '';
+  pts.forEach(([px, py], i) => {
+    if (i === 0) { line = `M ${px} ${py}`; return; }
+    const [x0, y0] = pts[Math.max(0, i - 2)];
+    const [x1, y1] = pts[i - 1];
+    const [x3, y3] = pts[Math.min(pts.length - 1, i + 1)];
+    const c1x = x1 + (px - x0) / 6, c1y = Math.min(H - 1, y1 + (py - y0) / 6);
+    const c2x = px - (x3 - x1) / 6, c2y = Math.min(H - 1, py - (y3 - y1) / 6);
+    line += ` C ${c1x} ${c1y} ${c2x} ${c2y} ${px} ${py}`;
+  });
+  const last = pts[pts.length - 1];
+  const area = last ? `${line} L ${last[0]} ${H} L 0 ${H} Z` : '';
+  const empty = past.every((d) => d.amount === 0);
+  // Repères : le 1er, tous les cinq jours, et le dernier s'il ne colle pas au précédent.
+  const ticks = days.filter((d) => d.day === 1 || d.day % 5 === 0 || (d.day === n && n % 5 >= 3));
+  const shown = hover !== null ? days[hover] : null;
+
+  if (loading) return <div className="h-32 animate-pulse rounded-xl bg-white/15" />;
+
+  return (
+    <div className="relative">
+      <div className="relative h-32">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="admin-reveal-x absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
+          <line x1="0" x2={W} y1={H - 1} y2={H - 1} stroke="white" strokeOpacity="0.25" vectorEffect="non-scaling-stroke" />
+          {last && last[0] < W && (
+            <line x1={last[0]} x2={W} y1={H - 1} y2={H - 1} stroke="white" strokeOpacity="0.55" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+          )}
+          {!empty && area && <path d={area} fill="white" fillOpacity="0.16" />}
+          {!empty && line && (
+            <path d={line} fill="none" stroke="white" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          )}
+        </svg>
+
+        {/* Point du jour et point survolé (en HTML : l'SVG étiré déformerait un cercle) */}
+        {past.map((d, i) =>
+          d.isToday || hover === i ? (
+            <span
+              key={d.day}
+              className={`pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ${hover === i ? 'bg-white' : 'bg-growth'}`}
+              style={{ left: `${x(i)}%`, top: `${(y(d.amount) / H) * 100}%` }}
+              aria-hidden="true"
+            />
+          ) : null,
+        )}
+
+        {/* Bulle de la recette survolée */}
+        {shown && !shown.isFuture && (
+          <span
+            className={`pointer-events-none absolute z-10 -translate-y-[calc(100%+12px)] whitespace-nowrap rounded bg-white px-2 py-1 text-[12.5px] font-semibold text-stone-950 shadow-md ${
+              x(hover!) < 15 ? '-translate-x-3' : x(hover!) > 85 ? '-translate-x-[calc(100%-12px)]' : '-translate-x-1/2'
+            }`}
+            style={{ left: `${x(hover!)}%`, top: `${(y(shown.amount) / H) * 100}%` }}
+          >
+            {shown.long} · {formatCHF(shown.amount)}
+          </span>
+        )}
+
+        {/* Zones de survol, une par jour écoulé */}
+        <ol className="absolute inset-0 flex" aria-label="Recettes jour par jour">
+          {days.map((d, i) => (
+            <li key={d.day} className="h-full flex-1">
+              {!d.isFuture && (
+                <button
+                  type="button"
+                  className="h-full w-full cursor-default focus-visible:outline-none focus-visible:bg-white/10"
+                  onMouseEnter={() => setHover(i)}
+                  onMouseLeave={() => setHover(null)}
+                  onFocus={() => setHover(i)}
+                  onBlur={() => setHover(null)}
+                  aria-label={`${d.long} : ${formatCHF(d.amount)}`}
+                />
+              )}
+            </li>
+          ))}
+        </ol>
+
+        {empty && (
+          <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-[14px] text-white/90">Pas encore de recette ce mois-ci.</p>
+        )}
+      </div>
+
+      {/* Repères des jours */}
+      <div className="relative mt-2 h-4 text-[12px] text-white/90" aria-hidden="true">
+        {ticks.map((d) => (
+          <span
+            key={d.day}
+            className={`absolute -translate-x-1/2 tabular-nums ${d.isToday ? 'font-semibold text-white' : ''}`}
+            style={{ left: `${x(d.day - 1)}%` }}
+          >
+            {d.day}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

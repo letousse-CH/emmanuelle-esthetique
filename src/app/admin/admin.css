@@ -172,6 +172,11 @@
 }
 .admin-pop { animation: admin-pop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 
+/* Courbe dévoilée de gauche à droite (découpe animée : sans effet sur
+   l'épaisseur du trait, contrairement à un pointillé animé). */
+@keyframes admin-reveal-x { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.admin-reveal-x { animation: admin-reveal-x 1.1s cubic-bezier(0.4, 0, 0.2, 1) 0.15s both; }
+
 /* ── Arrondis très légers : 4 px (2026-10-16) ───────────────────────────────
    Tout ce qui porte une classe `rounded-*` (panneaux, boutons, champs,
    badges, fenêtres) reçoit le même arrondi discret ; le reste garde ses angles
