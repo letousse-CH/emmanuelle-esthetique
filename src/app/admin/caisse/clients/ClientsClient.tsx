@@ -630,6 +630,12 @@ function ClientDialog({ client, onClose, onSaved, onDelete }: {
             <Input label="Prénom" value={form.prenom ?? ''} onChange={set('prenom')} />
             <Input label="Nom *" value={form.nom} onChange={set('nom')} required autoFocus />
           </div>
+          {client && (form.nom.trim() !== client.nom || (form.prenom ?? '').trim() !== client.prenom) && (
+            <p className="text-[12px] text-stone-600 -mt-1">
+              Le nouveau nom vaut pour la fiche et les prochaines factures ; celles déjà émises
+              gardent le nom inscrit à l&apos;encaissement.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Input label="Téléphone" value={form.telephone ?? ''} onChange={set('telephone')} type="tel" />
             <Input label="E-mail" value={form.email ?? ''} onChange={set('email')} type="email" />

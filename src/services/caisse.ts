@@ -12,7 +12,7 @@ import type {
   CartLine, Client, ClientStats, ForfaitItem, GiftCard, ModePaiement,
   Product, Service, ServiceCategory, StockMovement, Transaction, TransactionWithItems,
 } from '../types/caisse';
-import { remiseLabel } from '../types/caisse';
+import { clientFullName, remiseLabel } from '../types/caisse';
 
 // ── Clientèle ───────────────────────────────────────────────────────────────
 
@@ -516,6 +516,23 @@ export async function cancelTransaction(id: string, reason: string): Promise<Tra
     p_id: id,
     p_reason: reason,
   });
+  if (error) throw new Error(error.message);
+  return data as Transaction;
+}
+
+/**
+ * Inscrit la cliente sur une facture émise « Client de passage ». Seul le nom
+ * change : numéro, date et montants restent figés. En base, le déclencheur
+ * recopie le nom depuis la fiche, date l'ajout (`client_indiquee_le`) et
+ * refuse toute facture émise au nom d'une autre cliente (voir `clienteAIndiquer`).
+ */
+export async function indiquerClienteFacture(id: string, client: Client): Promise<Transaction> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .update({ client_id: client.id, client_label: clientFullName(client) })
+    .eq('id', id)
+    .select()
+    .single();
   if (error) throw new Error(error.message);
   return data as Transaction;
 }

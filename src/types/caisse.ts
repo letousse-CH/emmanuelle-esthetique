@@ -422,6 +422,10 @@ export interface Transaction {
   montant_bon: number;
   /** Facture que celle-ci corrige (l'ancienne reste annulée au journal). */
   corrige_transaction_id: string | null;
+  /** Facture émise « Client de passage » dont la cliente a été inscrite après
+   *  coup, à cette date (null : nom inscrit à l'encaissement). Absent avant la
+   *  migration `20261018_caisse_cliente_indiquee`. */
+  client_indiquee_le?: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
   created_at: string;
@@ -524,6 +528,21 @@ export const CLIENT_DE_PASSAGE = 'Client de passage';
 
 export function clientFullName(c: Pick<Client, 'nom' | 'prenom'>): string {
   return `${c.prenom ?? ''} ${c.nom ?? ''}`.trim();
+}
+
+/**
+ * Peut-on (encore) inscrire la cliente sur cette facture ? Oui pour une facture
+ * payée émise « Client de passage », ou dont la cliente a déjà été inscrite
+ * après coup (pour rectifier un mauvais choix de fiche). Jamais pour une
+ * facture émise au nom d'une cliente : celle-là se refait par « Corriger ».
+ * Même règle en base (`caisse_transactions_guard`, migration 20261018).
+ */
+export function clienteAIndiquer(
+  t: Pick<Transaction, 'status' | 'client_id' | 'client_label' | 'client_indiquee_le'>,
+): boolean {
+  if (t.status !== 'payee') return false;
+  if (t.client_indiquee_le) return true;
+  return t.client_id === null && t.client_label === CLIENT_DE_PASSAGE;
 }
 
 /**

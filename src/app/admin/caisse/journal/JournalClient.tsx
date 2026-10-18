@@ -6,8 +6,12 @@ import { useRouter } from 'next/navigation';
 import {
   Download, RefreshCw, Loader2, FileText, Ban,
   ChevronDown, ChevronRight, ChevronLeft, TrendingUp, Check, PenLine, Ticket, Package, CalendarDays, Receipt,
+  UserRound, Search,
 } from 'lucide-react';
-import { cancelTransaction, listGiftCardsForSale, listProducts, listTransactions } from '../../../../services/caisse';
+import {
+  cancelTransaction, indiquerClienteFacture, listClients, listGiftCardsForSale, listProducts,
+  listTransactions, matchClient,
+} from '../../../../services/caisse';
 import { useSettings } from '../../../../hooks/useSettings';
 import { AnimatedNumber, Button, Callout, Metric, MetricStrip } from '../../../../components/admin/ui';
 import {
@@ -16,9 +20,10 @@ import {
 import { downloadFacture } from '../../../../utils/factureDownload';
 import { setCaisseCorrection } from '../../../../utils/caissePrefill';
 import {
-  MODES_PAIEMENT, MODE_PAIEMENT_LABELS, formatAmount, formatCHF, ligneMarge, recetteEncaissee,
+  MODES_PAIEMENT, MODE_PAIEMENT_LABELS, clientFullName, clienteAIndiquer, formatAmount, formatCHF,
+  ligneMarge, recetteEncaissee,
 } from '../../../../types/caisse';
-import type { GiftCard, ModePaiement, TransactionWithItems } from '../../../../types/caisse';
+import type { Client, GiftCard, ModePaiement, TransactionWithItems } from '../../../../types/caisse';
 
 type PeriodMode = 'mois' | 'annee';
 
@@ -84,6 +89,8 @@ export default function JournalClient() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ tx: TransactionWithItems; intent: 'cancel' | 'correct' } | null>(null);
+  // Facture « Client de passage » dont on inscrit la cliente après coup.
+  const [clienteTx, setClienteTx] = useState<TransactionWithItems | null>(null);
   // Mobile : détail d'une écriture (feuille du bas) et choix de la période.
   const [detailId, setDetailId] = useState<string | null>(null);
   const [periodOpen, setPeriodOpen] = useState(false);
@@ -691,6 +698,7 @@ export default function JournalClient() {
                       onDownload={() => handleDownload(t)}
                       onCancel={() => setDialog({ tx: t, intent: 'cancel' })}
                       onCorrect={() => setDialog({ tx: t, intent: 'correct' })}
+                      onCliente={() => setClienteTx(t)}
                     />
                   ))}
                 </ul>
@@ -743,6 +751,11 @@ export default function JournalClient() {
             >
               Quittance PDF
             </Button>
+            {clienteAIndiquer(detailTx) && (
+              <Button className="w-full" icon={UserRound} onClick={() => { setDetailId(null); setClienteTx(detailTx); }}>
+                {detailTx.client_indiquee_le ? 'Changer de cliente' : 'Indiquer la cliente'}
+              </Button>
+            )}
             {detailTx.status !== 'annulee' && (
               <div className="grid grid-cols-2 gap-2">
                 <Button icon={PenLine} onClick={() => { setDetailId(null); setDialog({ tx: detailTx, intent: 'correct' }); }}>Corriger</Button>
@@ -754,6 +767,14 @@ export default function JournalClient() {
       >
         {detailTx && <JournalDetail tx={detailTx} />}
       </BottomSheet>
+
+      {clienteTx && (
+        <ClienteDialog
+          tx={clienteTx}
+          onClose={() => setClienteTx(null)}
+          onDone={() => { setClienteTx(null); load(); }}
+        />
+      )}
 
       {dialog && (
         <CancelDialog
@@ -855,6 +876,7 @@ function JournalDetail({ tx }: { tx: TransactionWithItems }) {
         )}
       </dl>
       {tx.corrige_transaction_id && <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-[14px] text-amber-800">Cette facture rectifie une écriture annulée.</p>}
+      {tx.client_indiquee_le && <p className="text-[14px] text-stone-600">{clienteIndiqueeLabel(tx.client_indiquee_le)}</p>}
       {tx.note && <p className="text-[14px] italic text-stone-700">Note : {tx.note}</p>}
       {tx.cancel_reason && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-[14px] text-red-700">Motif d&apos;annulation : {tx.cancel_reason}</p>}
     </div>
@@ -908,7 +930,12 @@ function SeriesChart({ data, loading }: { data: { label: string; value: number }
   );
 }
 
-function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onCorrect }: {
+/** « Cliente inscrite le 18.10.2026, après l'encaissement. » */
+function clienteIndiqueeLabel(iso: string): string {
+  return `Cliente inscrite le ${new Date(iso).toLocaleDateString('fr-CH')}, après l'encaissement.`;
+}
+
+function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onCorrect, onCliente }: {
   tx: TransactionWithItems;
   open: boolean;
   downloading: boolean;
@@ -916,11 +943,13 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
   onDownload: () => void;
   onCancel: () => void;
   onCorrect: () => void;
+  onCliente: () => void;
 }) {
   const d = new Date(tx.created_at);
   const cancelled = tx.status === 'annulee';
   const bon = Number(tx.montant_bon ?? 0);
   const recette = recetteEncaissee(tx);
+  const aIndiquer = clienteAIndiquer(tx);
 
   return (
     <li className={cancelled ? 'opacity-55' : ''}>
@@ -943,6 +972,16 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
             <span className="truncate">{tx.client_label}</span>
             {cancelled && <span className="shrink-0 bg-red-50 px-2 py-0.5 text-[11.5px] font-semibold text-red-700 rounded">Annulée</span>}
             {tx.corrige_transaction_id && <span className="shrink-0 bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-800 rounded">Rectificative</span>}
+            {aIndiquer && (
+              <button
+                onClick={onCliente}
+                title={tx.client_indiquee_le ? clienteIndiqueeLabel(tx.client_indiquee_le) : 'Inscrire la cliente sur cette facture'}
+                className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-semibold text-accent hover:underline underline-offset-2 cursor-pointer"
+              >
+                <UserRound size={12} aria-hidden="true" />
+                {tx.client_indiquee_le ? 'changer' : 'Indiquer la cliente'}
+              </button>
+            )}
           </p>
           <p className="truncate text-[12.5px] text-stone-500 tabular-nums">
             {tx.numero} · {tx.transaction_items.length} ligne{tx.transaction_items.length > 1 ? 's' : ''}
@@ -1024,6 +1063,7 @@ function JournalRow({ tx, open, downloading, onToggle, onDownload, onCancel, onC
               Cette facture rectifie une écriture annulée.
             </p>
           )}
+          {tx.client_indiquee_le && <p className="text-xs text-stone-600 pt-1">{clienteIndiqueeLabel(tx.client_indiquee_le)}</p>}
           {tx.note && <p className="text-[12.5px] text-stone-600 italic pt-1">Note : {tx.note}</p>}
           {tx.cancel_reason && <p className="text-xs text-red-700 pt-1">Motif d&apos;annulation : {tx.cancel_reason}</p>}
         </div>
@@ -1137,6 +1177,130 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
 
           {error && <p className="text-[14px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
         </form>
+      </div>
+    </BottomSheet>
+  );
+}
+
+/**
+ * Inscrire la cliente d'une facture émise « Client de passage ». Seul le nom
+ * change : la base recopie celui de la fiche, date l'ajout et refuse toute
+ * facture déjà au nom d'une cliente (celle-là se refait par « Corriger »).
+ */
+function ClienteDialog({ tx, onClose, onDone }: {
+  tx: TransactionWithItems;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [clients, setClients] = useState<Client[] | null>(null);
+  const [search, setSearch]   = useState('');
+  const [picked, setPicked]   = useState<Client | null>(null);
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    listClients()
+      .then(setClients)
+      .catch(err => {
+        setClients([]);
+        setError(`La liste des clientes n'a pas pu être chargée${err instanceof Error ? ` (${err.message})` : ''}.`);
+      });
+  }, []);
+
+  // Les fiches créées le jour de l'encaissement d'abord : la cliente oubliée
+  // est souvent celle qu'on venait d'enregistrer.
+  const jour = new Date(tx.created_at).toDateString();
+  const memeJour = useCallback((c: Client) => new Date(c.created_at).toDateString() === jour, [jour]);
+  const results = useMemo(() => (clients ?? [])
+    .filter(c => c.id !== tx.client_id && matchClient(c, search))
+    .sort((a, b) => Number(memeJour(b)) - Number(memeJour(a)))
+    .slice(0, 40), [clients, search, tx.client_id, memeJour]);
+
+  const submit = async () => {
+    if (!picked) return;
+    setSaving(true); setError(null);
+    try {
+      await indiquerClienteFacture(tx.id, picked);
+      onDone();
+    } catch (err) {
+      setError(`La facture n'a pas été modifiée${err instanceof Error ? ` (${err.message})` : ''}.`);
+      setSaving(false);
+    }
+  };
+
+  const d = new Date(tx.created_at);
+  return (
+    <BottomSheet
+      open size="full" zIndex={110}
+      onClose={() => { if (!saving) onClose(); }}
+      title={`Cliente de ${tx.numero}`}
+      description={`Encaissée le ${d.toLocaleDateString('fr-CH')} à ${d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })} · ${formatCHF(tx.total_ttc)}`}
+      footer={
+        <div className="grid grid-cols-2 gap-2">
+          <Button type="button" onClick={onClose} disabled={saving}>Ne rien changer</Button>
+          <Button
+            type="button" variant="primary" onClick={submit}
+            disabled={!picked || saving} loading={saving} icon={saving ? undefined : Check}
+          >
+            {picked ? `Inscrire ${clientFullName(picked)}` : 'Choisissez une cliente'}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-[15px] lg:text-[14px] text-stone-600 leading-relaxed">
+          {tx.client_indiquee_le
+            ? <>Actuellement : <strong className="text-stone-800">{tx.client_label}</strong>, inscrite le {new Date(tx.client_indiquee_le).toLocaleDateString('fr-CH')}. </>
+            : <>Encaissée sans fiche, en « {tx.client_label} ». </>}
+          Le nom choisi s&apos;inscrit sur la facture et le passage compte sur sa fiche. Numéro,
+          date et montants ne changent pas ; le journal garde la date de cet ajout.
+        </p>
+
+        <div className="relative">
+          <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500" aria-hidden="true" />
+          <label htmlFor="cliente-search" className="sr-only">Rechercher une cliente</label>
+          <input
+            id="cliente-search" type="search" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Nom, téléphone…" autoComplete="off"
+            className="w-full h-12 rounded-xl border border-stone-200 bg-white pl-11 pr-4 text-[16px] lg:text-[15px] text-stone-900 placeholder:text-stone-500 outline-none focus:border-accent focus:ring-2 focus:ring-accent/15"
+          />
+        </div>
+
+        {error && <p className="text-[14px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+
+        {clients === null ? (
+          <div className="flex items-center justify-center gap-2 p-6 text-[14px] text-stone-600">
+            <Loader2 size={15} className="animate-spin" /> Chargement des clientes…
+          </div>
+        ) : results.length === 0 ? (
+          <p className="text-center text-[15px] lg:text-[14px] text-stone-700">
+            {search.trim() ? `Aucune fiche pour « ${search.trim()} ». ` : 'Aucune fiche cliente. '}
+            <Link href="/admin/caisse/clients?nouvelle=1" className="font-semibold text-accent hover:underline">Créer sa fiche</Link>
+            {' '}puis revenir ici.
+          </p>
+        ) : (
+          <ul className="data-frame zebra overflow-hidden rounded-xl">
+            {results.map(c => {
+              const selected = picked?.id === c.id;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button" onClick={() => setPicked(c)} aria-pressed={selected}
+                    className={`flex min-h-14 lg:min-h-12 w-full items-center justify-between gap-3 px-4 py-2 text-left cursor-pointer transition-colors ${selected ? 'bg-accent/10' : 'hover:bg-row-hover'}`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[16px] lg:text-[14.5px] font-medium text-stone-950">{clientFullName(c)}</span>
+                      <span className="block truncate text-[14px] lg:text-[12.5px] text-stone-600">
+                        {[c.telephone, memeJour(c) ? 'fiche créée ce jour-là' : null].filter(Boolean).join(' · ') || ' '}
+                      </span>
+                    </span>
+                    {selected && <Check size={20} className="shrink-0 text-accent" aria-label="Choisie" />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </BottomSheet>
   );

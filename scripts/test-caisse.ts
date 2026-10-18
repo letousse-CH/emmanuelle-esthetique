@@ -5,7 +5,9 @@
  */
 import assert from 'node:assert/strict';
 import {
+  CLIENT_DE_PASSAGE,
   cartTotals,
+  clienteAIndiquer,
   contenanceDepuisNom,
   coutAchat,
   isGiftCardUsable,
@@ -50,6 +52,16 @@ test('recette : total − part réglée par bon, 0 si annulée', () => {
   assert.equal(recetteEncaissee({ status: 'payee', total_ttc: 200, montant_bon: 150 }), 50);
   assert.equal(recetteEncaissee({ status: 'payee', total_ttc: 150, montant_bon: 150 }), 0);
   assert.equal(recetteEncaissee({ status: 'annulee', total_ttc: 200, montant_bon: 0 }), 0);
+});
+
+test('cliente indiquée après coup : seulement sur une facture payée « Client de passage »', () => {
+  const passage = { status: 'payee' as const, client_id: null, client_label: CLIENT_DE_PASSAGE, client_indiquee_le: null };
+  assert.equal(clienteAIndiquer(passage), true);
+  assert.equal(clienteAIndiquer({ ...passage, client_indiquee_le: undefined }), true, 'avant la migration');
+  assert.equal(clienteAIndiquer({ ...passage, status: 'annulee' }), false);
+  assert.equal(clienteAIndiquer({ ...passage, client_id: 'c1', client_label: 'Mary Pousaz' }), false, 'émise au nom d’une cliente');
+  assert.equal(clienteAIndiquer({ ...passage, client_id: null, client_label: 'Mary Pousaz' }), false, 'fiche supprimée : le nom figé reste');
+  assert.equal(clienteAIndiquer({ ...passage, client_id: 'c1', client_label: 'Noémie K.', client_indiquee_le: '2026-10-18T10:00:00Z' }), true, 'rectifier un mauvais choix');
 });
 
 test('cycle d’un bon : vendu 200, utilisé 150 puis 50 + 50 TWINT → CA 250, jamais 450', () => {

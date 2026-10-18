@@ -380,6 +380,16 @@ nouvelle facture porte `corrige_transaction_id` vers l'ancienne. C'est la seule
 correction légale — le CO interdit de réécrire une écriture, il exige que
 l'erreur *et* sa correction restent visibles.
 
+**Cliente oubliée à l'encaissement** (2026-10-18, migration
+`20261018_caisse_cliente_indiquee.sql`, après `20260801`). Une facture payée émise
+« Client de passage » peut recevoir sa cliente après coup : journal → « Indiquer la
+cliente » (`ClienteDialog`, `indiquerClienteFacture`). Seul le nom change, pas la
+date — « Corriger » l'aurait datée du jour. `caisse_transactions_guard` recopie le
+nom **depuis la fiche** (jamais un texte du navigateur), date l'ajout dans
+`client_indiquee_le` (affiché au journal) et refuse tout changement de cliente sur
+une facture émise au nom de quelqu'un ou annulée. Règle pure : `clienteAIndiquer`.
+Renommer une fiche ne réécrit toujours aucune facture.
+
 **Web app (PWA).** La caisse s'installe sur l'écran d'accueil du téléphone :
 manifeste servi par `src/app/admin/caisse/manifest/route.ts`, déclaré **par le
 seul** `src/app/admin/caisse/layout.tsx`. Le site public ne référence aucun
