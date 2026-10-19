@@ -204,6 +204,10 @@ export default function SocialContentGenerator({
               brand={brand}
               coverImage={coverImage}
               onRegenerate={generate}
+              onUpdateContent={(next) => {
+                setResult(next);
+                setSaveState('idle');
+              }}
             />
           </>
         )}

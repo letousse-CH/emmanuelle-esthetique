@@ -4,16 +4,17 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ChevronLeft, ChevronRight, FileText, Rss, Lightbulb, PenLine, CheckCircle2,
   Archive, Trash2, X, CalendarDays, List, Plus, AlertCircle, RotateCcw, Clock, Eye,
-  CalendarRange, Instagram, Linkedin, Facebook, Layers, Sparkles, Check, Image as ImageIcon, Loader2
+  CalendarRange, Instagram, Linkedin, Facebook, Layers, Sparkles, Check, Image as ImageIcon, Loader2,
+  Smartphone, MapPin
 } from 'lucide-react';
 import { supabase } from '../../../services/supabase';
 import { SITE_CONFIG } from '../../../config/site';
 import { fetchBrandTokens, BrandTokens } from '../../../utils/socialCards';
 import type { SocialGenerationResult } from '../../../utils/socialGeneration';
-import SocialResultDisplay, { deriveVisual, type SocialPlatformId } from '../../../components/admin/SocialResultDisplay';
+import SocialResultDisplay, { deriveVisual, deriveStories, deriveGoogleBusiness, type SocialPlatformId } from '../../../components/admin/SocialResultDisplay';
 import NewSocialPostDialog from './NewSocialPostDialog';
 import EditorialPlanDialog from './EditorialPlanDialog';
-import { renderCarouselSlide, renderHookCard, THUMBNAIL_SCALE, type SocialCardFormat } from '../../../utils/socialCards';
+import { renderCarouselSlide, renderHookCard, renderStorySlide, THUMBNAIL_SCALE, type SocialCardFormat } from '../../../utils/socialCards';
 import { toDateKey, fromDateKey, todayKey } from '../../../utils/dateKey';
 
 // ── Types & Meta ──────────────────────────────────────────────────────────────
@@ -21,28 +22,43 @@ import { toDateKey, fromDateKey, todayKey } from '../../../utils/dateKey';
 type PlatformLens = 'all' | SocialPlatformId;
 
 const PLATFORM_LENSES: { id: PlatformLens; label: string; icon: typeof Layers; color: string }[] = [
-  { id: 'all',       label: 'Tous les réseaux', icon: Layers,    color: 'text-stone-700' },
-  { id: 'instagram', label: 'Instagram',        icon: Instagram, color: 'text-accent' },
-  { id: 'linkedin',  label: 'LinkedIn',         icon: Linkedin,  color: 'text-accent' },
-  { id: 'facebook',  label: 'Facebook',         icon: Facebook,  color: 'text-accent' },
+  { id: 'all',       label: 'Tous les formats',            icon: Layers,     color: 'text-stone-700' },
+  { id: 'instagram', label: 'Carrousel Instagram',         icon: Instagram,  color: 'text-accent' },
+  { id: 'stories',   label: 'Story verticale',             icon: Smartphone, color: 'text-accent' },
+  { id: 'facebook',  label: 'Publication Facebook',        icon: Facebook,   color: 'text-accent' },
+  { id: 'google',    label: 'Actualité Google (Palézieux)', icon: MapPin,     color: 'text-accent' },
+  { id: 'linkedin',  label: 'Post LinkedIn',               icon: Linkedin,   color: 'text-accent' },
 ];
 
 const PLATFORM_FORMATS: Record<SocialPlatformId, SocialCardFormat> = {
   instagram: 'instagram-portrait',
+  stories: 'instagram-story',
   linkedin: 'linkedin-square',
   facebook: 'facebook-landscape',
+  google: 'google-business',
 };
 
 const PLATFORM_ASPECT: Record<SocialCardFormat, string> = {
   'instagram-portrait': 'aspect-[4/5]',
+  'instagram-story': 'aspect-[9/16]',
   'linkedin-square': 'aspect-square',
   'facebook-landscape': 'aspect-[40/21]',
+  'google-business': 'aspect-[4/3]',
 };
 
 function visualFor(content: SocialGenerationResult, platform: SocialPlatformId): { text: string; highlight?: string } {
   if (platform === 'instagram') {
     const slide = content.instagram?.slides?.[0];
     return { text: slide?.text || content.instagram?.caption?.hook || '', highlight: slide?.highlight };
+  }
+  if (platform === 'stories') {
+    const stories = deriveStories(content);
+    const first = stories[0];
+    return { text: first?.text || content.instagram?.caption?.hook || '', highlight: first?.highlight };
+  }
+  if (platform === 'google') {
+    const gb = deriveGoogleBusiness(content);
+    return deriveVisual(gb.visual, gb.title || content.instagram?.caption?.hook || '');
   }
   if (platform === 'linkedin') {
     return deriveVisual(content.linkedin?.visual, content.linkedin?.hook_variants?.[0] || content.linkedin?.post || '');
@@ -67,8 +83,8 @@ type StatusFilter = 'all' | SocialPostRow['status'];
 const SOURCE_META: Record<string, { label: string; icon: typeof FileText; color: string }> = {
   // Couleurs neutres : le vert et l'ambre sont réservés aux statuts (publié, à publier, en retard).
   article:    { label: 'Article',    icon: FileText,  color: 'text-stone-700 bg-stone-100 border-stone-200' },
-  rss:        { label: 'Flux RSS',   icon: Rss,       color: 'text-stone-700 bg-stone-100 border-stone-200' },
-  suggestion: { label: 'Suggestion', icon: Lightbulb, color: 'text-stone-700 bg-stone-100 border-stone-200' },
+  rss:        { label: 'Actualité',  icon: Rss,       color: 'text-stone-700 bg-stone-100 border-stone-200' },
+  suggestion: { label: 'Soin & Idée', icon: Lightbulb, color: 'text-stone-700 bg-stone-100 border-stone-200' },
   manual:     { label: 'Création',   icon: PenLine,   color: 'text-stone-700 bg-stone-100 border-stone-200' },
 };
 const FALLBACK_SOURCE = { label: 'Post', icon: PenLine, color: 'text-stone-700 bg-stone-100 border-stone-200' };
@@ -92,10 +108,10 @@ const MONTH_LABEL = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'num
 const DAY_LABEL = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 const SHORT_DAY_LABEL = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 
-export default function SocialCalendarClient() {
+export default function SocialCalendarClient({ initialDate }: { initialDate?: string } = {}) {
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
   const [currentMonth, setCurrentMonth] = useState(() => {
-    const d = new Date();
+    const d = initialDate ? fromDateKey(initialDate) : new Date();
     d.setDate(1);
     return d;
   });
@@ -104,7 +120,7 @@ export default function SocialCalendarClient() {
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(initialDate ?? null);
   const [newPostDate, setNewPostDate] = useState<string | undefined>(undefined);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [brand, setBrand] = useState<BrandTokens | null>(null);
@@ -117,8 +133,15 @@ export default function SocialCalendarClient() {
   const monthEnd = toDateKey(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0));
 
   useEffect(() => {
-    fetchBrandTokens(SITE_CONFIG.name).then(setBrand);
+    fetchBrandTokens(SITE_CONFIG.name || 'Emmanuelle Esthétique').then(setBrand);
   }, []);
+
+  useEffect(() => {
+    if (!initialDate) return;
+    const d = fromDateKey(initialDate);
+    setCurrentMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+    setSelectedDate(initialDate);
+  }, [initialDate]);
 
   useEffect(() => {
     if (!flash) return;
@@ -250,6 +273,21 @@ export default function SocialCalendarClient() {
 
   const previewPost = useMemo(() => posts.find((p) => p.id === previewId) ?? null, [posts, previewId]);
 
+  const updatePostContent = async (post: SocialPostRow, nextContent: SocialGenerationResult) => {
+    const snapshot = posts;
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, content: nextContent } : p)));
+    const { error: updateError } = await supabase
+      .from('social_posts')
+      .update({ content: nextContent })
+      .eq('id', post.id);
+    if (updateError) {
+      setPosts(snapshot);
+      setError(`Modifications non enregistrées : ${updateError.message}`);
+    } else {
+      setFlash('Habillage et textes enregistrés.');
+    }
+  };
+
   const renderPost = (post: SocialPostRow) => (
     <SocialPostItem
       key={post.id}
@@ -271,6 +309,7 @@ export default function SocialCalendarClient() {
           post={previewPost}
           brand={brand}
           initialPlatform={lens === 'all' ? undefined : lens}
+          onUpdateContent={(next) => updatePostContent(previewPost, next)}
           onClose={() => setPreviewId(null)}
         />
       )}
@@ -823,17 +862,23 @@ function PlatformPreview({ content, platform, brand, onOpen }: {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!visible || !canvas || !brand || !visual.text) return;
+    const theme = content.theme;
     const draw = platform === 'instagram'
       ? renderCarouselSlide({
           canvas, text: visual.text, highlight: visual.highlight,
-          number: 1, total: Math.max(slideCount, 1), dark: false, brand, scale: THUMBNAIL_SCALE,
+          number: 1, total: Math.max(slideCount, 1), dark: false, brand, scale: THUMBNAIL_SCALE, theme,
+        })
+      : platform === 'stories'
+      ? renderStorySlide({
+          canvas, text: visual.text, highlight: visual.highlight,
+          number: 1, total: 3, dark: true, brand, scale: THUMBNAIL_SCALE, theme,
         })
       : renderHookCard({
           canvas, text: visual.text, highlight: visual.highlight,
-          dark: true, brand, format, scale: THUMBNAIL_SCALE,
+          dark: true, brand, format, scale: THUMBNAIL_SCALE, theme,
         });
     draw.catch((err) => console.error('[social] Rendu du visuel impossible:', err));
-  }, [visible, brand, visual.text, visual.highlight, platform, format, slideCount]);
+  }, [visible, brand, visual.text, visual.highlight, platform, format, slideCount, content.theme]);
 
   if (!visual.text) {
     return <p className="text-[13px] text-stone-600">Aucun visuel pour ce réseau.</p>;
@@ -861,10 +906,11 @@ function PlatformPreview({ content, platform, brand, onOpen }: {
 
 // ── Modale Aperçu complet ─────────────────────────────────────────────────────
 
-function SocialPostPreviewDialog({ post, brand, initialPlatform, onClose }: {
+function SocialPostPreviewDialog({ post, brand, initialPlatform, onUpdateContent, onClose }: {
   post: SocialPostRow;
   brand: BrandTokens | null;
   initialPlatform?: SocialPlatformId;
+  onUpdateContent?: (next: SocialGenerationResult) => void;
   onClose: () => void;
 }) {
   const panelRef = React.useRef<HTMLDivElement>(null);
@@ -898,7 +944,7 @@ function SocialPostPreviewDialog({ post, brand, initialPlatform, onClose }: {
         aria-labelledby="social-preview-title"
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full max-w-3xl max-h-[88vh] flex flex-col rounded-xl shadow-2xl overflow-hidden outline-none border border-stone-200"
+        className="bg-white w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl shadow-2xl overflow-hidden outline-none border border-stone-200"
       >
         <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-stone-200 bg-stone-50 shrink-0">
           <div className="min-w-0">
@@ -927,6 +973,7 @@ function SocialPostPreviewDialog({ post, brand, initialPlatform, onClose }: {
               brand={brand}
               coverImage={post.cover_image || undefined}
               initialPlatform={initialPlatform}
+              onUpdateContent={onUpdateContent}
             />
           ) : (
             <p className="text-sm text-stone-700">Chargement de la charte graphique…</p>

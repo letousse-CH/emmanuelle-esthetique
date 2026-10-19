@@ -30,18 +30,32 @@ export async function POST(req: NextRequest) {
   let content = '';
   let intro = '';
   let keyword = '';
+  let customInstruction = '';
+  let preferredTheme = '';
+  let preferredPillar = '';
   try {
     const body = await req.json();
     title = String(body?.title || '').trim();
     content = String(body?.content || '').trim();
     intro = String(body?.intro || '').trim();
     keyword = String(body?.keyword || '').trim();
+    customInstruction = String(body?.customInstruction || '').trim();
+    preferredTheme = String(body?.preferredTheme || '').trim();
+    preferredPillar = String(body?.preferredPillar || '').trim();
   } catch {
     return NextResponse.json({ error: 'Corps de requête JSON invalide.' }, { status: 400 });
   }
 
   try {
-    const result = await generateSocialContent({ title, content, intro, keyword });
+    const result = await generateSocialContent({
+      title,
+      content,
+      intro,
+      keyword,
+      customInstruction: customInstruction || undefined,
+      preferredTheme: preferredTheme || undefined,
+      preferredPillar: preferredPillar || undefined,
+    });
     return NextResponse.json(result);
   } catch (err: any) {
     const message = err?.message || 'Erreur lors de la génération.';

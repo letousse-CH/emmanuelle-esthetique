@@ -32,7 +32,9 @@ export async function publishSocialPost(payload: SocialPublishPayload): Promise<
       'social_linkedin_token' as any,
       'social_linkedin_page_id' as any,
       'social_meta_token' as any,
+      'social_meta_page_token' as any,
       'social_instagram_account_id' as any,
+      'social_facebook_page_id' as any,
     ];
     const settings = await getSettingsServer(keys);
 
@@ -40,6 +42,8 @@ export async function publishSocialPost(payload: SocialPublishPayload): Promise<
     const linkedinPageId = ((settings as any).social_linkedin_page_id || process.env.LINKEDIN_PAGE_ID || '').trim();
     const metaToken = ((settings as any).social_meta_token || process.env.META_ACCESS_TOKEN || '').trim();
     const igAccountId = ((settings as any).social_instagram_account_id || process.env.INSTAGRAM_ACCOUNT_ID || '').trim();
+    const fbPageId = ((settings as any).social_facebook_page_id || process.env.FACEBOOK_PAGE_ID || '').trim();
+    const fbToken = (((settings as any).social_meta_page_token || metaToken) || '').trim();
 
     const channels: string[] = [];
     const errors: string[] = [];
@@ -110,13 +114,13 @@ export async function publishSocialPost(payload: SocialPublishPayload): Promise<
     // 2. Publication Native Instagram (Meta Graph API)
     if (payload.platform === 'instagram' || payload.platform === 'all') {
       if (!metaToken || !igAccountId) {
-        errors.push("Le jeton d'accès Meta ou l'ID Compte Instagram n'est pas encore enregistré dans Paramètres.");
+        errors.push("Le jeton d'accès Meta ou l'ID Compte Instagram n'est pas encore enregistré dans l'onglet « Identité & Comptes » du Studio Social.");
       } else if (!payload.imageUrl) {
         errors.push("Instagram requiert un visuel (image) pour publier.");
       } else {
         try {
           const createRes = await fetch(
-            `https://graph.facebook.com/v18.0/${igAccountId}/media?image_url=${encodeURIComponent(payload.imageUrl)}&caption=${encodeURIComponent(payload.caption)}&access_token=${metaToken}`,
+            `https://graph.facebook.com/v19.0/${igAccountId}/media?image_url=${encodeURIComponent(payload.imageUrl)}&caption=${encodeURIComponent(payload.caption)}&access_token=${metaToken}`,
             { method: 'POST' }
           );
           const createData = await createRes.json();
@@ -132,7 +136,7 @@ export async function publishSocialPost(payload: SocialPublishPayload): Promise<
               await new Promise((resolve) => setTimeout(resolve, 3000));
 
               const statusRes = await fetch(
-                `https://graph.facebook.com/v18.0/${containerId}?fields=status_code&access_token=${metaToken}`
+                `https://graph.facebook.com/v19.0/${containerId}?fields=status_code&access_token=${metaToken}`
               );
               const statusData = await statusRes.json();
 
@@ -147,7 +151,7 @@ export async function publishSocialPost(payload: SocialPublishPayload): Promise<
               errors.push("Le traitement de l'image par Instagram prend trop de temps.");
             } else {
               const pubRes = await fetch(
-                `https://graph.facebook.com/v18.0/${igAccountId}/media_publish?creation_id=${containerId}&access_token=${metaToken}`,
+                `https://graph.facebook.com/v19.0/${igAccountId}/media_publish?creation_id=${containerId}&access_token=${metaToken}`,
                 { method: 'POST' }
               );
               if (pubRes.ok) {
@@ -161,6 +165,46 @@ export async function publishSocialPost(payload: SocialPublishPayload): Promise<
           }
         } catch (e: any) {
           errors.push(`Erreur réseau Instagram : ${e.message}`);
+        }
+      }
+    }
+
+    // 3. Publication Native Facebook Page (Meta Graph API v19.0)
+    if (payload.platform === 'facebook' || payload.platform === 'all') {
+      if (!fbToken || !fbPageId) {
+        errors.push("Le compte Facebook n'est pas encore connecté. Connectez votre Page Facebook dans l'onglet « Identité & Comptes » du Studio Social.");
+      } else {
+        try {
+          let res: Response;
+          if (payload.imageUrl) {
+            res = await fetch(`https://graph.facebook.com/v19.0/${fbPageId}/photos`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                url: payload.imageUrl,
+                caption: payload.caption,
+                access_token: fbToken,
+              }),
+            });
+          } else {
+            res = await fetch(`https://graph.facebook.com/v19.0/${fbPageId}/feed`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: payload.caption,
+                access_token: fbToken,
+              }),
+            });
+          }
+
+          if (res.ok) {
+            channels.push('Facebook');
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            errors.push(`Erreur Facebook API : ${errData?.error?.message || `Statut ${res.status}`}`);
+          }
+        } catch (e: any) {
+          errors.push(`Erreur réseau Facebook : ${e.message}`);
         }
       }
     }
