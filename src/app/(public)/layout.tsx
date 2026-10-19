@@ -52,6 +52,9 @@ export default async function PublicLayout({
     'business_name',
     'business_phone',
     'business_owner',
+    'business_email',
+    'business_address_street',
+    'business_address_postal',
     'business_address_city',
     'business_address_region',
     ...(DRAFT_PREVIEW ? (['navigation_menu_draft'] as SettingKey[]) : []),
@@ -104,6 +107,10 @@ export default async function PublicLayout({
         initialBusiness={{
           business_name: settings.business_name,
           business_owner: settings.business_owner,
+          business_email: settings.business_email,
+          business_phone: settings.business_phone,
+          business_address_street: settings.business_address_street,
+          business_address_postal: settings.business_address_postal,
           business_address_city: settings.business_address_city,
           business_address_region: settings.business_address_region,
         }}

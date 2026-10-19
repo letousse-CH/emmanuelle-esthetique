@@ -5,6 +5,7 @@ import { Instagram, Linkedin, Youtube, Music2 } from 'lucide-react';
 import { useSettings, settingsCache } from '../hooks/useSettings';
 import type { FooterVariant } from '../constants/chromeVariants';
 import { optimizedImgProps } from '../utils/imageOptim';
+import { localityLine } from '../utils/swissCanton';
 
 // Pas de logo par défaut : l'affichage est conditionné à un logo réellement
 // renseigné dans Paramètres > Design & Style.
@@ -33,9 +34,15 @@ interface FooterProps {
   initialTheme?: string;
   initialBgColor?: string;
   initialLegalLinks?: string;
+  // Coordonnées lues côté serveur : sans elles, le HTML servi aux moteurs ne
+  // montrait que « Palézieux Vaud », le reste n'arrivant qu'avec JavaScript.
   initialBusiness?: {
     business_name?: string;
     business_owner?: string;
+    business_email?: string;
+    business_phone?: string;
+    business_address_street?: string;
+    business_address_postal?: string;
     business_address_city?: string;
     business_address_region?: string;
   };
@@ -176,11 +183,11 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
     || (footerTheme === 'light' ? 'var(--brand-bg, #FFFFFF)' : 'var(--brand-text, #1C1917)');
   const footerInk = isLight ? 'var(--brand-text, #1C1917)' : 'var(--brand-bg, #FFFFFF)';
 
-  const locationLine = [
+  const locationLine = localityLine(
     settings.business_address_postal,
     settings.business_address_city,
     settings.business_address_region,
-  ].filter(Boolean).join(' ');
+  );
 
   const socials = [
     { label: 'Instagram', href: settings.social_instagram, icon: Instagram },
@@ -297,6 +304,11 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
             */}
             <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-[color:color-mix(in_srgb,var(--footer-ink)_60%,transparent)] mb-5">Coordonnées</p>
             <address className="not-italic text-sm text-[color:color-mix(in_srgb,var(--footer-ink)_50%,transparent)] leading-relaxed space-y-2">
+              {settings.business_name && (
+                <p className="font-semibold text-[color:color-mix(in_srgb,var(--footer-ink)_70%,transparent)]">
+                  {settings.business_name}
+                </p>
+              )}
               {(settings.business_address_street || locationLine) && (
                 <p>
                   {settings.business_address_street && (
@@ -351,11 +363,8 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
                 {link.name}
               </Link>
             ))}
-            {/* Accès à l'administration (page de connexion si personne n'est connecté).
-                `nofollow` + lien simple : /admin est exclu de l'indexation (robots.txt). */}
-            <a href="/admin" rel="nofollow" className="hover:text-[color:var(--footer-ink)] transition-colors">
-              Administration
-            </a>
+            {/* Pas de lien vers /admin : l'administration s'ouvre à son adresse
+                (ou par l'app Caisse), elle n'a pas à s'annoncer aux visiteurs. */}
             {variant === 'simple' && socials.map(({ label, href, icon: Icon }) => (
               <a
                 key={label}
