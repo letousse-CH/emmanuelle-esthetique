@@ -59,7 +59,6 @@ export async function generateMetadata({ params }: PageProps) {
   return {
     title,
     description,
-    ...(event.meta_keywords ? { keywords: event.meta_keywords } : {}),
     alternates: {
       canonical: `${SITE_CONFIG.url}/ateliers/${event.slug}`,
     },

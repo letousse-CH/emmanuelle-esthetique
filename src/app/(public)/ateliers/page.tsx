@@ -13,7 +13,6 @@ const ATELIERS_DESCRIPTION =
 export const metadata = {
   title: `Ateliers | ${SITE_CONFIG.name}`,
   description: ATELIERS_DESCRIPTION,
-  keywords: "",
   alternates: {
     canonical: `${SITE_CONFIG.url}/ateliers`,
   },

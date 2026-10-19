@@ -594,22 +594,9 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const estimatedSummary = `${chf(currentPriceChf)} · ${currentDurationMinutes} min`;
 
   return (
-    <div className="min-h-screen bg-paper text-stone-deep pt-36 sm:pt-44 lg:pt-48 pb-20 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-paper text-stone-deep pb-20 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        {/* En-tête éditorial */}
-        <div className="text-center mb-8 sm:mb-12 space-y-3">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase bg-sage/10 text-sage border border-sage/20">
-            <Sparkles className="w-3.5 h-3.5 text-sage" aria-hidden="true" />
-            Cabine Privée · Soins d&apos;Exception
-          </span>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif text-stone-deep font-normal tracking-tight">
-            Réserver votre soin en ligne
-          </h1>
-          <p className="text-muted max-w-xl mx-auto text-sm sm:text-base font-light leading-relaxed">
-            Choisissez votre rituel, le jour et la demi-journée qui vous conviennent. Emmanuelle vous rappelle ensuite
-            pour fixer l&apos;horaire exact.
-          </p>
-        </div>
+        {/* L'en-tête éditorial (H1) est rendu par page.tsx, côté serveur. */}
 
         {/* Ancre de défilement / focus au changement d'étape */}
         <div ref={stepTopRef} className="scroll-mt-28" />

@@ -48,7 +48,8 @@ export function buildMetadata(_slug: string, meta: PageMeta, canonical: string) 
   return {
     ...(meta.title       ? { title: meta.title }             : {}),
     ...(meta.description ? { description: meta.description } : {}),
-    ...(meta.keywords    ? { keywords: meta.keywords }       : {}),
+    // Pas de <meta name="keywords"> : Google l'ignore, et la liste exposait la
+    // stratégie de mots-clés du site. Le champ reste enregistré dans l'admin.
     alternates: { canonical },
     openGraph: {
       ...(meta.og_title       || meta.title       ? { title:       meta.og_title       || meta.title }       : {}),
