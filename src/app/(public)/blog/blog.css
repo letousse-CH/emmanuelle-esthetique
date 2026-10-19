@@ -18,3 +18,104 @@
 @source inline("prose-blockquote:bg-sage/5 prose-blockquote:px-6 prose-blockquote:py-4 prose-blockquote:rounded-r-xl prose-blockquote:my-8");
 @source inline("prose-strong:text-stone-900 prose-strong:font-semibold prose-a:text-sage prose-a:no-underline hover:prose-a:underline");
 @source inline("prose-img:rounded-xl prose-img:shadow-md prose-img:max-w-full prose-pre:overflow-x-auto");
+
+/* ── Hors couches : ces règles doivent battre les réglages de typographie du site ── */
+
+/* Titre d'un article : plus sobre que le H1 des pages. Le sélecteur bat celui de
+   GlobalStyles (`[data-site-theme] h1`), qui imposait jusqu'à 3.5rem à des titres
+   souvent formulés en question, donc longs. */
+[data-site-theme] h1.blog-post-title,
+h1.blog-post-title {
+  font-size: clamp(1.6rem, 1.25rem + 1.4vw, 2.25rem);
+  line-height: 1.2;
+}
+
+/* Encart « Aller plus loin » : photo de la page du soin, dégradé lagon → marine
+   et algue en filigrane, comme la section des offres du moment (blocks.css).
+   Des <span>/<div> plutôt que des <p> : la charte impose sa taille à tout paragraphe. */
+.blog-more {
+  --bm-lagon: var(--pb-accent, #60b9c2);
+  --bm-marine: var(--brand-primary, #12283a);
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  color: #fff;
+  background:
+    radial-gradient(90% 55% at 0% 100%, color-mix(in srgb, var(--bm-lagon) 45%, transparent) 0%, transparent 70%),
+    linear-gradient(165deg, color-mix(in srgb, var(--bm-lagon) 42%, #0b3a44) 0%, var(--bm-marine) 80%);
+  box-shadow: 0 18px 36px -20px rgba(4, 20, 32, 0.55);
+}
+.blog-more::after {
+  content: "";
+  position: absolute;
+  right: -2.5rem;
+  bottom: -2.5rem;
+  width: 11rem;
+  aspect-ratio: 1;
+  background: url("/images/algue.svg") center / contain no-repeat;
+  opacity: 0.13;
+  transform: rotate(-14deg);
+  pointer-events: none;
+}
+.blog-more > * { position: relative; z-index: 1; }
+.blog-more-pillar { display: block; color: inherit; text-decoration: none; }
+.blog-more-photo { display: block; position: relative; aspect-ratio: 4 / 3; overflow: hidden; }
+.blog-more-photo img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s ease; }
+.blog-more-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 55%, color-mix(in srgb, var(--bm-lagon) 30%, #0b3a44) 100%);
+  opacity: 0.6;
+}
+.blog-more-pillar:hover .blog-more-photo img { transform: scale(1.04); }
+.blog-more-eyebrow {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  z-index: 1;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: var(--pb-warm, #faf7f2);
+  color: var(--bm-marine);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.blog-more-body { display: block; padding: 1.1rem 1.25rem 0.25rem; }
+.blog-more-body .blog-more-eyebrow { position: static; display: inline-block; margin-bottom: 0.75rem; }
+.blog-more-title { display: block; font-size: 1.2rem; line-height: 1.25; font-weight: 600; color: #fff; }
+.blog-more-text { display: block; margin-top: 0.35rem; font-size: 0.85rem; line-height: 1.5; color: rgba(255, 255, 255, 0.86); }
+.blog-more-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--bm-lagon) 55%, #fff);
+  transition: gap 0.2s ease;
+}
+.blog-more-pillar:hover .blog-more-link { gap: 0.6rem; }
+.blog-more-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 1rem 1.25rem 0;
+  padding: 0.8rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--pb-warm, #faf7f2);
+  color: var(--bm-marine);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+}
+.blog-more-cta:hover { background: #fff; }
+.blog-more-note { display: block; padding: 0.6rem 1.25rem 1.25rem; text-align: center; font-size: 0.75rem; color: rgba(255, 255, 255, 0.78); }
+/* Sous la colonne de l'article (mobile, tablette) : une carte, pas un bandeau. */
+@media (max-width: 1023.98px) {
+  .blog-more { max-width: 26rem; }
+}

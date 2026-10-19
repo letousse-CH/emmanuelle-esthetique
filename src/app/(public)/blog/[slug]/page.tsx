@@ -6,7 +6,7 @@ import React from 'react';
 import '../blog.css';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Calendar, Clock, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Calendar, CalendarCheck, Clock, ArrowLeft, ArrowRight } from 'lucide-react';
 import { supabase } from '../../../../services/supabase';
 import { getSettingsServer } from '../../../../services/settingsServer';
 import { proxyUrl } from '../../../../utils/media';
@@ -178,6 +178,27 @@ async function getAuthorSettings() {
   };
 }
 
+/**
+ * Première photo d'une page du site (celle qu'Emmanuelle a choisie pour la page
+ * du soin) : illustre l'encart « Aller plus loin ». Vide si la page n'en a pas
+ * ou ne répond pas — l'encart s'affiche alors sans photo.
+ */
+async function getPagePhoto(path: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('dynamic_pages')
+      .select('content, sections')
+      .eq('slug', path.replace(/^\/+/, ''))
+      .maybeSingle();
+    if (!data) return '';
+    const m = JSON.stringify([data.content ?? null, data.sections ?? null])
+      .match(/https?:\/\/[^"\\\s]+?\.(?:jpe?g|png|webp|avif)(?:\?[^"\\\s]*)?/i);
+    return m ? proxyUrl(m[0]) : '';
+  } catch {
+    return '';
+  }
+}
+
 async function getPost(slug: string) {
   // 1. Try Supabase first
   try {
@@ -286,6 +307,8 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   // Page pilier du soin dont parle l'article (silo) : lien en marge et `about`.
   const pillar = pillarForArticle({ title: post.title, meta_keywords: post.keywords, content: post.content });
   const image = post.image || author.fallbackImage;
+  const morePath = pillar ? pillar.path : '/soins';
+  const morePhoto = (await getPagePhoto(morePath)) || post.image;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -372,7 +395,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             </span>
           </div>
 
-          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold text-stone-900 leading-[1.1] tracking-tight mb-6">
+          <h1 className="blog-post-title font-serif font-bold text-stone-900 tracking-tight mb-6">
             {post.title}
           </h1>
 
@@ -430,32 +453,44 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
               </div>
             </article>
 
-            {/* Sidebar */}
-            <aside className="lg:sticky lg:top-28 space-y-5">
+            {/* Sidebar : la table des matières défile avec le début de l'article, puis
+                l'encart reste visible pendant la lecture. Toute la colonne fixe, l'encart
+                passait sous le bas de l'écran dès que la table des matières était longue. */}
+            <aside className="space-y-5 lg:self-stretch">
               {toc.length > 0 && <TableOfContents entries={toc} />}
 
               {/* Maillage interne — généré automatiquement, présent sur tout article :
-                  la page pilier du soin concerné (ou la carte), puis la réservation. */}
-              <div className="bg-stone-900 text-white rounded-2xl p-5 space-y-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Aller plus loin</p>
-                <Link
-                  href={pillar ? pillar.path : '/soins'}
-                  className="block bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors"
-                >
-                  <p className="font-serif text-sm font-bold text-white mb-1">
-                    {pillar ? pillar.label : 'La carte des soins et tarifs'}
-                  </p>
-                  <p className="text-xs text-stone-400 leading-relaxed">
-                    {pillar ? `Les soins et leurs tarifs, ${pillarFromPrice(pillar)}.` : 'Tous les soins, leurs durées et leurs prix.'}
-                  </p>
+                  la page pilier du soin concerné (ou la carte), avec sa photo, puis la
+                  réservation. Styles : .blog-more* dans blog.css. */}
+              {/* top-36 : sous le bandeau fixe du site (124 px une fois la page défilée). */}
+              <div className="lg:sticky lg:top-36">
+              <div className="blog-more">
+                <Link href={morePath} className="blog-more-pillar">
+                  {morePhoto ? (
+                    <span className="blog-more-photo">
+                      <img src={morePhoto} alt="" width={560} height={420} loading="lazy" decoding="async" />
+                      <span className="blog-more-eyebrow">Aller plus loin</span>
+                    </span>
+                  ) : null}
+                  <span className="blog-more-body">
+                    {!morePhoto && <span className="blog-more-eyebrow">Aller plus loin</span>}
+                    <span className="blog-more-title font-serif">
+                      {pillar ? pillar.label : 'La carte des soins et tarifs'}
+                    </span>
+                    <span className="blog-more-text">
+                      {pillar ? `Les soins et leurs tarifs, ${pillarFromPrice(pillar)}.` : 'Tous les soins, leurs durées et leurs prix.'}
+                    </span>
+                    <span className="blog-more-link">
+                      Découvrir les soins <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </span>
+                  </span>
                 </Link>
-                <Link
-                  href="/reservation"
-                  className="block bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors"
-                >
-                  <p className="font-serif text-sm font-bold text-white mb-1">Prendre rendez-vous</p>
-                  <p className="text-xs text-stone-400 leading-relaxed">Un créneau qui vous arrange, en semaine comme le samedi.</p>
+                <Link href="/reservation" className="blog-more-cta">
+                  <CalendarCheck className="w-4 h-4" aria-hidden="true" />
+                  Prendre rendez-vous
                 </Link>
+                <span className="blog-more-note">Choisissez votre jour et votre heure en ligne.</span>
+              </div>
               </div>
             </aside>
           </div>
