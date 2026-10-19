@@ -75,13 +75,31 @@ export async function generateMetadata() {
 // Le `sameAs` est construit dynamiquement à partir des liens sociaux du footer
 // (réglages Supabase) : si un lien change dans l'admin, la balise suit.
 const SITE_URL = SITE_CONFIG.url;
-const PHOTO_URL = SITE_CONFIG.seoDefaults.ogImage;
 
-// Prestations proposées — signal de pertinence pour le SEO local.
-// Alimentées par Paramètres > Éditorial & Marque : une liste codée en dur
-// décrirait le métier du client précédent.
-function knowsAboutFrom(raw: string): string[] {
-  return raw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 12);
+// Réglages « une valeur par ligne » (domaines de compétence, photos).
+// Une ligne seulement : découper aussi sur les virgules coupait les phrases
+// en morceaux (« … Palézieux-Gare (Vaud », « Suisse). Soins … »).
+function lines(raw: string, max = 12): string[] {
+  return (raw || '').split(/\n+/).map((s) => s.trim()).filter(Boolean).slice(0, max);
+}
+
+// Schema.org attend un code pays ISO 3166 (« CH »), pas son nom en clair.
+const COUNTRY_CODES: Record<string, string> = {
+  suisse: 'CH', switzerland: 'CH', schweiz: 'CH', svizzera: 'CH',
+  france: 'FR', belgique: 'BE', luxembourg: 'LU', canada: 'CA',
+};
+function countryCode(raw: string): string {
+  const v = (raw || '').trim();
+  return COUNTRY_CODES[v.toLowerCase()] || v;
+}
+
+interface EntityExtras {
+  ownerBio: string;                // Person.description
+  ownerPhoto: string;              // Person.image — une vraie photo, jamais le logo
+  knowsAbout: string[];
+  images: string[];                // photos du lieu
+  logo: string;
+  paymentAccepted: string;
 }
 
 interface LocalExtras {
@@ -140,9 +158,10 @@ function buildStructuredData(
   business: BusinessInfo,
   editorial: { activity: string; jobTitle: string },
   extras: LocalExtras,
+  entity: EntityExtras,
 ) {
   const activity = editorial.activity;
-  const knowsAbout = knowsAboutFrom(editorial.activity);
+  const { knowsAbout } = entity;
   // Zone desservie : la liste explicite du réglage `business_area_served`
   // prend le pas ; sinon repli sur ville + canton déduits de l'adresse.
   const areaServed = extras.areaServedList.length
@@ -164,7 +183,7 @@ function buildStructuredData(
     ...(business.addressPostal ? { postalCode: business.addressPostal } : {}),
     addressLocality: business.addressCity,
     addressRegion: business.addressRegion,
-    addressCountry: business.addressCountry,
+    addressCountry: countryCode(business.addressCountry),
   } as const;
 
   const phone = business.phone ? business.phone.replace(/\s+/g, '') : '';
@@ -204,9 +223,10 @@ function buildStructuredData(
         '@id': `${SITE_URL}/#owner`,
         name: business.owner,
         ...(editorial.jobTitle ? { jobTitle: editorial.jobTitle } : {}),
-        ...(activity ? { description: activity } : {}),
+        // La description de l'activité décrit l'institut, pas la personne.
+        ...(entity.ownerBio ? { description: entity.ownerBio } : {}),
         url: SITE_URL,
-        image: PHOTO_URL,
+        ...(entity.ownerPhoto ? { image: entity.ownerPhoto } : {}),
         ...(knowsAbout.length ? { knowsAbout } : {}),
         address: postalAddress,
         ...(sameAs.length ? { sameAs } : {}),
@@ -220,7 +240,8 @@ function buildStructuredData(
         name: business.name,
         ...(activity ? { description: activity } : {}),
         url: SITE_URL,
-        image: PHOTO_URL,
+        ...(entity.images.length ? { image: entity.images } : {}),
+        ...(entity.logo ? { logo: entity.logo } : {}),
         founder: { '@id': `${SITE_URL}/#owner` },
         address: postalAddress,
         ...(geo ? { geo } : {}),
@@ -239,7 +260,9 @@ function buildStructuredData(
         ...(openingHoursSpecification.length
           ? { openingHoursSpecification }
           : {}),
-        priceRange: business.priceRange,
+        ...(business.priceRange ? { priceRange: business.priceRange } : {}),
+        ...(entity.paymentAccepted ? { paymentAccepted: entity.paymentAccepted } : {}),
+        currenciesAccepted: 'CHF',
         // hasOfferCatalog : signal riche pour Google et menu de prestations
         // exploitable directement par ChatGPT/Perplexity (URL par soin +
         // prix). Ne dépend pas de settings pour rester source unique de vérité.
@@ -286,6 +309,13 @@ export default async function RootLayout({
     'business_geo_lat',
     'business_geo_lng',
     'business_schema_type',
+    'business_owner_bio',
+    'business_owner_photo',
+    'business_knows_about',
+    'business_images',
+    'business_payment_accepted',
+    'seo_home_og_image',
+    'global_logo',
   ]);
   const areaServedList = (editorialSettings.business_area_served || '')
     .split(/[,;]+/)
@@ -312,6 +342,17 @@ export default async function RootLayout({
       geoLat: editorialSettings.business_geo_lat || '',
       geoLng: editorialSettings.business_geo_lng || '',
       schemaType: editorialSettings.business_schema_type || '',
+    },
+    {
+      ownerBio: editorialSettings.business_owner_bio || '',
+      ownerPhoto: editorialSettings.business_owner_photo || '',
+      knowsAbout: lines(editorialSettings.business_knows_about),
+      // Repli sur l'image de partage de l'accueil : un `image: ""` est une erreur.
+      images: lines(editorialSettings.business_images, 6).length
+        ? lines(editorialSettings.business_images, 6)
+        : [editorialSettings.seo_home_og_image].filter(Boolean),
+      logo: editorialSettings.global_logo || '',
+      paymentAccepted: editorialSettings.business_payment_accepted || '',
     },
   );
 

@@ -85,6 +85,14 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   business_owner: '',
   // Intitulé de métier (Person.jobTitle du graphe Schema.org).
   business_job_title: '',
+  // Graphe Schema.org (app/layout.tsx), réglés en base sans écran d'admin :
+  // présentation de la personne, photo d'elle (jamais le logo), domaines de
+  // compétence et photos du lieu (une valeur par ligne), moyens de paiement.
+  business_owner_bio: '',
+  business_owner_photo: '',
+  business_knows_about: '',
+  business_images: '',
+  business_payment_accepted: '',
   // Vide tant qu'il n'y a pas de domaine : le footer et la page contact
   // masquent l'e-mail s'il est absent, plutôt que d'afficher une adresse morte.
   business_email: '',
