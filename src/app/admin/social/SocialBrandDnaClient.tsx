@@ -675,14 +675,18 @@ export default function SocialBrandDnaClient({
 
         {/* Panneau de liaison rapide Meta (auto-découverte Page FB + compte IG) */}
         {showMetaSetup && (
-          <form onSubmit={handleVerifyMetaToken} className="rounded-xl bg-[#FAF7F2] border border-stone-200 p-5 space-y-4">
+          <form
+            onSubmit={handleVerifyMetaToken}
+            autoComplete="off"
+            className="rounded-xl bg-[#FAF7F2] border border-stone-200 p-5 space-y-5"
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h4 className="text-[15px] font-semibold text-[#3A3730]">
-                  Relier automatiquement votre Page Facebook et votre compte Instagram
+                  Relier votre Page Facebook et votre compte Instagram en 3 étapes simples
                 </h4>
                 <p className="text-[12.5px] text-stone-600 mt-0.5 leading-relaxed">
-                  Collez votre jeton d&apos;accès Meta : le Studio détecte tout seul la Page Facebook <strong>Emmanuelle Esthétique</strong> et le compte Instagram Professionnel associé, sans que vous ayez à chercher les identifiants techniques.
+                  Pour des raisons de sécurité, Facebook ne permet pas d&apos;entrer un email/mot de passe directement : il utilise une <strong>clé d&apos;autorisation Meta (qui commence par EAA…)</strong>. Une fois collée ci-dessous, le Studio détecte tout seul votre Page Facebook et votre Instagram.
                 </p>
               </div>
               {metaStatus.connected && (
@@ -696,29 +700,78 @@ export default function SocialBrandDnaClient({
               )}
             </div>
 
+            {/* Guide pas-à-pas 1-2-3 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white rounded-xl p-4 border border-stone-200 text-[12.5px] text-stone-700">
+              <div className="space-y-1.5">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#3A3730] text-white text-[11px] font-bold">
+                  1
+                </span>
+                <p className="font-semibold text-[#3A3730]">Ouvrir l&apos;outil officiel Meta</p>
+                <p className="text-[12px] text-stone-600 leading-relaxed">
+                  Connectez-vous avec votre compte Facebook administrateur de la page <strong>Emmanuelle Esthétique</strong> :
+                </p>
+                <a
+                  href="https://developers.facebook.com/tools/explorer/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#8A9A7B] hover:text-[#3A3730] underline"
+                >
+                  Ouvrir Meta Graph Explorer ↗
+                </a>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#3A3730] text-white text-[11px] font-bold">
+                  2
+                </span>
+                <p className="font-semibold text-[#3A3730]">Générer la clé (Access Token)</p>
+                <p className="text-[12px] text-stone-600 leading-relaxed">
+                  À droite, dans <em>Permissions</em>, cochez <code className="bg-stone-100 px-1 rounded">pages_show_list</code>, <code className="bg-stone-100 px-1 rounded">pages_manage_posts</code> et <code className="bg-stone-100 px-1 rounded">instagram_content_publish</code>, puis cliquez sur <strong>Generate Access Token</strong>.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#3A3730] text-white text-[11px] font-bold">
+                  3
+                </span>
+                <p className="font-semibold text-[#3A3730]">Copier et coller ci-dessous</p>
+                <p className="text-[12px] text-stone-600 leading-relaxed">
+                  Copiez le long code qui commence par <strong>EAA…</strong> en haut de la page Meta, collez-le dans le premier champ ci-dessous et cliquez sur le bouton noir.
+                </p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="md:col-span-3 space-y-1">
                 <label className="block text-[13px] font-semibold text-[#3A3730]">
-                  Jeton d&apos;accès Meta (Facebook / Instagram)
+                  1. Clé d&apos;accès Meta (code commençant par EAA…)
                 </label>
                 <input
-                  type="password"
+                  type="text"
+                  name="meta_graph_access_token_field"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
                   value={metaTokenInput}
                   onChange={(e) => setMetaTokenInput(e.target.value)}
-                  placeholder="Collez ici votre jeton Meta (EAA…)"
-                  className="w-full h-10 rounded-lg border border-stone-300 bg-white px-3 text-[13px] text-stone-900 focus:border-[#3A3730] focus:outline-none"
+                  placeholder="Collez ici le code qui commence par EAA…"
+                  className="w-full h-10 rounded-lg border border-stone-300 bg-white px-3 text-[13px] font-mono text-stone-900 focus:border-[#3A3730] focus:outline-none"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="block text-[12px] font-medium text-stone-700">
-                  App ID Meta (optionnel, pour connexion 1-clic)
+                  App ID Meta (chiffres uniquement — optionnel)
                 </label>
                 <input
                   type="text"
-                  value={metaAppIdInput}
+                  name="meta_numeric_app_id_field"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  value={metaAppIdInput.includes('@') ? '' : metaAppIdInput}
                   onChange={(e) => setMetaAppIdInput(e.target.value)}
-                  placeholder="ex: 123456789012345"
+                  placeholder="Laisser vide ou ex: 123456789012345"
                   className="w-full h-9 rounded-lg border border-stone-300 bg-white px-3 text-[12.5px] text-stone-900 focus:border-[#3A3730] focus:outline-none"
                 />
               </div>
@@ -728,10 +781,14 @@ export default function SocialBrandDnaClient({
                   App Secret Meta (optionnel, jeton 60 jours)
                 </label>
                 <input
-                  type="password"
+                  type="text"
+                  name="meta_app_secret_field"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
                   value={metaAppSecretInput}
                   onChange={(e) => setMetaAppSecretInput(e.target.value)}
-                  placeholder="Clé secrète de l'application"
+                  placeholder="Laisser vide (optionnel)"
                   className="w-full h-9 rounded-lg border border-stone-300 bg-white px-3 text-[12.5px] text-stone-900 focus:border-[#3A3730] focus:outline-none"
                 />
               </div>
