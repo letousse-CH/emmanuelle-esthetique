@@ -20,6 +20,8 @@ import {
   Sun,
   Sunset,
   BadgePercent,
+  Plus,
+  X,
 } from 'lucide-react';
 import {
   PERIODE_LABEL,
@@ -37,7 +39,7 @@ import {
   type PrestationItem,
   type PrivilegeOption,
 } from './catalog';
-import { addDays, formatDateLong, formatHeure, isValidDateStr, periodeLabel, todayZurich } from './dates';
+import { addDays, formatDateLong, formatHeure, isValidDateStr, todayZurich } from './dates';
 import { chf } from './format';
 import { validateContact, type ContactErrors } from './validation';
 import DayCalendar from './DayCalendar';
@@ -74,8 +76,38 @@ const CATEGORIES: Array<{ id: CategoryId; label: string; icon: typeof Droplets; 
 /** Fenêtre proposée dans le calendrier (le serveur borne en plus par ses propres règles). */
 const CALENDAR_DAYS = 60;
 const PERIODES: BookingPeriode[] = ['matin', 'apres_midi'];
+/** Battement incompressible entre deux clientes (le serveur l'impose, voir bookingEngine). */
+const BATTEMENT_MINUTES = 30;
+/** Nombre maximal de soins ajoutés au premier (limite du serveur). */
+const MAX_EXTRAS = 6;
 
-// 1 Soin · 2 Date & période · 3 Coordonnées · 4 Confirmation
+/** Soin ou complément que la cliente peut ajouter à sa séance. */
+interface ExtraItem {
+  id: string;
+  name: string;
+  /** Rubrique affichée (« Compléments », « Soins du visage »…). */
+  groupe: string;
+  durationMinutes: number;
+  priceChf: number;
+  variants?: PrestationItem['variants'];
+}
+
+/** `75` → `1h15`, `60` → `1h`, `45` → `45 min`. */
+function formatDuree(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+}
+
+/** Heure de fin d'une séance (`09:00` + 70 min → `10:10`). */
+function addMinutes(hhmm: string, minutes: number): string {
+  const [h, m] = hhmm.split(':').map((x) => parseInt(x, 10));
+  const t = h * 60 + m + minutes;
+  return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+
+// 1 Soin(s) · 2 Date & heure · 3 Coordonnées · 4 Confirmation
 type StepNum = 1 | 2 | 3 | 4;
 
 interface ReservationClientProps {
@@ -107,13 +139,18 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const [selectedService, setSelectedService] = useState<PrestationItem | null>(PRESTATIONS_CATALOG[0]);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState<number>(0);
 
+  // Soins ajoutés au premier (autres soins de la carte ou compléments), dans l'ordre du choix.
+  const [catalogOptions, setCatalogOptions] = useState<PrivilegeOption[]>([]);
+  const [extras, setExtras] = useState<Array<{ id: string; variantIndex: number }>>([]);
+  const [extrasOpen, setExtrasOpen] = useState(false);
+
   // Offre du moment : réservée comme un soin à part entière. Quand elle est
   // choisie, elle prime sur `selectedService` (gardé pour revenir en arrière).
   const [offers, setOffers] = useState<PublicOffer[]>([]);
   const [selectedOffer, setSelectedOffer] = useState<PublicOffer | null>(null);
   const offerParamApplied = useRef(false);
 
-  // Étape 2 : jour + période
+  // Étape 2 : jour + heure
   const today = useMemo(() => todayZurich(), []);
   // Avec une offre, seuls les jours de sa période sont proposés (le serveur le vérifie aussi).
   const calendarRange = useMemo(() => {
@@ -129,7 +166,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const [calendarKey, setCalendarKey] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [dayInfo, setDayInfo] = useState<AvailableDaySlots | null>(null);
-  const [selectedPeriode, setSelectedPeriode] = useState<BookingPeriode | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [slotsKey, setSlotsKey] = useState(0);
@@ -226,6 +263,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
         if (cancelled) return;
         if (data?.success && Array.isArray(data.services) && data.services.length > 0) {
           setServicesCatalog(data.services);
+          setCatalogOptions(Array.isArray(data.options) ? data.options : []);
           resolve(data.services);
         } else {
           // Base injoignable : le repli (ids de carteSoins) reste utilisable.
@@ -283,32 +321,85 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
     }
   };
 
+  // ── Soins à ajouter : la carte (hors premier soin) puis les compléments ──
+  const mainId = selectedOffer ? null : selectedService?.id ?? null;
+  const extraCatalog = useMemo<ExtraItem[]>(() => {
+    const catLabel = (c: CategoryId) => CATEGORIES.find((x) => x.id === c)?.label ?? 'Soins';
+    return [
+      ...catalogOptions.map((o) => ({
+        id: o.id,
+        name: o.nom,
+        groupe: 'Compléments',
+        durationMinutes: o.duree_minutes,
+        priceChf: o.prix_chf,
+      })),
+      ...CATEGORIES.flatMap((c) =>
+        servicesCatalog
+          .filter((p) => p.category === c.id)
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            groupe: catLabel(c.id),
+            durationMinutes: p.durationMinutes,
+            priceChf: p.priceChf,
+            variants: p.variants,
+          })),
+      ),
+    ];
+  }, [catalogOptions, servicesCatalog]);
+
+  // Soins ajoutés encore valables (le catalogue a pu changer ; le premier soin n'est jamais doublé).
+  const chosenExtras = useMemo(
+    () =>
+      extras
+        .filter((x) => x.id !== mainId)
+        .map((x) => {
+          const item = extraCatalog.find((i) => i.id === x.id);
+          if (!item) return null;
+          const v = item.variants?.[x.variantIndex];
+          return {
+            item,
+            variantIndex: x.variantIndex,
+            durationMinutes: v?.durationMinutes ?? item.durationMinutes,
+            priceChf: v?.priceChf ?? item.priceChf,
+            variantMinutes: v ? v.durationMinutes : null,
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null),
+    [extras, extraCatalog, mainId]
+  );
+
+  const toggleExtra = (id: string) => {
+    setExtras((prev) => {
+      if (prev.some((x) => x.id === id)) return prev.filter((x) => x.id !== id);
+      if (prev.filter((x) => x.id !== mainId).length >= MAX_EXTRAS) return prev;
+      return [...prev, { id, variantIndex: 0 }];
+    });
+  };
+  const setExtraVariant = (id: string, variantIndex: number) =>
+    setExtras((prev) => prev.map((x) => (x.id === id ? { ...x, variantIndex } : x)));
+
   // ── Totaux (estimation d'affichage : le serveur recalcule prix et durée) ──
-  const { currentDurationMinutes, baseDurationMinutes, currentPriceChf, currentServiceName } = useMemo(() => {
+  const { baseDurationMinutes, basePriceChf, currentServiceName } = useMemo(() => {
     if (selectedOffer) {
       return {
-        currentDurationMinutes: selectedOffer.duree_minutes,
         baseDurationMinutes: selectedOffer.duree_minutes,
-        currentPriceChf: selectedOffer.prix_chf,
+        basePriceChf: selectedOffer.prix_chf,
         currentServiceName: selectedOffer.titre,
       };
     }
     if (!selectedService) {
-      return { currentDurationMinutes: 60, baseDurationMinutes: 60, currentPriceChf: 0, currentServiceName: '' };
+      return { baseDurationMinutes: 60, basePriceChf: 0, currentServiceName: '' };
     }
     const variant = selectedService.variants?.[selectedVariantIndex];
-    const baseDuration = variant?.durationMinutes ?? selectedService.durationMinutes;
-    const basePrice = variant?.priceChf ?? selectedService.priceChf;
-
-    let duration = baseDuration;
-    let price = basePrice;
     return {
-      currentDurationMinutes: duration,
-      baseDurationMinutes: baseDuration,
-      currentPriceChf: price,
+      baseDurationMinutes: variant?.durationMinutes ?? selectedService.durationMinutes,
+      basePriceChf: variant?.priceChf ?? selectedService.priceChf,
       currentServiceName: selectedService.name,
     };
   }, [selectedService, selectedVariantIndex, selectedOffer]);
+  const currentDurationMinutes = baseDurationMinutes + chosenExtras.reduce((t, x) => t + x.durationMinutes, 0);
+  const currentPriceChf = basePriceChf + chosenExtras.reduce((t, x) => t + x.priceChf, 0);
 
   // ── Calendrier des jours (GET /api/bookings/calendar) ──
   const atSlotsStep = currentStep >= 2;
@@ -373,7 +464,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
     });
   }, [calendar, isDayAvailable, searchParams, calendarRange]);
 
-  // ── Périodes du jour choisi (GET /api/bookings/available-slots) ──
+  // ── Horaires du jour choisi (GET /api/bookings/available-slots) ──
   useEffect(() => {
     if (!atSlotsStep || !selectedDate) {
       setDayInfo(null);
@@ -397,27 +488,23 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
           );
         }
         const data = await readJson<AvailableDaySlots>(res);
-        if (!data || !data.periodes || !data.periodes.matin || !data.periodes.apres_midi) {
+        if (!data || !Array.isArray(data.slots)) {
           throw new Error('Réponse inattendue de l’agenda.');
         }
         return data;
       })
       .then((data) => {
         setDayInfo(data);
-        const { matin, apres_midi } = data.periodes;
+        // On garde l'heure choisie si elle tient encore (autre jour, soin ajouté) ; sinon la cliente choisit.
         const open = data.ouvert !== false;
-        setSelectedPeriode((prev) => {
-          if (!open) return null;
-          if (prev && data.periodes[prev]?.disponible) return prev;
-          if (matin.disponible && !apres_midi.disponible) return 'matin';
-          if (!matin.disponible && apres_midi.disponible) return 'apres_midi';
-          return null; // les deux sont libres : la cliente choisit.
-        });
+        setSelectedTime((prev) =>
+          open && prev && data.slots.some((sl) => sl.heure === prev && sl.disponible) ? prev : null
+        );
       })
       .catch((err) => {
         if (ctrl.signal.aborted) return;
         console.error('[ReservationClient] créneaux:', err);
-        setSelectedPeriode(null);
+        setSelectedTime(null);
         setSlotsError(err?.message || "Erreur lors de la vérification de l'agenda.");
       })
       .finally(() => {
@@ -427,10 +514,9 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
     return () => ctrl.abort();
   }, [atSlotsStep, selectedDate, currentDurationMinutes, slotsKey]);
 
-  const periodes = dayInfo?.periodes;
-  const anyPeriodeAvailable = !!periodes && (periodes.matin.disponible || periodes.apres_midi.disponible);
-  const selectedPeriodeLabel = selectedPeriode
-    ? periodeLabel(selectedPeriode, periodes?.[selectedPeriode]?.premier_creneau)
+  const freeSlots = useMemo(() => (dayInfo?.slots ?? []).filter((sl) => sl.disponible), [dayInfo]);
+  const selectedTimeLabel = selectedTime
+    ? `${formatHeure(selectedTime)} à ${formatHeure(addMinutes(selectedTime, currentDurationMinutes))}`
     : '';
   const formattedDate = selectedDate ? formatDateLong(selectedDate) : '';
 
@@ -451,8 +537,8 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
       focusFirstError(errors);
       return;
     }
-    if ((!selectedService && !selectedOffer) || !selectedDate || !selectedPeriode) {
-      setSubmitError('Veuillez choisir un soin, un jour et le matin ou l’après-midi.');
+    if ((!selectedService && !selectedOffer) || !selectedDate || !selectedTime) {
+      setSubmitError('Veuillez choisir un soin, un jour et une heure.');
       return;
     }
 
@@ -475,10 +561,11 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
       service_id: selectedOffer ? null : selectedService?.id ?? null,
       // Offre du moment : prix, durée, période et places sont contrôlés par le serveur.
       offer_of_month_id: selectedOffer?.id ?? null,
-      options: [], // pas d'options choisies en ligne : Emmanuelle les propose au téléphone
+      // Soins ajoutés : identifiants seulement, le serveur retrouve prix et durées.
+      options: chosenExtras.map((x) => ({ id: x.item.id, variante_duree_minutes: x.variantMinutes })),
       variante_duree_minutes: variant ? variant.durationMinutes : null,
       date_rdv: selectedDate,
-      periode: selectedPeriode,
+      heure_rdv: selectedTime,
       notes_cliente: formData.notes.trim() || null,
       consent_email: !!email && consentEmail,
       consent_whatsapp: consentWhatsapp,
@@ -503,7 +590,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
         const code = data?.code;
         const serverMessage = data?.error;
         if (code === 'doublon') {
-          // Pas de retour à l'étape 3 : la période n'est pas en cause.
+          // Pas de retour à l'étape 2 : l'horaire n'est pas en cause.
           setSubmitError(
             `${serverMessage ? `${serverMessage} ` : ''}Votre demande est peut-être déjà enregistrée : vérifiez vos e-mails${
               businessPhone ? ` ou appelez l’institut au ${businessPhone}` : ' ou appelez l’institut'
@@ -527,10 +614,12 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
           );
           setCatalogKey((k) => k + 1);
           setCurrentStep(1);
-        } else if (code === 'periode_complete' || (!code && res.status === 409)) {
-          // La période a été prise entre-temps : on recharge les disponibilités.
-          setSlotsNotice('Cette période vient d’être prise. Choisissez-en une autre ci-dessous.');
-          setSelectedPeriode(null);
+        } else if (code === 'creneau_pris' || code === 'periode_complete' || (!code && res.status === 409)) {
+          // L'horaire a été pris entre-temps : on recharge les disponibilités.
+          setSlotsNotice(
+            `${serverMessage || 'Cet horaire vient d’être pris.'} Les horaires ci-dessous sont à jour.`
+          );
+          setSelectedTime(null);
           setCalendarKey((k) => k + 1);
           setSlotsKey((k) => k + 1);
           setCurrentStep(2);
@@ -556,10 +645,11 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
       const raw = data?.booking ?? {};
       setConfirmedBooking({
         id: raw.id ?? '',
-        service_nom: raw.service_nom ?? currentServiceName,
-        options: raw.options ?? [],
+        service_nom: raw.service_nom || currentServiceName,
+        options: raw.options?.length ? raw.options : chosenExtras.map((x) => ({ nom: x.item.name, prix_chf: x.priceChf })),
         date_rdv: raw.date_rdv ?? selectedDate,
-        periode: raw.periode ?? selectedPeriode,
+        periode: raw.periode ?? (selectedTime < '13:00' ? 'matin' : 'apres_midi'),
+        heure_rdv: raw.heure_rdv ?? selectedTime,
         service_duree_minutes: raw.service_duree_minutes ?? currentDurationMinutes,
         total_chf: typeof raw.total_chf === 'number' ? raw.total_chf : currentPriceChf,
       });
@@ -591,7 +681,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
   const headingText =
     currentStep === 4 ? '' : `Étape ${stepIndex + 1} sur ${stepTotal} : ${stepLabel}`;
 
-  const estimatedSummary = `${chf(currentPriceChf)} · ${currentDurationMinutes} min`;
+  const estimatedSummary = `${chf(currentPriceChf)} · ${formatDuree(currentDurationMinutes)}`;
 
   return (
     <div className="min-h-screen bg-paper text-stone-deep pb-20 px-4 sm:px-6 lg:px-8">
@@ -916,14 +1006,143 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                 })}
             </fieldset>
 
+            {/* Soins en plus : s'enchaînent dans la même séance, la durée totale est réservée */}
+            {(selectedService || selectedOffer) && extraCatalog.length > 0 && (
+              <section
+                data-surface
+                aria-labelledby="rf-extras-titre"
+                className="bg-surface rounded-[var(--radius-base,1rem)] border border-border shadow-xs"
+              >
+                <button
+                  type="button"
+                  onClick={() => setExtrasOpen((o) => !o)}
+                  aria-expanded={extrasOpen}
+                  aria-controls="rf-extras-liste"
+                  className="w-full flex items-center justify-between gap-4 p-4 sm:p-5 text-left"
+                >
+                  <span className="flex items-center gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="w-10 h-10 rounded-xl bg-sage/10 flex items-center justify-center text-sage shrink-0"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </span>
+                    <span>
+                      <span id="rf-extras-titre" className="block text-sm sm:text-base font-serif font-semibold text-stone-deep">
+                        Ajouter un autre soin à votre séance
+                      </span>
+                      <span className="block text-xs text-muted font-light">
+                        Facultatif · les soins s&apos;enchaînent, la durée totale vous est réservée
+                      </span>
+                    </span>
+                  </span>
+                  <span className="text-xs font-semibold text-sage shrink-0">
+                    {chosenExtras.length > 0
+                      ? `${chosenExtras.length} ajouté${chosenExtras.length > 1 ? 's' : ''}`
+                      : extrasOpen
+                        ? 'Masquer'
+                        : 'Voir'}
+                  </span>
+                </button>
+
+                {chosenExtras.length > 0 && (
+                  <ul className="px-4 sm:px-5 pb-4 flex flex-wrap gap-2" aria-label="Soins ajoutés">
+                    {chosenExtras.map((x) => (
+                      <li key={x.item.id}>
+                        <button
+                          type="button"
+                          onClick={() => toggleExtra(x.item.id)}
+                          className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full bg-sage/10 border border-sage/30 text-xs font-medium text-stone-deep hover:border-sage"
+                        >
+                          {x.item.name} · {formatDuree(x.durationMinutes)}
+                          <X className="w-3.5 h-3.5 text-sage" aria-hidden="true" />
+                          <span className="sr-only"> (retirer)</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {extrasOpen && (
+                  <div id="rf-extras-liste" className="border-t border-border px-4 sm:px-5 py-4 space-y-5">
+                    {[...new Set(extraCatalog.map((i) => i.groupe))].map((groupe) => {
+                      const items = extraCatalog.filter((i) => i.groupe === groupe && i.id !== mainId);
+                      if (items.length === 0) return null;
+                      return (
+                        <fieldset key={groupe} className="min-w-0 space-y-2">
+                          <legend className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-2">{groupe}</legend>
+                          {items.map((item) => {
+                            const chosen = chosenExtras.find((x) => x.item.id === item.id);
+                            const full = !chosen && chosenExtras.length >= MAX_EXTRAS;
+                            const v = chosen && item.variants?.[chosen.variantIndex];
+                            return (
+                              <div
+                                key={item.id}
+                                className={`rounded-[var(--radius-base,0.75rem)] border transition-colors ${
+                                  chosen ? 'border-sage bg-sage/5' : 'border-border hover:border-sage/40'
+                                } ${full ? 'opacity-50' : ''}`}
+                              >
+                                <label className={`flex items-center gap-3 p-3 ${full ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!chosen}
+                                    disabled={full}
+                                    onChange={() => toggleExtra(item.id)}
+                                    className="w-4 h-4 shrink-0 accent-[var(--color-sage)]"
+                                  />
+                                  <span className="flex-1 min-w-0 text-sm text-stone-deep leading-snug">{item.name}</span>
+                                  <span className="text-right shrink-0">
+                                    <span className="block text-sm font-semibold text-sage">
+                                      + {chf(v ? v.priceChf : item.priceChf)}
+                                    </span>
+                                    <span className="block text-[11px] text-muted">
+                                      + {formatDuree(v ? v.durationMinutes : item.durationMinutes)}
+                                    </span>
+                                  </span>
+                                </label>
+                                {chosen && item.variants && item.variants.length > 1 && (
+                                  <div className="px-3 pb-3 flex flex-wrap gap-2" role="group" aria-label={`Durée de ${item.name}`}>
+                                    {item.variants.map((vv, idx) => (
+                                      <button
+                                        key={vv.durationMinutes}
+                                        type="button"
+                                        aria-pressed={chosen.variantIndex === idx}
+                                        onClick={() => setExtraVariant(item.id, idx)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                                          chosen.variantIndex === idx ? 'bg-sage text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                                        }`}
+                                      >
+                                        {vv.durationLabel} — {chf(vv.priceChf)}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </fieldset>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
+
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-4 sm:p-5 border border-border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-center sm:text-left">
-                <span className="text-xs text-muted block font-medium">Soin sélectionné :</span>
+                <span className="text-xs text-muted block font-medium">
+                  {chosenExtras.length > 0 ? 'Votre séance :' : 'Soin sélectionné :'}
+                </span>
                 <span className="text-base sm:text-lg font-serif font-semibold text-stone-deep">
                   {currentServiceName || 'Veuillez choisir un soin'}
                 </span>
+                {chosenExtras.map((x) => (
+                  <span key={x.item.id} className="block text-xs text-stone-deep">
+                    + {x.item.name}
+                  </span>
+                ))}
                 <div className="text-xs text-sage font-medium mt-0.5">
-                  {chf(selectedService || selectedOffer ? currentPriceChf : 0)} · Durée : {baseDurationMinutes} min
+                  {chf(selectedService || selectedOffer ? currentPriceChf : 0)} · Durée : {formatDuree(currentDurationMinutes)}
                 </div>
               </div>
 
@@ -944,7 +1163,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
           </div>
         )}
 
-        {/* ═══ ÉTAPE 2 : JOUR + PÉRIODE ═══ */}
+        {/* ═══ ÉTAPE 2 : JOUR + HEURE ═══ */}
         {currentStep === 2 && (
           <div className="space-y-8 animate-fadein">
             <div data-surface className="bg-surface rounded-[var(--radius-base,1rem)] p-5 border border-border shadow-xs flex items-start gap-4">
@@ -952,11 +1171,11 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div className="space-y-1 text-xs sm:text-sm text-stone-deep font-light">
-                <p className="font-semibold text-stone-deep">Vous choisissez un jour et une demi-journée.</p>
+                <p className="font-semibold text-stone-deep">Vous choisissez votre jour et votre heure.</p>
                 <p className="text-muted">
-                  Emmanuelle vous appelle ensuite pour <strong>fixer avec vous l&apos;horaire exact</strong>. Un temps
-                  de battement est réservé après chaque soin pour aérer et désinfecter la cabine, et garantir votre
-                  discrétion.
+                  Votre horaire vous est réservé dès l&apos;envoi de la demande ; Emmanuelle vous recontacte ensuite pour
+                  <strong> confirmer votre rendez-vous</strong>. {BATTEMENT_MINUTES} minutes de battement sont prévues
+                  entre deux clientes pour aérer et désinfecter la cabine, et garantir votre discrétion.
                 </p>
               </div>
             </div>
@@ -1046,16 +1265,16 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
               ) : null}
             </section>
 
-            {/* Période */}
+            {/* Heure */}
             {calendar && selectedDate && (
-              <section className="space-y-4" aria-labelledby="rf-periode-titre">
+              <section className="space-y-4" aria-labelledby="rf-heure-titre">
                 <div className="border-b border-border pb-3">
-                  <h3 id="rf-periode-titre" className="text-base sm:text-lg font-serif font-medium text-stone-deep">
-                    2. Matin ou après-midi, le <span>{formattedDate}</span> ?
+                  <h3 id="rf-heure-titre" className="text-base sm:text-lg font-serif font-medium text-stone-deep">
+                    2. À quelle heure, le <span>{formattedDate}</span> ?
                   </h3>
                   <p className="text-xs text-muted font-light mt-0.5">
-                    L&apos;horaire exact sera fixé avec Emmanuelle lors d&apos;un appel : l&apos;heure indiquée est celle
-                    du premier créneau possible dans la demi-journée, à titre indicatif.
+                    Votre séance dure {formatDuree(currentDurationMinutes)}. Seuls les horaires où elle tient entièrement
+                    sont proposés, avec {BATTEMENT_MINUTES} minutes de battement entre deux clientes.
                   </p>
                 </div>
 
@@ -1083,106 +1302,65 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                         Réessayer
                       </button>
                     </div>
-                  ) : dayInfo && (dayInfo.ouvert === false || !anyPeriodeAvailable) ? (
+                  ) : dayInfo && (dayInfo.ouvert === false || freeSlots.length === 0) ? (
                     <div className="py-10 text-center bg-surface rounded-[var(--radius-base,1rem)] border border-border p-6 space-y-2">
                       <Clock className="w-8 h-8 text-muted mx-auto" aria-hidden="true" />
                       <h4 className="text-sm font-semibold text-stone-deep">
-                        {dayInfo.ouvert === false ? 'L’institut est fermé ce jour-là' : 'Aucune séance disponible ce jour-là'}
+                        {dayInfo.ouvert === false ? 'L’institut est fermé ce jour-là' : 'Plus d’horaire libre ce jour-là pour cette durée'}
                       </h4>
                       <p className="text-xs text-muted max-w-sm mx-auto font-light">
                         Veuillez sélectionner un autre jour dans le calendrier ci-dessus.
                       </p>
                     </div>
-                  ) : dayInfo && periodes ? (
-                    <fieldset className="min-w-0">
-                      <legend className="sr-only">Choisissez le matin ou l&apos;après-midi</legend>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {PERIODES.map((p) => {
-                          const info = periodes[p];
-                          const available = info.disponible;
-                          const checked = selectedPeriode === p;
-                          const Icon = p === 'matin' ? Sun : Sunset;
-                          return (
-                            <label
-                              key={p}
-                              className={`relative p-5 sm:p-6 rounded-[var(--radius-base,1rem)] border text-left transition-all flex flex-col justify-between gap-4 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-sage has-[:focus-visible]:ring-offset-2 ${
-                                !available
-                                  ? 'bg-stone-50 border-border cursor-not-allowed'
-                                  : checked
-                                  ? 'bg-sage/10 border-sage ring-2 ring-sage shadow-md text-stone-deep cursor-pointer'
-                                  : 'bg-surface border-border hover:border-sage hover:bg-stone-50/50 text-stone-deep shadow-xs cursor-pointer'
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name="periode"
-                                value={p}
-                                checked={checked}
-                                disabled={!available}
-                                aria-labelledby={`rf-periode-${p}-nom`}
-                                aria-describedby={`rf-periode-${p}-desc`}
-                                onChange={() => {
-                                  setSlotsNotice(null);
-                                  setSelectedPeriode(p);
-                                }}
-                                className="sr-only"
-                              />
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-center gap-3">
-                                  <div
-                                    aria-hidden="true"
-                                    className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
-                                      checked ? 'bg-sage text-white shadow-xs' : available ? 'bg-sage/10 text-sage' : 'bg-stone-100 text-stone-600'
-                                    }`}
-                                  >
-                                    <Icon className="w-6 h-6" />
-                                  </div>
-                                  <div>
-                                    <span
-                                      id={`rf-periode-${p}-nom`}
-                                      className={`block text-base sm:text-lg font-serif font-bold ${available ? 'text-stone-deep' : 'text-stone-600'}`}
+                  ) : dayInfo ? (
+                    <fieldset className="min-w-0 space-y-5">
+                      <legend className="sr-only">Choisissez votre heure d&apos;arrivée</legend>
+                      {PERIODES.map((p) => {
+                        const slots = freeSlots.filter((sl) => sl.periode === p);
+                        const Icon = p === 'matin' ? Sun : Sunset;
+                        return (
+                          <div key={p} className="space-y-2.5">
+                            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-stone-deep">
+                              <Icon className="w-4 h-4 text-sage" aria-hidden="true" />
+                              {PERIODE_LABEL[p]}
+                              {slots.length === 0 && (
+                                <span className="normal-case tracking-normal font-light text-muted">— complet</span>
+                              )}
+                            </div>
+                            {slots.length > 0 && (
+                              <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2">
+                                {slots.map((sl) => {
+                                  const checked = selectedTime === sl.heure;
+                                  return (
+                                    <label
+                                      key={sl.heure}
+                                      className={`relative cursor-pointer rounded-lg border px-2 py-2.5 text-center text-sm font-semibold transition-all has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-sage has-[:focus-visible]:ring-offset-2 ${
+                                        checked
+                                          ? 'bg-sage text-white border-sage shadow-sm'
+                                          : 'bg-surface text-stone-deep border-border hover:border-sage hover:bg-stone-50'
+                                      }`}
                                     >
-                                      {PERIODE_LABEL[p]}
-                                    </span>
-                                    <span
-                                      id={`rf-periode-${p}-desc`}
-                                      className={`text-xs font-light ${available ? 'text-muted' : 'text-stone-600'}`}
-                                    >
-                                      {available && info.premier_creneau
-                                        ? `dès ${formatHeure(info.premier_creneau)}`
-                                        : available
-                                        ? 'Disponible'
-                                        : 'Plus de place'}
-                                    </span>
-                                  </div>
-                                </div>
-                                <span
-                                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 ${
-                                    !available
-                                      ? 'bg-stone-100 text-stone-700 border border-stone-300'
-                                      : checked
-                                      ? 'bg-sage text-white'
-                                      : 'bg-emerald-50 text-emerald-800 border border-emerald-300'
-                                  }`}
-                                >
-                                  {!available ? 'Complet' : checked ? 'Choisi' : 'Disponible'}
-                                </span>
+                                      <input
+                                        type="radio"
+                                        name="heure"
+                                        value={sl.heure}
+                                        checked={checked}
+                                        onChange={() => {
+                                          setSlotsNotice(null);
+                                          setSelectedTime(sl.heure);
+                                        }}
+                                        aria-label={`${formatHeure(sl.heure)}, fin vers ${formatHeure(addMinutes(sl.heure, currentDurationMinutes))}`}
+                                        className="sr-only"
+                                      />
+                                      {formatHeure(sl.heure)}
+                                    </label>
+                                  );
+                                })}
                               </div>
-
-                              <p className={`text-xs font-light leading-relaxed ${available ? 'text-muted' : 'text-stone-600'}`}>
-                                {p === 'matin'
-                                  ? 'Pour commencer votre journée dans la douceur, en cabine privée.'
-                                  : 'Pour vous offrir une parenthèse de ressourcement dans l’après-midi.'}
-                              </p>
-
-                              <div className={`text-[11px] font-medium pt-3 border-t border-border/60 flex items-center justify-between ${available ? 'text-sage' : 'text-stone-600'}`}>
-                                <span>Horaire exact fixé avec Emmanuelle lors d&apos;un appel</span>
-                                {checked && <CheckCircle2 className="w-4 h-4 text-sage" aria-hidden="true" />}
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </fieldset>
                   ) : null}
                 </div>
@@ -1197,16 +1375,16 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                 </div>
                 <div>
                   <span className="text-xs text-muted block font-medium">Votre demande :</span>
-                  {selectedPeriode && selectedDate ? (
+                  {selectedTime && selectedDate ? (
                     <div className="text-base sm:text-lg font-serif font-semibold text-stone-deep">
                       <span className="capitalize">{formattedDate}</span> —{' '}
-                      <span className="text-sage">{selectedPeriodeLabel}</span>
+                      <span className="text-sage">{selectedTimeLabel}</span>
                     </div>
                   ) : (
-                    <div className="text-sm text-muted italic">Choisissez un jour, puis le matin ou l&apos;après-midi</div>
+                    <div className="text-sm text-muted italic">Choisissez un jour, puis votre heure</div>
                   )}
                   <span className="text-xs text-muted block font-light">
-                    Horaire exact fixé avec Emmanuelle lors d&apos;un appel
+                    Confirmée ensuite par Emmanuelle
                   </span>
                 </div>
               </div>
@@ -1224,7 +1402,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                   type="button"
                   data-btn="primary"
                   onClick={() => setCurrentStep(3)}
-                  disabled={!calendar || !selectedPeriode || !selectedDate || loadingSlots || !!slotsError}
+                  disabled={!calendar || !selectedTime || !selectedDate || loadingSlots || !!slotsError}
                   className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-8 py-3.5 font-medium text-sm sm:text-base tracking-wide shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continuer vers vos coordonnées
@@ -1244,13 +1422,20 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                 <div className="text-base font-serif font-semibold text-stone-deep">
                   {currentServiceName}
                 </div>
+                {chosenExtras.length > 0 && (
+                  <ul className="text-xs text-stone-deep">
+                    {chosenExtras.map((x) => (
+                      <li key={x.item.id}>+ {x.item.name}</li>
+                    ))}
+                  </ul>
+                )}
                 <div className="text-xs text-muted flex flex-wrap items-center gap-x-2">
                   <span className="capitalize">{formattedDate}</span>
                   <span aria-hidden="true">—</span>
-                  <span className="font-semibold text-stone-deep">{selectedPeriodeLabel}</span>
-                  <span className="font-light">({currentDurationMinutes} min)</span>
+                  <span className="font-semibold text-stone-deep">{selectedTimeLabel}</span>
+                  <span className="font-light">({formatDuree(currentDurationMinutes)})</span>
                 </div>
-                <div className="text-[11px] text-muted font-light">Horaire exact fixé avec Emmanuelle lors d&apos;un appel.</div>
+                <div className="text-[11px] text-muted font-light">Horaire réservé pour vous, confirmé ensuite par Emmanuelle.</div>
               </div>
               <div className="text-right">
                 <span className="text-xs text-muted block">Total estimé, à régler sur place :</span>
@@ -1275,12 +1460,12 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                   {
                     n: 2,
                     title: 'Confirmation personnelle',
-                    text: 'Emmanuelle vous rappelle personnellement pour fixer l’horaire exact et répondre à vos éventuelles attentes. Votre demande n’est confirmée qu’à ce moment-là.',
+                    text: 'Votre horaire vous est réservé dès l’envoi. Emmanuelle vous recontacte personnellement pour confirmer votre rendez-vous et répondre à vos éventuelles attentes.',
                   },
                   {
                     n: 3,
                     title: 'Cabine privée exclusive',
-                    text: 'Vous êtes l’unique hôte de l’institut. Un temps de battement est réservé entre chaque soin pour votre entière tranquillité.',
+                    text: 'Vous êtes l’unique hôte de l’institut. 30 minutes de battement séparent toujours deux clientes, pour votre entière tranquillité.',
                   },
                 ].map((c) => (
                   <div key={c.n} className="bg-paper rounded-xl p-4 border border-border space-y-1.5">
@@ -1377,7 +1562,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
                     <p id="rf-telephone-err" className="text-xs text-red-700">{formErrors.telephone}</p>
                   ) : (
                     <p id="rf-telephone-hint" className="text-xs text-muted font-light">
-                      Emmanuelle vous appelle (ou vous écrit) sur ce numéro.
+                      Emmanuelle vous contacte sur ce numéro pour confirmer votre rendez-vous.
                     </p>
                   )}
                 </div>
@@ -1560,7 +1745,7 @@ export default function ReservationClient({ businessPhone }: ReservationClientPr
               </button>
             </div>
             <p className="text-center text-xs text-muted font-light -mt-4">
-              {estimatedSummary} · Votre demande sera confirmée par Emmanuelle lors de son appel.
+              {estimatedSummary} · Votre rendez-vous sera confirmé par Emmanuelle.
             </p>
           </form>
         )}

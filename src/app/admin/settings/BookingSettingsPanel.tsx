@@ -355,15 +355,16 @@ function BookingSettingsContent() {
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
-                    min="0"
+                    min="30"
                     step="5"
                     value={settings.buffer_minutes}
                     onChange={(e) => setSettings({ ...settings, buffer_minutes: parseInt(e.target.value, 10) || 0 })}
+                    onBlur={() => setSettings((s) => ({ ...s, buffer_minutes: Math.max(30, s.buffer_minutes || 0) }))}
                     className="w-24 text-sm px-3.5 py-2 rounded-xl border border-stone-200"
                   />
                   <span className="text-[14px] lg:text-xs text-stone-600 lg:text-stone-500">minutes</span>
                 </div>
-                <p className="text-[13px] lg:text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 lg:text-stone-400 font-light">30 min recommandées pour l'aération et la préparation.</p>
+                <p className="text-[13px] lg:text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 lg:text-stone-400 font-light">30 min au minimum (aération et préparation) : impossible de descendre en dessous.</p>
               </div>
 
               <div className="space-y-1">
@@ -438,7 +439,7 @@ function BookingSettingsContent() {
                   className="w-full sm:w-40 text-sm px-3.5 py-2.5 rounded-xl bg-stone-50"
                 />
                 <p className="text-[13px] lg:text-[11px] text-stone-600 lg:text-stone-500 font-light">
-                  Sépare « matin » et « après-midi » dans les demandes des clientes.
+                  Sépare les horaires du matin et de l’après-midi proposés aux clientes.
                 </p>
               </div>
             </div>

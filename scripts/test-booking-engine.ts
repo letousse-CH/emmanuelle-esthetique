@@ -4,13 +4,15 @@
  *   npx tsx scripts/test-booking-engine.ts
  *
  * Calendrier utilisé : octobre 2026 — le 5 est un lundi, le 4 un dimanche,
- * le 3 un samedi. Horaires : lun–ven 09:00–12:00 et 13:30–18:30, buffer 30 min,
- * pas 30 min, coupure matin/après-midi 13:00.
+ * le 3 un samedi. Horaires : lun–ven 09:00–12:00 et 13:30–18:30, buffer 30 min
+ * (minimum incompressible), pas 30 min, coupure matin/après-midi 13:00.
  */
 import assert from 'node:assert/strict';
 import {
   addDays,
   busyFromInstants,
+  checkSlot,
+  compareBookings,
   computeDay,
   computeRange,
   dateBoundsError,
@@ -392,6 +394,91 @@ test('computeRange : dimanche grisé, lundi libre, matin complet signalé', () =
   assert.deepEqual(cal.jours['2026-10-04'], { matin: false, apres_midi: false });
   assert.deepEqual(cal.jours[LUNDI], { matin: true, apres_midi: true });
   assert.deepEqual(cal.jours[MARDI], { matin: false, apres_midi: true });
+});
+
+section('Heure choisie en ligne (depuis le 2026-10-19)');
+const slot = (heure: string, opts: { duration?: number; bookings?: EngineBooking[]; blocks?: BookingBlock[]; now?: typeof NOW; settings?: EngineSettings; ignoreBounds?: boolean } = {}) =>
+  checkSlot({
+    date: LUNDI,
+    heure,
+    duration: opts.duration ?? 60,
+    settings: opts.settings ?? SETTINGS,
+    blocks: opts.blocks ?? [],
+    bookings: opts.bookings ?? [],
+    now: opts.now ?? NOW,
+    ignoreBounds: opts.ignoreBounds,
+  });
+test('battement de 30 min incompressible, même si le réglage dit 0 ou 10', () => {
+  const autre = rdv({ date_rdv: LUNDI, heure_rdv: '10:00' });
+  for (const buffer_minutes of [0, 10]) {
+    const settings = { ...SETTINGS, buffer_minutes };
+    const libres = heuresLibres(day(LUNDI, { duration: 30, bookings: [autre], settings }));
+    assert.ok(libres.includes('09:00'), 'finit 09:30 + 30 = 10:00 : pile');
+    assert.ok(!libres.includes('09:30'), 'finit 10:00 : collé au rdv suivant');
+    assert.equal(day(LUNDI, { settings }).buffer_minutes, 30);
+    assert.notEqual(slot('11:00', { bookings: [autre], settings }), null, 'rdv fini à 11:00 : pas avant 11:30');
+  }
+  // Un réglage plus généreux reste respecté
+  assert.notEqual(slot('11:30', { bookings: [autre], settings: { ...SETTINGS, buffer_minutes: 45 } }), null);
+});
+test('heure proposée au plus tôt après un soin de 70 min : 10:40, pas seulement 11:00', () => {
+  const pieds = rdv({ date_rdv: LUNDI, heure_rdv: '09:00', service_duree_minutes: 70 }); // 09:00–10:10, libre à 10:40
+  const r = day(LUNDI, { bookings: [pieds] });
+  const libres = heuresLibres(r);
+  assert.ok(libres.includes('10:40'));
+  assert.ok(!libres.includes('10:30'));
+  assert.deepEqual(libres.filter((h) => h < '12:00'), ['10:40', '11:00']);
+  assert.equal(r.periodes.matin.premier_creneau, '10:40');
+});
+test('reprise juste après une indisponibilité qui finit hors grille (dentiste 09:00–10:20)', () => {
+  const blocks = [bloc({ date_debut: LUNDI, date_fin: LUNDI, heure_debut: '09:00', heure_fin: '10:20' })];
+  assert.ok(heuresLibres(day(LUNDI, { blocks })).includes('10:20'), 'pas de battement exigé après un blocage');
+});
+test('plusieurs soins : la durée totale doit tenir dans la plage d\'ouverture', () => {
+  // Hydra 60 + Échappée belle 105 = 165 min, matin 09:00–12:00
+  const libres = heuresLibres(day(LUNDI, { duration: 165 }));
+  assert.ok(libres.includes('09:00'));
+  assert.ok(!libres.includes('09:30'), 'finirait à 12:15');
+  assert.equal(slot('09:30', { duration: 165 }), 'Indisponible');
+  assert.equal(slot('09:00', { duration: 165 }), null);
+});
+test('checkSlot : libre, occupé, hors horaires, délai, fermé', () => {
+  const autre = rdv({ date_rdv: LUNDI, heure_rdv: '14:00' });
+  assert.equal(slot('14:00'), null);
+  assert.equal(slot('14:30', { bookings: [autre] }), 'Déjà occupé');
+  assert.equal(slot('15:00', { bookings: [autre] }), 'Déjà occupé', 'collé sans battement');
+  assert.equal(slot('15:30', { bookings: [autre] }), null);
+  assert.equal(slot('12:30'), 'Indisponible', 'pause de midi');
+  assert.equal(slot('17:45'), 'Indisponible', 'finirait après 18:30');
+  assert.equal(slot('9h00'), 'Horaire invalide.');
+  const lundiMatin = zurichNow(new Date('2026-10-05T06:30:00Z')); // 08:30 Zurich, 2 h de délai
+  assert.equal(slot('10:00', { now: lundiMatin }), "Délai d'anticipation dépassé");
+  assert.equal(slot('10:30', { now: lundiMatin }), null);
+  assert.equal(checkSlot({ date: '2026-10-04', heure: '10:00', duration: 60, settings: SETTINGS, blocks: [], bookings: [], now: NOW }), 'Fermé ce jour.');
+});
+test('une heure hors grille qui tient est acceptée (10:40)', () => {
+  const pieds = rdv({ date_rdv: LUNDI, heure_rdv: '09:00', service_duree_minutes: 70 });
+  assert.equal(slot('10:40', { bookings: [pieds] }), null);
+  assert.equal(slot('10:35', { bookings: [pieds] }), 'Déjà occupé');
+});
+test('une demande en ligne à heure choisie bloque comme un rdv fixe, même en attente', () => {
+  const demande = rdv({ date_rdv: LUNDI, heure_rdv: '14:00', statut: 'en_attente', horaire_fixe: true });
+  assert.ok(!heuresLibres(day(LUNDI, { bookings: [demande] })).includes('14:30'));
+  assert.equal(slot('14:30', { bookings: [demande] }), 'Déjà occupé');
+});
+test('deux demandes simultanées sur la même heure : la première déposée garde l\'horaire', () => {
+  const a = rdv({ date_rdv: LUNDI, heure_rdv: '14:00', statut: 'en_attente', id: 'bbb', created_at: '2026-10-01T09:00:00Z' });
+  const b = rdv({ date_rdv: LUNDI, heure_rdv: '14:30', statut: 'en_attente', id: 'aaa', created_at: '2026-10-01T09:00:00Z' });
+  const all = [a, b];
+  // Même horodatage : départage par id (« aaa » avant « bbb »)
+  const avant = (x: EngineBooking) => all.filter((o) => o.id !== x.id && compareBookings(o, x) < 0);
+  assert.equal(slot(b.heure_rdv, { bookings: avant(b), ignoreBounds: true }), null, 'b (aaa) est la première');
+  assert.equal(slot(a.heure_rdv, { bookings: avant(a), ignoreBounds: true }), 'Déjà occupé', 'a (bbb) se retire');
+});
+test('une ancienne demande souple garde sa place face à une heure choisie', () => {
+  const s1 = souple(LUNDI, 'matin'); // placée à 09:00
+  assert.equal(slot('09:00', { bookings: [s1] }), 'Déjà occupé');
+  assert.equal(slot('10:30', { bookings: [s1] }), null);
 });
 
 console.log(`\n${passed} test(s) réussi(s), ${failed} échec(s).`);

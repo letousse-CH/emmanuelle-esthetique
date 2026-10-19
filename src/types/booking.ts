@@ -3,9 +3,12 @@
  * partagés par le service, les routes API, l'admin et le formulaire public.
  *
  * Modèle métier — voir PLAN-RESERVATIONS.md :
- *  - la cliente demande une DATE + une PÉRIODE (matin / après-midi) ;
- *  - Emmanuelle la rappelle, fait l'upselling, puis fixe l'HORAIRE DÉFINITIF ;
- *  - `horaire_fixe = false` : demande « souple », `heure_rdv` n'est qu'indicative ;
+ *  - depuis le 2026-10-19, la cliente choisit en ligne son HEURE (dans les heures
+ *    d'ouverture), un soin et éventuellement d'autres soins en plus ; la durée
+ *    totale et 30 min de battement bloquent l'agenda dès la demande ;
+ *  - la demande reste `en_attente` jusqu'à ce qu'Emmanuelle la confirme ;
+ *  - `horaire_fixe = false` : ancienne demande « souple » (date + matin/après-midi),
+ *    `heure_rdv` n'est qu'indicative ;
  *  - `horaire_fixe = true`  : l'heure est arrêtée et bloque réellement l'agenda.
  */
 
@@ -156,8 +159,11 @@ export interface PublicBookingRequest {
   ville?: string | null;
   /** Soin de la carte. Absent quand la cliente réserve une offre du moment. */
   service_id?: string | null;
-  /** Identifiants du catalogue uniquement : le serveur retrouve nom, prix, durée. */
-  options?: Array<{ id: string }>;
+  /**
+   * Soins ajoutés en plus du premier (autres soins réservables en ligne ou compléments).
+   * Identifiants du catalogue uniquement : le serveur retrouve nom, prix, durée.
+   */
+  options?: Array<{ id: string; variante_duree_minutes?: number | null }>;
   /** Offre du moment réservée comme soin à part entière (prix, durée, période et places vérifiés par le serveur). */
   offer_of_month_id?: string | null;
   /**
@@ -166,7 +172,10 @@ export interface PublicBookingRequest {
    */
   variante_duree_minutes?: number | null;
   date_rdv: string;
-  periode: BookingPeriode;
+  /** HH:mm de début choisi par la cliente (Europe/Zurich). Vérifié par le serveur avec la durée totale. */
+  heure_rdv: string;
+  /** Déduite de `heure_rdv` par le serveur ; ignorée si envoyée. */
+  periode?: BookingPeriode;
   notes_cliente?: string | null;
   consent_email?: boolean;
   consent_whatsapp?: boolean;
@@ -183,6 +192,8 @@ export interface PublicBookingView {
   options: Array<{ nom: string; prix_chf: number }>;
   date_rdv: string;
   periode: BookingPeriode;
+  /** HH:mm choisi (absent pour une ancienne demande « matin / après-midi »). */
+  heure_rdv?: string | null;
   service_duree_minutes: number;
   total_chf: number;
 }
@@ -313,6 +324,7 @@ export function formatCHF(n: number): string {
 /** Codes machine des erreurs de POST /api/bookings (en plus de `error`, lisible). */
 export type PublicBookingErrorCode =
   | 'periode_complete'
+  | 'creneau_pris'
   | 'doublon'
   | 'trop_de_demandes'
   | 'offre_indisponible'

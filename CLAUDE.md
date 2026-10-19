@@ -162,11 +162,23 @@ suffit : pas besoin de domaine personnalisé.
 Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
 `supabase/migrations/20261004_reservations_v2.sql` (après `20261003`).
 
-> **La cliente demande une date et une période (matin / après-midi), pas une heure.**
-> Emmanuelle la rappelle, fait l'upselling, puis fixe l'horaire définitif.
+> **Depuis le 2026-10-19, la cliente choisit son heure** (dans les heures d'ouverture),
+> un soin et, si elle veut, d'autres soins en plus (soins réservables en ligne ou
+> compléments, rangés dans `options` avec `ajoute_par: 'cliente'`). La durée totale
+> + **30 min de battement incompressible** bloquent l'agenda dès la demande, qui
+> reste `en_attente` jusqu'à ce qu'Emmanuelle la confirme.
 
-- `horaire_fixe = false` : demande « souple », `heure_rdv` n'est qu'indicative et
-  ne bloque pas une heure précise. `true` : l'heure est arrêtée et bloque l'agenda.
+- Demande en ligne = `horaire_fixe = true` + `en_attente` + `heure_rdv` choisie ;
+  `periode` est déduite de l'heure (coupure des réglages). `horaire_fixe = false` :
+  ancienne demande « souple » (matin / après-midi), encore gérée par le moteur.
+- Battement : `effectiveBuffer()` = réglage, jamais moins de `MIN_BUFFER_MINUTES`
+  (30, `bookingEngine.ts`) ; le réglage refuse aussi moins de 30. Les heures
+  proposées = grille (`pas_creneau_minutes`) + le plus tôt possible après un
+  rendez-vous ou une indisponibilité (un soin de 70 min fini à 10:10 libère 10:40).
+- Création : `checkSlot()` avant l'INSERT, puis re-vérification face aux seuls
+  rendez-vous déposés avant (`compareBookings`, ordre `created_at, id`) : de deux
+  demandes simultanées sur la même heure, la première reste (409 `creneau_pris`
+  pour l'autre). La demande part aussi dans Google Agenda (« [À confirmer] »).
 - Le moteur de créneaux est pur et testable : `src/services/bookingEngine.ts`
   (`npx tsx scripts/test-booking-engine.ts`). Tout se calcule en `Europe/Zurich`,
   jamais avec `toISOString().split('T')` (UTC).

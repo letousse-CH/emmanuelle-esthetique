@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Check, MessageCircle, Phone, Info } from 'lucide-react';
 import { PERIODE_LABEL, type PublicBookingView } from '../../../types/booking';
-import { formatDateLong } from './dates';
+import { formatDateLong, formatHeure } from './dates';
 import { chf } from './format';
 
 interface ConfirmationStepProps {
@@ -17,10 +17,10 @@ interface ConfirmationStepProps {
 }
 
 /**
- * Écran final. Il dit la vérité : la demande est ENREGISTRÉE, elle n'est pas
- * CONFIRMÉE — c'est Emmanuelle qui fixe l'horaire exact au téléphone. D'où
- * l'absence de fichier .ics : une demande non confirmée n'a rien à faire dans
- * un agenda.
+ * Écran final. Il dit la vérité : la demande est ENREGISTRÉE et son horaire
+ * réservé, mais elle n'est pas CONFIRMÉE — c'est Emmanuelle qui la confirme.
+ * D'où l'absence de fichier .ics : une demande non confirmée n'a rien à faire
+ * dans un agenda.
  */
 export default function ConfirmationStep({
   booking,
@@ -31,6 +31,15 @@ export default function ConfirmationStep({
 }: ConfirmationStepProps) {
   const dateLong = formatDateLong(booking.date_rdv);
   const periode = PERIODE_LABEL[booking.periode] ?? booking.periode;
+  const debut = booking.heure_rdv ?? null;
+  const fin = debut
+    ? (() => {
+        const [h, m] = debut.split(':').map((x) => parseInt(x, 10));
+        const t = h * 60 + m + (Number(booking.service_duree_minutes) || 0);
+        return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+      })()
+    : null;
+  const quand = debut ? `${formatHeure(debut)} à ${formatHeure(fin)}` : periode;
   const phoneDigits = businessPhone ? businessPhone.replace(/[^\d+]/g, '') : '';
   const totalDiffers = Math.abs((Number(booking.total_chf) || 0) - estimatedTotal) > 0.009;
 
@@ -58,8 +67,9 @@ export default function ConfirmationStep({
           </h2>
           <p className="text-stone-deep text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
             <strong className="font-semibold">Ce n&apos;est pas encore une confirmation.</strong>{' '}
-            Emmanuelle vous
-            appelle (ou vous écrit) pour confirmer l&apos;horaire exact de votre rendez-vous.
+            {debut
+              ? 'Votre horaire vous est réservé ; Emmanuelle vous recontacte pour confirmer votre rendez-vous.'
+              : 'Emmanuelle vous appelle (ou vous écrit) pour confirmer l’horaire exact de votre rendez-vous.'}
           </p>
         </div>
 
@@ -73,7 +83,7 @@ export default function ConfirmationStep({
           </div>
 
           <div className="space-y-1">
-            <div className="text-xs text-muted font-medium">Soin demandé</div>
+            <div className="text-xs text-muted font-medium">{booking.options?.length ? 'Soins demandés' : 'Soin demandé'}</div>
             <div className="text-base font-serif font-bold text-stone-deep">{booking.service_nom}</div>
             {booking.options?.length > 0 && (
               <ul className="text-xs text-muted space-y-0.5">
@@ -89,10 +99,12 @@ export default function ConfirmationStep({
 
           <div className="grid grid-cols-2 gap-4 pt-3 border-t border-border">
             <div>
-              <span className="text-xs text-muted block">Jour et période demandés</span>
+              <span className="text-xs text-muted block">{debut ? 'Jour et heure demandés' : 'Jour et période demandés'}</span>
               <span className="text-sm font-semibold text-stone-deep capitalize block">{dateLong}</span>
-              <span className="text-sm font-semibold text-sage block">{periode}</span>
-              <span className="text-[11px] text-muted block font-light mt-0.5">Horaire exact à convenir avec Emmanuelle</span>
+              <span className="text-sm font-semibold text-sage block">{quand}</span>
+              <span className="text-[11px] text-muted block font-light mt-0.5">
+                {debut ? 'À confirmer par Emmanuelle' : 'Horaire exact à convenir avec Emmanuelle'}
+              </span>
             </div>
             <div>
               <span className="text-xs text-muted block">Durée prévue</span>
@@ -117,7 +129,7 @@ export default function ConfirmationStep({
         </div>
 
         <p className="text-xs text-muted max-w-md mx-auto font-light leading-relaxed">
-          Aucun paiement n&apos;est demandé en ligne. Si vous ne recevez pas d&apos;appel d&apos;ici un jour ouvré, ou si
+          Aucun paiement n&apos;est demandé en ligne. Si vous n&apos;avez pas de nouvelles d&apos;ici un jour ouvré, ou si
           vous devez modifier votre demande, contactez directement l&apos;institut.
         </p>
 
@@ -136,7 +148,7 @@ export default function ConfirmationStep({
           {phoneDigits && (
             <a
               href={`https://wa.me/${phoneDigits.replace(/\D/g, '')}?text=${encodeURIComponent(
-                `Bonjour Emmanuelle, je viens de faire une demande de rendez-vous en ligne pour le soin ${booking.service_nom}, le ${dateLong} (${periode.toLowerCase()}).`
+                `Bonjour Emmanuelle, je viens de faire une demande de rendez-vous en ligne pour le soin ${booking.service_nom}, le ${dateLong} (${debut ? `à ${formatHeure(debut)}` : periode.toLowerCase()}).`
               )}`}
               target="_blank"
               rel="noopener noreferrer"

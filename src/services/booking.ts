@@ -1,10 +1,12 @@
 /**
  * Service de Réservations — Emmanuelle Esthétique
  *
- * Modèle (PLAN-RESERVATIONS.md) : la cliente dépose une DEMANDE = date + période
- * (matin / après-midi). Emmanuelle la rappelle, fait l'upselling puis FIXE
- * l'horaire définitif. Tant que `horaire_fixe = false`, la demande est « souple »
- * et n'occupe que de la capacité dans sa période.
+ * Modèle (PLAN-RESERVATIONS.md) : depuis le 2026-10-19, la cliente choisit en
+ * ligne son soin (plus d'autres soins si elle veut) et son HEURE ; la demande
+ * bloque aussitôt `[heure, heure + durée totale + 30 min]` (`horaire_fixe = true`)
+ * et reste `en_attente` jusqu'à ce qu'Emmanuelle la confirme. Les anciennes
+ * demandes « souples » (date + matin/après-midi, `horaire_fixe = false`)
+ * n'occupent que de la capacité dans leur période.
  *
  * Ce fichier regroupe, côté serveur uniquement :
  *  - la lecture/écriture des réglages et des blocages (validation stricte) ;
@@ -84,6 +86,8 @@ import {
 import {
   addDays,
   busyFromInstants,
+  checkSlot,
+  compareBookings,
   computeDay,
   computeRange,
   dateBoundsError,
@@ -92,6 +96,7 @@ import {
   findFixedConflicts,
   isValidDateStr,
   isValidTimeStr,
+  MIN_BUFFER_MINUTES,
   periodeOfTime,
   zurichInstant,
   zurichNow,
@@ -655,7 +660,9 @@ function coerceSettings(data: any): BookingSettings {
   const pas = Number(data.pas_creneau_minutes);
   return {
     id: data.id ?? 'default',
-    buffer_minutes: Number.isFinite(Number(data.buffer_minutes)) ? Number(data.buffer_minutes) : d.buffer_minutes,
+    buffer_minutes: Number.isFinite(Number(data.buffer_minutes))
+      ? Math.max(MIN_BUFFER_MINUTES, Number(data.buffer_minutes))
+      : d.buffer_minutes,
     anticipation_min_heures: Number.isFinite(Number(data.anticipation_min_heures))
       ? Number(data.anticipation_min_heures)
       : d.anticipation_min_heures,
@@ -708,7 +715,10 @@ export function validateSettingsPatch(body: unknown): Partial<BookingSettings> {
   const b = body as Record<string, unknown>;
   const out: Record<string, unknown> = {};
 
-  if (b.buffer_minutes !== undefined) out.buffer_minutes = intInRange(b.buffer_minutes, 0, 240, 'Battement entre soins (minutes)');
+  // 30 min incompressibles entre deux rendez-vous : le moteur les impose de toute façon.
+  if (b.buffer_minutes !== undefined) {
+    out.buffer_minutes = intInRange(b.buffer_minutes, MIN_BUFFER_MINUTES, 240, 'Battement entre soins (minutes)');
+  }
   if (b.anticipation_min_heures !== undefined) {
     out.anticipation_min_heures = intInRange(b.anticipation_min_heures, 0, 720, 'Délai minimum (heures)');
   }
@@ -1724,11 +1734,12 @@ interface ValidatedPublicRequest {
   code_postal: string | null;
   ville: string | null;
   service_id: string;
-  optionIds: string[];
+  /** Soins ajoutés en plus du premier (dédoublonnés). */
+  extras: Array<{ id: string; variantMinutes: number | null }>;
   offer_of_month_id: string | null;
   variantMinutes: number | null;
   date_rdv: string;
-  periode: BookingPeriode;
+  heure_rdv: string;
   notes_cliente: string | null;
   consent_email: boolean;
   consent_whatsapp: boolean;
@@ -1752,25 +1763,27 @@ function validatePublicRequest(raw: unknown): ValidatedPublicRequest {
   // Une offre du moment se réserve comme un soin : `service_id` n'est alors pas requis.
   if (!offer && (typeof r.service_id !== 'string' || !r.service_id.trim() || r.service_id.length > 80)) fail('Choisissez un soin.');
   if (!isValidDateStr(r.date_rdv)) fail('Date invalide.');
-  if (!PERIODES.includes(r.periode as BookingPeriode)) fail('Choisissez le matin ou l\'après-midi.');
+  if (!isValidTimeStr(r.heure_rdv)) fail('Choisissez l\'heure de votre rendez-vous.');
 
-  const optionIds: string[] = [];
+  const variante = (vm: unknown): number | null => {
+    if (vm === undefined || vm === null) return null;
+    const n = Number(vm);
+    if (!Number.isInteger(n) || n < 5 || n > MAX_DURATION_MINUTES) fail('Durée du soin invalide.');
+    return n;
+  };
+
+  const extras: ValidatedPublicRequest['extras'] = [];
   if (r.options !== undefined && r.options !== null) {
-    if (!Array.isArray(r.options) || r.options.length > 6) fail('Options : 6 au maximum.');
+    if (!Array.isArray(r.options) || r.options.length > 6) fail('6 soins en plus au maximum.');
     for (const o of r.options as unknown[]) {
       const id = isPlainObject(o) ? o.id : undefined;
-      if (typeof id !== 'string' || !id.trim() || id.length > 80) fail('Option invalide.');
-      if (!optionIds.includes(id as string)) optionIds.push(id as string);
+      if (typeof id !== 'string' || !id.trim() || id.length > 80) fail('Soin ajouté invalide.');
+      const variantMinutes = variante(isPlainObject(o) ? o.variante_duree_minutes : undefined);
+      if (!extras.some((x) => x.id === id)) extras.push({ id: id as string, variantMinutes });
     }
   }
 
-  let variantMinutes: number | null = null;
-  const vm = (r as any).variante_duree_minutes;
-  if (vm !== undefined && vm !== null) {
-    const n = Number(vm);
-    if (!Number.isInteger(n) || n < 5 || n > MAX_DURATION_MINUTES) fail('Durée du soin invalide.');
-    variantMinutes = n;
-  }
+  const variantMinutes = variante((r as any).variante_duree_minutes);
 
   return {
     nom: cleanText(r.nom, 80, 'Votre nom', true),
@@ -1780,11 +1793,11 @@ function validatePublicRequest(raw: unknown): ValidatedPublicRequest {
     code_postal: cleanText(r.code_postal, 10, 'Code postal') || null,
     ville: cleanText(r.ville, 80, 'Localité') || null,
     service_id: offer ? '' : (r.service_id as string).trim(),
-    optionIds: offer ? [] : optionIds,
+    extras,
     offer_of_month_id: offer,
     variantMinutes,
     date_rdv: r.date_rdv as string,
-    periode: r.periode as BookingPeriode,
+    heure_rdv: r.heure_rdv as string,
     notes_cliente: cleanText(r.notes_cliente, 1000, 'Votre message') || null,
     consent_email: r.consent_email === true,
     consent_whatsapp: r.consent_whatsapp === true,
@@ -1798,6 +1811,7 @@ export function toPublicView(b: Booking): PublicBookingView {
     options: b.options.map((o) => ({ nom: o.nom, prix_chf: o.prix_chf })),
     date_rdv: b.date_rdv,
     periode: b.periode ?? periodeOfTime(b.heure_rdv, DEFAULT_BOOKING_SETTINGS),
+    heure_rdv: b.horaire_fixe ? b.heure_rdv : null,
     service_duree_minutes: b.service_duree_minutes,
     total_chf: b.total_chf ?? bookingTotal(b),
   };
@@ -1868,13 +1882,15 @@ async function offerPlaceHeld(db: SupabaseClient, offer: Offer, bookingId: strin
 /**
  * Création d'une demande par une cliente (POST /api/bookings).
  *
- *  1. validation stricte ; prix, durée et options retrouvés AU CATALOGUE (jamais crus
- *     sur le navigateur) ; offre du moment relue en base ;
- *  2. la période demandée doit avoir de la place (sinon 409) ;
- *  3. INSERT, puis RE-VÉRIFICATION déterministe (même calcul, ordre `created_at, id`,
- *     ligne insérée comprise) : si la demande n'est plus placée, elle est supprimée
- *     et la cliente reçoit un 409 ;
- *  4. seulement ensuite : fiche CRM, journal, e-mails, automatisation.
+ *  1. validation stricte ; prix et durée du soin ET des soins ajoutés retrouvés AU
+ *     CATALOGUE (jamais crus sur le navigateur) ; offre du moment relue en base ;
+ *  2. l'heure choisie doit laisser passer la durée totale, dans les heures
+ *     d'ouverture, avec 30 min de battement autour des autres rendez-vous (sinon 409) ;
+ *  3. INSERT (`horaire_fixe = true`, statut `en_attente`), puis RE-VÉRIFICATION
+ *     déterministe face aux seuls rendez-vous déposés AVANT elle (ordre
+ *     `created_at, id`) : de deux demandes simultanées sur la même heure, la
+ *     première reste, la seconde est supprimée et reçoit un 409 ;
+ *  4. seulement ensuite : fiche CRM, journal, Google Agenda, e-mails, automatisation.
  */
 export async function createPublicBooking(raw: unknown): Promise<{ booking: Booking; view: PublicBookingView }> {
   const input = validatePublicRequest(raw);
@@ -1901,12 +1917,16 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
     // Une offre passée par `service_id` (`offre:<uuid>`) contournerait le contrôle des places.
     if (entry.origine === 'offre') throw new BookingError(422, 'Cette offre du moment n\'est plus disponible.', undefined, 'offre_indisponible');
     service = entry;
+  }
 
-    for (const id of input.optionIds) {
-      const opt = await lookupCatalogEntry(db, id, { onlyActive: true });
-      if (!opt || opt.kind !== 'option') throw new BookingError(422, 'Une des options choisies n\'est plus disponible.', undefined, 'soin_inconnu');
-      options.push({ id: opt.id, nom: opt.nom, prix_chf: opt.prix_chf, duree_minutes: opt.duree_minutes, ajoute_par: 'cliente' });
+  // Soins ajoutés : réservables en ligne (soin de la carte ou complément), jamais une offre.
+  for (const x of input.extras) {
+    if (x.id === service.id) continue;
+    const extra = await lookupCatalogEntry(db, x.id, { onlyActive: true, variantMinutes: x.variantMinutes });
+    if (!extra || extra.kind === 'hors_ligne' || extra.origine === 'offre') {
+      throw new BookingError(422, 'Un des soins ajoutés n\'est plus disponible.', undefined, 'soin_inconnu');
     }
+    options.push({ id: extra.id, nom: extra.nom, prix_chf: extra.prix_chf, duree_minutes: extra.duree_minutes, ajoute_par: 'cliente' });
   }
 
   const duree = service.duree_minutes + sumOptionDurations(options);
@@ -1924,10 +1944,11 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
     throw new BookingError(409, 'Vous avez déjà plusieurs demandes en cours. Emmanuelle vous rappellera très prochainement.', undefined, 'trop_de_demandes');
   }
 
-  // La période a-t-elle de la place ?
+  // L'heure choisie laisse-t-elle passer toute la séance (+ battement) ?
   const dayData = await loadDayData(input.date_rdv);
-  const dispo = computeDay({
+  const indispo = checkSlot({
     date: input.date_rdv,
+    heure: input.heure_rdv,
     duration: duree,
     settings: dayData.settings,
     blocks: dayData.blocks,
@@ -1935,10 +1956,17 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
     externalBusy: dayData.externalBusy,
     now,
   });
-  const periodeDispo = dispo.periodes[input.periode];
-  if (!dispo.ouvert || !periodeDispo.disponible || !periodeDispo.premier_creneau) {
-    throw new BookingError(409, 'Cette période n\'est plus disponible. Merci d\'en choisir une autre.', undefined, 'periode_complete');
+  if (indispo) {
+    throw new BookingError(
+      409,
+      indispo === "Délai d'anticipation dépassé"
+        ? 'Cet horaire est trop proche pour être réservé en ligne. Merci d\'en choisir un autre.'
+        : 'Cet horaire n\'est plus disponible pour la durée de votre séance. Merci d\'en choisir un autre.',
+      undefined,
+      'creneau_pris',
+    );
   }
+  const periode = periodeOfTime(input.heure_rdv, settings);
 
   const insertRow = {
     client_id: null,
@@ -1955,11 +1983,12 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
     options,
     offer_of_month_id: input.offer_of_month_id,
     date_rdv: input.date_rdv,
-    heure_rdv: periodeDispo.premier_creneau,
-    periode: input.periode,
-    horaire_fixe: false,
+    heure_rdv: input.heure_rdv,
+    periode,
+    // La cliente a choisi son heure : elle bloque l'agenda dès maintenant, même en attente.
+    horaire_fixe: true,
     date_demandee: input.date_rdv,
-    periode_demandee: input.periode,
+    periode_demandee: periode,
     total_chf: total,
     source: 'en_ligne',
     statut: 'en_attente',
@@ -1970,7 +1999,7 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
   const { data: inserted, error: insertError } = await db.from('bookings').insert(insertRow).select().single();
   if (insertError || !inserted) {
     if (insertError?.code === '23505') {
-      throw new BookingError(409, 'Vous avez déjà une demande pour cette date et cette période. Emmanuelle vous rappellera pour la confirmer.', undefined, 'doublon');
+      throw new BookingError(409, 'Vous avez déjà une demande en cours pour cette demi-journée. Emmanuelle vous recontactera pour la confirmer.', undefined, 'doublon');
     }
     console.error('[createPublicBooking] INSERT refusé:', insertError);
     const msg = insertError?.message ?? '';
@@ -1981,32 +2010,29 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
   }
   let booking = normalizeBookingRow(inserted);
 
-  // Re-vérification déterministe, ligne insérée comprise
+  // Re-vérification déterministe : seuls les rendez-vous déposés AVANT celui-ci comptent.
   try {
     const after = await loadDayData(input.date_rdv, false);
-    const verif = computeDay({
+    const prior = after.bookings.filter((b) => b.id !== booking.id && compareBookings(b, booking) < 0);
+    const conflit = checkSlot({
       date: input.date_rdv,
+      heure: input.heure_rdv,
       duration: duree,
       settings: after.settings,
       blocks: after.blocks,
-      bookings: after.bookings,
+      bookings: prior,
       now,
       ignoreBounds: true,
     });
-    const placement = verif.placements.find((p) => p.booking_id === booking.id);
-    if (!verif.ouvert || !placement) {
+    if (conflit) {
       await db.from('bookings').delete().eq('id', booking.id);
-      throw new BookingError(409, 'Cette période vient d\'être prise par une autre demande. Merci d\'en choisir une autre.', undefined, 'periode_complete');
+      throw new BookingError(409, 'Cet horaire vient d\'être réservé par une autre cliente. Merci d\'en choisir un autre.', undefined, 'creneau_pris');
     }
     // Même principe pour les places d'une offre limitée : deux clientes qui
     // prennent la dernière place à la même seconde ne la gardent pas toutes les deux.
     if (offer && !(await offerPlaceHeld(db, offer, booking.id))) {
       await db.from('bookings').delete().eq('id', booking.id);
       throw new BookingError(409, 'La dernière place de cette offre vient d\'être réservée. Choisissez un autre soin ou contactez l\'institut.', undefined, 'offre_complete');
-    }
-    if (placement.heure !== booking.heure_rdv) {
-      const { data: upd } = await db.from('bookings').update({ heure_rdv: placement.heure }).eq('id', booking.id).select().single();
-      if (upd) booking = normalizeBookingRow(upd);
     }
   } catch (err) {
     if (err instanceof BookingError) throw err;
@@ -2019,7 +2045,7 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
     db,
     booking.id,
     'creation',
-    { source: 'en_ligne', date: booking.date_rdv, periode: booking.periode, total_chf: booking.total_chf },
+    { source: 'en_ligne', date: booking.date_rdv, heure: booking.heure_rdv, total_chf: booking.total_chf },
     'cliente',
   );
 
@@ -2031,11 +2057,14 @@ export async function createPublicBooking(raw: unknown): Promise<{ booking: Book
   );
   if (clientId) booking = { ...booking, client_id: clientId };
 
-  // E-mails et notification : attendus avant de répondre (une fonction serverless est gelée dès la réponse envoyée).
-  await Promise.all([
+  // Agenda Google, e-mails et notification : attendus avant de répondre (une fonction
+  // serverless est gelée dès la réponse envoyée). Aucun ne fait échouer la demande.
+  const [synced] = await Promise.all([
+    syncGoogleEventAfterWrite(db, null, booking, settings),
     sendNewRequestMails(db, booking, settings).catch((err) => console.warn('[createPublicBooking] E-mails:', err)),
     sendNewRequestPush(db, booking).catch((err) => console.warn('[createPublicBooking] Notification:', err)),
   ]);
+  booking = synced;
 
   try {
     await emitAutomationEvent('booking.created', SITE_CONFIG.url);
@@ -2598,10 +2627,13 @@ async function sendNewRequestPush(db: SupabaseClient, booking: Booking): Promise
   const jour = new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('fr-CH', {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Zurich',
   });
-  const periode = PERIODE_LABEL[booking.periode ?? 'matin'].toLowerCase();
+  const quand = booking.horaire_fixe
+    ? `à ${booking.heure_rdv}`
+    : PERIODE_LABEL[booking.periode ?? 'matin'].toLowerCase();
+  const soins = [booking.service_nom, ...booking.options.map((o) => o.nom)].join(' + ');
   const r = await sendPushToAll({
     title: `Nouvelle demande — ${booking.prenom} ${booking.nom}`.trim(),
-    body: `${booking.service_nom}\n${jour.charAt(0).toUpperCase()}${jour.slice(1)}, ${periode} · ${booking.telephone}`,
+    body: `${soins}\n${jour.charAt(0).toUpperCase()}${jour.slice(1)} ${quand} · ${booking.telephone}`,
     url: `/admin/reservations?id=${encodeURIComponent(booking.id)}`,
     tag: `rdv-${booking.id}`,
   });
@@ -2629,9 +2661,17 @@ async function sendNewRequestMails(db: SupabaseClient, booking: Booking, setting
     return;
   }
   const periode = booking.periode ?? 'matin';
+  const fin = minutesToTime(timeToMinutes(booking.heure_rdv) + booking.service_duree_minutes);
+  const souhait = booking.horaire_fixe
+    ? `${escapeHtml(formatDateLong(booking.date_rdv))} — ${escapeHtml(booking.heure_rdv)} à ${escapeHtml(fin)}`
+    : `${escapeHtml(formatDateLong(booking.date_rdv))} — ${escapeHtml(PERIODE_LABEL[periode].toLowerCase())}`;
   const html = mailShell(`
     <h2 style="font-size:18px;margin:0 0 8px;">Nouvelle demande de rendez-vous</h2>
-    <p>Une cliente a déposé une demande sur le site. <strong>Elle attend votre appel</strong> pour confirmer l'horaire.</p>
+    <p>Une cliente a déposé une demande sur le site. ${
+      booking.horaire_fixe
+        ? 'L\'horaire qu\'elle a choisi est <strong>réservé dans l\'agenda</strong> ; il reste à le confirmer.'
+        : '<strong>Elle attend votre appel</strong> pour confirmer l\'horaire.'
+    }</p>
     <div style="background:#fafaf9;border:1px solid #e7e5e4;border-radius:8px;padding:16px;margin:16px 0;">
       ${mailRow('Cliente :', `${escapeHtml(booking.prenom)} ${escapeHtml(booking.nom)}`)}
       ${mailRow('Téléphone :', `<a href="tel:${escapeHtml(booking.telephone.replace(/\s+/g, ''))}">${escapeHtml(booking.telephone)}</a>`)}
@@ -2639,8 +2679,8 @@ async function sendNewRequestMails(db: SupabaseClient, booking: Booking, setting
       ${booking.ville ? mailRow('Localité :', `${escapeHtml(booking.code_postal ?? '')} ${escapeHtml(booking.ville)}`) : ''}
       <hr style="border:none;border-top:1px solid #e7e5e4;margin:12px 0;"/>
       ${mailRow('Soin :', escapeHtml(booking.service_nom))}
-      ${booking.options.length ? mailRow('Options :', booking.options.map((o) => escapeHtml(o.nom)).join(', ')) : ''}
-      ${mailRow('Souhait :', `${escapeHtml(formatDateLong(booking.date_rdv))} — ${escapeHtml(PERIODE_LABEL[periode].toLowerCase())}`)}
+      ${booking.options.length ? mailRow('En plus :', booking.options.map((o) => escapeHtml(o.nom)).join(', ')) : ''}
+      ${mailRow('Souhait :', souhait)}
       ${mailRow('Durée :', `${booking.service_duree_minutes} minutes`)}
       ${mailRow('Total :', escapeHtml(chfMail(booking.total_chf ?? bookingTotal(booking))))}
       ${booking.notes_cliente ? mailRow('Message :', escapeHtml(booking.notes_cliente).replace(/\n/g, '<br/>')) : ''}

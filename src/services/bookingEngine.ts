@@ -8,8 +8,12 @@
  *
  * Modèle (voir PLAN-RESERVATIONS.md §1 et §3) :
  *  - rendez-vous à horaire arrêté (`horaire_fixe = true`) : bloquent
- *    `[début, début + durée + buffer]` ;
- *  - demandes « souples » (`en_attente`, `horaire_fixe = false`) : n'ont pas
+ *    `[début, début + durée + buffer]`. Depuis le 2026-10-19, c'est aussi le cas
+ *    des demandes en ligne : la cliente choisit son heure ;
+ *  - buffer : jamais moins de `MIN_BUFFER_MINUTES` (30 min incompressibles entre
+ *    deux rendez-vous), quel que soit le réglage ;
+ *  - demandes « souples » (héritage d'avant le 2026-10-19 : `en_attente`,
+ *    `horaire_fixe = false`) : n'ont pas
  *    d'heure, elles occupent de la capacité dans leur période. Le moteur les
  *    PLACE une à une, par ordre `(created_at, id)`, au premier créneau libre de
  *    leur période. Deux demandes du même matin ne se bloquent donc pas tant
@@ -140,6 +144,14 @@ export function jourLabel(date: string): string {
 // ── Types du moteur ──────────────────────────────────────────────────────────
 
 export interface Interval { start: number; end: number }
+
+/** Battement incompressible entre deux rendez-vous (aération, désinfection, discrétion). */
+export const MIN_BUFFER_MINUTES = 30;
+
+/** Battement appliqué : le réglage, jamais moins de `MIN_BUFFER_MINUTES`. */
+export function effectiveBuffer(settings: Pick<BookingSettings, 'buffer_minutes'>): number {
+  return Math.max(MIN_BUFFER_MINUTES, Math.round(Number(settings.buffer_minutes) || 0));
+}
 
 export type EngineSettings = Pick<
   BookingSettings,
@@ -295,7 +307,7 @@ interface DayModel {
 
 function buildDay(input: DayInput, extraObstacles: Interval[] = []): DayModel {
   const { date, settings, blocks, bookings, excludeId } = input;
-  const buf = Math.max(0, settings.buffer_minutes || 0);
+  const buf = effectiveBuffer(settings);
 
   const windows = openingWindows(date, settings);
   const dayBlocks = blocksForDate(date, blocks);
@@ -337,12 +349,27 @@ function candidates(windows: Interval[], duration: number, step: number): number
   return out;
 }
 
+/**
+ * Grille + départs « au plus tôt » : la fin d'un rendez-vous (battement compris,
+ * arrondie aux 5 minutes) et la reprise après une indisponibilité. Sans eux, un
+ * soin de 70 min fini à 10:10 ne libérerait l'agenda qu'à 11:00 avec une grille
+ * de 30 min, au lieu de 10:40. Ces départs ne sont ajoutés que s'ils tiennent
+ * dans une plage libre ; la grille, elle, reste entière (créneaux pris inclus).
+ */
+function startTimes(day: DayModel, obstacles: Interval[], duration: number, step: number): number[] {
+  const grid = candidates(day.windows, duration, step);
+  const extra = [...day.free.map((f) => f.start), ...obstacles.map((o) => Math.ceil(o.end / 5) * 5)].filter((t) =>
+    day.free.some((f) => t >= f.start && t + duration <= f.end),
+  );
+  return [...new Set([...grid, ...extra])].sort((a, b) => a - b);
+}
+
 /** Place les demandes souples (ordre `(created_at, id)`), renvoie positions + surcapacité. */
 function placeSofts(
   day: DayModel,
   settings: EngineSettings,
 ): { obstacles: Interval[]; placements: Placement[]; surcapacite: string[] } {
-  const buf = Math.max(0, settings.buffer_minutes || 0);
+  const buf = effectiveBuffer(settings);
   const obstacles = day.obstacles.map((o) => ({ ...o }));
   const placements: Placement[] = [];
   const surcapacite: string[] = [];
@@ -384,10 +411,77 @@ export function dateBoundsError(date: string, settings: EngineSettings, now: Zur
 
 const EMPTY_PERIODE: PeriodeDispo = { disponible: false, premier_creneau: null };
 
-export function computeDay(input: DayInput): DayResult {
+type PreparedDay =
+  | { closed: string }
+  | {
+      closed?: undefined;
+      day: DayModel;
+      placed: { obstacles: Interval[]; placements: Placement[]; surcapacite: string[] };
+      minStart: number;
+    };
+
+/** Bornes, jour fermé ou bloqué, placement des demandes souples : commun à `computeDay` et `checkSlot`. */
+function prepareDay(input: DayInput): PreparedDay {
   const { date, settings } = input;
   const mode = input.mode ?? 'public';
-  const buf = Math.max(0, settings.buffer_minutes || 0);
+  const enforceBounds = mode === 'public' && !input.ignoreBounds;
+  if (enforceBounds) {
+    const bounds = dateBoundsError(date, settings, input.now);
+    if (bounds) return { closed: bounds };
+  }
+
+  const day = buildDay(input);
+  if (day.windows.length === 0) return { closed: 'Fermé ce jour.' };
+  if (day.fullDayBlock) {
+    // Le motif d'un blocage (« Rendez-vous médecin »…) reste interne : jamais exposé au public.
+    return { closed: mode === 'admin' && day.fullDayBlock.motif ? day.fullDayBlock.motif : 'Indisponible ce jour.' };
+  }
+
+  // Mode admin : les demandes souples ne gênent pas (elles se re-placent).
+  const placed =
+    mode === 'public'
+      ? placeSofts(day, settings)
+      : { obstacles: day.obstacles, placements: [] as Placement[], surcapacite: [] as string[] };
+
+  const minStart = enforceBounds ? minAllowedStart(date, settings, input.now) : -Infinity;
+  return { day, placed, minStart };
+}
+
+/** Pourquoi un départ à `t` est impossible (`undefined` : il est libre). */
+function slotMotif(t: number, duration: number, p: Exclude<PreparedDay, { closed: string }>, buf: number): string | undefined {
+  if (!p.day.free.some((w) => t >= w.start && t + duration <= w.end)) return 'Indisponible';
+  if (t < p.minStart) return "Délai d'anticipation dépassé";
+  if (!fits(t, duration, p.day.free, p.placed.obstacles, buf)) return 'Déjà occupé';
+  return undefined;
+}
+
+export interface SlotCheckInput extends DayInput {
+  /** HH:mm choisi par la cliente */
+  heure: string;
+}
+
+/**
+ * Un rendez-vous peut-il commencer à `heure` ? `null` si oui, sinon la raison.
+ * Même calcul que `computeDay` (bornes, horaires, blocages, rendez-vous et
+ * battement), sans exiger que l'heure soit sur la grille : sert à vérifier
+ * l'horaire choisi en ligne, avant et après l'INSERT.
+ */
+export function checkSlot(input: SlotCheckInput): string | null {
+  if (!isValidTimeStr(input.heure)) return 'Horaire invalide.';
+  const prepared = prepareDay(input);
+  if (prepared.closed !== undefined) return prepared.closed;
+  const duration = Math.max(1, Math.round(input.duration || 60));
+  return slotMotif(timeToMinutes(input.heure), duration, prepared, effectiveBuffer(input.settings)) ?? null;
+}
+
+/** Ordre de priorité de deux rendez-vous (`created_at`, puis `id`) : le premier déposé l'emporte. */
+export function compareBookings(a: Pick<EngineBooking, 'created_at' | 'id'>, b: Pick<EngineBooking, 'created_at' | 'id'>): number {
+  return compareSoft(a as EngineBooking, b as EngineBooking);
+}
+
+export function computeDay(input: DayInput): DayResult {
+  const { date, settings } = input;
+  const buf = effectiveBuffer(settings);
   const duration = Math.max(1, Math.round(input.duration || 60));
 
   const closed = (motif: string, extra: Partial<DayResult> = {}): DayResult => ({
@@ -406,45 +500,17 @@ export function computeDay(input: DayInput): DayResult {
     ...extra,
   });
 
-  const enforceBounds = mode === 'public' && !input.ignoreBounds;
-  if (enforceBounds) {
-    const bounds = dateBoundsError(date, settings, input.now);
-    if (bounds) return closed(bounds);
-  }
-
-  const day = buildDay(input);
-  if (day.windows.length === 0) return closed('Fermé ce jour.');
-  if (day.fullDayBlock) {
-    // Le motif d'un blocage (« Rendez-vous médecin »…) reste interne : jamais exposé au public.
-    return closed(mode === 'admin' && day.fullDayBlock.motif ? day.fullDayBlock.motif : 'Indisponible ce jour.');
-  }
-
-  // Mode admin : les demandes souples ne gênent pas (elles se re-placent).
-  const placed =
-    mode === 'public'
-      ? placeSofts(day, settings)
-      : { obstacles: day.obstacles, placements: [] as Placement[], surcapacite: [] as string[] };
-
-  const minStart = enforceBounds ? minAllowedStart(date, settings, input.now) : -Infinity;
+  const prepared = prepareDay(input);
+  if (prepared.closed !== undefined) return closed(prepared.closed);
+  const { day, placed } = prepared;
 
   const slots: TimeSlot[] = [];
-  for (const t of candidates(day.windows, duration, settings.pas_creneau_minutes)) {
-    let disponible = true;
-    let motif: string | undefined;
-    if (!day.free.some((w) => t >= w.start && t + duration <= w.end)) {
-      disponible = false;
-      motif = 'Indisponible';
-    } else if (t < minStart) {
-      disponible = false;
-      motif = "Délai d'anticipation dépassé";
-    } else if (!fits(t, duration, day.free, placed.obstacles, buf)) {
-      disponible = false;
-      motif = 'Déjà occupé';
-    }
+  for (const t of startTimes(day, placed.obstacles, duration, settings.pas_creneau_minutes)) {
+    const motif = slotMotif(t, duration, prepared, buf);
     slots.push({
       heure: minutesToTime(t),
       fin: minutesToTime(t + duration),
-      disponible,
+      disponible: !motif,
       periode: periodeOfMinutes(t, settings),
       ...(motif ? { motif } : {}),
     });
@@ -527,7 +593,7 @@ export interface FixedCheckInput {
  */
 export function findFixedConflicts(input: FixedCheckInput): BookingConflict[] {
   const { date, settings } = input;
-  const buf = Math.max(0, settings.buffer_minutes || 0);
+  const buf = effectiveBuffer(settings);
   const duration = Math.max(1, Math.round(input.duration || 60));
   const t = timeToMinutes(input.heure);
   const end = t + duration;

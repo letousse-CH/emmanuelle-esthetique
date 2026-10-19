@@ -70,14 +70,14 @@ export const MAIL_VARIABLES: { key: string; label: string; only?: ClientMailKind
 
 export const DEFAULT_MAIL_TEXTS: Record<ClientMailKind, MailText> = {
   accuse: {
-    subject: 'Votre demande de rendez-vous — {date} ({periode})',
+    subject: 'Votre demande de rendez-vous — {date_heure}',
     body: `Bonjour {prenom},
 
-Nous avons bien reçu votre demande de rendez-vous pour le **{date}** ({periode}).
+Nous avons bien reçu votre demande de rendez-vous pour le **{date_heure}**.
 
 {recapitulatif}
 
-**Votre rendez-vous n'est pas encore confirmé.** {gerante} vous rappelle prochainement pour confirmer l'horaire exact.
+**Votre rendez-vous n'est pas encore confirmé.** Votre horaire vous est réservé ; {gerante} vous recontacte prochainement pour le confirmer.
 
 À bientôt,
 **{institut}**
@@ -191,7 +191,7 @@ export function mailShell(innerHtml: string): string {
 
 function summaryBlock(b: Booking, rows: string[]): string {
   const opts = b.options.length
-    ? `<p style="margin:0 0 6px;"><strong>Options :</strong> ${b.options.map((o) => escapeHtml(o.nom)).join(', ')}</p>`
+    ? `<p style="margin:0 0 6px;"><strong>En plus :</strong> ${b.options.map((o) => escapeHtml(o.nom)).join(', ')}</p>`
     : '';
   return `<div style="background:#fafaf9;border:1px solid #e7e5e4;border-radius:8px;padding:16px;margin:16px 0;">
     ${rows.join('\n')}
@@ -270,7 +270,9 @@ function recapRows(kind: ClientMailKind, b: Booking, v: Record<string, string>):
   const heure = `<strong>${v.heure}</strong>`;
   switch (kind) {
     case 'accuse':
-      return [mailRow('Date souhaitée :', `${v.date} — ${v.periode}`)];
+      return b.horaire_fixe
+        ? [mailRow('Date souhaitée :', v.date), mailRow('Heure souhaitée :', heure)]
+        : [mailRow('Date souhaitée :', `${v.date} — ${v.periode}`)];
     case 'deplacement':
       return [mailRow('Nouvelle date :', v.date), mailRow('Nouvelle heure :', heure), lieu];
     case 'confirmation':

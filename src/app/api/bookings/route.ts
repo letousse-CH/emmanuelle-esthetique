@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createPublicBooking, isHoneypotTriggered } from '../../../services/booking';
-import { isValidDateStr } from '../../../services/bookingEngine';
+import { isValidDateStr, isValidTimeStr } from '../../../services/bookingEngine';
 import { checkRateLimit } from '../../../utils/rateLimit';
 import { BAD_JSON, clientIp, errorResponse, readJson } from './_shared';
 
@@ -8,10 +8,10 @@ export const runtime = 'nodejs';
 
 /**
  * POST /api/bookings
- * Dépose une DEMANDE de rendez-vous (date + période). Prix, durée et options sont
- * retrouvés côté serveur : le corps n'est jamais cru sur parole.
+ * Dépose une DEMANDE de rendez-vous (date + heure choisie, soin + soins ajoutés).
+ * Prix et durées sont retrouvés côté serveur : le corps n'est jamais cru sur parole.
  *
- * 201 { success, booking: PublicBookingView } · 400 validation · 409 période complète
+ * 201 { success, booking: PublicBookingView } · 400 validation · 409 horaire pris
  * · 422 soin inconnu · 429 débit · 503 base indisponible.
  * Champ-piège `champ_piege` rempli (`website` est ignoré) : 200 factice, rien n'est écrit.
  */
@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
         service_nom: '',
         options: [],
         date_rdv: isValidDateStr(b.date_rdv) ? b.date_rdv : '',
-        periode: b.periode === 'apres_midi' ? 'apres_midi' : 'matin',
+        periode: isValidTimeStr(b.heure_rdv) && b.heure_rdv >= '13:00' ? 'apres_midi' : 'matin',
+        heure_rdv: isValidTimeStr(b.heure_rdv) ? b.heure_rdv : null,
         service_duree_minutes: 0,
         total_chf: 0,
       },

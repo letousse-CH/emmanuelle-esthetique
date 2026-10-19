@@ -91,9 +91,9 @@ export default async function ReservationPage() {
             Réserver votre soin
           </h1>
           <p className="text-muted max-w-xl mx-auto text-sm sm:text-base font-light leading-relaxed">
-            {`Choisissez votre rituel, le jour et la demi-journée qui vous conviennent. ${
-              ownerFirstName ? `${ownerFirstName} vous rappelle` : 'Vous êtes rappelée'
-            } ensuite pour fixer l’horaire exact.`}
+            {`Choisissez votre rituel, ajoutez d’autres soins si vous le souhaitez, puis le jour et l’heure qui vous conviennent. ${
+              ownerFirstName ? `${ownerFirstName} vous recontacte` : 'Vous êtes recontactée'
+            } ensuite pour confirmer votre rendez-vous.`}
           </p>
         </div>
       </div>

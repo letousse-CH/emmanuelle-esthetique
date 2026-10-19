@@ -1,5 +1,15 @@
 # Réservations v2 — audit, modèle et contrat (2026-10-03)
 
+> **Mise à jour du 2026-10-19 — la cliente choisit son heure.** Le formulaire ne
+> propose plus matin / après-midi : il liste les heures où la durée totale (soin +
+> soins ajoutés) tient dans les heures d'ouverture, avec 30 min de battement
+> incompressible (`MIN_BUFFER_MINUTES`). `POST /api/bookings` reçoit `heure_rdv`
+> (requis) et `options: [{ id, variante_duree_minutes? }]` (soins de la carte ou
+> compléments) ; la demande est créée `en_attente` + `horaire_fixe = true` et bloque
+> l'agenda. 409 `creneau_pris` si l'heure n'est plus libre. Les sections ci-dessous
+> décrivent le modèle d'origine (demandes « souples »), toujours géré pour les
+> demandes déposées avant cette date.
+
 Source de vérité partagée par les trois chantiers (service/API, admin, formulaire
 public). Types : `src/types/booking.ts`. Migration : `supabase/migrations/20261004_reservations_v2.sql`.
 

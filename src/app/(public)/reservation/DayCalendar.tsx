@@ -175,7 +175,7 @@ export default function DayCalendar({ from, to, jours, selected, today, onSelect
       </div>
 
       <p className="mt-3 text-[11px] text-muted font-light leading-relaxed">
-        Les jours barrés sont fermés ou complets. Sélectionnez un jour, puis choisissez le matin ou l&apos;après-midi.
+        Les jours barrés sont fermés ou complets. Sélectionnez un jour, puis choisissez votre heure.
       </p>
     </div>
   );
