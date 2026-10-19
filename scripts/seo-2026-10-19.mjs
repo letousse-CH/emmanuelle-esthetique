@@ -68,8 +68,7 @@ const SETTINGS = {
     'Beauté des mains et des pieds',
     'Beauté du regard',
   ].join('\n'),
-  // Pas la photo « cabinet-hypnose-…-02 » proposée par l'audit : même pièce,
-  // mais un nom de fichier hérité d'un autre site ; les photos pro sont mieux nommées.
+  // Les photos professionnelles de la cabine, aux noms de fichier descriptifs.
   business_images: [
     `${R2}/1790524727824-WhatsApp-Image-2026-09-27-at-17.51.49.webp`,
     PHOTO.tableSoin,

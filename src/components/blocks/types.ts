@@ -1,8 +1,7 @@
 /**
  * Page builder v2 — modèle de données.
  *
- * Repris du builder de MatthieuLeTousse-Therapeute (sections > colonnes >
- * blocs, imbrication limitée à un niveau), avec des couleurs sémantiques
+ * Sections > colonnes > blocs (imbrication limitée à un niveau), avec des couleurs sémantiques
  * résolues depuis la charte du site (voir blocks.css) au lieu de teintes
  * écrites en dur. Tout nouveau type de bloc se déclare ici puis dans
  * blockMeta.ts (formulaire, bibliothèque, IA) et BlockRenderer.tsx (rendu).

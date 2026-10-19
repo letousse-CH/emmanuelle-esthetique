@@ -129,27 +129,21 @@ function injectAt(
 }
 
 /*
-  Le site d'origine (cabinet d'hypnose) ajoutait ici des liens vers
-  `/seance-individuelle` et `/about`, plus une phrase « Si ce texte résonne en
-  toi… » en fin d'article : pages absentes de ce site (404) et tutoiement. Les
-  articles d'esthétique portent déjà leurs liens vers la page du soin et la
-  réservation (prompts : utils/blogSilo.ts). Ces restes sont retirés à chaque
-  enregistrement, plus jamais ajoutés.
+  Seuls les liens entre articles sont gérés ici : les articles portent déjà
+  leurs liens vers la page du soin et la réservation (prompts : utils/blogSilo.ts).
+  « À lire aussi » est recalculé à chaque enregistrement : l'ancien, une fois son
+  lien retiré, laissait un titre en texte brut que la passe suivante liait à moitié.
 */
-function stripLegacyParagraphs(doc: Document): void {
+function stripReadAlso(doc: Document): void {
   doc.querySelectorAll('p').forEach(p => {
     const text = (p.textContent || '').trim();
-    const legacyCta = /^Si ce texte résonne en toi/i.test(text);
-    // « À lire aussi » est recalculé plus bas : l'ancien, une fois son lien retiré,
-    // laissait un titre en texte brut que la passe suivante liait à moitié.
-    const readAlso = /^À lire aussi\s*:/i.test(text) && !!p.querySelector('a[href^="/blog/"]');
-    if (legacyCta || readAlso) p.remove();
+    if (/^À lire aussi\s*:/i.test(text) && p.querySelector('a[href^="/blog/"]')) p.remove();
   });
 }
 
 function stripInternalLinks(doc: Document): void {
-  stripLegacyParagraphs(doc);
-  doc.querySelectorAll('a[href^="/blog/"], a[href^="/seance-individuelle"], a[href^="/about"]').forEach(a => {
+  stripReadAlso(doc);
+  doc.querySelectorAll('a[href^="/blog/"]').forEach(a => {
     const parent = a.parentNode;
     if (!parent) return;
     while (a.firstChild) parent.insertBefore(a.firstChild, a);

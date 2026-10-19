@@ -20,14 +20,8 @@ export interface FleetSite {
   lastLogs?: string[];
 }
 
-const DEFAULT_SITES: FleetSite[] = [
-  {
-    id: 'site-audeladeschaines',
-    name: 'Au-delà des chaînes',
-    url: 'https://audeladeschaines.com',
-    status: 'connected',
-  }
-];
+/** Aucun site par défaut : la liste se construit depuis ce panneau. */
+const DEFAULT_SITES: FleetSite[] = [];
 
 export default function FleetManagerPanel() {
   const [sites, setSites] = useState<FleetSite[]>([]);
@@ -290,7 +284,7 @@ export default function FleetManagerPanel() {
                   id="fleet-name"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Ex: Au-delà des chaînes"
+                  placeholder="Ex : Institut de beauté Lausanne"
                 />
               </div>
 
@@ -300,7 +294,7 @@ export default function FleetManagerPanel() {
                   id="fleet-url"
                   value={formUrl}
                   onChange={(e) => setFormUrl(e.target.value)}
-                  placeholder="https://audeladeschaines.com"
+                  placeholder="https://www.exemple.ch"
                 />
               </div>
 

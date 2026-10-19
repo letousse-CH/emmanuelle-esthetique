@@ -9,16 +9,12 @@ export interface PageMeta {
   keywords: string;
 }
 
-// Pages créées avant le page builder générique : leurs réglages SEO ont été
-// enregistrés sans le préfixe "pages_". Toute nouvelle page dynamique (dont
-// a-propos et arsenal-tactique) passe par le préfixe "pages_".
+// Pages dont les réglages SEO ont été enregistrés sans le préfixe "pages_"
+// (des clés `seo_contact_*` et `seo_mentions-legales_*` existent en base).
+// Toute autre page dynamique passe par le préfixe "pages_".
 // Source de vérité unique — l'éditeur admin (PageBuilderClient) importe cette
 // même fonction pour écrire au même endroit que celui-ci lit.
-const LEGACY_SLUGS = [
-  'home', 'about', 'accompagnement', 'contact', 'mentions-legales',
-  'paroles-et-silences', 'programme-complet', 'reve-eveille-libre',
-  'seance-individuelle', 'si-les-arbres-pouvaient-parler',
-];
+const LEGACY_SLUGS = ['home', 'contact', 'mentions-legales'];
 
 export function getSeoPrefix(slug: string): string {
   if (!slug) return '';

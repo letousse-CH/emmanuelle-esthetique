@@ -16,8 +16,7 @@ export type ModuleName =
   | 'social'
   | 'caisse'
   | 'agents'
-  | 'automations'
-  | 'decodeur';
+  | 'automations';
 
 export const MODULE_SETTING_KEYS = {
   blog: 'module_blog_enabled',
@@ -29,7 +28,6 @@ export const MODULE_SETTING_KEYS = {
   keywords: 'module_keywords_enabled',
   agents: 'module_agents_enabled',
   automations: 'module_automations_enabled',
-  decodeur: 'module_decodeur_enabled',
 } as const;
 
 export type ModuleFlags = Record<ModuleName, boolean>;
@@ -45,6 +43,5 @@ export function toModuleFlags(values: Record<string, string>): ModuleFlags {
     keywords: values[MODULE_SETTING_KEYS.keywords] !== 'false',
     agents: values[MODULE_SETTING_KEYS.agents] !== 'false',
     automations: values[MODULE_SETTING_KEYS.automations] !== 'false',
-    decodeur: values[MODULE_SETTING_KEYS.decodeur] !== 'false',
   };
 }

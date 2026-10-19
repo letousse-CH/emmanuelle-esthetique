@@ -15,6 +15,8 @@ interface ReviewData {
   rating: number;
   total: number;
   reviews: Review[];
+  /** Avis de la fiche Google de l'institut (GOOGLE_PLACE_ID), fourni par l'API. */
+  url?: string;
 }
 
 // État neutre affiché si l'API Google n'est pas configurée, échoue, ou ne
@@ -184,10 +186,11 @@ export default function GoogleReviews({ bg = 'bg-stone-50', theme = 'light' }: {
           ))}
         </div>
 
-        {/* CTA Google */}
+        {/* CTA Google : la fiche de l'institut, jamais une recherche écrite en dur. */}
+        {displayed.url && (
         <div className="mt-12 text-center">
           <a
-            href="https://www.google.com/search?q=matthieu-le-tousse"
+            href={displayed.url}
             target="_blank"
             rel="noopener noreferrer"
             className={`inline-flex items-center gap-3 ${
@@ -205,6 +208,7 @@ export default function GoogleReviews({ bg = 'bg-stone-50', theme = 'light' }: {
             Voir tous les avis sur Google
           </a>
         </div>
+        )}
       </div>
     </section>
   );

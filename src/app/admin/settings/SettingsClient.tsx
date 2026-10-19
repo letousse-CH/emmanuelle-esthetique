@@ -1419,7 +1419,7 @@ export default function Settings() {
                       className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-600 transition-colors focus:border-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-900 text-sm"
                       placeholder="/contact"
                     />
-                    <p className="text-[12.5px] text-stone-600">Exemple : /contact, /programme-complet, ou un lien externe complet https://...</p>
+                    <p className="text-[12.5px] text-stone-600">Exemple : /contact, /reservation, ou un lien externe complet https://...</p>
                   </div>
                   <div className={`flex flex-wrap items-center gap-3 pt-2 ${STICKY_SAVE}`}>
                     <Button type="submit" variant="primary" icon={Save} loading={headerRegisterLoading}>

@@ -15,6 +15,8 @@ export interface GoogleReviewsData {
   rating: number;
   total: number;
   reviews: GoogleReview[];
+  /** Page « tous les avis » de la fiche Google configurée (GOOGLE_PLACE_ID). */
+  url: string;
 }
 
 export async function getGoogleReviews(): Promise<GoogleReviewsData | null> {
@@ -42,6 +44,7 @@ export async function getGoogleReviews(): Promise<GoogleReviewsData | null> {
     return {
       rating,
       total,
+      url: `https://search.google.com/local/reviews?placeid=${encodeURIComponent(placeId)}`,
       reviews: (data.result.reviews || []).slice(0, 5).map((r: any) => ({
         author: r.author_name,
         photo: r.profile_photo_url,

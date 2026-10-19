@@ -730,10 +730,10 @@ propose en marge. En-tête de `/blog` : réglages `blog_heading`, `blog_intro`.
 
 Les pages publiques vivent dans la table Supabase `dynamic_pages`. Depuis le
 2026-09-26 elles sont rendues et éditées par le **page builder v2**
-(`src/components/blocks/`), fusion du builder de MatthieuLeTousse-Therapeute
-(sections > colonnes > blocs, canvas cliquable, glisser-déposer) et des
+(`src/components/blocks/`) : sections > colonnes > blocs, canvas cliquable,
+glisser-déposer, et des
 fonctions de Studio (bibliothèque par intention, annuler/rétablir, IA, médias,
-dictée). Plan d'origine : `PLAN-PAGEBUILDER.md`.
+dictée).
 
 **Stockage.** Deux colonnes coexistent :
 - `sections` (JSONB, format Studio `{ type, data }`) : **jamais écrite** par le

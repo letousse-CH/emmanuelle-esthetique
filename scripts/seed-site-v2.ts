@@ -47,12 +47,12 @@ const HOURS = 'Du lundi au samedi, de 9 h à 18 h, sur rendez-vous';
 const R2 = 'https://pub-e4b5844034214d1087c574b78e760bce.r2.dev/';
 const IMG = {
   // Photos de la cabine (vraies photos)
-  cabineSalon: { url: `${R2}1790524746001-cabinet-hypnose-oron-palezieux-gare-02.webp`, alt: 'Cabine de soins privée à Palézieux-Gare : table de soin, fauteuils et tableau marin' },
-  cabineTable: { url: `${R2}1790524741683-cabinet-hypnose-oron-palezieux-gare-01.webp`, alt: 'Cabine de soins à Palézieux-Gare : table de soin et étagères, lumière douce' },
-  cabineFauteuil: { url: `${R2}1790524749679-cabinet-hypnose-oron-palezieux-gare-04.webp`, alt: 'Coin détente de la cabine avec bouquet de fleurs, à Palézieux-Gare' },
+  cabineSalon: { url: `${R2}1791296588293-cabine-soins-esthetiques-palezieux-gare-portrait_89C6887.CR2.webp`, alt: 'Cabine de soins privée à Palézieux-Gare : table de soin, fauteuils et tableau marin' },
+  cabineTable: { url: `${R2}1791296583792-cabine-soins-esthetiques-palezieux-gare-portrait_89C6873.CR2.webp`, alt: 'Cabine de soins à Palézieux-Gare : table de soin et étagères, lumière douce' },
+  cabineFauteuil: { url: `${R2}1791296585438-cabine-soins-esthetiques-palezieux-gare-portrait_89C6881.CR2.webp`, alt: 'Cabine de soins à Palézieux-Gare : table de soin près de la fenêtre et coin détente' },
   cabineLarge: { url: `${R2}1790524727824-WhatsApp-Image-2026-09-27-at-17.51.49.webp`, alt: 'Vue de la cabine de soins Emmanuelle Esthétique à Palézieux-Gare' },
   cabineSoin: { url: `${R2}1790524735770-WhatsApp-Image-2026-09-27-at-17.51.48.webp`, alt: 'Table de soin recouverte d’un plaid rose dans la cabine de Palézieux-Gare' },
-  cabineFleurs: { url: `${R2}1790524755404-cabinet-hypnose-oron-palezieux-gare-07.webp`, alt: 'Fauteuil et bouquet de fleurs dans la cabine de soins, Palézieux-Gare' },
+  cabineFleurs: { url: `${R2}1791296591314-cabine-soins-esthetiques-palezieux-gare-portrait_89C6892.CR2.webp`, alt: 'Étagère de produits Phytomer dans la cabine de soins, Palézieux-Gare' },
   phytomer: { url: `${R2}1790524738941-WhatsApp-Image-2026-09-27-at-17.51.49--2-.webp`, alt: 'Produits Phytomer et orchidée blanche dans la cabine de Palézieux-Gare' },
   mer: { url: `${R2}1789999272375-prise-de-rdv.webp`, alt: 'Côte bretonne, phare et mer turquoise : l’univers de la cosmétique marine Phytomer' },
   epilation: { url: `${R2}1789998853978-e-pilation.jpg`, alt: 'Jambes lisses et douces après une épilation à la cire douce ou au sucre' },

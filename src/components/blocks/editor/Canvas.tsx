@@ -38,7 +38,7 @@ interface Props {
 }
 
 /**
- * Aperçu réel de la page, cliquable (repris de l'éditeur MLT) :
+ * Aperçu réel de la page, cliquable :
  * - clic : sélectionne la section, la colonne ou le bloc ;
  * - double-clic sur un texte : édition directe dans la page ;
  * - glisser-déposer : déplacer un bloc (y compris vers une autre section),

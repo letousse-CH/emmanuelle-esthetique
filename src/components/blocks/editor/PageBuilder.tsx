@@ -42,7 +42,7 @@ interface Props {
 }
 
 /**
- * Éditeur de page v2 : canvas MLT (aperçu réel cliquable, glisser-déposer),
+ * Éditeur de page v2 : canvas (aperçu réel cliquable, glisser-déposer),
  * inspecteur ancré, bibliothèque par intention, annuler/rétablir, sauvegarde
  * automatique et assistant IA. Rendu dans un portail hors de
  * `[data-site-theme]`, pour que la charte du site ne restyle pas l'interface
