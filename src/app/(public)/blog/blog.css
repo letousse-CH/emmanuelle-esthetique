@@ -1,6 +1,6 @@
-/* Typographie des articles et des événements (`prose`). Importée par blog/[slug]/page.tsx et
-   ateliers/[slug]/EventDetailClient.tsx seulement : les autres pages du site n'embarquent pas
-   le plugin typographie.
+/* Typographie des articles et des événements (`prose`). Importée par blog/page.tsx,
+   blog/[slug]/page.tsx et ateliers/[slug]/EventDetailClient.tsx seulement : les autres pages
+   du site n'embarquent pas le plugin typographie.
 
    Ne génère QUE les classes listées ci-dessous (`@source inline`). Les autres utilitaires de ces
    pages sont dans index.css : une feuille partielle chargée après lui écraserait ses variantes
@@ -28,6 +28,14 @@
 h1.blog-post-title {
   font-size: clamp(1.6rem, 1.25rem + 1.4vw, 2.25rem);
   line-height: 1.2;
+}
+
+/* Titre d'un article dans les cartes de /blog : même raison (le réglage des H2
+   l'affichait à plus de 2rem dans une carte de 300 px). */
+[data-site-theme] h2.blog-card-title,
+h2.blog-card-title {
+  font-size: clamp(1.2rem, 1.1rem + 0.4vw, 1.4rem);
+  line-height: 1.3;
 }
 
 /* Encart « Aller plus loin » : photo de la page du soin, dégradé lagon → marine

@@ -1,5 +1,6 @@
 export const revalidate = 60;
 import React from 'react';
+import './blog.css';
 import { notFound } from 'next/navigation';
 import { Calendar, Clock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
@@ -166,7 +167,7 @@ export default async function BlogPage() {
                         <span>{post.readTime}</span>
                       </div>
                     </div>
-                    <h2 className="font-serif text-2xl font-bold text-stone-900 leading-tight group-hover:text-sage transition-colors">
+                    <h2 className="blog-card-title font-serif font-bold text-stone-900 group-hover:text-sage transition-colors">
                       {post.title}
                     </h2>
                     <p className="text-stone-500 font-light leading-relaxed line-clamp-3">

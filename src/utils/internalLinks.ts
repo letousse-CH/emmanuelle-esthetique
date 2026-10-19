@@ -128,26 +128,27 @@ function injectAt(
   }
 }
 
-/** Phrases fixes vers les pages clés du site. */
-const FIXED_PAGE_LINKS: Array<{ href: string; phrases: string[] }> = [
-  {
-    href: '/seance-individuelle',
-    phrases: [
-      'séance individuelle', 'une séance', 'prendre rendez-vous',
-      'accompagnement individuel', 'première séance', 'séance de travail',
-      'séance d accompagnement',
-    ],
-  },
-  {
-    href: '/about',
-    phrases: [
-      'matthieu le tousse', 'semeur d eveil', 'ma démarche',
-      'mon approche', 'ma pratique', 'ma vision',
-    ],
-  },
-];
+/*
+  Le site d'origine (cabinet d'hypnose) ajoutait ici des liens vers
+  `/seance-individuelle` et `/about`, plus une phrase « Si ce texte résonne en
+  toi… » en fin d'article : pages absentes de ce site (404) et tutoiement. Les
+  articles d'esthétique portent déjà leurs liens vers la page du soin et la
+  réservation (prompts : utils/blogSilo.ts). Ces restes sont retirés à chaque
+  enregistrement, plus jamais ajoutés.
+*/
+function stripLegacyParagraphs(doc: Document): void {
+  doc.querySelectorAll('p').forEach(p => {
+    const text = (p.textContent || '').trim();
+    const legacyCta = /^Si ce texte résonne en toi/i.test(text);
+    // « À lire aussi » est recalculé plus bas : l'ancien, une fois son lien retiré,
+    // laissait un titre en texte brut que la passe suivante liait à moitié.
+    const readAlso = /^À lire aussi\s*:/i.test(text) && !!p.querySelector('a[href^="/blog/"]');
+    if (legacyCta || readAlso) p.remove();
+  });
+}
 
 function stripInternalLinks(doc: Document): void {
+  stripLegacyParagraphs(doc);
   doc.querySelectorAll('a[href^="/blog/"], a[href^="/seance-individuelle"], a[href^="/about"]').forEach(a => {
     const parent = a.parentNode;
     if (!parent) return;
@@ -211,51 +212,6 @@ export function injectInternalLinks(
       p.appendChild(a);
       doc.body.appendChild(p);
     }
-  }
-
-  // ── Phase 2 : liens fixes (séance individuelle, à propos) ───────────────
-  const linkedPages = new Set<string>();
-
-  for (const { href, phrases } of FIXED_PAGE_LINKS) {
-    for (const textNode of getTextNodes(doc)) {
-      if (linkedPages.has(href)) break;
-      const original = textNode.textContent || '';
-      const { norm, indexMap } = normalizeWithMap(original);
-
-      for (const phrase of phrases) {
-        const idx = norm.indexOf(normalize(phrase));
-        if (idx === -1) continue;
-        const origStart = indexMap[idx];
-        const origEnd = indexMap[idx + phrase.length];
-        injectAt(textNode, doc, origStart, origEnd, href, false);
-        linkedPages.add(href);
-        break;
-      }
-    }
-  }
-
-  // ── Phase 3 : CTA de secours si les liens fixes n'ont pas été trouvés ───
-  const missingLinks: { href: string; label: string }[] = [];
-  if (!linkedPages.has('/seance-individuelle'))
-    missingLinks.push({ href: '/seance-individuelle', label: 'un accompagnement individuel' });
-  if (!linkedPages.has('/about'))
-    missingLinks.push({ href: '/about', label: 'ma démarche' });
-
-  if (missingLinks.length > 0) {
-    const parts = missingLinks.map(({ href, label }) => {
-      const a = doc.createElement('a');
-      a.setAttribute('href', href);
-      a.setAttribute('class', 'text-sage underline underline-offset-2 hover:text-stone-900 transition-colors');
-      a.setAttribute('style', 'font-weight:bold');
-      a.textContent = label;
-      return a.outerHTML;
-    });
-    const sentence = parts.length === 1
-      ? `Si ce texte résonne en toi, peut-être est-il temps d'explorer ${parts[0]}.`
-      : `Si ce texte résonne en toi, peut-être est-il temps d'explorer ${parts[0]} ou de découvrir ${parts[1]}.`;
-    const p = doc.createElement('p');
-    p.innerHTML = sentence;
-    doc.body.appendChild(p);
   }
 
   return doc.body.innerHTML;
