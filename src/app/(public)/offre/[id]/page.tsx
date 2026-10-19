@@ -11,7 +11,7 @@ import { getSettingsServer } from '../../../../services/settingsServer';
 import { getImageDims } from '../../../../utils/imageDims';
 import { SITE_CONFIG } from '../../../../config/site';
 import type { OfferStatus, PublicOffer } from '../../../../types/offers';
-import { formatOfferPeriod, offerAccroche, offerPagePath, offerShareSummary, offerShareTitle } from '../../../../types/offers';
+import { formatOfferPeriod, offerDescriptionLine, offerPagePath, offerShareSummary, offerShareTitle } from '../../../../types/offers';
 
 /**
  * Page d'une offre du moment : c'est le lien partagé sur WhatsApp, Facebook…
@@ -102,7 +102,7 @@ function offerJsonLd(o: PublicOffer, brand: string) {
     '@context': 'https://schema.org',
     '@type': 'Offer',
     name: o.titre,
-    description: offerAccroche(o.description, 300) || undefined,
+    description: offerDescriptionLine(o.description) || undefined,
     url: `${SITE_CONFIG.url}${offerPagePath(o.id)}`,
     image: o.image_url || undefined,
     price: o.prix_chf.toFixed(2),

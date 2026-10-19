@@ -285,21 +285,49 @@ function decodeEntities(t: string): string {
     .replace(/&amp;/g, '&');
 }
 
-function truncate(t: string, max: number): string {
-  if (t.length <= max) return t;
-  const cut = t.slice(0, max - 1);
-  const sp = cut.lastIndexOf(' ');
-  return `${(sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:.–-]+$/, '')}…`;
+/** Passage en texte simple : retours à la ligne gardés, adresse d'un lien écrite après son texte. */
+function inlineText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<a href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href: string, x: string) =>
+      /^https?:/i.test(href) && !x.includes(href) ? `${x} (${href})` : x)
+    .replace(/<[^>]*>/g, '');
 }
 
-/** Phrase d'accroche : l'intertitre de la description s'il y en a un, sinon son premier paragraphe. */
-export function offerAccroche(desc: string | null | undefined, max = 180): string {
-  const html = offerDescriptionHtml(desc);
+/**
+ * Description complète en texte simple, pour un message (WhatsApp, Facebook,
+ * e-mail, SMS) : paragraphes et intertitres séparés par une ligne vide, listes
+ * à puces « • » ou numérotées. Rien n'est coupé. Pas de `*gras*` WhatsApp : le
+ * même message part aussi par e-mail et sur Facebook, où les astérisques
+ * resteraient visibles.
+ */
+export function offerDescriptionText(desc: string | null | undefined): string {
+  let html = offerDescriptionHtml(desc).replace(/&nbsp;/g, ' ');
   if (!html) return '';
-  const h3 = html.match(/<h3>([\s\S]*?)<\/h3>/i)?.[1];
-  const p = html.match(/<p>([\s\S]*?)<\/p>/i)?.[1];
-  const raw = decodeEntities((h3 ?? p ?? htmlToText(html)).replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
-  return truncate(raw, max);
+  const para = (x: string) => x.replace(/<\/p>\s*<p>/gi, '\n').replace(/<\/?p>/gi, '');
+  // Listes, de la plus imbriquée à la plus large : une sous-liste est décalée sous sa puce.
+  const innermost = /<(ul|ol)>((?:(?!<(?:ul|ol)>)[\s\S])*?)<\/\1>/i;
+  for (let m = html.match(innermost); m; m = html.match(innermost)) {
+    const ordered = m[1].toLowerCase() === 'ol';
+    const items = [...m[2].matchAll(/<li>([\s\S]*?)<\/li>/gi)]
+      .map((li) => inlineText(para(li[1])).trim().replace(/\n\s*\n/g, '\n'))
+      .filter(Boolean);
+    const lines = items.map((t, i) => `${ordered ? `${i + 1}.` : '•'} ${t.replace(/\n/g, '\n   ')}`);
+    html = html.replace(m[0], () => `\n\n${lines.join('\n')}\n\n`);
+  }
+  html = html.replace(/<\/?blockquote>/gi, '\n\n').replace(/<(p|h[2-4])>([\s\S]*?)<\/\1>/gi, (_, _t, x: string) => `\n\n${x}\n\n`);
+  return decodeEntities(inlineText(html))
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** La même description complète sur une seule ligne (balises meta, données structurées) : un intertitre y prend un point. */
+export function offerDescriptionLine(desc: string | null | undefined): string {
+  return offerDescriptionText(desc)
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/\s*\n\s*/g, ' ').replace(/([^.!?…:;])$/, '$1.'))
+    .join(' ');
 }
 
 function offerPriceLine(o: Pick<PublicOffer, 'prix_chf' | 'prix_normal_chf' | 'date_debut' | 'date_fin'>): string {
@@ -318,26 +346,27 @@ export function offerShareTitle(o: Pick<PublicOffer, 'titre' | 'prix_chf' | 'pri
 }
 
 /**
- * Description de l'aperçu de partage (balises Open Graph). Facebook interdit de
- * pré-remplir le texte d'une publication : seul cet aperçu s'affiche à coup sûr,
- * il porte donc l'essentiel — accroche, période, première condition.
+ * Description de l'aperçu de partage (balises Open Graph) : description
+ * complète, période, première condition. Rien n'est coupé ici — WhatsApp et
+ * Facebook raccourcissent eux-mêmes l'aperçu à ce qu'ils affichent ; le texte
+ * entier part dans le message.
  */
 export function offerShareSummary(o: PublicOffer): string {
-  const accroche = offerAccroche(o.description, 140);
   const condition = o.conditions?.split('\n').map((l) => l.trim()).find(Boolean);
-  const phrase = (t: string) => (/[.!?…]$/.test(t) ? t : `${t}.`);
-  const parts = [accroche, `Valable ${formatOfferPeriod(o.date_debut, o.date_fin)}`, condition].filter(Boolean) as string[];
-  return truncate(parts.map(phrase).join(' '), 280);
+  const phrase = (t: string) => (/[.!?…:]$/.test(t) ? t : `${t}.`);
+  const parts = [offerDescriptionLine(o.description), `Valable ${formatOfferPeriod(o.date_debut, o.date_fin)}`, condition].filter(Boolean) as string[];
+  return parts.map(phrase).join(' ');
 }
 
 /**
- * Message prêt à partager (WhatsApp, e-mail, réseaux) : titre, accroche, prix,
- * période, première condition, lien de réservation. Modifiable avant envoi.
+ * Message prêt à partager (WhatsApp, e-mail, réseaux) : titre, description
+ * complète, prix, période, première condition, lien de réservation. Modifiable
+ * avant envoi.
  */
 export function offerShareMessage(o: PublicOffer, url: string, brand?: string | null): string {
   const lines = [`${o.titre}${brand ? ` — ${brand}` : ''}`];
-  const accroche = offerAccroche(o.description);
-  if (accroche && accroche !== o.titre) lines.push('', accroche);
+  const description = offerDescriptionText(o.description);
+  if (description && description !== o.titre) lines.push('', description);
   lines.push('', offerPriceLine(o));
   const condition = o.conditions?.split('\n').map((l) => l.trim()).find(Boolean);
   if (condition) lines.push(condition);
