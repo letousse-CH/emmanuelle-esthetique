@@ -11,6 +11,7 @@
 import { callClaude, extractJson } from './ai';
 import { getSettingsServer } from '../services/settingsServer';
 import { getAnthropicKey } from '../services/secrets';
+import { fetchMediaLibraryPhotos, pickBestLibraryPhoto } from './socialCards';
 
 export type SocialVisualTheme = 'creme' | 'marin' | 'sauge' | 'photo' | 'citation';
 
@@ -54,6 +55,8 @@ export interface SocialGoogleBusiness {
 export interface SocialGenerationResult {
   pillar?: string;
   theme?: SocialVisualTheme;
+  /** Image de la bibliothèque (media_assets) obligatoirement associée au post. */
+  cover_image?: string;
   instagram: {
     slides: SocialSlide[];
     caption: SocialCaption;
@@ -313,9 +316,16 @@ ${SYSTEM_PROMPT}`;
   }
 
   // Normalisation défensive pour garantir une rétrocompatibilité et des valeurs propres
-  const rawTheme = String(parsed.theme || preferredTheme || 'creme').toLowerCase() as SocialVisualTheme;
-  const theme: SocialVisualTheme = VALID_THEMES.includes(rawTheme) ? rawTheme : 'creme';
+  const rawTheme = String(preferredTheme || parsed.theme || 'photo').toLowerCase() as SocialVisualTheme;
+  const theme: SocialVisualTheme = VALID_THEMES.includes(rawTheme) ? rawTheme : 'photo';
   const pillar = String(parsed.pillar || preferredPillar || 'Reconnaître').trim();
+
+  // Sélection obligatoire d'une image de la bibliothèque (media_assets) correspondant au sujet
+  const libraryPhotos = await fetchMediaLibraryPhotos();
+  const resolvedCoverImage = pickBestLibraryPhoto(
+    `${title} ${keyword} ${parsed.instagram.caption?.hook || ''} ${parsed.instagram.caption?.body || ''}`,
+    libraryPhotos,
+  );
 
   const firstSlideText = parsed.instagram.slides[0]?.text || title;
   const hookVariants: string[] = Array.isArray(parsed.instagram.hook_variants) && parsed.instagram.hook_variants.length > 0
@@ -380,6 +390,7 @@ ${SYSTEM_PROMPT}`;
   return {
     pillar,
     theme,
+    cover_image: resolvedCoverImage,
     instagram: {
       slides: parsed.instagram.slides,
       caption: parsed.instagram.caption,

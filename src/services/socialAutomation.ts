@@ -11,6 +11,7 @@
 import { createClient } from '@supabase/supabase-js';
 import Parser from 'rss-parser';
 import { generateSocialContent } from '../utils/socialGeneration';
+import { fetchMediaLibraryPhotos, pickBestLibraryPhoto } from '../utils/socialCards';
 import { addDaysToKey, todayKey } from '../utils/dateKey';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -114,10 +115,11 @@ export async function runSocialAutomation(maxItems = 3): Promise<SocialAutomatio
     (existingByType[row.source_type] ||= new Set()).add(row.source_ref);
   }
 
-  const [rssCandidates, articleCandidates, suggestionCandidates] = await Promise.all([
+  const [rssCandidates, articleCandidates, suggestionCandidates, libraryPhotos] = await Promise.all([
     collectRssCandidates(client, existingByType.rss),
     collectArticleCandidates(client, existingByType.article),
     collectSuggestionCandidates(client, existingByType.suggestion),
+    fetchMediaLibraryPhotos(),
   ]);
 
   const candidates = [...rssCandidates, ...articleCandidates, ...suggestionCandidates].slice(0, maxItems);
@@ -157,12 +159,20 @@ export async function runSocialAutomation(maxItems = 3): Promise<SocialAutomatio
     }
 
     try {
+      const resolvedCover =
+        candidate.coverImage ||
+        generation.value.cover_image ||
+        pickBestLibraryPhoto(`${candidate.title} ${candidate.intro || ''}`, libraryPhotos, i);
+
       const { error } = await client.from('social_posts').insert({
         source_type: candidate.sourceType,
         source_ref: candidate.sourceRef,
         title: candidate.title,
-        cover_image: candidate.coverImage || null,
-        content: generation.value,
+        cover_image: resolvedCover,
+        content: {
+          ...generation.value,
+          cover_image: resolvedCover,
+        },
         planned_date: nextDate,
         status: 'ready',
       });

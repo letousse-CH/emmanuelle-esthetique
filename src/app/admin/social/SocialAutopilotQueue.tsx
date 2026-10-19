@@ -11,6 +11,7 @@ import { SITE_CONFIG } from '../../../config/site';
 import {
   fetchBrandTokens, renderCarouselSlide, renderHookCard,
   THUMBNAIL_SCALE, type BrandTokens,
+  fetchMediaLibraryPhotos, pickBestLibraryPhoto, BRAND_PHOTOS, type MediaLibraryPhoto,
 } from '../../../utils/socialCards';
 import type { SocialGenerationResult } from '../../../utils/socialGeneration';
 import SocialResultDisplay, { deriveVisual } from '../../../components/admin/SocialResultDisplay';
@@ -52,6 +53,16 @@ export const VISUAL_THEMES: {
   isDarkCard: boolean;
 }[] = [
   {
+    id: 'photo',
+    label: 'Photo de soin',
+    subtitle: 'Cabine Palézieux-Gare & rituels',
+    accent: '#60B9C2',
+    dark: '#3A3730',
+    bgPreview: '#3A3730',
+    textPreview: '#FAF7F2',
+    isDarkCard: true,
+  },
+  {
     id: 'creme',
     label: 'Éditorial Crème',
     subtitle: 'Douceur beige & sauge',
@@ -78,16 +89,6 @@ export const VISUAL_THEMES: {
     accent: '#8A9A7B',
     dark: '#2F382B',
     bgPreview: '#2F382B',
-    textPreview: '#FAF7F2',
-    isDarkCard: true,
-  },
-  {
-    id: 'photo',
-    label: 'Photo de soin',
-    subtitle: 'Cabine Palézieux-Gare & rituels',
-    accent: '#60B9C2',
-    dark: '#3A3730',
-    bgPreview: '#3A3730',
     textPreview: '#FAF7F2',
     isDarkCard: true,
   },
@@ -150,6 +151,7 @@ export default function SocialAutopilotQueue({
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [brand, setBrand] = useState<BrandTokens | null>(null);
+  const [libraryPhotos, setLibraryPhotos] = useState<MediaLibraryPhoto[]>(BRAND_PHOTOS);
 
   const [showPlanDialog, setShowPlanDialog] = useState(false);
   const [generatingNow, setGeneratingNow] = useState(false);
@@ -162,6 +164,7 @@ export default function SocialAutopilotQueue({
 
   useEffect(() => {
     fetchBrandTokens(SITE_CONFIG.name || 'Emmanuelle Esthétique').then(setBrand);
+    fetchMediaLibraryPhotos().then(setLibraryPhotos);
   }, []);
 
   useEffect(() => {
@@ -173,16 +176,31 @@ export default function SocialAutopilotQueue({
   const loadPosts = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: queryError } = await supabase
-      .from('social_posts')
-      .select('*')
-      .order('planned_date', { ascending: true })
-      .limit(200);
+    const [photos, { data, error: queryError }] = await Promise.all([
+      fetchMediaLibraryPhotos(),
+      supabase
+        .from('social_posts')
+        .select('*')
+        .order('planned_date', { ascending: true })
+        .limit(200),
+    ]);
+    setLibraryPhotos(photos);
 
     if (queryError) {
       setError(`Impossible de charger les propositions : ${queryError.message}`);
     } else {
-      setPosts((data || []) as SocialPostRow[]);
+      const rows = (data || []) as SocialPostRow[];
+      // Garantir que chaque publication existante a une image de la bibliothèque
+      const hydrated = rows.map((row, idx) => {
+        if (row.cover_image) return row;
+        const autoCover =
+          row.content?.cover_image ||
+          pickBestLibraryPhoto(`${row.title} ${row.content?.instagram?.caption?.hook || ''}`, photos, idx);
+        // Backfill asynchrone dans Supabase
+        supabase.from('social_posts').update({ cover_image: autoCover }).eq('id', row.id).then(() => {});
+        return { ...row, cover_image: autoCover };
+      });
+      setPosts(hydrated);
     }
     setLoading(false);
   }, []);
@@ -251,7 +269,7 @@ export default function SocialAutopilotQueue({
     seedId: string,
     title: string,
     intro: string,
-    theme: VisualThemeId = 'creme'
+    theme: VisualThemeId = 'photo'
   ) => {
     setStarterBusy(seedId);
     setError(null);
@@ -271,12 +289,13 @@ export default function SocialAutopilotQueue({
         throw new Error(data?.error || 'La rédaction automatique a échoué. Réessayez dans un instant.');
       }
       const nextDate = findNextFreeCadenceDate(occupiedDates, today);
-      const enrichedContent = { ...data, visual_theme: theme };
+      const coverImage = data.cover_image || pickBestLibraryPhoto(`${title} ${intro}`, libraryPhotos);
+      const enrichedContent = { ...data, cover_image: coverImage, visual_theme: theme };
       const { error: insertError } = await supabase.from('social_posts').insert({
         source_type: 'manual',
         source_ref: newSourceRef('seed'),
         title,
-        cover_image: null,
+        cover_image: coverImage,
         content: enrichedContent,
         planned_date: nextDate,
         status: 'ready',
@@ -294,7 +313,7 @@ export default function SocialAutopilotQueue({
 
   const handleApproveAndPublish = async (post: SocialPostRow) => {
     const confirmed = window.confirm(
-      `Approuver et publier « ${post.title} » maintenant ?\n\nSi vos comptes Instagram / Facebook sont connectés, le post sera envoyé directement et marqué comme « Publié » dans votre calendrier.`
+      `Approuver et publier « ${post.title} » maintenant ?\n\nSi vos comptes Instagram / Facebook sont connectés, le post sera envoyé directement avec son image de bibliothèque et marqué comme « Publié » dans votre calendrier.`
     );
     if (!confirmed) return;
 
@@ -306,6 +325,7 @@ export default function SocialAutopilotQueue({
       const caption = post.content.instagram?.caption
         ? `${post.content.instagram.caption.hook}\n\n${post.content.instagram.caption.body}\n\n${post.content.instagram.caption.cta}`
         : post.content.facebook?.post || post.title;
+      const imageUrl = post.cover_image || pickBestLibraryPhoto(post.title, libraryPhotos);
 
       // Tentative d'envoi direct sur Instagram si configuré
       await fetch('/api/admin/social-publish', {
@@ -318,18 +338,18 @@ export default function SocialAutopilotQueue({
           platform: 'instagram',
           title: post.title,
           caption,
-          imageUrl: post.cover_image || undefined,
+          imageUrl,
         }),
       }).catch(() => null);
 
       const { error: updateErr } = await supabase
         .from('social_posts')
-        .update({ status: 'posted' })
+        .update({ status: 'posted', cover_image: imageUrl })
         .eq('id', post.id);
 
       if (updateErr) throw new Error(updateErr.message);
 
-      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, status: 'posted' } : p)));
+      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, status: 'posted', cover_image: imageUrl } : p)));
       setFlash(`« ${post.title} » a été approuvé et marqué comme publié.`);
       onPostsChanged?.();
     } catch (e: any) {
@@ -413,7 +433,7 @@ export default function SocialAutopilotQueue({
       return;
     }
     setEditingPost(updated);
-    setFlash('L’habillage et les textes ont bien été enregistrés.');
+    setFlash('L’habillage, l’image et les textes ont bien été enregistrés.');
     onPostsChanged?.();
   };
 
@@ -431,7 +451,7 @@ export default function SocialAutopilotQueue({
             </h2>
             <p className="text-[14px] text-stone-700 leading-relaxed">
               <strong className="font-semibold text-[#3A3730]">1.</strong> Choisissez une proposition ou préparez une série ·{' '}
-              <strong className="font-semibold text-[#3A3730]">2.</strong> Ajustez l&apos;habillage visuel ·{' '}
+              <strong className="font-semibold text-[#3A3730]">2.</strong> Ajustez l&apos;habillage visuel &amp; la photo ·{' '}
               <strong className="font-semibold text-[#3A3730]">3.</strong> Validez en 1 clic pour planifier ou publier.
             </p>
           </div>
@@ -572,7 +592,7 @@ export default function SocialAutopilotQueue({
                   'phytomer',
                   'Soin Hydra Originel Phytomer : réconforter la peau face aux premiers froids',
                   'Rituels visage Phytomer à la cabine de Palézieux-Gare : pourquoi la peau tire en automne/hiver et comment le bain d’hydratation aux algues tissées bio repulpe et apaise durablement l’épiderme.',
-                  'marin'
+                  'photo'
                 )
               }
               className="group p-4 rounded-xl bg-white hover:bg-[#FAF7F2] border border-stone-200 hover:border-[#60B9C2] transition-all flex flex-col justify-between gap-3 cursor-pointer disabled:opacity-50"
@@ -599,7 +619,7 @@ export default function SocialAutopilotQueue({
                   'cadeaux',
                   'Offrir une parenthèse de calme à Palézieux-Gare : bons cadeaux & Grand Massage Relaxant',
                   'Mettre en avant les bons cadeaux d’Emmanuelle Esthétique à Palézieux-Gare et le Grand Massage Relaxant Marine (60 ou 90 min) : une idée attentionnée pour offrir un vrai lâcher-prise.',
-                  'creme'
+                  'photo'
                 )
               }
               className="group p-4 rounded-xl bg-white hover:bg-[#FAF7F2] border border-stone-200 hover:border-[#8A9A7B] transition-all flex flex-col justify-between gap-3 cursor-pointer disabled:opacity-50"
@@ -719,8 +739,9 @@ function AutopilotPostCard({
   const pillar = PILLAR_BADGE[pillarKey] ?? PILLAR_BADGE['Comprendre'];
   const isLate = post.planned_date < today;
 
-  const currentThemeId: VisualThemeId = post.content.visual_theme || 'creme';
+  const currentThemeId: VisualThemeId = post.content.visual_theme || post.content.theme || 'photo';
   const themeSpec = VISUAL_THEMES.find((t) => t.id === currentThemeId) || VISUAL_THEMES[0];
+  const activeBgImage = post.cover_image || post.content.cover_image || pickBestLibraryPhoto(post.title, BRAND_PHOTOS);
 
   const themedBrand: BrandTokens | null = useMemo(() => {
     if (!brand) return null;
@@ -763,6 +784,8 @@ function AutopilotPostCard({
         brand: themedBrand,
         format: 'facebook-landscape',
         scale: THUMBNAIL_SCALE,
+        theme: currentThemeId,
+        bgImageUrl: activeBgImage,
       }).catch(() => {});
     } else {
       const text = activeChannel === 'story' ? storyText : (firstSlide?.text || igHook);
@@ -776,9 +799,11 @@ function AutopilotPostCard({
         dark: themeSpec.isDarkCard,
         brand: themedBrand,
         scale: THUMBNAIL_SCALE,
+        theme: currentThemeId,
+        bgImageUrl: activeBgImage,
       }).catch(() => {});
     }
-  }, [themedBrand, activeChannel, firstSlide, slideCount, igHook, storyText, post.content, themeSpec.isDarkCard]);
+  }, [themedBrand, activeChannel, firstSlide, slideCount, igHook, storyText, post.content, themeSpec.isDarkCard, currentThemeId, activeBgImage]);
 
   return (
     <div className="bg-stone-50 border border-stone-200 rounded-2xl overflow-hidden flex flex-col justify-between shadow-2xs hover:border-stone-300 transition-colors">
@@ -973,7 +998,10 @@ function CustomizePostModal({
   onSave: (updated: SocialPostRow) => Promise<void>;
   onApprove: () => void;
 }) {
-  const [selectedTheme, setSelectedTheme] = useState<VisualThemeId>(post.content.visual_theme || 'creme');
+  const [selectedTheme, setSelectedTheme] = useState<VisualThemeId>(post.content.visual_theme || post.content.theme || 'photo');
+  const [selectedCover, setSelectedCover] = useState<string>(
+    post.cover_image || post.content.cover_image || pickBestLibraryPhoto(post.title, BRAND_PHOTOS)
+  );
   const [hookText, setHookText] = useState(post.content.instagram?.caption?.hook || '');
   const [bodyText, setBodyText] = useState(post.content.instagram?.caption?.body || '');
   const [ctaText, setCtaText] = useState(post.content.instagram?.caption?.cta || '');
@@ -994,6 +1022,8 @@ function CustomizePostModal({
   const previewResult: SocialGenerationResult = useMemo(
     () => ({
       ...post.content,
+      theme: selectedTheme,
+      cover_image: selectedCover,
       instagram: {
         ...post.content.instagram,
         caption: {
@@ -1004,15 +1034,17 @@ function CustomizePostModal({
         },
       },
     }),
-    [post.content, hookText, bodyText, ctaText]
+    [post.content, selectedTheme, selectedCover, hookText, bodyText, ctaText]
   );
 
   const handleSave = async () => {
     setSaving(true);
     const updated: SocialPostRow = {
       ...post,
+      cover_image: selectedCover,
       content: {
         ...previewResult,
+        cover_image: selectedCover,
         visual_theme: selectedTheme,
       },
     };
@@ -1035,7 +1067,7 @@ function CustomizePostModal({
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-stone-200 bg-[#FAF7F2] shrink-0">
           <div>
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8A9A7B]">
-              Personnalisation de l&apos;écrin &amp; des textes
+              Personnalisation de l&apos;écrin, de l&apos;image &amp; des textes
             </span>
             <h3 className="text-lg font-semibold text-[#3A3730]">{post.title}</h3>
           </div>
@@ -1121,12 +1153,13 @@ function CustomizePostModal({
             </div>
           </div>
 
-          {/* Aperçu complet multi-plateforme et téléchargement */}
+          {/* Aperçu complet multi-plateforme et sélection de la photo de bibliothèque */}
           <div className="pt-2">
             <SocialResultDisplay
               result={previewResult}
               brand={themedBrand}
-              coverImage={post.cover_image || undefined}
+              coverImage={selectedCover}
+              onUpdateCoverImage={(newUrl) => setSelectedCover(newUrl)}
             />
           </div>
         </div>

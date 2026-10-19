@@ -1,13 +1,19 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Sparkles, Loader2, AlertCircle, CalendarRange, Trash2, CheckCircle2 } from 'lucide-react';
+import { X, Sparkles, Loader2, AlertCircle, CalendarRange, Trash2, CheckCircle2, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../../../services/supabase';
 import { addDaysToKey, fromDateKey, toDateKey, todayKey } from '../../../utils/dateKey';
 import {
   PERIOD_LABELS, PERIOD_SIZES,
   type EditorialPeriod, type EditorialTopic,
 } from '../../../types/editorial';
+import {
+  BRAND_PHOTOS,
+  fetchMediaLibraryPhotos,
+  pickBestLibraryPhoto,
+  type MediaLibraryPhoto,
+} from '../../../utils/socialCards';
 
 interface Props {
   onClose: () => void;
@@ -87,6 +93,8 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
   const [period, setPeriod] = useState<EditorialPeriod>('week');
   const [startDate, setStartDate] = useState(() => addDaysToKey(todayKey(), 1));
   const [topics, setTopics] = useState<EditorialTopic[]>([]);
+  const [libraryPhotos, setLibraryPhotos] = useState<MediaLibraryPhoto[]>(BRAND_PHOTOS);
+  const [topicPhotos, setTopicPhotos] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0 });
@@ -99,6 +107,7 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
     panelRef.current?.focus();
     const draft = loadDraft();
     if (draft) { setTopics(draft); setStep('review'); setResumed(true); }
+    fetchMediaLibraryPhotos().then(setLibraryPhotos);
   }, []);
 
   useEffect(() => {
@@ -156,6 +165,18 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
     }
   };
 
+  const getTopicPhoto = (topic: EditorialTopic, index: number): string => {
+    if (topicPhotos[index]) return topicPhotos[index];
+    return pickBestLibraryPhoto(`${topic.title} ${topic.angle}`, libraryPhotos, index);
+  };
+
+  const cycleTopicPhoto = (index: number) => {
+    const currentUrl = getTopicPhoto(topics[index], index);
+    const currentIdx = libraryPhotos.findIndex((p) => p.url === currentUrl);
+    const nextPhoto = libraryPhotos[(currentIdx + 1) % libraryPhotos.length] || BRAND_PHOTOS[0];
+    setTopicPhotos((prev) => ({ ...prev, [index]: nextPhoto.url }));
+  };
+
   const generateAll = async () => {
     setError('');
     setBusy(true);
@@ -173,22 +194,29 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
     const failures: string[] = [];
     const created = new Set<number>();
 
-    const writeOne = async (topic: EditorialTopic) => {
+    const writeOne = async (topic: EditorialTopic, index: number) => {
       const res = await fetch('/api/generate-social', {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify({ title: topic.title, intro: topic.angle }),
+        body: JSON.stringify({ title: topic.title, intro: topic.angle, preferredTheme: 'photo' }),
       });
       const content = await res.json().catch(() => null);
       if (!res.ok || !content || content.error) {
         throw new Error(content?.error || `HTTP ${res.status}`);
       }
+      const finalCover = getTopicPhoto(topic, index) || content.cover_image || BRAND_PHOTOS[0].url;
+      const enrichedContent = {
+        ...content,
+        cover_image: finalCover,
+        theme: content.theme || 'photo',
+        visual_theme: content.theme || 'photo',
+      };
       const { error: insertError } = await supabase.from('social_posts').insert({
         source_type: 'manual',
         source_ref: newSourceRef(),
         title: topic.title,
-        cover_image: null,
-        content,
+        cover_image: finalCover,
+        content: enrichedContent,
         planned_date: topic.date,
         status: 'ready',
       });
@@ -202,7 +230,7 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
         if (index >= topics.length) return;
         const topic = topics[index];
         try {
-          await writeOne(topic);
+          await writeOne(topic, index);
           created.add(index);
           done++;
         } catch (err: any) {
@@ -341,48 +369,65 @@ export default function EditorialPlanDialog({ onClose, onCreated }: Props) {
                 Corrigez les titres et les angles, retirez ce qui ne vous parle pas.
               </p>
               <div className="space-y-2.5">
-                {topics.map((topic, i) => (
-                  <div key={`${topic.date}-${i}`} className="border border-stone-200 rounded-xl p-3.5 space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[13px] font-semibold text-stone-800 first-letter:uppercase">
-                          {DAY_LABEL.format(fromDateKey(topic.date))}
-                        </span>
-                        {topic.pillar && (
-                          <span className="text-[12px] font-medium px-2 py-0.5 border border-stone-200 bg-stone-100 text-stone-700 rounded">
-                            {topic.pillar}
-                          </span>
-                        )}
-                      </div>
+                {topics.map((topic, i) => {
+                  const photoUrl = getTopicPhoto(topic, i);
+                  return (
+                    <div key={`${topic.date}-${i}`} className="border border-stone-200 rounded-xl p-3.5 flex gap-3.5 items-start">
                       <button
                         type="button"
-                        onClick={() => removeTopic(i)}
-                        aria-label={`Retirer « ${topic.title} » du plan`}
-                        title="Retirer"
-                        className="text-stone-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer shrink-0 p-1"
+                        onClick={() => cycleTopicPhoto(i)}
+                        title="Cliquer pour changer la photo de la bibliothèque"
+                        className="group relative w-20 h-20 rounded-lg overflow-hidden border border-stone-200 shrink-0 cursor-pointer"
                       >
-                        <Trash2 size={15} />
+                        <img src={photoUrl} alt="Photo bibliothèque" className="w-full h-full object-cover" />
+                        <span className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-[10px] font-medium py-0.5 text-center flex items-center justify-center gap-1">
+                          <ImageIcon size={10} /> Changer
+                        </span>
                       </button>
+
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[13px] font-semibold text-stone-800 first-letter:uppercase">
+                              {DAY_LABEL.format(fromDateKey(topic.date))}
+                            </span>
+                            {topic.pillar && (
+                              <span className="text-[12px] font-medium px-2 py-0.5 border border-stone-200 bg-stone-100 text-stone-700 rounded">
+                                {topic.pillar}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeTopic(i)}
+                            aria-label={`Retirer « ${topic.title} » du plan`}
+                            title="Retirer"
+                            className="text-stone-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer shrink-0 p-1"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                        <label className="sr-only" htmlFor={`topic-title-${i}`}>Titre du sujet</label>
+                        <input
+                          id={`topic-title-${i}`}
+                          type="text"
+                          value={topic.title}
+                          onChange={(e) => updateTopic(i, { title: e.target.value })}
+                          className="w-full text-sm font-semibold text-stone-900 leading-snug bg-transparent border-b border-stone-200 hover:border-stone-300 focus:border-stone-900 outline-none transition-colors py-0.5"
+                        />
+                        <label className="sr-only" htmlFor={`topic-angle-${i}`}>Angle du sujet</label>
+                        <textarea
+                          id={`topic-angle-${i}`}
+                          rows={2}
+                          value={topic.angle}
+                          onChange={(e) => updateTopic(i, { angle: e.target.value })}
+                          placeholder="L'idée à faire passer, un exemple concret, ce que vos clientes doivent retenir."
+                          className="w-full text-[13px] text-stone-700 leading-relaxed bg-stone-50 rounded-lg px-2.5 py-1.5 border border-transparent focus:border-stone-900 focus:bg-white outline-none transition-colors resize-none"
+                        />
+                      </div>
                     </div>
-                    <label className="sr-only" htmlFor={`topic-title-${i}`}>Titre du sujet</label>
-                    <input
-                      id={`topic-title-${i}`}
-                      type="text"
-                      value={topic.title}
-                      onChange={(e) => updateTopic(i, { title: e.target.value })}
-                      className="w-full text-sm font-semibold text-stone-900 leading-snug bg-transparent border-b border-stone-200 hover:border-stone-300 focus:border-stone-900 outline-none transition-colors py-0.5"
-                    />
-                    <label className="sr-only" htmlFor={`topic-angle-${i}`}>Angle du sujet</label>
-                    <textarea
-                      id={`topic-angle-${i}`}
-                      rows={3}
-                      value={topic.angle}
-                      onChange={(e) => updateTopic(i, { angle: e.target.value })}
-                      placeholder="L'idée à faire passer, un exemple concret, ce que vos clientes doivent retenir."
-                      className="w-full text-[13px] text-stone-700 leading-relaxed bg-stone-50 rounded-lg px-2.5 py-2 border border-transparent focus:border-stone-900 focus:bg-white outline-none transition-colors resize-none"
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               {topics.length === 0 && (
                 <p className="text-sm text-stone-700">Tous les sujets ont été retirés.</p>

@@ -9,7 +9,10 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../../services/supabase';
 import { SITE_CONFIG } from '../../../config/site';
-import { fetchBrandTokens, BrandTokens } from '../../../utils/socialCards';
+import {
+  fetchBrandTokens, BrandTokens,
+  fetchMediaLibraryPhotos, pickBestLibraryPhoto, BRAND_PHOTOS,
+} from '../../../utils/socialCards';
 import type { SocialGenerationResult } from '../../../utils/socialGeneration';
 import SocialResultDisplay, { deriveVisual, deriveStories, deriveGoogleBusiness, type SocialPlatformId } from '../../../components/admin/SocialResultDisplay';
 import NewSocialPostDialog from './NewSocialPostDialog';
@@ -165,13 +168,25 @@ export default function SocialCalendarClient({ initialDate }: { initialDate?: st
       : supabase.from('social_posts').select('*')
           .order('planned_date', { ascending: false }).limit(200);
 
-    const { data, error: queryError } = await query;
+    const [photos, { data, error: queryError }] = await Promise.all([
+      fetchMediaLibraryPhotos(),
+      query,
+    ]);
     if (loadId !== loadIdRef.current) return;
     if (queryError) {
       setError(`Chargement impossible : ${queryError.message}`);
       setPosts([]);
     } else {
-      setPosts((data || []) as SocialPostRow[]);
+      const rows = (data || []) as SocialPostRow[];
+      const hydrated = rows.map((row, idx) => {
+        if (row.cover_image) return row;
+        const autoCover =
+          row.content?.cover_image ||
+          pickBestLibraryPhoto(`${row.title} ${row.content?.instagram?.caption?.hook || ''}`, photos, idx);
+        supabase.from('social_posts').update({ cover_image: autoCover }).eq('id', row.id).then(() => {});
+        return { ...row, cover_image: autoCover };
+      });
+      setPosts(hydrated);
     }
     setLoading(false);
   }, [view, monthStart, monthEnd]);
@@ -288,6 +303,24 @@ export default function SocialCalendarClient({ initialDate }: { initialDate?: st
     }
   };
 
+  const updatePostCoverImage = async (post: SocialPostRow, newCoverUrl: string) => {
+    const snapshot = posts;
+    const nextContent = { ...post.content, cover_image: newCoverUrl };
+    setPosts((prev) =>
+      prev.map((p) => (p.id === post.id ? { ...p, cover_image: newCoverUrl, content: nextContent } : p))
+    );
+    const { error: updateError } = await supabase
+      .from('social_posts')
+      .update({ cover_image: newCoverUrl, content: nextContent })
+      .eq('id', post.id);
+    if (updateError) {
+      setPosts(snapshot);
+      setError(`Image non enregistrée : ${updateError.message}`);
+    } else {
+      setFlash('Image de la bibliothèque enregistrée sur ce post.');
+    }
+  };
+
   const renderPost = (post: SocialPostRow) => (
     <SocialPostItem
       key={post.id}
@@ -310,6 +343,7 @@ export default function SocialCalendarClient({ initialDate }: { initialDate?: st
           brand={brand}
           initialPlatform={lens === 'all' ? undefined : lens}
           onUpdateContent={(next) => updatePostContent(previewPost, next)}
+          onUpdateCoverImage={(newUrl) => updatePostCoverImage(previewPost, newUrl)}
           onClose={() => setPreviewId(null)}
         />
       )}
@@ -749,6 +783,7 @@ function SocialPostItem({ post, today, lens, brand, onPreview, onStatus, onDate,
   const meta = sourceMeta(post.source_type);
   const status = STATUS_META[post.status] ?? STATUS_META.ready;
   const isLate = post.status === 'ready' && post.planned_date < today;
+  const coverUrl = post.cover_image || post.content.cover_image || pickBestLibraryPhoto(post.title, BRAND_PHOTOS);
 
   return (
     <div className={`rounded-xl overflow-hidden bg-stone-50 ${isLate ? 'border-amber-300' : 'border-stone-200'}`}>
@@ -774,16 +809,23 @@ function SocialPostItem({ post, today, lens, brand, onPreview, onStatus, onDate,
           </button>
         </div>
 
-        <button type="button" onClick={onPreview} className="text-left w-full cursor-pointer group space-y-1">
-          <p className="text-[15px] font-semibold text-stone-900 leading-snug group-hover:text-accent transition-colors">
-            {post.title}
-          </p>
-          <p className="text-[13px] text-stone-700 flex items-center gap-1.5 group-hover:text-stone-950 transition-colors">
-            <Eye size={14} /> Voir les textes et visuels
-          </p>
+        <button type="button" onClick={onPreview} className="text-left w-full cursor-pointer group flex items-center gap-3">
+          <img
+            src={coverUrl}
+            alt={post.title}
+            className="w-12 h-14 rounded-lg object-cover border border-stone-200 shrink-0"
+          />
+          <div className="min-w-0 space-y-1">
+            <p className="text-[15px] font-semibold text-stone-900 leading-snug group-hover:text-accent transition-colors line-clamp-2">
+              {post.title}
+            </p>
+            <p className="text-[13px] text-stone-700 flex items-center gap-1.5 group-hover:text-stone-950 transition-colors">
+              <Eye size={14} /> Voir les textes, l&apos;image &amp; les visuels
+            </p>
+          </div>
         </button>
 
-        {lens !== 'all' && <PlatformPreview content={post.content} platform={lens} brand={brand} onOpen={onPreview} />}
+        {lens !== 'all' && <PlatformPreview content={post.content} coverImage={coverUrl} platform={lens} brand={brand} onOpen={onPreview} />}
 
         <div className="pt-2 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2">
           <label className="flex items-center gap-2 text-[13px] text-stone-700">
@@ -834,8 +876,9 @@ function SocialPostItem({ post, today, lens, brand, onPreview, onStatus, onDate,
 
 // ── Miniature du visuel pour une plateforme ────────────────────────────────────
 
-function PlatformPreview({ content, platform, brand, onOpen }: {
+function PlatformPreview({ content, coverImage, platform, brand, onOpen }: {
   content: SocialGenerationResult;
+  coverImage?: string;
   platform: SocialPlatformId;
   brand: BrandTokens | null;
   onOpen: () => void;
@@ -862,23 +905,24 @@ function PlatformPreview({ content, platform, brand, onOpen }: {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!visible || !canvas || !brand || !visual.text) return;
-    const theme = content.theme;
+    const theme = content.theme || 'photo';
+    const bgImageUrl = coverImage || content.cover_image || undefined;
     const draw = platform === 'instagram'
       ? renderCarouselSlide({
           canvas, text: visual.text, highlight: visual.highlight,
-          number: 1, total: Math.max(slideCount, 1), dark: false, brand, scale: THUMBNAIL_SCALE, theme,
+          number: 1, total: Math.max(slideCount, 1), dark: false, brand, scale: THUMBNAIL_SCALE, theme, bgImageUrl,
         })
       : platform === 'stories'
       ? renderStorySlide({
           canvas, text: visual.text, highlight: visual.highlight,
-          number: 1, total: 3, dark: true, brand, scale: THUMBNAIL_SCALE, theme,
+          number: 1, total: 3, dark: true, brand, scale: THUMBNAIL_SCALE, theme, bgImageUrl,
         })
       : renderHookCard({
           canvas, text: visual.text, highlight: visual.highlight,
-          dark: true, brand, format, scale: THUMBNAIL_SCALE, theme,
+          dark: true, brand, format, scale: THUMBNAIL_SCALE, theme, bgImageUrl,
         });
     draw.catch((err) => console.error('[social] Rendu du visuel impossible:', err));
-  }, [visible, brand, visual.text, visual.highlight, platform, format, slideCount, content.theme]);
+  }, [visible, brand, visual.text, visual.highlight, platform, format, slideCount, content.theme, content.cover_image, coverImage]);
 
   if (!visual.text) {
     return <p className="text-[13px] text-stone-600">Aucun visuel pour ce réseau.</p>;
@@ -906,11 +950,12 @@ function PlatformPreview({ content, platform, brand, onOpen }: {
 
 // ── Modale Aperçu complet ─────────────────────────────────────────────────────
 
-function SocialPostPreviewDialog({ post, brand, initialPlatform, onUpdateContent, onClose }: {
+function SocialPostPreviewDialog({ post, brand, initialPlatform, onUpdateContent, onUpdateCoverImage, onClose }: {
   post: SocialPostRow;
   brand: BrandTokens | null;
   initialPlatform?: SocialPlatformId;
   onUpdateContent?: (next: SocialGenerationResult) => void;
+  onUpdateCoverImage?: (newUrl: string) => void;
   onClose: () => void;
 }) {
   const panelRef = React.useRef<HTMLDivElement>(null);
@@ -971,9 +1016,10 @@ function SocialPostPreviewDialog({ post, brand, initialPlatform, onUpdateContent
             <SocialResultDisplay
               result={post.content}
               brand={brand}
-              coverImage={post.cover_image || undefined}
+              coverImage={post.cover_image || post.content.cover_image || pickBestLibraryPhoto(post.title, BRAND_PHOTOS)}
               initialPlatform={initialPlatform}
               onUpdateContent={onUpdateContent}
+              onUpdateCoverImage={onUpdateCoverImage}
             />
           ) : (
             <p className="text-sm text-stone-700">Chargement de la charte graphique…</p>

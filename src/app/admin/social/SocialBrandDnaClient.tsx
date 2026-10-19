@@ -9,6 +9,7 @@ import {
 import { supabase } from '../../../services/supabase';
 import { CARTE, chf } from '../../../constants/carteSoins';
 import { toDateKey, fromDateKey, todayKey, addDaysToKey } from '../../../utils/dateKey';
+import { fetchMediaLibraryPhotos, pickBestLibraryPhoto, type MediaLibraryPhoto } from '../../../utils/socialCards';
 import SocialSourcesClient from './SocialSourcesClient';
 
 export interface SocialBrandDnaClientProps {
@@ -141,6 +142,7 @@ export default function SocialBrandDnaClient({
   const [instituteName, setInstituteName] = useState('Emmanuelle Esthétique');
   const [instituteAddress, setInstituteAddress] = useState('Chemin de la Marouette 19, 1607 Palézieux-Gare');
   const [monthlyOffers, setMonthlyOffers] = useState<MonthlyOfferRow[]>([]);
+  const [libraryPhotos, setLibraryPhotos] = useState<MediaLibraryPhoto[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -148,6 +150,10 @@ export default function SocialBrandDnaClient({
   const [creatingCareId, setCreatingCareId] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMediaLibraryPhotos().then(setLibraryPhotos);
+  }, []);
 
   useEffect(() => {
     if (!flash) return;
@@ -345,21 +351,23 @@ export default function SocialBrandDnaClient({
       }
 
       const plannedDate = nextCadenceDateKey();
+      const coverImage = data.cover_image || pickBestLibraryPhoto(`${careName} ${careDescription} ${categoryLabel}`, libraryPhotos);
       const { error: insertErr } = await supabase.from('social_posts').insert({
         source_type: 'manual',
         source_ref: newSourceRef('soin'),
         title: careName,
-        cover_image: null,
+        cover_image: coverImage,
         content: {
           ...data,
-          visual_theme: categoryLabel.toLowerCase().includes('phytomer') ? 'marin' : 'creme',
+          cover_image: coverImage,
+          visual_theme: 'photo',
         },
         planned_date: plannedDate,
         status: 'ready',
       });
       if (insertErr) throw new Error(insertErr.message);
 
-      setFlash(`Publication sur « ${careName} » créée pour le ${DAY_LABEL.format(fromDateKey(plannedDate))}.`);
+      setFlash(`Publication sur « ${careName} » créée avec sa photo de bibliothèque pour le ${DAY_LABEL.format(fromDateKey(plannedDate))}.`);
       onPostCreated?.(plannedDate);
     } catch (e: any) {
       setError(e?.message || 'Impossible de créer la publication pour ce soin.');
@@ -1046,19 +1054,36 @@ export default function SocialBrandDnaClient({
         </div>
       </div>
 
-      {/* ── 4. Galerie Photos de la Marque ───────────────────────────────────── */}
+      {/* ── 4. Galerie Photos de la Bibliothèque ─────────────────────────────── */}
       <div className="bg-stone-50 border border-stone-200 rounded-2xl p-6 space-y-4">
-        <div>
-          <h3 className="text-[18px] font-semibold text-[#3A3730] flex items-center gap-2">
-            <ImageIcon size={18} className="text-[#8A9A7B]" /> Galerie Photos de la Marque
-          </h3>
-          <p className="text-[13px] text-stone-700 mt-0.5">
-            Les visuels de votre cabine à Palézieux-Gare et de vos soins utilisés par le Studio Visuel pour illustrer vos publications.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-[18px] font-semibold text-[#3A3730] flex items-center gap-2">
+              <ImageIcon size={18} className="text-[#8A9A7B]" /> Images de votre Bibliothèque Médias ({libraryPhotos.length > 0 ? libraryPhotos.length : BRAND_PHOTOS.length})
+            </h3>
+            <p className="text-[13px] text-stone-700 mt-0.5">
+              Toutes vos publications utilisent obligatoirement les photos de votre bibliothèque médias pour illustrer vos posts et carrousels.
+            </p>
+          </div>
+          <a
+            href="/admin/media"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-[12px] font-semibold text-[#3A3730] transition-colors"
+          >
+            Gérer la bibliothèque d&apos;images →
+          </a>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-          {BRAND_PHOTOS.map((photo) => (
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3.5 max-h-[520px] overflow-y-auto pr-1">
+          {(libraryPhotos.length > 0
+            ? libraryPhotos.map((p) => ({
+                id: p.id,
+                category: p.category,
+                title: p.label,
+                url: p.url,
+                caption: p.category,
+              }))
+            : BRAND_PHOTOS
+          ).map((photo) => (
             <div
               key={photo.id}
               className="group bg-white border border-stone-200 rounded-xl overflow-hidden flex flex-col"
@@ -1074,9 +1099,8 @@ export default function SocialBrandDnaClient({
                   {photo.category}
                 </span>
               </div>
-              <div className="p-3 space-y-0.5">
-                <p className="text-[13px] font-semibold text-[#3A3730] leading-snug">{photo.title}</p>
-                <p className="text-[11px] text-stone-600 line-clamp-2">{photo.caption}</p>
+              <div className="p-2.5 space-y-0.5">
+                <p className="text-[12px] font-semibold text-[#3A3730] leading-snug truncate">{photo.title}</p>
               </div>
             </div>
           ))}

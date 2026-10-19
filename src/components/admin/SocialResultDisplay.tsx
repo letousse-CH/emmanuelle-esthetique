@@ -8,8 +8,8 @@ import {
 import { supabase } from '../../services/supabase';
 import {
   renderCarouselSlide, renderHookCard, renderStorySlide, downloadCanvas, downloadImageFromUrl,
-  FORMAT_LABELS, VISUAL_THEMES, BRAND_PHOTOS,
-  BrandTokens, SocialCardFormat, SocialVisualTheme,
+  FORMAT_LABELS, VISUAL_THEMES, BRAND_PHOTOS, fetchMediaLibraryPhotos, pickBestLibraryPhoto,
+  BrandTokens, SocialCardFormat, SocialVisualTheme, MediaLibraryPhoto,
 } from '../../utils/socialCards';
 import type {
   SocialGenerationResult, SocialSlide, SocialStorySlide, SocialVisual, SocialGoogleBusiness,
@@ -24,6 +24,8 @@ interface Props {
   onRegenerate?: () => void;
   /** Permet de sauvegarder les retouches de texte ou le thème choisi dans Supabase. */
   onUpdateContent?: (next: SocialGenerationResult) => void | Promise<void>;
+  /** Permet de mettre à jour l'image de couverture du post dans Supabase. */
+  onUpdateCoverImage?: (newUrl: string) => void | Promise<void>;
   /** Plateforme affichée à l'ouverture. */
   initialPlatform?: SocialPlatformId;
 }
@@ -244,13 +246,22 @@ export default function SocialResultDisplay({
   coverImage,
   onRegenerate,
   onUpdateContent,
+  onUpdateCoverImage,
   initialPlatform,
 }: Props) {
   const [platform, setPlatform] = useState<SocialPlatformId>(initialPlatform ?? 'instagram');
   const [draft, setDraft] = useState<SocialGenerationResult>(() => result);
-  const [theme, setTheme] = useState<SocialVisualTheme>(() => result.theme || 'creme');
-  const [bgImageUrl, setBgImageUrl] = useState<string>(() => coverImage || BRAND_PHOTOS[0].url);
-  const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [theme, setTheme] = useState<SocialVisualTheme>(() => result.theme || 'photo');
+  const [libraryPhotos, setLibraryPhotos] = useState<MediaLibraryPhoto[]>(BRAND_PHOTOS);
+  const [bgImageUrl, setBgImageUrl] = useState<string>(() =>
+    coverImage ||
+    result.cover_image ||
+    pickBestLibraryPhoto(
+      `${result.instagram?.caption?.hook || ''} ${result.instagram?.slides?.[0]?.text || ''}`,
+      BRAND_PHOTOS,
+    )
+  );
+  const [showPhotoPicker, setShowPhotoPicker] = useState(true);
   const [editingText, setEditingText] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -263,6 +274,24 @@ export default function SocialResultDisplay({
   const storyCanvasRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
 
   useEffect(() => {
+    let active = true;
+    fetchMediaLibraryPhotos().then((photos) => {
+      if (!active) return;
+      setLibraryPhotos(photos);
+      if (!coverImage && !result.cover_image) {
+        const autoPicked = pickBestLibraryPhoto(
+          `${result.instagram?.caption?.hook || ''} ${result.instagram?.slides?.[0]?.text || ''}`,
+          photos,
+        );
+        setBgImageUrl(autoPicked);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [coverImage, result.cover_image, result.instagram]);
+
+  useEffect(() => {
     setDraft(result);
     if (result.theme) setTheme(result.theme);
     setDirty(false);
@@ -270,7 +299,8 @@ export default function SocialResultDisplay({
 
   useEffect(() => {
     if (coverImage) setBgImageUrl(coverImage);
-  }, [coverImage]);
+    else if (result.cover_image) setBgImageUrl(result.cover_image);
+  }, [coverImage, result.cover_image]);
 
   useEffect(() => {
     if (initialPlatform) setPlatform(initialPlatform);
@@ -281,7 +311,7 @@ export default function SocialResultDisplay({
     if (nextTheme === 'photo') {
       setShowPhotoPicker(true);
     }
-    const nextDraft: SocialGenerationResult = { ...draft, theme: nextTheme };
+    const nextDraft: SocialGenerationResult = { ...draft, theme: nextTheme, cover_image: bgImageUrl };
     setDraft(nextDraft);
     setDirty(true);
     setSavedNotice(false);
@@ -289,17 +319,18 @@ export default function SocialResultDisplay({
 
   const handleSelectPhoto = (url: string) => {
     setBgImageUrl(url);
-    if (theme !== 'photo') {
-      setTheme('photo');
-      setDraft((prev) => ({ ...prev, theme: 'photo' }));
-      setDirty(true);
+    setDraft((prev) => ({ ...prev, cover_image: url }));
+    setDirty(true);
+    setSavedNotice(false);
+    if (onUpdateCoverImage) {
+      Promise.resolve(onUpdateCoverImage(url)).catch(() => {});
     }
   };
 
   const updateDraft = (updater: (prev: SocialGenerationResult) => SocialGenerationResult) => {
     setDraft((prev) => {
       const next = updater(prev);
-      return { ...next, theme };
+      return { ...next, theme, cover_image: bgImageUrl };
     });
     setDirty(true);
     setSavedNotice(false);
@@ -309,7 +340,10 @@ export default function SocialResultDisplay({
     if (!onUpdateContent) return;
     setSaving(true);
     try {
-      await onUpdateContent({ ...draft, theme });
+      await onUpdateContent({ ...draft, theme, cover_image: bgImageUrl });
+      if (onUpdateCoverImage && bgImageUrl) {
+        await onUpdateCoverImage(bgImageUrl);
+      }
       setDirty(false);
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 3000);
@@ -366,28 +400,39 @@ export default function SocialResultDisplay({
     });
   };
 
-  const photoChoices = [
-    ...(coverImage
-      ? [{ id: 'cover-photo', label: 'Photo du sujet', category: 'Couverture', url: coverImage }]
-      : []),
-    ...BRAND_PHOTOS,
-  ];
+  const photoChoices = React.useMemo(() => {
+    const seen = new Set<string>();
+    const list: MediaLibraryPhoto[] = [];
+    if (coverImage) {
+      seen.add(coverImage);
+      list.push({ id: 'cover-photo', label: 'Image sélectionnée', category: 'Bibliothèque', url: coverImage, fromLibrary: true });
+    }
+    for (const p of libraryPhotos) {
+      if (!seen.has(p.url)) {
+        seen.add(p.url);
+        list.push(p);
+      }
+    }
+    return list;
+  }, [coverImage, libraryPhotos]);
 
   return (
     <div className="space-y-6">
-      {/* ── Sélecteur d'habillage visuel ("Personnaliser l'Écrin") ───────────── */}
+      {/* ── Sélecteur d'habillage visuel & Image de la bibliothèque ───────────── */}
       <div className="rounded-xl border border-stone-200 bg-white p-4 sm:p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-[#FAF7F2] text-[#3A3730] border border-stone-200">
-              <Palette size={16} />
-            </span>
+          <div className="flex items-center gap-3">
+            <img
+              src={bgImageUrl}
+              alt="Image du post"
+              className="size-12 rounded-xl object-cover border border-stone-200 shadow-2xs shrink-0"
+            />
             <div>
               <h3 className="text-[15px] font-semibold text-stone-950">
-                Personnaliser l’écrin visuel
+                Image de la bibliothèque &amp; écrin visuel
               </h3>
               <p className="text-[13px] text-stone-600">
-                Changez d’ambiance en 1 clic : toutes vos images se redessinent instantanément.
+                Chaque publication intègre obligatoirement une image de votre bibliothèque ({photoChoices.length} visuels disponibles).
               </p>
             </div>
           </div>
@@ -397,13 +442,13 @@ export default function SocialResultDisplay({
               type="button"
               onClick={() => setShowPhotoPicker((v) => !v)}
               className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold transition-colors cursor-pointer border ${
-                showPhotoPicker || theme === 'photo'
+                showPhotoPicker
                   ? 'border-stone-900 bg-stone-900 text-white'
                   : 'border-stone-200 bg-stone-50 text-stone-800 hover:bg-stone-100'
               }`}
             >
               <ImageIcon size={14} />
-              Photos de l’institut
+              {showPhotoPicker ? 'Masquer la bibliothèque' : 'Changer l’image (Bibliothèque)'}
             </button>
 
             <button
@@ -439,65 +484,24 @@ export default function SocialResultDisplay({
           </div>
         </div>
 
-        {/* Grille des 5 thèmes */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-          {VISUAL_THEMES.map((item) => {
-            const active = theme === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleSelectTheme(item.id)}
-                className={`group flex flex-col items-start rounded-xl p-3 text-left transition-all cursor-pointer border ${
-                  active
-                    ? 'border-stone-900 bg-stone-50 ring-2 ring-stone-900/10'
-                    : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60'
-                }`}
-              >
-                <div className="flex w-full items-center justify-between gap-2 mb-2">
-                  <span
-                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-serif font-bold border border-black/10"
-                    style={{ backgroundColor: item.previewBg, color: item.previewFg }}
-                  >
-                    <span>Aa</span>
-                    <span
-                      className="inline-block size-2 rounded-full"
-                      style={{ backgroundColor: item.previewAccent }}
-                    />
-                  </span>
-                  {active && (
-                    <span className="inline-flex size-4 items-center justify-center rounded-full bg-stone-900 text-white">
-                      <Check size={10} />
-                    </span>
-                  )}
-                </div>
-                <span className="text-[13.5px] font-semibold text-stone-900 leading-snug">
-                  {item.label}
-                </span>
-                <span className="mt-0.5 text-[11.5px] text-stone-600 leading-snug line-clamp-2">
-                  {item.description}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Sélecteur de photo de soin (affiché quand le thème Photo est actif ou ouvert) */}
-        {(theme === 'photo' || showPhotoPicker) && (
+        {/* Sélecteur d'image de la bibliothèque (media_assets) */}
+        {showPhotoPicker && (
           <div className="pt-3 border-t border-stone-200 space-y-2.5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[13px] font-semibold text-stone-800">
-                Choisissez la photo d’arrière-plan (soins Phytomer, massages, regard, cabine) :
+                Choisissez l’image de votre bibliothèque (Médiathèque de l’institut) :
               </p>
-              {theme !== 'photo' && (
-                <span className="text-[12px] text-stone-600">
-                  Cliquer sur une photo activera l’écrin « Photo de Soin »
-                </span>
-              )}
+              <button
+                type="button"
+                onClick={() => downloadImageFromUrl(bgImageUrl, 'photo-post-emmanuelle.jpg')}
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-stone-700 hover:text-stone-950 underline cursor-pointer"
+              >
+                <Download size={12} /> Télécharger la photo seule
+              </button>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-6 md:grid-cols-8 gap-2 max-h-[230px] overflow-y-auto pr-1">
               {photoChoices.map((photo) => {
-                const selected = bgImageUrl === photo.url && theme === 'photo';
+                const selected = bgImageUrl === photo.url;
                 return (
                   <button
                     key={photo.id}
@@ -531,6 +535,54 @@ export default function SocialResultDisplay({
             </div>
           </div>
         )}
+
+        {/* Grille des 5 ambiances visuelles par-dessus la photo */}
+        <div className="pt-2 border-t border-stone-200 space-y-2">
+          <p className="text-[12.5px] font-semibold text-stone-700">
+            Style d’habillage par-dessus votre image :
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            {VISUAL_THEMES.map((item) => {
+              const active = theme === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelectTheme(item.id)}
+                  className={`group flex flex-col items-start rounded-xl p-3 text-left transition-all cursor-pointer border ${
+                    active
+                      ? 'border-stone-900 bg-stone-50 ring-2 ring-stone-900/10'
+                      : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60'
+                  }`}
+                >
+                  <div className="flex w-full items-center justify-between gap-2 mb-2">
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-serif font-bold border border-black/10"
+                      style={{ backgroundColor: item.previewBg, color: item.previewFg }}
+                    >
+                      <span>Aa</span>
+                      <span
+                        className="inline-block size-2 rounded-full"
+                        style={{ backgroundColor: item.previewAccent }}
+                      />
+                    </span>
+                    {active && (
+                      <span className="inline-flex size-4 items-center justify-center rounded-full bg-stone-900 text-white">
+                        <Check size={10} />
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[13.5px] font-semibold text-stone-900 leading-snug">
+                    {item.label}
+                  </span>
+                  <span className="mt-0.5 text-[11.5px] text-stone-600 leading-snug line-clamp-2">
+                    {item.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* ── Onglets des 5 formats réseaux ───────────────────────────────────── */}
@@ -571,7 +623,7 @@ export default function SocialResultDisplay({
               platform="instagram"
               title="Post Instagram"
               caption={`${draft.instagram.caption.hook}\n\n${draft.instagram.caption.body}\n\n${draft.instagram.caption.cta}\n\n${draft.instagram.caption.hashtags}`}
-              imageUrl={coverImage || bgImageUrl}
+              imageUrl={bgImageUrl || coverImage}
             />
           </div>
 
@@ -853,7 +905,7 @@ export default function SocialResultDisplay({
               platform="facebook"
               title="Post Facebook"
               caption={draft.facebook.post}
-              imageUrl={coverImage || bgImageUrl}
+              imageUrl={bgImageUrl || coverImage}
             />
           </div>
 
@@ -1066,7 +1118,7 @@ export default function SocialResultDisplay({
                   ? `${draft.linkedin.post}\n\n${draft.linkedin.hashtags}`
                   : draft.linkedin.post
               }
-              imageUrl={coverImage || bgImageUrl}
+              imageUrl={bgImageUrl || coverImage}
             />
           </div>
 

@@ -7,7 +7,10 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../../services/supabase';
 import { SITE_CONFIG } from '../../../config/site';
-import { fetchBrandTokens, type BrandTokens } from '../../../utils/socialCards';
+import {
+  fetchBrandTokens, type BrandTokens,
+  fetchMediaLibraryPhotos, pickBestLibraryPhoto, BRAND_PHOTOS, type MediaLibraryPhoto,
+} from '../../../utils/socialCards';
 import type { SocialGenerationResult } from '../../../utils/socialGeneration';
 import SocialResultDisplay from '../../../components/admin/SocialResultDisplay';
 import { toDateKey, fromDateKey, todayKey, addDaysToKey } from '../../../utils/dateKey';
@@ -42,6 +45,7 @@ interface ChatMessage {
   visualTheme?: VisualThemeId;
   singleResult?: {
     title: string;
+    coverImage: string;
     content: SocialGenerationResult & {
       visual_theme?: VisualThemeId;
       story?: { text?: string; highlight?: string; cta?: string };
@@ -101,13 +105,13 @@ const SEASONAL_SUGGESTIONS: {
   {
     label: 'Créer un carrousel : 3 gestes simples pour apaiser sa peau face au froid',
     mode: 'single',
-    theme: 'creme',
+    theme: 'photo',
     prompt: '3 gestes simples pour apaiser sa peau qui tire face au froid et au vent, avec l’expertise marine Phytomer à la cabine de Palézieux-Gare.',
   },
   {
     label: "Rédiger une actualité Google pour promouvoir les bons cadeaux massages à l'institut de Palézieux-Gare",
     mode: 'single',
-    theme: 'sauge',
+    theme: 'photo',
     prompt: "Promouvoir les bons cadeaux d'Emmanuelle Esthétique à Palézieux-Gare (Grand Massage Relaxant Marine, Rituel Échappée Belle) : une attention locale et apaisante à offrir.",
   },
   {
@@ -119,7 +123,7 @@ const SEASONAL_SUGGESTIONS: {
   {
     label: 'Trouver 4 idées de publications douces pour inviter mes clientes à prendre un moment pour soi',
     mode: 'ideas',
-    theme: 'citation',
+    theme: 'photo',
     prompt: 'Trouver 4 idées de publications douces et bienveillantes pour inviter mes clientes de Palézieux, Oron et Châtel-St-Denis à s’accorder une vraie pause en cabine.',
   },
 ];
@@ -148,13 +152,15 @@ function newSourceRef(prefix = 'assistant'): string {
 
 export default function SocialAssistantChat({ onPostCreated, initialPrompt }: SocialAssistantChatProps) {
   const [mode, setMode] = useState<AssistantMode>('single');
-  const [visualTheme, setVisualTheme] = useState<VisualThemeId>('creme');
+  const [visualTheme, setVisualTheme] = useState<VisualThemeId>('photo');
   const [input, setInput] = useState(initialPrompt || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [brand, setBrand] = useState<BrandTokens | null>(null);
+  const [libraryPhotos, setLibraryPhotos] = useState<MediaLibraryPhoto[]>(BRAND_PHOTOS);
   const [previewModalPost, setPreviewModalPost] = useState<{
     title: string;
+    coverImage: string;
     content: SocialGenerationResult;
     theme: VisualThemeId;
   } | null>(null);
@@ -165,7 +171,7 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
     {
       id: 'welcome',
       role: 'assistant',
-      text: "Bonjour Emmanuelle. Je connais la carte de vos soins Phytomer, vos massages, la beauté du regard et l'ambiance douce de votre cabine à Palézieux-Gare. Que souhaitez-vous préparer aujourd'hui ?",
+      text: "Bonjour Emmanuelle. Je connais la carte de vos soins Phytomer, vos massages, la beauté du regard et les photos de votre bibliothèque. Que souhaitez-vous préparer aujourd'hui ?",
     },
   ]);
 
@@ -173,6 +179,7 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
 
   useEffect(() => {
     fetchBrandTokens(SITE_CONFIG.name || 'Emmanuelle Esthétique').then(setBrand);
+    fetchMediaLibraryPhotos().then(setLibraryPhotos);
   }, []);
 
   useEffect(() => {
@@ -224,16 +231,19 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
           if (activeMode === 'single' && (chatData.content || chatData.post || chatData.result || chatData.instagram)) {
             const rawContent = chatData.content || chatData.post || chatData.result || chatData;
             const nextDate = buildNextCadenceDates(1)[0] || addDaysToKey(todayKey(), 1);
+            const postTitle = chatData.title || text.slice(0, 90);
+            const coverImage = rawContent.cover_image || pickBestLibraryPhoto(`${postTitle} ${text}`, libraryPhotos);
             setMessages((prev) => [
               ...prev,
               {
                 id: `assistant-${Date.now()}`,
                 role: 'assistant',
-                text: chatData.reply || 'Voici votre publication complète, prête à être ajoutée au calendrier :',
+                text: chatData.reply || 'Voici votre publication complète avec son image de bibliothèque, prête à être ajoutée au calendrier :',
                 visualTheme: activeTheme,
                 singleResult: {
-                  title: chatData.title || text.slice(0, 90),
-                  content: { ...rawContent, theme: activeTheme, visual_theme: activeTheme },
+                  title: postTitle,
+                  coverImage,
+                  content: { ...rawContent, cover_image: coverImage, theme: activeTheme, visual_theme: activeTheme },
                   plannedDate: nextDate,
                 },
               },
@@ -302,8 +312,12 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
         }
 
         const nextDate = buildNextCadenceDates(1)[0] || addDaysToKey(todayKey(), 1);
+        const postTitle = text.length > 90 ? `${text.slice(0, 87)}…` : text;
+        const coverImage = data.cover_image || pickBestLibraryPhoto(`${postTitle} ${text}`, libraryPhotos);
         const enriched = {
           ...data,
+          cover_image: coverImage,
+          theme: activeTheme,
           visual_theme: activeTheme,
           story: data.story || {
             text: data.instagram?.slides?.[0]?.text || data.instagram?.caption?.hook || text,
@@ -322,10 +336,11 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
           {
             id: `assistant-${Date.now()}`,
             role: 'assistant',
-            text: 'J’ai rédigé votre publication complète (Carrousel Instagram, Story verticale, Facebook et actualité Google pour Palézieux-Gare). Vous pouvez l’ajouter au calendrier en 1 clic :',
+            text: 'J’ai rédigé votre publication complète avec une photo de votre bibliothèque (Carrousel Instagram, Story verticale, Facebook et actualité Google pour Palézieux-Gare). Vous pouvez l’ajouter au calendrier en 1 clic :',
             visualTheme: activeTheme,
             singleResult: {
-              title: text.length > 90 ? `${text.slice(0, 87)}…` : text,
+              title: postTitle,
+              coverImage,
               content: enriched,
               plannedDate: nextDate,
             },
@@ -458,13 +473,14 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
     setSavingId(msg.id);
     setError(null);
     try {
-      const { title, content, plannedDate } = msg.singleResult;
+      const { title, coverImage, content, plannedDate } = msg.singleResult;
+      const finalCover = coverImage || content.cover_image || pickBestLibraryPhoto(title, libraryPhotos);
       const { error: insertErr } = await supabase.from('social_posts').insert({
         source_type: 'manual',
         source_ref: newSourceRef('chat-single'),
         title,
-        cover_image: null,
-        content,
+        cover_image: finalCover,
+        content: { ...content, cover_image: finalCover },
         planned_date: plannedDate,
         status: 'ready',
       });
@@ -514,8 +530,10 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
           throw new Error(data?.error || `Échec sur le sujet « ${topic.title} »`);
         }
 
+        const coverImage = data.cover_image || pickBestLibraryPhoto(`${topic.title} ${topic.angle}`, libraryPhotos, i);
         const enriched = {
           ...data,
+          cover_image: coverImage,
           pillar: topic.pillar || data.pillar,
           visual_theme: msg.visualTheme || visualTheme,
         };
@@ -524,7 +542,7 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
           source_type: 'manual',
           source_ref: newSourceRef('chat-plan'),
           title: topic.title,
-          cover_image: null,
+          cover_image: coverImage,
           content: enriched,
           planned_date: topic.date,
           status: 'ready',
@@ -573,8 +591,10 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
       }
 
       const nextDate = buildNextCadenceDates(ideaIdx + 1).pop() || addDaysToKey(todayKey(), 1);
+      const coverImage = data.cover_image || pickBestLibraryPhoto(`${idea.title} ${idea.angle}`, libraryPhotos, ideaIdx);
       const enriched = {
         ...data,
+        cover_image: coverImage,
         pillar: idea.pillar || data.pillar,
         visual_theme: msg.visualTheme || visualTheme,
       };
@@ -583,7 +603,7 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
         source_type: 'manual',
         source_ref: newSourceRef('chat-idea'),
         title: idea.title,
-        cover_image: null,
+        cover_image: coverImage,
         content: enriched,
         planned_date: nextDate,
         status: 'ready',
@@ -691,7 +711,16 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
                     </span>
                   </div>
 
-                  <h4 className="text-[16px] font-semibold text-[#3A3730]">{msg.singleResult.title}</h4>
+                  <div className="flex items-center gap-3">
+                    {msg.singleResult.coverImage && (
+                      <img
+                        src={msg.singleResult.coverImage}
+                        alt={msg.singleResult.title}
+                        className="w-14 h-16 rounded-lg object-cover border border-stone-200 shrink-0"
+                      />
+                    )}
+                    <h4 className="text-[16px] font-semibold text-[#3A3730]">{msg.singleResult.title}</h4>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="bg-white rounded-xl p-3 border border-stone-200 space-y-1">
@@ -744,6 +773,7 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
                       onClick={() =>
                         setPreviewModalPost({
                           title: msg.singleResult!.title,
+                          coverImage: msg.singleResult!.coverImage,
                           content: msg.singleResult!.content,
                           theme: msg.visualTheme || visualTheme,
                         })
@@ -970,6 +1000,7 @@ export default function SocialAssistantChat({ onPostCreated, initialPrompt }: So
             <div className="overflow-y-auto p-6">
               <SocialResultDisplay
                 result={previewModalPost.content}
+                coverImage={previewModalPost.coverImage}
                 brand={{
                   ...brand,
                   accent: VISUAL_THEMES.find((t) => t.id === previewModalPost.theme)?.accent || brand.accent,
