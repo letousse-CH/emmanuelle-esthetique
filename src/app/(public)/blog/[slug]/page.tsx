@@ -12,8 +12,9 @@ import { getSettingsServer } from '../../../../services/settingsServer';
 import { proxyUrl } from '../../../../utils/media';
 import { NewsletterBanner } from '../../../../components/NewsletterBanner';
 import { ShareButtons, TableOfContents, TocEntry } from '../../../../components/blog/BlogClientComponents';
-import { SITE_CONFIG } from '../../../../config/site';
+import { getBusinessInfoServer, SITE_CONFIG } from '../../../../config/site';
 import { isModuleEnabledServer } from '../../../../config/modules';
+import { pillarForArticle, pillarFromPrice } from '../../../../utils/blogSilo';
 
 /* ── Regex-based server helpers to avoid browser DOMParser crashes ── */
 
@@ -155,14 +156,25 @@ function extractFaqItems(html: string): Array<{ question: string; answer: string
   return items;
 }
 
+/*
+  Nom du site et de l'autrice : ils vivent dans les réglages. SITE_CONFIG.name
+  et SITE_CONFIG.owner sont vides, d'où des titres « Article | » et un JSON-LD
+  sans auteur ni éditeur.
+*/
 async function getAuthorSettings() {
-  const s = await getSettingsServer(['author_bio', 'author_link', 'author_photo', 'business_owner', 'global_logo']);
+  const [s, business] = await Promise.all([
+    getSettingsServer(['author_bio', 'author_link', 'author_photo', 'business_owner_bio', 'global_logo', 'seo_home_og_image']),
+    getBusinessInfoServer(),
+  ]);
   return {
-    bio: s.author_bio,
+    bio: s.author_bio || s.business_owner_bio,
     link: s.author_link,
     photo: s.author_photo,
-    name: s.business_owner || SITE_CONFIG.owner,
+    name: business.owner || SITE_CONFIG.owner,
+    siteName: business.name || SITE_CONFIG.name,
     logo: s.global_logo,
+    // Image de partage d'un article sans visuel : celle de l'accueil.
+    fallbackImage: s.seo_home_og_image,
   };
 }
 
@@ -187,7 +199,6 @@ async function getPost(slug: string) {
         date: new Date(data.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
         dateIso: data.created_at,
         updatedAtIso: data.updated_at || data.created_at,
-        author: SITE_CONFIG.owner,
         // Un article sans catégorie ni visuel n'en invente pas : « Beauté &
         // bien-être » et une photo Unsplash étaient le thème du site d'origine,
         // servis en Open Graph sur les articles de n'importe quel autre site.
@@ -223,20 +234,21 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const post = await getPost(slug);
+  const [post, author] = await Promise.all([getPost(slug), getAuthorSettings()]);
+  const suffix = author.siteName ? ` | ${author.siteName}` : '';
 
   if (!post) {
     return {
-      title: `Article non trouvé | ${SITE_CONFIG.name}`,
+      title: `Article non trouvé${suffix}`,
     };
   }
 
-  const title = post.meta_title || `${post.title} | ${SITE_CONFIG.name}`;
+  const title = post.meta_title || `${post.title}${suffix}`;
+  const image = post.image || author.fallbackImage;
 
   return {
     title: title,
     description: post.excerpt,
-    keywords: post.keywords || `${post.category}, ${SITE_CONFIG.name}, ${SITE_CONFIG.seoDefaults.keywords}`,
     alternates: {
       canonical: `${SITE_CONFIG.url}/blog/${post.slug}`,
     },
@@ -245,14 +257,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       description: post.excerpt,
       url: `${SITE_CONFIG.url}/blog/${post.slug}`,
       type: "article",
-      images: [
-        {
-          url: post.image,
-          width: 1200,
-          height: 630,
-          alt: `${title} — ${SITE_CONFIG.name}`,
-        }
-      ],
+      ...(image ? { images: [{ url: image, alt: post.title }] } : {}),
       publishedTime: post.dateIso,
       modifiedTime: post.updatedAtIso,
       section: post.category,
@@ -278,13 +283,16 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   const faqItems = extractFaqItems(post.content || '');
   const wordCount = estimateWordCount(post.content || '');
   const readingMinutes = Math.max(1, Math.ceil(wordCount / 200));
+  // Page pilier du soin dont parle l'article (silo) : lien en marge et `about`.
+  const pillar = pillarForArticle({ title: post.title, meta_keywords: post.keywords, content: post.content });
+  const image = post.image || author.fallbackImage;
 
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     "headline": post.title,
     "description": post.excerpt,
-    "image": post.image,
+    ...(image ? { "image": image } : {}),
     "url": `${SITE_CONFIG.url}/blog/${post.slug}`,
     "datePublished": post.dateIso,
     "dateModified": post.updatedAtIso,
@@ -293,12 +301,12 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     "author": {
       "@type": "Person",
       "@id": `${SITE_CONFIG.url}/#owner`,
-      "name": SITE_CONFIG.owner
+      "name": author.name
     },
     "publisher": {
       "@type": "Organization",
       "@id": `${SITE_CONFIG.url}/#organization`,
-      "name": SITE_CONFIG.name,
+      "name": author.siteName,
       "url": SITE_CONFIG.url,
       ...(author.logo ? { "logo": { "@type": "ImageObject", "url": author.logo } } : {})
     },
@@ -307,7 +315,8 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       "@id": `${SITE_CONFIG.url}/blog/${post.slug}`
     },
     "isPartOf": { "@type": "Blog", "@id": `${SITE_CONFIG.url}/blog` },
-    "articleSection": post.category,
+    ...(post.category ? { "articleSection": post.category } : {}),
+    ...(pillar ? { "about": { "@type": "Service", "name": pillar.label, "url": `${SITE_CONFIG.url}${pillar.path}` } } : {}),
     "inLanguage": "fr-CH"
   };
 
@@ -334,10 +343,12 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
       {/* ── Hero ──────────────────────────────────────────────── */}
       <section className="relative pt-32 pb-16 px-6 overflow-hidden bg-white">
-        {/* Fond image flouté très subtil */}
-        <div className="absolute inset-0 opacity-[0.04]">
-          <img src={post.image} alt="" className="w-full h-full object-cover" aria-hidden loading="lazy" decoding="async" />
-        </div>
+        {/* Fond image flouté très subtil — rien sans visuel : `src=""` recharge la page. */}
+        {post.image && (
+          <div className="absolute inset-0 opacity-[0.04]">
+            <img src={post.image} alt="" className="w-full h-full object-cover" aria-hidden loading="lazy" decoding="async" />
+          </div>
+        )}
         <div className="relative max-w-3xl mx-auto">
           <Link
             href="/blog"
@@ -348,9 +359,11 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
           {/* Méta */}
           <div className="flex flex-wrap items-center gap-4 mb-6">
-            <span className="text-xs font-bold uppercase tracking-widest text-white bg-sage px-3 py-1 rounded-full">
-              {post.category}
-            </span>
+            {post.category && (
+              <span className="text-xs font-bold uppercase tracking-widest text-white bg-sage px-3 py-1 rounded-full">
+                {post.category}
+              </span>
+            )}
             <span className="flex items-center gap-1.5 text-xs text-stone-400">
               <Calendar className="w-3.5 h-3.5" /> {post.date}
             </span>
@@ -367,6 +380,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       </section>
 
       {/* ── Image couverture ──────────────────────────────────── */}
+      {post.image && (
       <section className="px-6 pb-0">
         <div className="max-w-5xl mx-auto">
           <div className="aspect-[16/7] rounded-2xl overflow-hidden shadow-lg">
@@ -384,6 +398,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           </div>
         </div>
       </section>
+      )}
 
       {/* ── Contenu + Sidebar ────────────────────────────────── */}
       <section className="py-16 px-6 bg-white">
@@ -419,9 +434,21 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             <aside className="lg:sticky lg:top-28 space-y-5">
               {toc.length > 0 && <TableOfContents entries={toc} />}
 
-              {/* Maillage interne — généré automatiquement, présent sur tout article. */}
+              {/* Maillage interne — généré automatiquement, présent sur tout article :
+                  la page pilier du soin concerné (ou la carte), puis la réservation. */}
               <div className="bg-stone-900 text-white rounded-2xl p-5 space-y-3">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Aller plus loin</p>
+                <Link
+                  href={pillar ? pillar.path : '/soins'}
+                  className="block bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors"
+                >
+                  <p className="font-serif text-sm font-bold text-white mb-1">
+                    {pillar ? pillar.label : 'La carte des soins et tarifs'}
+                  </p>
+                  <p className="text-xs text-stone-400 leading-relaxed">
+                    {pillar ? `Les soins et leurs tarifs, ${pillarFromPrice(pillar)}.` : 'Tous les soins, leurs durées et leurs prix.'}
+                  </p>
+                </Link>
                 <Link
                   href="/reservation"
                   className="block bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition-colors"

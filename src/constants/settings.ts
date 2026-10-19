@@ -53,6 +53,10 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   site_tone_of_voice:        "",
   site_brand_tone:           "",
   site_blog_topics:          "",
+  // En-tête de la page /blog (titre H1 et accroche), réglés en base. Vides :
+  // « Le Blog » et « Conseils et actualités de <nom> ».
+  blog_heading:              "",
+  blog_intro:                "",
 
   // ── Page de contact ─────────────────────────────────────
   // Le gabarit de la page /contact n'affiche que ce qui est renseigné : sans

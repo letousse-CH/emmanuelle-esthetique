@@ -6,20 +6,13 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { callClaude } from '../../utils/ai';
-import { buildPrompt, type ArticleIdea } from '../../utils/articleGeneration';
+import { buildPrompt, ARTICLE_PROMPT_SETTING_KEYS, type ArticleIdea } from '../../utils/articleGeneration';
 import { getSupabaseAdmin } from '../../utils/supabaseAdmin';
 import { AiTaskError, getSettingsPlain, type AiTaskMode } from './shared';
 
-const ARTICLE_SETTING_KEYS = [
-  'site_activity_context',
-  'site_target_persona',
-  'site_tone_of_voice',
-  'site_brand_tone',
-];
-
 /** Texte HTML de l'article. Réflexion coupée, comme dans la version en flux. */
 export async function writeArticle(idea: ArticleIdea, mode: AiTaskMode = 'long'): Promise<string> {
-  const settings = await getSettingsPlain(ARTICLE_SETTING_KEYS);
+  const settings = await getSettingsPlain(ARTICLE_PROMPT_SETTING_KEYS);
   const completion = await callClaude({
     feature: 'article',
     mode,

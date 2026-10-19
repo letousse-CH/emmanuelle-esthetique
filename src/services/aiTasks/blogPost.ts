@@ -6,6 +6,7 @@
  */
 import { callClaude } from '../../utils/ai';
 import { AiTaskError, getSettingsPlain, type AiTaskMode } from './shared';
+import { siteFactsForPrompt } from '../../utils/blogSilo';
 
 export interface BlogPostResult {
   meta_title: string;
@@ -31,6 +32,8 @@ export async function generateBlogPost(
       'site_tone_of_voice',
       'site_brand_tone',
       'business_name',
+      'business_owner',
+      'business_owner_bio',
     ]);
 
     const activityContext = settings.site_activity_context || 'Entreprise & Prestations web';
@@ -46,6 +49,8 @@ export async function generateBlogPost(
 • Persona Cible : ${targetPersona}
 • Ton de Voix & Personne d'adresse (Tu / Vous) : ${toneOfVoice}
 
+${siteFactsForPrompt(settings)}
+
 ━━━ DIRECTIVES ABSOLUES DE RÉDACTION HUMAINE ET AUTHENTIQUE ━━━
 
 1. FOND, RIGUEUR ET TRAITEMENT DE L'INFORMATION :
@@ -53,7 +58,7 @@ export async function generateBlogPost(
 - Profondeur d'analyse : ne te contente jamais de résumer superficiellement des informations en ligne ou de réécrire une page Wikipédia. Apporte une analyse originale et du relief.
 - Fraîcheur des données : évite les données obsolètes et les références à des études datées.
 - Ancrage terrain : fournis des paramètres précis, des détails pratiques et des méthodes concrètes plutôt que des abstractions générales.
-- Storytelling & cas réels : illustre les concepts par des cas réels ou de courtes anecdotes terrain.
+- Ancrage métier : illustre par des situations courantes en cabine, décrites de façon générale — jamais une cliente, une histoire ou un chiffre inventés.
 
 2. BANNISSEMENT STRICT DES SIGNAUX ET MOTS IA :
 - Mots-signatures interdits : proscris formellement "En outre", "Par conséquent", "Il convient de noter", "Il est crucial de", "Dans le monde actuel", "fondamental", "crucial", "écosystème", "synergies", "révolutionner", "booster", "optimiser".
@@ -91,7 +96,7 @@ export async function generateBlogPost(
 - Les 2 premières phrases directement sous chaque <h2> répondent EXPEDITIVEMENT à la question posée, avant d'approfondir.
 
 4. MARQUEURS D'EXPÉRIENCE VÉCUE (E-E-A-T) :
-- Intègre au moins 2 marqueurs d'expérience réelle ("Dans notre pratique quotidienne chez ${businessName}...", "Sur notre terrain d'intervention...").
+- Intègre au moins 2 marqueurs d'expérience de métier ("En cabine, chez ${businessName}, on voit souvent..."), sous forme d'observations générales : rien d'inventé.
 
 5. TABLEAU COMPARATIF STRUCTURÉ (EXTRACTION LLM) :
 - Intègre au moins 1 tableau <table> HTML comparatif ou synthétique pour faciliter l'extraction RAG par Perplexity/ChatGPT.

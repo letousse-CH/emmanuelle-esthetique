@@ -5,7 +5,20 @@
  * l'exécuteur d'automatisations : sans ça, l'action « Générer un brouillon
  * d'article » aurait dupliqué un prompt de cent cinquante lignes, avec la
  * garantie que les deux versions divergeraient.
+ *
+ * Réglages attendus : ARTICLE_PROMPT_SETTING_KEYS (la carte des soins vient de
+ * constants/carteSoins.ts, via utils/blogSilo.ts).
  */
+import { siteFactsForPrompt } from './blogSilo';
+
+export const ARTICLE_PROMPT_SETTING_KEYS = [
+  'site_activity_context',
+  'site_target_persona',
+  'site_tone_of_voice',
+  'site_brand_tone',
+  'business_owner',
+  'business_owner_bio',
+];
 export interface ArticleIdea {
   keyword: string;
   question?: string;
@@ -25,6 +38,7 @@ export function buildPrompt(idea: any, settings: Record<string, string>): string
   const targetPersona   = settings.site_target_persona || "";
   const toneOfVoice     = settings.site_tone_of_voice || "";
   const brandTone       = settings.site_brand_tone || "";
+  const cta = idea.cta || '[Une phrase qui invite à réserver le soin dont parle l’article, avec un lien vers /reservation]';
 
   return `Tu rédiges un article de blog complet, approfondi et optimisé SEO pour le site web.
 
@@ -34,6 +48,7 @@ ${activityContext}
 ${targetPersona ? `━━━ PERSONA CIBLE & BESOINS ━━━\n${targetPersona}\n` : ''}
 ${toneOfVoice ? `━━━ TON DE VOIX & STYLE D'ÉCRITURE ━━━\n${toneOfVoice}\n` : ''}
 ${brandTone ? `━━━ TON DE MARQUE & CHARTE ÉDITORIALE ━━━\n${brandTone}\n` : ''}
+${siteFactsForPrompt(settings)}
 
 ━━━ BRIEF SEO ━━━
 Mot-clé principal : "${idea.keyword}"
@@ -66,7 +81,7 @@ Conseils de rédaction à respecter :
 ${idea.contentTips?.map((t: string) => `- ${t}`).join('\n') || ''}
 
 CTA de fin d'article :
-"${idea.cta}"
+"${cta}"
 
 ━━━ DIRECTIVES DU TON ET VOIX D'ÉCRITURE ━━━
 
@@ -106,10 +121,11 @@ RÈGLES SEO OBLIGATOIRES :
 - Respecter la personne d'adresse (tutoiement ou vouvoiement) fixée par le ton de voix ci-dessus, sans jamais en changer en cours d'article.
 
 ━━━ SOURCES EXTERNES OBLIGATOIRES ━━━
-- Inclure exactement 2 liens externes vers des sources de référence (PubMed, CNRS, APA, Inserm, université reconnue, ouvrage clinique de référence).
+- Inclure exactement 2 liens externes vers des sources de référence en dermatologie ou en cosmétologie (PubMed, DermNet, Société française de dermatologie, université ou hôpital universitaire reconnu).
 - Ces liens doivent être ancrés dans le corps du texte, dans une phrase naturelle.
+- Lien vers la page d'accueil de la source, jamais vers un article dont tu devines l'adresse : une URL inventée mène à une page introuvable.
 - Format : <a href="[URL]" target="_blank" rel="noopener noreferrer">[nom de la source]</a>
-- Exemple ✅ : "Selon une étude relayée par <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer">PubMed</a>, le lien de trauma s'appuie sur des mécanismes neurochimiques..."
+- Exemple ✅ : "La <a href="https://www.sfdermato.org" target="_blank" rel="noopener noreferrer">Société française de dermatologie</a> rappelle qu'une peau déshydratée n'est pas forcément une peau sèche..."
 - Exemple ❌ : une liste de sources en bas d'article sans ancrage contextuel.
 
 ━━━ FAQ POUR RICH SNIPPETS (OBLIGATOIRE) ━━━
@@ -128,7 +144,7 @@ Les moteurs conversationnels citent les passages qui répondent vite, clairement
 
 ━━━ SIGNAUX E-E-A-T — EXPÉRIENCE & EXPERTISE ━━━
 Google et les IA privilégient les contenus qui montrent une expérience réelle du métier. Intègre, de façon naturelle et non promotionnelle :
-1. AU MOINS 2 MARQUEURS D'EXPÉRIENCE DIRECTE, ancrés dans le texte : "Ce que je vois le plus souvent en cabine, c'est…", "Les clientes qui poussent la porte arrivent souvent…". L'expérience vécue prime sur la théorie.
+1. AU MOINS 2 MARQUEURS D'EXPÉRIENCE DIRECTE, ancrés dans le texte : "Ce que je vois le plus souvent en cabine, c'est…", "Les clientes qui poussent la porte arrivent souvent…". Des observations générales de métier, jamais une cliente, une histoire ou un chiffre inventés.
 2. UNE MENTION NATURELLE DE LÉGITIMITÉ, une seule fois, sans étalage, tirée UNIQUEMENT des informations fournies dans le contexte ci-dessus. N'invente jamais un diplôme, une certification, une durée d'expérience ou une affiliation.
 3. NUANCE ET HONNÊTETÉ : reconnaître les limites ("chaque peau est différente", "en cas de doute, demandez un avis médical"). La prudence est un signal de fiabilité.
 4. JAMAIS de promesse de résultat absolue, de diagnostic à distance, ni d'allégation médicale ou anti-âge non fondée.
@@ -177,13 +193,13 @@ Structure requise :
 <h2>Pour aller plus loin</h2>
 <p>[Conclusion 100-150 mots — synthèse et ouverture]</p>
 
-<blockquote>\${idea.cta}</blockquote>
+<blockquote>${cta}</blockquote>
 
 ━━━ IMPORTANT ━━━
 - Commence directement avec le premier <p> de l'introduction. Pas de titre H1 (il est déjà dans la page).
-- Utilise des <strong> pour les concepts clés et les verrous psychologiques importants.
+- Utilise des <strong> pour les notions clés et les conseils importants.
 - Utilise des <em> pour les termes techniques du métier la première fois qu'ils apparaissent.
-- Inclus au moins une <blockquote> de citation (réelle ou composée dans ton style).
+- La seule <blockquote> est celle du CTA final : aucune citation inventée, attribuée ou non.
 - Chaque H2 doit contenir la requête cible ou une variante naturelle.
 - L'article doit se lire naturellement, pas comme une liste de réponses.
 

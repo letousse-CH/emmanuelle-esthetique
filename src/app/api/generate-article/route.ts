@@ -7,7 +7,7 @@ import { recordAiUsage } from '../../../services/aiUsage';
 import { resolveModelSpec } from '../../../constants/aiModels';
 import { getSettingsServer } from '../../../services/settingsServer';
 import { getAnthropicKey } from '../../../services/secrets';
-import { buildPrompt } from '../../../utils/articleGeneration';
+import { buildPrompt, ARTICLE_PROMPT_SETTING_KEYS } from '../../../utils/articleGeneration';
 
 export const dynamic = 'force-dynamic';
 // Route IA synchrone : limite des fonctions Netlify (voir src/utils/ai.ts).
@@ -60,12 +60,7 @@ export async function POST(req: NextRequest) {
 
       try {
         const client = new Anthropic({ apiKey: anthropicApiKey });
-        const settings = await getSettingsServer([
-          'site_activity_context',
-          'site_target_persona',
-          'site_tone_of_voice',
-          'site_brand_tone',
-        ]);
+        const settings = await getSettingsServer(ARTICLE_PROMPT_SETTING_KEYS);
         const prompt = buildPrompt(idea, settings);
 
         // Modèle piloté depuis /admin/settings → IA & Budget.

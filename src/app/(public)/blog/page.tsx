@@ -6,40 +6,57 @@ import Link from 'next/link';
 import { fetchPublishedArticles } from '../../../services/articles';
 import { proxyUrl } from '../../../utils/media';
 import { NewsletterBanner } from '../../../components/NewsletterBanner';
-import { SITE_CONFIG } from '../../../config/site';
+import type { Metadata } from 'next';
+import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
 import { isModuleEnabledServer } from '../../../config/modules';
+import { getSettingsServer } from '../../../services/settingsServer';
+import { getPageMeta } from '../../../services/pageMeta';
 
-export const metadata = {
-  title: `Blog | ${SITE_CONFIG.name} - ${SITE_CONFIG.owner}`,
-  description: "",
-  keywords: "",
-  alternates: {
-    canonical: `${SITE_CONFIG.url}/blog`,
-  },
-  /*
-    Le titre et la description annonçaient « Beauté & bien-être » et des
-    « rituels de beauté naturelle » : le sujet du site d'origine, servi en Open
-    Graph et en Schema.org sur tout site issu du template. Les métadonnées SEO
-    propres à la page se règlent depuis /admin, via `page_meta`.
-  */
-  openGraph: {
-    title: `Blog | ${SITE_CONFIG.name}`,
-    description: "",
-    url: `${SITE_CONFIG.url}/blog`,
-    images: [
-      {
-        url: SITE_CONFIG.seoDefaults.ogImage,
-        alt: `Blog ${SITE_CONFIG.name}`,
-      }
-    ]
-  }
-};
+/*
+  Le titre valait « Blog |  - » (SITE_CONFIG.name est vide : le nom vit dans les
+  réglages) et l'accroche parlait de manipulation psychologique, le sujet d'un
+  autre site. Titre, description (`seo_pages_blog_*`), titre affiché et accroche
+  (`blog_heading`, `blog_intro`) se règlent en base. Tant qu'aucun article n'est
+  publié, la page reste accessible mais `noindex` (et absente du sitemap) : une
+  liste vide n'a rien à faire indexer.
+*/
+export async function generateMetadata(): Promise<Metadata> {
+  const [business, articles] = await Promise.all([
+    getBusinessInfoServer(),
+    fetchPublishedArticles().catch(() => []),
+  ]);
+  const name = business.name || SITE_CONFIG.name;
+  const meta = await getPageMeta('blog', {
+    title: name ? `Blog | ${name}` : 'Blog',
+    description: name ? `Conseils et actualités de ${name}.` : '',
+  });
+  const { title, description } = meta;
+  return {
+    title,
+    ...(description ? { description } : {}),
+    alternates: { canonical: `${SITE_CONFIG.url}/blog` },
+    ...(articles.length ? {} : { robots: { index: false, follow: true } }),
+    openGraph: {
+      title,
+      ...(description ? { description } : {}),
+      url: `${SITE_CONFIG.url}/blog`,
+      ...(SITE_CONFIG.seoDefaults.ogImage ? { images: [{ url: SITE_CONFIG.seoDefaults.ogImage, alt: title }] } : {}),
+    },
+  };
+}
 
 export default async function BlogPage() {
   if (!(await isModuleEnabledServer('blog'))) {
     notFound();
   }
 
+  const [business, intro] = await Promise.all([
+    getBusinessInfoServer(),
+    getSettingsServer(['blog_heading', 'blog_intro']),
+  ]);
+  const businessName = business.name || SITE_CONFIG.name;
+  const heading = intro.blog_heading || 'Le Blog';
+  const introText = intro.blog_intro || (businessName ? `Conseils et actualités de ${businessName}.` : '');
   let articles: any[] = [];
   try {
     articles = await fetchPublishedArticles();
@@ -64,12 +81,11 @@ export default async function BlogPage() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    "name": `Blog ${SITE_CONFIG.name}`,
-    "description": "",
+    "name": businessName ? `Blog ${businessName}` : 'Blog',
     "url": `${SITE_CONFIG.url}/blog`,
     "inLanguage": "fr-CH",
-    "author": { "@type": "Person", "@id": `${SITE_CONFIG.url}/#owner`, "name": SITE_CONFIG.owner },
-    "publisher": { "@type": "Organization", "name": SITE_CONFIG.name, "url": SITE_CONFIG.url },
+    "author": { "@id": `${SITE_CONFIG.url}/#owner` },
+    "publisher": { "@id": `${SITE_CONFIG.url}/#organization` },
     "breadcrumb": {
       "@type": "BreadcrumbList",
       "itemListElement": [
@@ -90,11 +106,15 @@ export default async function BlogPage() {
       <section className="py-24 px-6 bg-paper border-b border-stone-100">
         <div className="max-w-4xl mx-auto text-center">
           <div>
-            <span className="text-sage font-bold tracking-[0.3em] uppercase text-xs mb-6 block">Décoder les Mécanismes</span>
-            <h1 className="font-serif text-5xl md:text-7xl font-bold mb-8 text-stone-900 leading-tight">Le Blog</h1>
-            <p className="text-xl text-stone-600 font-light leading-relaxed max-w-2xl mx-auto italic">
-              "Comprendre les codes de la manipulation pour cesser de douter de votre réalité et commencer à vous reconstruire."
-            </p>
+            {heading !== 'Le Blog' && (
+              <span className="text-sage font-bold tracking-[0.3em] uppercase text-xs mb-6 block">Le blog</span>
+            )}
+            <h1 className="font-serif text-5xl md:text-7xl font-bold mb-8 text-stone-900 leading-tight">{heading}</h1>
+            {introText && (
+              <p className="text-xl text-stone-600 font-light leading-relaxed max-w-2xl mx-auto">
+                {introText}
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -102,6 +122,9 @@ export default async function BlogPage() {
       {/* Posts Grid */}
       <section className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
+          {displayPosts.length === 0 && (
+            <p className="text-center text-stone-500">Les premiers articles arrivent bientôt.</p>
+          )}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12">
             {displayPosts.map((post) => (
               <article 
