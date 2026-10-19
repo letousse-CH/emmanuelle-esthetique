@@ -696,6 +696,24 @@ futurs, rattachés à un pilier.
 **l'ancienne** arborescence (Head Spa, ateliers, anciens tarifs) : ne pas l'utiliser
 après la mise en ligne.
 
+**SEO (audit du 2026-10-19).** Le sitemap date chaque page par son `updated_at`
+(jamais la date du rendu), liste `/reservation`, et n'inclut `/blog` qu'avec au
+moins un article publié — sinon `/blog` est `noindex`. Aucune `<meta keywords>`
+n'est émise. Le graphe Schema.org (`app/layout.tsx`) lit, en plus des
+coordonnées, des réglages sans écran d'admin : `business_owner_bio`,
+`business_owner_photo` (une vraie photo, jamais le logo), `business_knows_about`
+et `business_images` (une valeur par ligne), `business_payment_accepted` ; le
+pays est converti en code ISO (`CH`). Les données de l'audit (titres, H1 et FAQ
+de l'accueil, textes alternatifs, page `/venir`) : `scripts/seo-2026-10-19.mjs`.
+
+**Blog = contenu de soutien du silo.** `utils/blogSilo.ts` donne aux deux
+prompts d'article (`utils/articleGeneration.ts`, `services/aiTasks/blogPost.ts`)
+la carte des soins comme seule source autorisée (noms, durées, prix, pages) et
+impose les liens internes vers la page pilier ; aucune cliente, anecdote,
+citation ou statistique inventée. La page article retrouve son pilier
+(`pillarForArticle` : premier lien `/soins/…`, sinon mots du titre) et le
+propose en marge. En-tête de `/blog` : réglages `blog_heading`, `blog_intro`.
+
 ## Contenu des pages — page builder v2 (2026-09-26)
 
 Les pages publiques vivent dans la table Supabase `dynamic_pages`. Depuis le
