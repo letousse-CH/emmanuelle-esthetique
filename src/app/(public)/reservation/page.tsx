@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
-import { Sparkles } from 'lucide-react';
+import { Suspense } from 'react';
 import ReservationClient from './ReservationClient';
+import { Assurances } from './parts';
+import './reservation.css';
 import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
 import { getSettingsServer } from '../../../services/settingsServer';
 import { buildMetadata, getPageMeta } from '../../../services/pageMeta';
@@ -26,8 +28,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return buildMetadata(RESERVATION_SLUG, meta, `${SITE_CONFIG.url}/reservation`);
 }
-
-import { Suspense } from 'react';
 
 export default async function ReservationPage() {
   const business = await getBusinessInfoServer();
@@ -81,27 +81,27 @@ export default async function ReservationPage() {
         (useSearchParams) et ne s'affiche donc qu'avec JavaScript. Dans le
         composant, le H1 manquait au HTML que lisent les moteurs.
       */}
-      <div className="bg-paper text-stone-deep pt-36 sm:pt-44 lg:pt-48 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center mb-8 sm:mb-12 space-y-3">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase bg-sage/10 text-sage border border-sage/20">
-            <Sparkles className="w-3.5 h-3.5 text-sage" aria-hidden="true" />
-            Cabine Privée · Soins d&apos;Exception
-          </span>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif text-stone-deep font-normal tracking-tight">
-            Réserver votre soin
-          </h1>
-          <p className="text-muted max-w-xl mx-auto text-sm sm:text-base font-light leading-relaxed">
-            {`Choisissez votre rituel, ajoutez d’autres soins si vous le souhaitez, puis le jour et l’heure qui vous conviennent. ${
-              ownerFirstName ? `${ownerFirstName} vous recontacte` : 'Vous êtes recontactée'
-            } ensuite pour confirmer votre rendez-vous.`}
-          </p>
+      <div className="rsv-hero">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/algue.svg" alt="" aria-hidden="true" className="rsv-hero__algue" />
+        <div className="rsv-container rsv-hero__inner">
+          <div>
+            <div className="rsv-eyebrow">Réservation en ligne · Cabine privée</div>
+            <h1>Réserver votre soin</h1>
+            <div className="rsv-lead">
+              {`Composez votre séance, puis choisissez le jour et l’heure qui vous conviennent. ${
+                ownerFirstName || 'L’institut'
+              } vous confirme ensuite personnellement votre rendez-vous.`}
+            </div>
+          </div>
+          <Assurances ownerFirstName={ownerFirstName} />
         </div>
       </div>
       <Suspense fallback={
-        <div className="min-h-[50vh] bg-paper text-stone-deep pb-20 px-4 flex items-center justify-center">
+        <div className="min-h-[50vh] flex items-center justify-center">
           <div className="text-center space-y-3">
-            <div className="w-8 h-8 border-2 border-sage border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-sm text-muted">Chargement de votre espace de réservation...</p>
+            <div className="w-6 h-6 border border-sage border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="text-sm text-muted">Chargement de la carte des soins…</div>
           </div>
         </div>
       }>

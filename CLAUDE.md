@@ -231,6 +231,16 @@ Détail, audit et contrat d'API : `PLAN-RESERVATIONS.md`. Migration :
   réservation en ligne ; les rendez-vous clientes touchés sont signalés, jamais
   annulés. Création : bouton « Rendez-vous perso », ou « Ce n'est pas une
   cliente ? » dans « Nouveau rendez-vous ».
+- **Page publique `/reservation`** (refonte du 2026-10-20, styles `rsv-*` dans
+  `reservation/reservation.css`) : toute la carte s'affiche, rangée par univers
+  (`families.ts` : libellé, photo portrait de la page pilier, cadrage, univers
+  associés), avec une barre collante qui suit le défilement (`?category=` y mène).
+  « Ajouter » compose la séance (`seance.ts` : offre ou premier soin = soin
+  principal, le reste part dans `options`) ; compléments proposés sous le soin
+  choisi et dans « Complétez votre séance » ; récapitulatif collant au bureau,
+  barre du bas sur mobile. La catégorie API `services` est coupée en « Mains &
+  pieds » / « Regard » côté navigateur. Descriptions : celle de la caisse, sinon
+  celle de la carte (`carteDescriptionForName`, affichage seulement).
 - Pas encore fait : passage « Encaisser » vers la caisse, pièce jointe .ics
   (`sendEmail` ne la gère pas).
 

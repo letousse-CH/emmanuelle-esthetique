@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '../../../../services/supabase';
 import { getSupabaseAdmin } from '../../../../utils/supabaseAdmin';
-import { FALLBACK_OPTIONS, classifyCatalogRow, stripAccents } from '../../../../services/booking';
+import { FALLBACK_OPTIONS, carteDescriptionForName, classifyCatalogRow, stripAccents } from '../../../../services/booking';
 
 export const runtime = 'nodejs';
 export const revalidate = 60; // Cache 1 minute
@@ -55,7 +55,10 @@ export async function GET() {
     for (const s of dbServices) {
       const nom = s.nom || '';
       const nomLower = nom.toLowerCase();
-      const desc = s.description || '';
+      // La description saisie en caisse ne contient souvent que la durée (« 40 min ») :
+      // on montre alors celle de la carte (carteSoins.ts), sinon un texte générique.
+      const ownDesc = (s.description || '').trim();
+      const desc = ownDesc && !/^\d+\s*min\.?$/i.test(ownDesc) ? ownDesc : carteDescriptionForName(nom) || '';
       const prix = Number(s.prix_chf) || 0;
       const catNom = s.category_id ? catMap.get(s.category_id) || '' : '';
 
@@ -72,7 +75,7 @@ export async function GET() {
           nom,
           duree_minutes: dur,
           prix_chf: prix,
-          description: desc || 'Soin complémentaire sur-mesure pendant votre séance.',
+          description: desc,
         });
         continue;
       }

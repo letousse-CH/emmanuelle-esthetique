@@ -378,6 +378,40 @@ function carteDurationForName(name: string): number | null {
   return d > 0 ? d : null;
 }
 
+/**
+ * Description de la carte pour un soin du catalogue (`null` si aucun soin de la carte ne lui correspond).
+ *
+ * Les noms saisis en caisse diffèrent de la carte par la ponctuation (« & » / « et »,
+ * tirets), le pluriel (« Bulle » / « Bulles ») ou un mot (« massage du cuir chevelu »
+ * / « massage relaxant du cuir chevelu ») : on compare des mots, pas des chaînes.
+ * Sert à l'affichage seulement — la durée réservée garde sa propre règle
+ * (`carteDurationForName`).
+ */
+export function carteDescriptionForName(name: string): string | null {
+  const words = (x: string) =>
+    stripAccents(x.toLowerCase().replace(/&/g, ' et '))
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter(Boolean)
+      .map((w) => (w.length > 3 ? w.replace(/s$/, '') : w));
+  const n = words(name);
+  if (n.length === 0) return null;
+  const joined = n.join(' ');
+  let best: { score: number; description: string } | null = null;
+  for (const item of flatCarte()) {
+    if (!item.description) continue;
+    const c = words(item.name);
+    const cj = c.join(' ');
+    // Nom de caisse plus long que celui de la carte (« Forfait douceur : 1/2 jambes… »).
+    const prefix = joined === cj || joined.startsWith(cj + ' ') || cj.startsWith(joined + ' ');
+    const common = c.filter((w) => n.includes(w)).length;
+    const score = prefix ? 1 : common / new Set([...c, ...n]).size;
+    if (score >= 0.75 && (!best || score > best.score)) best = { score, description: item.description };
+  }
+  return best?.description ?? null;
+}
+
 /** Option proposée même si absente de la table `services` (voir /api/bookings/services). */
 export const FALLBACK_OPTIONS: Record<string, { nom: string; duree_minutes: number; prix_chf: number; description: string }> = {
   'option-boue-marine-dos': {

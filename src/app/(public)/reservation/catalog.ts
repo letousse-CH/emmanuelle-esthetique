@@ -7,10 +7,6 @@
  * en repli — le formulaire n'envoie donc jamais un identifiant que personne
  * ne sait résoudre. Les prix et durées affichés ici sont indicatifs : le
  * serveur recalcule tout à partir de l'identifiant.
- *
- * `PRESTATIONS_CATALOG`, `PrestationItem` et `PRIVILEGE_OPTIONS` sont encore
- * importés (via `ReservationClient`) par l'ancienne page admin des
- * réservations : ne pas les retirer pendant la transition.
  */
 
 export interface PrestationItem {
@@ -175,45 +171,5 @@ export const PRESTATIONS_CATALOG: PrestationItem[] = [
     priceChf: 100,
     description:
       'Courbure naturelle et durable de vos cils pour ouvrir le regard sans recourbe-cils ni mascara. Résultat impeccable durant 6 à 8 semaines.',
-  },
-];
-
-// Options Privilèges Cabine (Upselling doux)
-export const PRIVILEGE_OPTIONS: PrivilegeOption[] = [
-  {
-    id: 'option-boue-marine-dos',
-    nom: 'Option Boue Marine Auto-Chauffante Dos',
-    prix_chf: 30,
-    duree_minutes: 15,
-    description:
-      'Application d’une boue marine effervescente et reminéralisante le long de la colonne pendant votre soin. Dénoue le haut du corps.',
-  },
-  {
-    id: 'option-cuir-chevelu-nuque',
-    nom: 'Option Massage Relaxant Cuir Chevelu & Nuque',
-    prix_chf: 25,
-    duree_minutes: 15,
-    description: 'Manœuvres lentes et enveloppantes pour libérer les micro-tensions crâniennes.',
-  },
-  {
-    id: 'teinture-cils',
-    nom: 'Teinture des cils',
-    prix_chf: 30,
-    duree_minutes: 15,
-    description: 'Intensifie la noirceur naturelle des cils pour un regard profond dès le réveil.',
-  },
-  {
-    id: 'teinture-sourcils',
-    nom: 'Teinture des sourcils',
-    prix_chf: 22,
-    duree_minutes: 15,
-    description: 'Redéfinit subtilement la ligne du sourcil en harmonie avec votre carnation.',
-  },
-  {
-    id: 'duo-regard',
-    nom: 'Duo Regard (Teinture cils & sourcils)',
-    prix_chf: 45,
-    duree_minutes: 20,
-    description: 'La combinaison idéale pour un regard magnifié en douceur.',
   },
 ];
