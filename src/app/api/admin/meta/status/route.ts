@@ -7,6 +7,7 @@ import {
   listChoosablePages,
   saveMetaApp,
 } from '../../../../../services/metaConnection';
+import { publicOrigin } from '../../../../../utils/publicOrigin';
 
 /**
  * État de la connexion Facebook + Instagram, et ses réglages.
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
   if (await denied(req)) return NextResponse.json({ error: 'Session expirée : reconnectez-vous.' }, { status: 401 });
   try {
     const status = await getMetaStatus();
-    return NextResponse.json({ ...status, redirectUri: `${new URL(req.url).origin}/api/admin/meta/callback` });
+    return NextResponse.json({ ...status, redirectUri: `${publicOrigin(req)}/api/admin/meta/callback` });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'État indisponible.' }, { status: 500 });
   }

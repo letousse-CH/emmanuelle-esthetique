@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { completeOAuth } from '../../../../../services/metaConnection';
+import { publicOrigin } from '../../../../../utils/publicOrigin';
 
 /**
  * Retour du dialogue Facebook. Protégé par le `state` posé au départ (cookie
@@ -18,7 +19,8 @@ function back(origin: string, params: Record<string, string>) {
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const origin = url.origin;
+  // Même adresse qu'au départ (login) : Facebook exige qu'elle soit identique.
+  const origin = publicOrigin(req);
 
   const denied = url.searchParams.get('error');
   if (denied) {

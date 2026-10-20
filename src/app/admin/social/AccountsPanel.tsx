@@ -88,6 +88,9 @@ export default function AccountsPanel({ status, loading, notice, askPageChoice, 
   };
 
   const healthy = status?.connected && status.health === 'ok';
+  // Le cookie de connexion vit sur l'adresse ouverte : elle doit être celle que Facebook connaît.
+  const siteOrigin = status ? new URL(status.redirectUri).origin : null;
+  const wrongOrigin = Boolean(siteOrigin && typeof window !== 'undefined' && window.location.origin !== siteOrigin);
 
   return (
     <div className="space-y-6">
@@ -96,6 +99,12 @@ export default function AccountsPanel({ status, loading, notice, askPageChoice, 
       </button>
 
       {message && <Callout tone={message.tone}>{message.text}</Callout>}
+      {wrongOrigin && siteOrigin && !siteOrigin.includes('localhost') && (
+        <Callout tone="warning" title="Ouvrez l’admin depuis l’adresse du site">
+          Pour relier les comptes, passez par <a className="font-semibold underline" href={`${siteOrigin}/admin/social`}>{siteOrigin}/admin/social</a> :
+          c’est la seule adresse déclarée dans l’application Meta.
+        </Callout>
+      )}
 
       <Card>
         <CardHeader
@@ -239,6 +248,11 @@ function MetaAppSetup({ status, onSaved }: { status: MetaStatus; onSaved: (text:
           <li>
             Sur <a className="font-semibold text-accent underline" href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer">developers.facebook.com <ExternalLink size={12} className="inline" /></a>,
             ouvrez votre application (type « Entreprise »), puis <strong>Paramètres › Général</strong> : copiez l’<strong>ID de l’app</strong> et la <strong>Clé secrète</strong> ci-dessous.
+          </li>
+          <li>
+            Toujours dans <strong>Paramètres › Général</strong> : inscrivez <strong>{new URL(status.redirectUri).hostname}</strong> dans
+            « Domaines de l’app », et, tout en bas, « Ajouter une plateforme » › <strong>Site web</strong> avec l’adresse{' '}
+            <strong>{new URL(status.redirectUri).origin}/</strong>. Enregistrez. Sans cela, Facebook répond « Impossible de charger cette URL ».
           </li>
           <li>
             Dans <strong>Facebook Login › Paramètres</strong>, collez cette adresse dans « URI de redirection OAuth valides » :

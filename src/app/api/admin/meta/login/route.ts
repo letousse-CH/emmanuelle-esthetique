@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { validateSupabaseToken, getBearerToken } from '../../../../../utils/apiAuth';
 import { getMetaApp, META_SCOPES } from '../../../../../services/metaConnection';
 import { oauthDialogUrl } from '../../../../../services/metaGraph';
+import { publicOrigin } from '../../../../../utils/publicOrigin';
 
 /**
  * Démarre la connexion Facebook + Instagram.
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
     if (!app.appId || !app.appSecret) {
       return NextResponse.json({ error: 'Renseignez d’abord l’App ID et l’App Secret (étape 1).' }, { status: 400 });
     }
-    const origin = new URL(req.url).origin;
+    const origin = publicOrigin(req);
     const state = crypto.randomUUID();
     const url = oauthDialogUrl({
       appId: app.appId,
