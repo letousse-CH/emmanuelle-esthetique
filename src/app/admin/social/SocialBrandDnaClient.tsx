@@ -535,6 +535,42 @@ export default function SocialBrandDnaClient({
     }
   };
 
+  const handleRedetectInstagram = async () => {
+    setVerifyingMeta(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
+      const res = await fetch('/api/admin/meta/status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action: 'redetect' }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.error) {
+        throw new Error(data?.error || 'Impossible de relancer la détection Meta.');
+      }
+      await loadMetaStatus();
+      if (data.instagramUsername || data.instagramAccountId) {
+        setFlash(
+          `Compte Instagram détecté avec succès : @${data.instagramUsername || data.instagramAccountId} (relié à la Page « ${data.facebookPageName || 'Emmanuelle Esthétique'} ») !`
+        );
+      } else {
+        setError(
+          `Page Facebook « ${data.facebookPageName || 'Emmanuelle Esthétique'} » bien trouvée, mais Meta n'indique aucun compte Instagram Professionnel relié à cette Page (ou autorisé dans votre clé EAA…). Vérifiez les 2 points ci-dessous.`
+        );
+        setShowMetaSetup(true);
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Erreur lors de la détection Instagram.');
+    } finally {
+      setVerifyingMeta(false);
+    }
+  };
+
   const handleDisconnectMeta = async () => {
     if (!window.confirm('Déconnecter les comptes Facebook et Instagram de ce Studio ?')) return;
     const { data: { session } } = await supabase.auth.getSession();
@@ -621,11 +657,24 @@ export default function SocialBrandDnaClient({
                 </p>
               </div>
             </div>
-            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold shrink-0 ${
-              metaStatus.instagramAccountId ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'
-            }`}>
-              {metaStatus.instagramAccountId ? 'Actif' : 'À relier'}
-            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {metaStatus.hasToken && !metaStatus.instagramAccountId && (
+                <button
+                  type="button"
+                  onClick={handleRedetectInstagram}
+                  disabled={verifyingMeta}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#3A3730] hover:bg-stone-800 text-white text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {verifyingMeta ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                  Re-détecter
+                </button>
+              )}
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold shrink-0 ${
+                metaStatus.instagramAccountId ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'
+              }`}>
+                {metaStatus.instagramAccountId ? 'Actif' : 'À relier'}
+              </span>
+            </div>
           </div>
 
           {/* Facebook */}

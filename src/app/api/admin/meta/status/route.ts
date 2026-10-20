@@ -62,11 +62,16 @@ export async function POST(request: Request) {
     const body = await request.json();
     const db = getSupabaseAdmin() ?? supabase;
 
-    // Action 1 : Auto-découverte via un Access Token Meta (échange optionnel en Long-Lived + détection FB Page & IG Business)
-    if (body.action === 'verify_token') {
+    // Action 1 : Auto-découverte via un Access Token Meta (ou re-détection depuis le jeton déjà enregistré)
+    if (body.action === 'verify_token' || body.action === 'redetect') {
       let accessToken = (body.accessToken || '').trim();
       const appId = (body.appId || '').trim();
       const appSecret = (body.appSecret || '').trim();
+
+      if (!accessToken) {
+        const existing = (await getSettingsServer(['social_meta_token'] as any[])) as Record<string, string>;
+        accessToken = (existing.social_meta_token || process.env.META_ACCESS_TOKEN || '').trim();
+      }
 
       if (!accessToken) {
         return NextResponse.json({ error: "Veuillez fournir un jeton d'accès Meta." }, { status: 400 });
@@ -93,7 +98,7 @@ export async function POST(request: Request) {
 
       // Interroger Graph API pour découvrir automatiquement les Pages Facebook et comptes Instagram Business
       const accountsRes = await fetch(
-        `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name}&access_token=${encodeURIComponent(accessToken)}`,
+        `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name},connected_instagram_account{id,username,name}&access_token=${encodeURIComponent(accessToken)}`,
       );
       const accountsData = await accountsRes.json();
 
@@ -105,8 +110,32 @@ export async function POST(request: Request) {
       }
 
       const pages: any[] = Array.isArray(accountsData?.data) ? accountsData.data : [];
-      const selectedPage = pages.find((p) => p.instagram_business_account?.id) || pages[0] || null;
-      const igAccount = selectedPage?.instagram_business_account || null;
+      // Prioriser la page "Emmanuelle Esthétique" si l'utilisateur gère plusieurs pages
+      const emmanuellePage = pages.find((p) => (p.name || '').toLowerCase().includes('emmanuelle'));
+      const pageWithIg = pages.find((p) => p.instagram_business_account?.id || p.connected_instagram_account?.id);
+      const selectedPage = emmanuellePage || pageWithIg || pages[0] || null;
+
+      let igAccount =
+        selectedPage?.instagram_business_account ||
+        selectedPage?.connected_instagram_account ||
+        null;
+
+      // Second essai direct avec le Page Access Token si non remonté au 1er appel
+      if (selectedPage?.id && !igAccount?.id) {
+        try {
+          const pageToken = selectedPage.access_token || accessToken;
+          const directPageRes = await fetch(
+            `https://graph.facebook.com/v19.0/${selectedPage.id}?fields=instagram_business_account{id,username,name},connected_instagram_account{id,username,name}&access_token=${encodeURIComponent(pageToken)}`,
+          );
+          const directPageData = await directPageRes.json();
+          igAccount =
+            directPageData?.instagram_business_account ||
+            directPageData?.connected_instagram_account ||
+            null;
+        } catch {
+          // Ignore
+        }
+      }
 
       const rows: { key: string; value: string }[] = [
         { key: 'social_meta_token', value: accessToken },
@@ -142,6 +171,11 @@ export async function POST(request: Request) {
         instagramAccountId: igAccount?.id || '',
         instagramUsername: igAccount?.username || igAccount?.name || '',
         pagesFound: pages.length,
+        allPages: pages.map((p) => ({
+          id: p.id,
+          name: p.name,
+          hasIg: Boolean(p.instagram_business_account?.id || p.connected_instagram_account?.id),
+        })),
       });
     }
 
