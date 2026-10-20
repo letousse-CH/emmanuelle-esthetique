@@ -59,6 +59,8 @@ export const MANAGED_SECRETS = {
   // Client OAuth Google (archivage des justificatifs dans Google Drive).
   google_client_id:     { env: ['GOOGLE_CLIENT_ID'],     secret: false },
   google_client_secret: { env: ['GOOGLE_CLIENT_SECRET'], secret: true },
+  // Banque de vidéos libres de droits des Reels (pexels.com/api, gratuite).
+  pexels_api_key:       { env: ['PEXELS_API_KEY'],       secret: true },
 } as const satisfies Record<string, { env: readonly string[]; secret: boolean }>;
 
 export type ManagedSecretKey = keyof typeof MANAGED_SECRETS;

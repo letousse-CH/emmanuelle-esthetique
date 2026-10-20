@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Check, Copy, ExternalLink, Facebook, Instagram, RefreshCw, Unplug } from 'lucide-react';
 import { Button, Callout, Card, CardBody, CardFooter, CardHeader, Field, Input } from '../../../components/admin/ui';
 import { api, type MetaStatus } from './api';
+import ReelSettings from './ReelSettings';
 
 interface Props {
   status: MetaStatus | null;
@@ -194,6 +195,8 @@ export default function AccountsPanel({ status, loading, notice, askPageChoice, 
         )}
         {showSetup && status && <MetaAppSetup status={status} onSaved={async (text) => { setMessage({ tone: 'success', text }); setShowSetup(false); await onRefresh(); }} />}
       </Card>
+
+      <ReelSettings />
     </div>
   );
 }

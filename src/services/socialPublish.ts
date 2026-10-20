@@ -79,13 +79,15 @@ async function connectedNetworks(target: MetaPublishTarget | null) {
   return { facebook: Boolean(target), instagram: Boolean(target?.instagramId) };
 }
 
-/** Le visuel est-il bien en ligne, en JPEG ? Meta répond sinon par une erreur obscure. */
-async function checkImageOnline(url: string): Promise<string | null> {
+/** Le fichier est-il bien en ligne, au bon format ? Meta répond sinon par une erreur obscure. */
+async function checkOnline(url: string, what: 'image' | 'video'): Promise<string | null> {
+  const label = what === 'image' ? 'Le visuel' : 'La vidéo';
   try {
     const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(4000), cache: 'no-store' });
-    if (!res.ok) return `Le visuel n’est pas accessible en ligne (erreur ${res.status}). Enregistrez-le à nouveau.`;
+    if (!res.ok) return `${label} n’est pas accessible en ligne (erreur ${res.status}). Enregistrez à nouveau.`;
     const type = res.headers.get('content-type') || '';
-    if (type && !/image\/jpe?g/i.test(type)) return 'Le visuel en ligne n’est pas un JPEG. Enregistrez-le à nouveau.';
+    if (what === 'image' && type && !/image\/jpe?g/i.test(type)) return 'Le visuel en ligne n’est pas un JPEG. Enregistrez-le à nouveau.';
+    if (what === 'video' && type && !/video\/mp4/i.test(type)) return 'La vidéo en ligne n’est pas un MP4. Générez-la à nouveau.';
     return null;
   } catch {
     return null; // Contrôle de confort : en cas de doute, Meta tranchera.
@@ -94,9 +96,12 @@ async function checkImageOnline(url: string): Promise<string | null> {
 
 async function validateForSend(post: SocialPost, target: MetaPublishTarget | null): Promise<string[]> {
   const problems = publishProblems(post, await connectedNetworks(target), publicSiteUrl() || undefined);
-  if (!problems.length && post.image_url) {
-    const imageProblem = await checkImageOnline(post.image_url);
-    if (imageProblem) problems.push(imageProblem);
+  if (!problems.length) {
+    const checks = await Promise.all([
+      post.image_url ? checkOnline(post.image_url, 'image') : null,
+      post.kind === 'reel' && post.video_url ? checkOnline(post.video_url, 'video') : null,
+    ]);
+    problems.push(...checks.filter((c): c is string => Boolean(c)));
   }
   return problems;
 }
@@ -264,30 +269,102 @@ async function stepFacebook(
   }
 
   try {
-    const res = await graphPost<{ id: string; post_id?: string }>(`${target.pageId}/photos`, {
-      url: post.image_url!,
-      caption: captionForNetwork('facebook', post),
-      published: true,
-      access_token: target.pageToken,
-    }, callTimeout(deadline));
-    const postRef = res.post_id || res.id;
-    let permalink: string | null = null;
-    try {
-      const info = await graphGet<{ permalink_url?: string }>(postRef, { fields: 'permalink_url', access_token: target.pageToken }, 3000);
-      permalink = info.permalink_url || null;
-    } catch {
-      permalink = `https://www.facebook.com/${postRef}`;
-    }
-    await save(pub.id, { status: 'published', external_id: postRef, permalink, error: null, published_at: new Date().toISOString() });
+    const done = post.kind === 'story'
+      ? await facebookStory(post, target, deadline)
+      : post.kind === 'reel'
+        ? await facebookReel(post, target, deadline)
+        : await facebookPhoto(post, target, deadline);
+    await save(pub.id, { status: 'published', external_id: done.id, permalink: done.permalink, error: null, published_at: new Date().toISOString() });
   } catch (err) {
     const uncertain = err instanceof MetaError && err.uncertain;
     await save(pub.id, {
       status: 'failed',
       error: uncertain
-        ? 'Facebook n’a pas répondu à temps. Vérifiez la Page avant de relancer : la photo est peut-être déjà publiée.'
+        ? 'Facebook n’a pas répondu à temps. Vérifiez la Page avant de relancer : la publication est peut-être déjà en ligne.'
         : err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+interface Published { id: string; permalink: string | null }
+
+async function facebookPhoto(post: SocialPost, target: MetaPublishTarget, deadline: number): Promise<Published> {
+  const res = await graphPost<{ id: string; post_id?: string }>(`${target.pageId}/photos`, {
+    url: post.image_url!,
+    caption: captionForNetwork('facebook', post),
+    published: true,
+    access_token: target.pageToken,
+  }, callTimeout(deadline));
+  const postRef = res.post_id || res.id;
+  try {
+    const info = await graphGet<{ permalink_url?: string }>(postRef, { fields: 'permalink_url', access_token: target.pageToken }, 3000);
+    return { id: postRef, permalink: info.permalink_url || null };
+  } catch {
+    return { id: postRef, permalink: `https://www.facebook.com/${postRef}` };
+  }
+}
+
+/** Story de Page : photo déposée sans être publiée, puis publiée en story. */
+async function facebookStory(post: SocialPost, target: MetaPublishTarget, deadline: number): Promise<Published> {
+  const photo = await graphPost<{ id: string }>(`${target.pageId}/photos`, {
+    url: post.image_url!,
+    published: false,
+    access_token: target.pageToken,
+  }, callTimeout(deadline));
+  const story = await graphPost<{ success?: boolean; post_id?: string }>(`${target.pageId}/photo_stories`, {
+    photo_id: photo.id,
+    access_token: target.pageToken,
+  }, callTimeout(deadline));
+  return { id: story.post_id || photo.id, permalink: null };
+}
+
+/**
+ * Reel de Page, en trois temps : ouverture de l'envoi, téléchargement du MP4
+ * par Facebook depuis R2 (en-tête `file_url`), puis publication.
+ */
+async function facebookReel(post: SocialPost, target: MetaPublishTarget, deadline: number): Promise<Published> {
+  const start = await graphPost<{ video_id: string; upload_url: string }>(`${target.pageId}/video_reels`, {
+    upload_phase: 'start',
+    access_token: target.pageToken,
+  }, callTimeout(deadline));
+  let uploaded: Response;
+  try {
+    uploaded = await fetch(start.upload_url, {
+      method: 'POST',
+      headers: { Authorization: `OAuth ${target.pageToken}`, file_url: post.video_url! },
+      signal: AbortSignal.timeout(callTimeout(deadline, 15000)),
+    });
+  } catch {
+    throw new MetaError(null, true, 'Facebook n’a pas répondu au dépôt de la vidéo.');
+  }
+  const up = (await uploaded.json().catch(() => null)) as any;
+  if (!uploaded.ok || up?.success === false || up?.error || up?.debug_info) {
+    throw new MetaError(up?.error ?? { message: up?.debug_info?.message || `Dépôt de la vidéo refusé (HTTP ${uploaded.status}).` });
+  }
+  await graphPost(`${target.pageId}/video_reels`, {
+    upload_phase: 'finish',
+    video_id: start.video_id,
+    video_state: 'PUBLISHED',
+    description: captionForNetwork('facebook', post),
+    access_token: target.pageToken,
+  }, callTimeout(deadline));
+  return { id: start.video_id, permalink: `https://www.facebook.com/reel/${start.video_id}` };
+}
+
+/** Paramètres du conteneur Instagram selon la sorte de publication. */
+function instagramContainer(post: SocialPost, token: string): Record<string, string | boolean> {
+  if (post.kind === 'story') return { media_type: 'STORIES', image_url: post.image_url!, access_token: token };
+  if (post.kind === 'reel') {
+    return {
+      media_type: 'REELS',
+      video_url: post.video_url!,
+      cover_url: post.image_url!,
+      caption: captionForNetwork('instagram', post),
+      share_to_feed: true,
+      access_token: token,
+    };
+  }
+  return { image_url: post.image_url!, caption: captionForNetwork('instagram', post), access_token: token };
 }
 
 async function stepInstagram(
@@ -307,16 +384,12 @@ async function stepInstagram(
   // 1. Conteneur : Instagram télécharge le visuel depuis R2.
   if (!containerId) {
     if (attempts >= IG_MAX_CONTAINER_ATTEMPTS) {
-      await save(pub.id, { status: 'failed', error: 'Instagram n’a pas pu préparer le visuel après deux essais. Enregistrez le visuel à nouveau puis relancez.' });
+      await save(pub.id, { status: 'failed', error: `Instagram n’a pas pu préparer ${post.kind === 'reel' ? 'la vidéo' : 'le visuel'} après deux essais. Enregistrez à nouveau puis relancez.` });
       return;
     }
     attempts += 1;
     try {
-      const res = await graphPost<{ id: string }>(`${target.instagramId}/media`, {
-        image_url: post.image_url!,
-        caption: captionForNetwork('instagram', post),
-        access_token: target.pageToken,
-      }, callTimeout(deadline));
+      const res = await graphPost<{ id: string }>(`${target.instagramId}/media`, instagramContainer(post, target.pageToken), callTimeout(deadline));
       containerId = res.id;
       await save(pub.id, { status: 'processing', container_id: containerId, attempts }, true);
     } catch (err) {
@@ -383,11 +456,11 @@ async function stepInstagram(
       await save(pub.id, {
         status: 'failed',
         container_id: null,
-        error: `Instagram n’a pas pu traiter le visuel${statusDetail ? ` (${statusDetail})` : ''}. Enregistrez-le à nouveau puis relancez.`,
+        error: `Instagram n’a pas pu traiter ${post.kind === 'reel' ? 'la vidéo' : 'le visuel'}${statusDetail ? ` (${statusDetail})` : ''}. Enregistrez à nouveau puis relancez.`,
       });
       return;
     }
-    await sleep(1500); // IN_PROGRESS
+    await sleep(post.kind === 'reel' ? 3000 : 1500); // IN_PROGRESS (une vidéo prend plus longtemps)
   }
   await save(pub.id, {});
 }

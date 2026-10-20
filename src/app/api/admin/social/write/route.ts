@@ -2,13 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { validateSupabaseToken, getBearerToken } from '../../../../../utils/apiAuth';
 import { isModuleEnabledServer } from '../../../../../config/modules';
 import { resolveSource, writeSocialPost, type WritingSource } from '../../../../../services/socialWriting';
+import { getSecretOrEnv } from '../../../../../services/secrets';
 
 /**
  * Rédige une publication à partir d'une idée, d'un soin de la carte, d'un
  * article ou d'une offre du moment.
  *
- * POST { source: { kind, text | id }, instruction? }
- *   → { eyebrow, headline, caption, hashtags, source: { kind, ref, title, linkPath, photoUrl } }
+ * POST { source: { kind, text | id }, instruction?, kind?: 'post' | 'story' | 'reel' }
+ *   → { eyebrow, headline, caption, hashtags, scenes?, mood?, source: { kind, ref, title, linkPath, photoUrl } }
  */
 export const runtime = 'nodejs';
 // Appel IA synchrone : voir src/utils/ai.ts (mode « quick »).
@@ -38,7 +39,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const resolved = await resolveSource(source);
-    const writing = await writeSocialPost(resolved, typeof body.instruction === 'string' ? body.instruction : undefined);
+    const kind = body?.kind === 'story' || body?.kind === 'reel' ? body.kind : 'post';
+    const videoAvailable = kind === 'reel' && Boolean(await getSecretOrEnv('pexels_api_key'));
+    const plannedFor = typeof body?.plannedFor === 'string' && !Number.isNaN(Date.parse(body.plannedFor)) ? body.plannedFor : null;
+    const writing = await writeSocialPost(resolved, typeof body.instruction === 'string' ? body.instruction : undefined, kind, videoAvailable, plannedFor);
     return NextResponse.json({
       ...writing,
       source: {

@@ -2,29 +2,30 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft, Archive, CalendarClock, Check, Copy, ExternalLink, Facebook, ImageIcon, Instagram, Loader2,
-  RefreshCw, Send, Sparkles, Trash2, X,
+  ArrowLeft, Archive, CalendarClock, Check, Clapperboard, Copy, ExternalLink, Facebook, ImageIcon, Instagram, Loader2,
+  RefreshCw, Send, Smartphone, Sparkles, Trash2, X,
 } from 'lucide-react';
 import { supabase } from '../../../services/supabase';
 import { SITE_CONFIG } from '../../../config/site';
 import { CARTE } from '../../../constants/carteSoins';
 import { Badge, Button, Callout, Card, CardBody, CardHeader, Field, Input, Select, Textarea } from '../../../components/admin/ui';
 import {
-  captionFor, DEFAULT_VISUAL, IG_CAPTION_MAX, isEditable, NETWORK_LABEL, normalizePost, parseHashtags,
-  POST_STATUS_LABEL, publishProblems, SOCIAL_NETWORKS,
-  type SocialNetwork, type SocialPost, type SocialPublication, type SocialSourceType, type SocialVisual,
+  captionFor, DEFAULT_VISUAL, IG_CAPTION_MAX, isEditable, KIND_LABEL, NETWORK_LABEL, normalizePost, parseHashtags,
+  PILLAR_LABEL, POST_STATUS_LABEL, publishProblems, reelProblems, SOCIAL_NETWORKS,
+  type ReelSpec, type SocialKind, type SocialNetwork, type SocialPost, type SocialPublication, type SocialSourceType, type SocialVisual,
 } from '../../../types/social';
-import { FORMATS, LAYOUTS, renderToJpeg, visualHash, type VisualBrand } from '../../../utils/socialVisual';
-import { api, ApiError, connectedNetworks, sessionToken, type MetaStatus } from './api';
+import { FORMATS, LAYOUTS, visualHash, type VisualBrand } from '../../../utils/socialVisual';
+import { api, ApiError, connectedNetworks, type MetaStatus } from './api';
 import VisualCanvas from './VisualCanvas';
-import PhotoPicker, { loadLibrary, suggestPhoto } from './PhotoPicker';
+import PhotoPicker from './PhotoPicker';
+import ReelComposer, { ReelPreview } from './ReelComposer';
 import { statusTone } from './PostList';
+import {
+  composeReel, pickPhoto, produceReel, reelHash, requestWriting, savePostRow, sourceOf, uploadVisual,
+  type EditorSource,
+} from './postActions';
 
-export type EditorSource =
-  | { kind: 'idee'; text: string }
-  | { kind: 'soin'; id: string }
-  | { kind: 'article'; id: string }
-  | { kind: 'offre'; id: string };
+export type { EditorSource };
 
 interface Props {
   post: SocialPost | null;
@@ -32,6 +33,8 @@ interface Props {
   draftFrom?: SocialPost | null;
   initialSource?: EditorSource | null;
   autoWrite?: boolean;
+  /** Jour choisi dans l'agenda (« AAAA-MM-JJ ») : la programmation s'ouvre sur ce jour, à 18 h. */
+  initialDay?: string | null;
   brand: VisualBrand;
   meta: MetaStatus | null;
   onClose: () => void;
@@ -40,6 +43,8 @@ interface Props {
 }
 
 interface Form {
+  kind: SocialKind;
+  reel: ReelSpec;
   title: string;
   caption: string;
   hashtags: string;
@@ -48,22 +53,18 @@ interface Form {
   networks: SocialNetwork[];
 }
 
-const PHOTO_WORDS: Record<string, string[]> = {
-  visage: ['visage', 'phytomer', 'soin'],
-  corps: ['massage', 'corps', 'dos'],
-  'mains-pieds': ['main', 'pied', 'ongle', 'manucure'],
-  regard: ['regard', 'cil', 'sourcil'],
-  epilation: ['epilation', 'cire', 'sucre'],
-};
-
 const LINK_CHOICES: { value: string; label: string }[] = [
   { value: '/reservation', label: 'Réservation en ligne' },
   { value: '/soins', label: 'La carte des soins' },
   { value: '/bon-cadeau', label: 'Bon cadeau' },
 ];
 
+const EMPTY_REEL: ReelSpec = { scenes: [], music: null };
+
 function formFrom(post: SocialPost | null | undefined, networks: SocialNetwork[]): Form {
   return {
+    kind: post?.kind || 'post',
+    reel: post?.reel ? { ...post.reel, scenes: [...post.reel.scenes] } : { ...EMPTY_REEL },
     title: post?.title || '',
     caption: post?.caption || '',
     hashtags: post?.hashtags || '',
@@ -93,7 +94,7 @@ export const formatWhen = (iso: string | null) =>
 /** Le lien n'est ajouté qu'en ligne : en local, l'adresse serait « localhost ». */
 const previewSiteUrl = /localhost|127\.0\.0\.1/.test(SITE_CONFIG.url) ? null : SITE_CONFIG.url;
 
-export default function PostEditor({ post: initialPost, draftFrom, initialSource, autoWrite, brand, meta, onClose, onChanged, onOpenAccounts }: Props) {
+export default function PostEditor({ post: initialPost, draftFrom, initialSource, autoWrite, initialDay, brand, meta, onClose, onChanged, onOpenAccounts }: Props) {
   const connected = connectedNetworks(meta);
   const defaultNetworks = SOCIAL_NETWORKS.filter((n) => connected[n]);
 
@@ -105,16 +106,23 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
   const saved = useRef<Form>(initialPost ? form : formFrom(null, form.networks));
   const [sourceType, setSourceType] = useState<SocialSourceType>(initialPost?.source_type || draftFrom?.source_type || initialSource?.kind || 'idee');
   const [sourceRef, setSourceRef] = useState(initialPost?.source_ref || draftFrom?.source_ref || '');
-  const [source, setSource] = useState<EditorSource>(initialSource || { kind: 'idee', text: '' });
-  const [instruction, setInstruction] = useState('');
+  // Un brouillon du plan arrive avec son sujet et son angle : il ne reste qu'à « Rédiger ».
+  const planned = Boolean(initialPost?.planned_at && !initialPost.caption);
+  const [source, setSource] = useState<EditorSource>(initialSource || (planned ? sourceOf(initialPost!) : { kind: 'idee', text: '' }));
+  const [instruction, setInstruction] = useState(planned ? initialPost!.plan_note || '' : '');
+  const [progress, setProgress] = useState<{ label: string; p: number } | null>(null);
   const [pubs, setPubs] = useState<SocialPublication[]>([]);
   const [busy, setBusy] = useState<null | 'write' | 'save' | 'schedule' | 'publish' | 'unschedule' | 'archive' | 'delete' | SocialNetwork>(null);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
   const [flash, setFlash] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [scheduleAt, setScheduleAt] = useState(() => (initialPost?.scheduled_at ? toLocalInput(new Date(initialPost.scheduled_at)) : defaultSchedule()));
+  const [scheduleOpen, setScheduleOpen] = useState(Boolean(initialDay));
+  const [scheduleAt, setScheduleAt] = useState(() =>
+    initialPost?.scheduled_at ? toLocalInput(new Date(initialPost.scheduled_at))
+    : initialPost?.planned_at ? toLocalInput(new Date(initialPost.planned_at))
+    : initialDay ? `${initialDay}T18:00`
+    : defaultSchedule());
   const [previewNetwork, setPreviewNetwork] = useState<SocialNetwork>('instagram');
   const [articles, setArticles] = useState<{ id: string; title: string }[]>([]);
   const [offers, setOffers] = useState<{ id: string; titre: string }[]>([]);
@@ -148,9 +156,10 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
     return p;
   };
 
-  const follow = useCallback(async (id: string) => {
-    for (let i = 0; i < 40 && mounted.current; i++) {
-      await new Promise((r) => setTimeout(r, 2500));
+  const follow = useCallback(async (id: string, long = false) => {
+    // Une vidéo met plusieurs minutes à être traitée par Instagram.
+    for (let i = 0; i < (long ? 80 : 40) && mounted.current; i++) {
+      await new Promise((r) => setTimeout(r, long ? 3000 : 2500));
       try {
         const snap = await api('/api/admin/social/publish', { postId: id, action: 'advance' });
         const p = applySnapshot(snap);
@@ -165,7 +174,7 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
   }, [onChanged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (initialPost?.status === 'publishing') follow(initialPost.id);
+    if (initialPost?.status === 'publishing') follow(initialPost.id, initialPost.kind === 'reel');
   }, [initialPost, follow]);
 
   // ── Rédaction ──
@@ -173,17 +182,9 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
     setBusy('write');
     setError(null);
     try {
-      const r = await api<{
-        eyebrow: string; headline: string; caption: string; hashtags: string;
-        source: { kind: SocialSourceType; ref: string; title: string; linkPath: string; photoUrl: string | null };
-      }>('/api/admin/social/write', { source: src, instruction });
-      let photo = r.source.photoUrl;
-      if (!photo) {
-        const library = await loadLibrary();
-        const soin = src.kind === 'soin' ? CARTE.find((c) => c.groups.some((g) => g.items.some((i) => i.id === src.id))) : null;
-        const words = soin ? PHOTO_WORDS[soin.id] : `${r.headline} ${r.eyebrow}`.split(/\s+/).filter((w) => w.length > 4);
-        photo = suggestPhoto(library, words);
-      }
+      const r = await requestWriting(src, instruction, form.kind, post?.planned_at || post?.scheduled_at);
+      const photo = await pickPhoto(src, r);
+      const reel = form.kind === 'reel' && r.scenes?.length ? await composeReel(r.scenes, r.mood, photo) : null;
       setSourceType(r.source.kind);
       setSourceRef(r.source.ref);
       setForm((f) => ({
@@ -199,13 +200,14 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
           // Une photo déjà choisie à la main reste en place.
           photo_url: f.visual.photo_url ?? photo,
         },
+        reel: reel ?? f.reel,
       }));
     } catch (e: any) {
       setError(e.message);
     } finally {
       setBusy(null);
     }
-  }, [instruction]);
+  }, [instruction, form.kind]);
 
   const autoWritten = useRef(false);
   useEffect(() => {
@@ -219,37 +221,47 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
   const setVisual = (patch: Partial<SocialVisual>) => setForm((f) => ({ ...f, visual: { ...f.visual, ...patch } }));
 
+  const currentReelHash = form.kind === 'reel' ? reelHash(form.reel, brand) : '';
+  const reelUpToDate = form.kind === 'reel' && Boolean(post?.video_url && post.reel?.hash === currentReelHash);
+
+  /**
+   * Enregistre ; dessine et dépose d'abord le visuel (ou monte le Reel) s'il a
+   * changé depuis le dernier dépôt.
+   */
   const persist = async (): Promise<SocialPost> => {
-    const hash = visualHash(form.visual, brand);
     let imageUrl = post?.image_url ?? null;
-    if (!imageUrl || post?.visual.hash !== hash) {
-      const blob = await renderToJpeg(form.visual, brand, await sessionToken());
-      imageUrl = (await api<{ url: string }>('/api/admin/social/visual', blob)).url;
+    let videoUrl = post?.video_url ?? null;
+    let visual: SocialVisual = form.visual;
+    let reel: ReelSpec | null = null;
+    if (form.kind === 'reel') {
+      reel = { ...form.reel, hash: currentReelHash };
+      if (!reelUpToDate) {
+        const out = await produceReel(form.reel, brand, (label, p) => mounted.current && setProgress({ label, p }));
+        imageUrl = out.coverUrl;
+        videoUrl = out.videoUrl;
+      }
+      setProgress(null);
+    } else {
+      const hash = visualHash(form.visual, brand);
+      visual = { ...form.visual, hash };
+      if (!imageUrl || post?.visual.hash !== hash || post?.kind !== form.kind) imageUrl = await uploadVisual(form.visual, brand);
+      videoUrl = null;
     }
-    const row = {
-      title: (form.title || form.visual.headline || 'Publication').slice(0, 200),
+    const p = await savePostRow(post, {
+      kind: form.kind,
+      title: (form.title || form.visual.headline || form.reel.scenes[0]?.text || KIND_LABEL[form.kind]).slice(0, 200),
       caption: form.caption.trim(),
       hashtags: form.hashtags.trim(),
       link_path: form.link_path,
-      visual: { ...form.visual, hash },
+      visual,
       image_url: imageUrl,
       cover_image: form.visual.photo_url,
       networks: form.networks,
-    };
-    const query = post
-      ? supabase.from('social_posts').update(row).eq('id', post.id).select('*').single()
-      : supabase.from('social_posts').insert({
-          ...row,
-          source_type: sourceType,
-          source_ref: sourceRef || sourceType,
-          content: {},
-          status: 'draft',
-        }).select('*').single();
-    const { data, error: dbError } = await query;
-    if (dbError || !data) throw new Error(dbError?.message || 'Enregistrement impossible.');
-    const p = normalizePost(data);
+      reel,
+      video_url: videoUrl,
+    }, { type: sourceType, ref: sourceRef });
     setPost(p);
-    saved.current = { ...form, visual: { ...form.visual, hash } };
+    saved.current = { ...form, visual, reel: reel ? { ...reel } : form.reel };
     setForm(saved.current);
     onChanged();
     return p;
@@ -266,16 +278,26 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
       if (e instanceof ApiError && e.problems.length) setProblems(e.problems);
       else setError(e?.message || 'Action impossible.');
     } finally {
-      if (mounted.current) setBusy(null);
+      if (mounted.current) {
+        setBusy(null);
+        setProgress(null);
+      }
     }
   };
 
   const localProblems = useMemo(
-    () => publishProblems({ ...form, image_url: 'https://x/visuel.jpg' }, connected, previewSiteUrl || undefined)
-      .filter((p) => !p.startsWith('Le visuel')),
+    () => [
+      ...(form.kind === 'reel' ? reelProblems(form.reel) : []),
+      ...publishProblems(
+        { ...form, image_url: 'https://x/visuel.jpg', video_url: 'https://x/video.mp4' },
+        connected,
+        previewSiteUrl || undefined,
+      ),
+    ],
     [form, connected],
   );
-  const canSend = editable && localProblems.length === 0 && Boolean(form.visual.headline.trim());
+  const hasContent = form.kind === 'reel' ? form.reel.scenes.length > 0 : Boolean(form.visual.headline.trim());
+  const canSend = editable && localProblems.length === 0 && hasContent;
 
   const save = () => run('save', async () => { await persist(); setFlash('Brouillon enregistré.'); });
 
@@ -303,7 +325,7 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
       const snap = await api('/api/admin/social/publish', { postId: p.id, action: 'now' });
       const next = applySnapshot(snap);
       onChanged();
-      if (next.status === 'publishing') follow(next.id);
+      if (next.status === 'publishing') follow(next.id, next.kind === 'reel');
     });
   };
 
@@ -311,7 +333,7 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
     if (!post) return;
     const next = applySnapshot(await api('/api/admin/social/publish', { postId: post.id, action: 'retry', network }));
     onChanged();
-    if (next.status === 'publishing') follow(next.id);
+    if (next.status === 'publishing') follow(next.id, next.kind === 'reel');
   });
 
   const archive = () => run('archive', async () => {
@@ -335,9 +357,17 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
   };
 
   const back = () => {
-    if (editable && dirty && (form.caption || form.visual.headline) && !window.confirm('Quitter sans enregistrer les modifications ?')) return;
+    if (editable && dirty && (form.caption || form.visual.headline || form.reel.scenes.length) && !window.confirm('Quitter sans enregistrer les modifications ?')) return;
     onClose();
   };
+
+  /** Changer de sorte : le format du visuel suit (story et Reel en 9:16). */
+  const setKind = (kind: SocialKind) =>
+    setForm((f) => ({
+      ...f,
+      kind,
+      visual: { ...f.visual, format: kind === 'post' ? (f.visual.format === 'square' ? 'square' : 'portrait') : 'story', hash: undefined },
+    }));
 
   const toggleNetwork = (n: SocialNetwork) =>
     set('networks', form.networks.includes(n) ? form.networks.filter((x) => x !== n) : SOCIAL_NETWORKS.filter((x) => x === n || form.networks.includes(x)));
@@ -371,6 +401,19 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
         <Callout tone={status === 'draft' ? 'info' : 'danger'}>{post.last_error}</Callout>
       )}
 
+      {post?.planned_at && status === 'draft' && (
+        <Callout tone="info" title={`Au plan : ${formatWhen(post.planned_at)}`}>
+          {post.pillar ? `${PILLAR_LABEL[post.pillar]} — ` : ''}{post.plan_note || post.title}
+          {!post.caption && ' Cliquez « Rédiger avec l’IA », relisez, puis « Programmer » (l’heure du plan est déjà proposée).'}
+        </Callout>
+      )}
+      {progress && (
+        <div className="rounded-lg bg-stone-50 px-4 py-3" role="status">
+          <p className="flex items-center gap-2 text-[14px] font-semibold text-stone-900"><Loader2 size={15} className="animate-spin" /> {progress.label}…</p>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-200"><div className="h-full bg-accent transition-[width]" style={{ width: `${Math.round(progress.p * 100)}%` }} /></div>
+        </div>
+      )}
+
       <PublicationProgress pubs={pubs} status={status} busy={busy} onRetry={retry} />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
@@ -379,6 +422,22 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
             <Card>
               <CardHeader title="1. De quoi parle-t-on ?" description="L’IA rédige à partir de la carte des soins et du ton de l’institut. Vous relisez et corrigez ensuite." />
               <CardBody className="space-y-4">
+                <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Sorte de publication">
+                  {([['post', 'Publication', 'Dans le fil, 4:5 ou carré', ImageIcon], ['story', 'Story', '24 h, plein écran 9:16', Smartphone], ['reel', 'Reel', 'Vidéo 9:16 avec musique', Clapperboard]] as const).map(([k, label, hint, Icon]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.kind === k}
+                      disabled={Boolean(post && post.status !== 'draft')}
+                      onClick={() => setKind(k)}
+                      className={`rounded-lg px-3 py-2.5 text-left cursor-pointer disabled:cursor-default ${form.kind === k ? 'bg-accent text-accent-fg' : 'bg-white text-stone-800 hover:bg-stone-100'}`}
+                    >
+                      <span className="flex items-center gap-1.5 text-[14px] font-semibold"><Icon size={15} /> {label}</span>
+                      <span className={`block text-[12px] leading-snug ${form.kind === k ? 'opacity-85' : 'text-stone-600'}`}>{hint}</span>
+                    </button>
+                  ))}
+                </div>
                 <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Sujet">
                   {([['idee', 'Une idée'], ['soin', 'Un soin'], ['article', 'Un article'], ['offre', 'L’offre du moment']] as const).map(([kind, label]) => (
                     <button
@@ -428,13 +487,21 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
                     disabled={source.kind === 'idee' ? source.text.trim().length < 3 : !source.id}
                     onClick={() => write(source)}
                   >
-                    {form.caption ? 'Proposer un autre texte' : 'Rédiger avec l’IA'}
+                    {form.caption ? 'Proposer un autre texte' : form.kind === 'reel' ? 'Rédiger le Reel avec l’IA' : 'Rédiger avec l’IA'}
                   </Button>
                 </div>
               </CardBody>
             </Card>
           )}
 
+          {form.kind === 'reel' ? (
+            <Card>
+              <CardHeader title={editable ? '2. Le Reel' : 'Le Reel'} description="Une suite de scènes (photos, diapos de texte, extraits vidéo), aux couleurs du site, puis le carton final avec le logo. La vidéo est montée dans le navigateur au moment d’enregistrer." />
+              <CardBody>
+                <ReelComposer reel={form.reel} onChange={(reel) => set('reel', reel)} brand={brand} editable={editable} onOpenSettings={onOpenAccounts} />
+              </CardBody>
+            </Card>
+          ) : (
           <Card>
             <CardHeader title={editable ? '2. Le visuel' : 'Le visuel'} description="Aux couleurs et aux polices du site. Ce que vous voyez à droite est exactement l’image publiée." />
             <CardBody className="space-y-5">
@@ -467,7 +534,7 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
                 </div>
               </Field>
 
-              <Field label="Format">
+              {form.kind === 'post' && <Field label="Format">
                 <div className="flex gap-2">
                   {FORMATS.map((f) => (
                     <button
@@ -481,7 +548,7 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
                     </button>
                   ))}
                 </div>
-              </Field>
+              </Field>}
 
               <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                 <Field label="Surtitre" htmlFor="sv-eyebrow" hint="Quelques mots, en capitales sur le visuel.">
@@ -493,7 +560,13 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
               </div>
             </CardBody>
           </Card>
+          )}
 
+          {form.kind === 'story' ? (
+            <p className="rounded-lg bg-stone-50 px-4 py-3 text-[13.5px] text-stone-700">
+              Une story n’a pas de légende : tout passe par le visuel. Elle reste visible 24 heures.
+            </p>
+          ) : (
           <Card>
             <CardHeader title={editable ? '3. La légende' : 'La légende'} description="Le même texte part sur Instagram et Facebook. Facebook reçoit en plus le lien vers le site." />
             <CardBody className="space-y-4">
@@ -513,6 +586,7 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
               </div>
             </CardBody>
           </Card>
+          )}
 
           <Card>
             <CardHeader title={editable ? '4. Où publier' : 'Réseaux'} />
@@ -573,8 +647,10 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
                 {previewNetwork === 'instagram' ? meta?.instagram?.username || 'votre compte' : meta?.page?.name || 'Votre Page'}
               </span>
             </div>
-            <VisualCanvas visual={form.visual} brand={brand} />
-            <CaptionPreview text={caption} name={previewNetwork === 'instagram' ? meta?.instagram?.username || '' : ''} />
+            {form.kind === 'reel'
+              ? <ReelPreview reel={form.reel} brand={brand} videoUrl={post?.video_url ?? null} upToDate={reelUpToDate} />
+              : <VisualCanvas visual={form.visual} brand={brand} />}
+            {form.kind !== 'story' && <CaptionPreview text={caption} name={previewNetwork === 'instagram' ? meta?.instagram?.username || '' : ''} />}
           </div>
           {previewNetwork === 'facebook' && !previewSiteUrl && form.link_path && (
             <p className="text-[12.5px] text-stone-600">Le lien vers le site s’ajoute une fois le site en ligne (pas depuis l’ordinateur de développement).</p>
@@ -597,8 +673,8 @@ export default function PostEditor({ post: initialPost, draftFrom, initialSource
               {status === 'scheduled' && (
                 <Button variant="ghost" icon={X} onClick={unschedule} loading={busy === 'unschedule'} className="mr-auto">Annuler la programmation</Button>
               )}
-              <Button onClick={save} loading={busy === 'save'} disabled={!form.visual.headline.trim() || Boolean(busy)}>
-                {dirty ? 'Enregistrer' : 'Enregistré'}
+              <Button onClick={save} loading={busy === 'save'} disabled={!hasContent || Boolean(busy)}>
+                {form.kind === 'reel' && !reelUpToDate ? 'Monter la vidéo et enregistrer' : dirty ? 'Enregistrer' : 'Enregistré'}
               </Button>
               {scheduleOpen ? (
                 <span className="flex flex-wrap items-center gap-2">

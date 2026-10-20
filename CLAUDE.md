@@ -328,7 +328,44 @@ le réintroduire.
   `https://<domaine>/api/admin/meta/callback` déclarée dans Facebook Login ; la
   personne qui relie est dans « Rôles de l'app » tant que l'app est en mode
   Développement, administre la Page (contrôle total) ; Instagram professionnel
-  relié à la Page.
+  relié à la Page. App de type Entreprise : « Facebook Login for Business » +
+  ID de configuration (champ avancé de l'écran Comptes). Sur Netlify,
+  `request.url` est l'adresse interne du déploiement : les retours OAuth passent
+  par `publicOrigin()` (`utils/publicOrigin.ts`).
+
+### Cycle hebdomadaire, stories et Reels (2026-10-21)
+
+Migration `20261021_social_plan_stories_reels.sql` (appliquée en prod le
+2026-10-21). L'exploitante ne crée rien : elle valide le plan, puis relit.
+
+- **Le jour réglé (mercredi par défaut)**, `/api/cron/social-weekly`
+  (`cron-social-weekly.mjs`, chaque matin) propose le plan de la semaine
+  suivante sur les créneaux du rythme (`services/socialWeekly.ts` →
+  `socialPlan.ts`) et envoie une notification push (lien `?semaine=`). Réglages :
+  `social_autopilot`, `social_weekly_day`, `social_rhythm` (table `settings`).
+- **Écran « Semaine à préparer »** (`WeekPanel.tsx`) : 1. valider le plan (sujets
+  = brouillons avec `planned_at`, `pillar`, `plan_note`) ; 2. préparation dans la
+  foulée — textes en parallèle (IA, serveur), puis visuels et Reels **dans le
+  navigateur** (`postActions.prepareDraft`), page ouverte ; 3. relecture :
+  « Valider » = programmer à `planned_at` (serveur), « Modifier », « Refaire »,
+  « Écarter ». État d'une publication : `weekState()` (`types/social.ts`).
+- **Stories** : visuel 9:16 (`insets()` : marges des zones d'interface
+  d'Instagram), sans légende. Facebook : photo déposée non publiée puis
+  `photo_stories` ; Instagram : conteneur `STORIES`.
+- **Reels** (`utils/reelRender.ts`) : scènes photo (zoom lent), texte (fond
+  marine du site), vidéo Pexels (CORS ouvert), carton final ; encodage
+  Mediabunny (versions figées 1.61.3, H.264 + AAC 48 kHz, encodeur AAC de
+  secours), métadonnées en tête, `edts` renommé `free` (`utils/mp4Boxes.ts`) —
+  Instagram refuse les listes d'éditions. MP4 déposé sur R2 par morceaux de
+  5 Mio (`/api/admin/social/video`, Netlify refuse les corps de plus de 6 Mo).
+  Facebook : `video_reels` (start → `file_url` sur rupload → finish).
+- **Musique** : l'API Meta ne donne pas accès à la musique d'Instagram ; elle est
+  intégrée au MP4, depuis la bibliothèque `social_music` (MP3 ≤ 4 Mo, licences
+  vérifiées, ex. Pixabay), relue par `/api/admin/social/photo` (R2 sans CORS).
+  Banque de vidéos : clé `pexels_api_key` (`app_secrets`, écran Comptes).
+- Heures d'audience réelles (`online_followers`) : Meta ne les donne qu'à partir
+  de 100 abonnées et avec `instagram_manage_insights` ; d'ici là, le rythme par
+  défaut vise un public local (mar./jeu. 18:30, sam. 9:30).
 
 ## Puces du site : l'algue
 

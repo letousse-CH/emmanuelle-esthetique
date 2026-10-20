@@ -19,6 +19,8 @@ export const VISUAL_SIZE: Record<VisualFormat, { w: number; h: number }> = {
   // 4:5, le format qui occupe le plus de place dans le fil Instagram.
   portrait: { w: 1080, h: 1350 },
   square: { w: 1080, h: 1080 },
+  // 9:16 : stories et Reels.
+  story: { w: 1080, h: 1920 },
 };
 
 export const LAYOUTS: { id: VisualLayout; label: string; hint: string }[] = [
@@ -103,7 +105,7 @@ const bitmapCache = new Map<string, Promise<ImageBitmap | null>>();
  * Le bucket R2 n'envoie pas d'en-tête CORS : la photo passe par le relais du
  * site (même origine), sinon le canvas refuserait d'exporter le JPEG.
  */
-function loadBitmap(url: string | null, token: string): Promise<ImageBitmap | null> {
+export function loadBitmap(url: string | null, token: string): Promise<ImageBitmap | null> {
   if (!url) return Promise.resolve(null);
   const absolute = url.startsWith('/') && typeof window !== 'undefined' ? `${window.location.origin}${url}` : url;
   const hit = bitmapCache.get(absolute);
@@ -190,13 +192,13 @@ function rgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-function rgba(hex: string, a: number): string {
+export function rgba(hex: string, a: number): string {
   const [r, g, b] = rgb(hex);
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
 /** Équivalent de `color-mix(in srgb, a t%, b)`. */
-function mix(a: string, b: string, t: number): string {
+export function mix(a: string, b: string, t: number): string {
   const [r1, g1, b1] = rgb(a);
   const [r2, g2, b2] = rgb(b);
   const c = (x: number, y: number) => Math.round(x * t + y * (1 - t)).toString(16).padStart(2, '0');
@@ -205,11 +207,15 @@ function mix(a: string, b: string, t: number): string {
 
 function sizeOf(img: CanvasImageSource): { w: number; h: number } {
   const anyImg = img as any;
-  return { w: anyImg.naturalWidth || anyImg.width || 1, h: anyImg.naturalHeight || anyImg.height || 1 };
+  // <video> : `width` est l'attribut HTML (0 par défaut), la taille réelle est videoWidth.
+  return {
+    w: anyImg.videoWidth || anyImg.naturalWidth || anyImg.width || 1,
+    h: anyImg.videoHeight || anyImg.naturalHeight || anyImg.height || 1,
+  };
 }
 
 /** `object-fit: cover`, centré. */
-function drawCover(ctx: CanvasRenderingContext2D, img: CanvasImageSource, x: number, y: number, w: number, h: number) {
+export function drawCover(ctx: CanvasRenderingContext2D, img: CanvasImageSource, x: number, y: number, w: number, h: number) {
   const { w: iw, h: ih } = sizeOf(img);
   const scale = Math.max(w / iw, h / ih);
   const sw = w / scale;
@@ -217,7 +223,7 @@ function drawCover(ctx: CanvasRenderingContext2D, img: CanvasImageSource, x: num
   ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
 }
 
-function drawLogo(ctx: CanvasRenderingContext2D, img: CanvasImageSource | null, x: number, bottom: number, height: number, align: 'left' | 'center' = 'left') {
+export function drawLogo(ctx: CanvasRenderingContext2D, img: CanvasImageSource | null, x: number, bottom: number, height: number, align: 'left' | 'center' = 'left') {
   if (!img) return;
   const { w, h } = sizeOf(img);
   const width = (w / h) * height;
@@ -245,7 +251,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): st
 interface Fit { size: number; lines: string[]; lineHeight: number }
 
 /** Plus grande taille qui tient dans le cadre ; sinon la plus petite, coupée. */
-function fitText(
+export function fitText(
   ctx: CanvasRenderingContext2D,
   text: string,
   font: (size: number) => string,
@@ -265,7 +271,7 @@ function fitText(
   return { size: sizes.min, lines: kept, lineHeight: sizes.min * sizes.leading };
 }
 
-function drawLines(ctx: CanvasRenderingContext2D, fit: Fit, x: number, top: number, align: CanvasTextAlign) {
+export function drawLines(ctx: CanvasRenderingContext2D, fit: Fit, x: number, top: number, align: CanvasTextAlign) {
   ctx.textAlign = align;
   ctx.textBaseline = 'alphabetic';
   fit.lines.forEach((line, i) => {
@@ -275,7 +281,7 @@ function drawLines(ctx: CanvasRenderingContext2D, fit: Fit, x: number, top: numb
 }
 
 /** Surtitre du site (`.pb-eyebrow`) : capitales très espacées, précédées d'un filet. */
-function drawEyebrow(
+export function drawEyebrow(
   ctx: CanvasRenderingContext2D,
   text: string,
   x: number,
@@ -306,7 +312,7 @@ function drawEyebrow(
   }
 }
 
-function drawSignature(ctx: CanvasRenderingContext2D, brand: VisualBrand, x: number, baseline: number, color: string, align: CanvasTextAlign) {
+export function drawSignature(ctx: CanvasRenderingContext2D, brand: VisualBrand, x: number, baseline: number, color: string, align: CanvasTextAlign) {
   if (!brand.signature) return;
   ctx.font = `600 26px "${brand.bodyFont}"`;
   ctx.fillStyle = color;
@@ -315,7 +321,7 @@ function drawSignature(ctx: CanvasRenderingContext2D, brand: VisualBrand, x: num
   ctx.fillText(brand.signature, x, baseline);
 }
 
-function drawAlgue(ctx: CanvasRenderingContext2D, algue: CanvasImageSource | null, cx: number, cy: number, size: number, rotateDeg: number, alpha: number) {
+export function drawAlgue(ctx: CanvasRenderingContext2D, algue: CanvasImageSource | null, cx: number, cy: number, size: number, rotateDeg: number, alpha: number) {
   if (!algue) return;
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -325,16 +331,25 @@ function drawAlgue(ctx: CanvasRenderingContext2D, algue: CanvasImageSource | nul
   ctx.restore();
 }
 
-const headingFont = (brand: VisualBrand) => (size: number) => `600 ${size}px "${brand.headingFont}"`;
+export const headingFont = (brand: VisualBrand) => (size: number) => `600 ${size}px "${brand.headingFont}"`;
 
 // ── Mises en page ────────────────────────────────────────────────────────────
 
 const M = 88;
-// Lisible une fois le visuel réduit à la largeur d'un téléphone (~ 1/3).
-const LOGO_H = 66;
-const EYEBROW = 28;
 
-function layoutPhoto(ctx: CanvasRenderingContext2D, W: number, H: number, v: SocialVisual, brand: VisualBrand, a: VisualAssets) {
+/**
+ * Marges hautes et basses. En story, Instagram pose le nom du compte en haut
+ * (~ 250 px) et le champ de réponse en bas (~ 330 px) : rien d'important n'y va.
+ */
+export function insets(W: number, H: number): { top: number; bottom: number } {
+  return H / W > 1.7 ? { top: 250, bottom: 330 } : { top: M, bottom: M };
+}
+// Lisible une fois le visuel réduit à la largeur d'un téléphone (~ 1/3).
+export const LOGO_H = 66;
+export const EYEBROW = 28;
+export { M as MARGIN };
+
+export function layoutPhoto(ctx: CanvasRenderingContext2D, W: number, H: number, v: SocialVisual, brand: VisualBrand, a: VisualAssets) {
   if (a.photo) drawCover(ctx, a.photo, 0, 0, W, H);
   else {
     const g = ctx.createLinearGradient(0, 0, W, H);
@@ -352,7 +367,7 @@ function layoutPhoto(ctx: CanvasRenderingContext2D, W: number, H: number, v: Soc
   ctx.fillStyle = veil;
   ctx.fillRect(0, 0, W, H);
 
-  const logoBottom = H - M;
+  const logoBottom = H - insets(W, H).bottom;
   drawLogo(ctx, a.logoLight, M, logoBottom, LOGO_H);
   drawSignature(ctx, brand, W - M, logoBottom - LOGO_H / 2 + 9, 'rgba(255, 255, 255, 0.82)', 'right');
 
@@ -369,7 +384,7 @@ function layoutPhoto(ctx: CanvasRenderingContext2D, W: number, H: number, v: Soc
   drawEyebrow(ctx, v.eyebrow, M, top - 34, { color: '#FFFFFF', font: brand.bodyFont, size: EYEBROW, align: 'left' });
 }
 
-function layoutEditorial(ctx: CanvasRenderingContext2D, W: number, H: number, v: SocialVisual, brand: VisualBrand, a: VisualAssets) {
+export function layoutEditorial(ctx: CanvasRenderingContext2D, W: number, H: number, v: SocialVisual, brand: VisualBrand, a: VisualAssets) {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, W, H);
   const photoH = Math.round(H * (H > W ? 0.55 : 0.5));
@@ -380,7 +395,7 @@ function layoutEditorial(ctx: CanvasRenderingContext2D, W: number, H: number, v:
     drawAlgue(ctx, a.algue, W / 2, photoH / 2, photoH * 0.6, 0, 0.9);
   }
 
-  const logoBottom = H - M + 10;
+  const logoBottom = H - insets(W, H).bottom + 10;
   const ruleY = logoBottom - LOGO_H - 34;
   ctx.fillStyle = brand.border;
   ctx.fillRect(M, ruleY, W - 2 * M, 2);
@@ -396,7 +411,10 @@ function layoutEditorial(ctx: CanvasRenderingContext2D, W: number, H: number, v:
   drawLines(ctx, fit, M, top, 'left');
 }
 
-function layoutMarine(ctx: CanvasRenderingContext2D, W: number, H: number, v: SocialVisual, brand: VisualBrand, a: VisualAssets) {
+
+/** Fond « offre du moment » du site (`.pb-section-offer`) : dégradé lagon → marine, halos, grande algue. */
+export function drawMarineBackground(ctx: CanvasRenderingContext2D, W: number, H: number, brand: VisualBrand, algue: CanvasImageSource | null) {
+  const a = { algue };
   // Même fond que `.pb-section-offer` (blocks.css).
   const base = ctx.createLinearGradient(0, 0, W, H);
   base.addColorStop(0, mix(brand.accent, '#0b3a44', 0.4));
@@ -415,16 +433,21 @@ function layoutMarine(ctx: CanvasRenderingContext2D, W: number, H: number, v: So
   ctx.fillStyle = glow2;
   ctx.fillRect(0, 0, W, H);
   drawAlgue(ctx, a.algue, W * 0.86, H * 0.86, W * 0.72, -14, 0.15);
+}
 
-  const logoBottom = H - M;
+export function layoutMarine(ctx: CanvasRenderingContext2D, W: number, H: number, v: SocialVisual, brand: VisualBrand, a: VisualAssets) {
+  drawMarineBackground(ctx, W, H, brand, a.algue);
+
+  const logoBottom = H - insets(W, H).bottom;
   drawLogo(ctx, a.logoLight, W / 2, logoBottom, LOGO_H, 'center');
 
   let textTop: number;
   let maxHeight: number;
   if (a.photo) {
-    const size = Math.round(H > W ? W * 0.5 : W * 0.38);
+    const story = H / W > 1.7;
+    const size = Math.round(story ? W * 0.62 : H > W ? W * 0.5 : W * 0.38);
     const x = (W - size) / 2;
-    const y = H > W ? 150 : 110;
+    const y = story ? insets(W, H).top + 60 : H > W ? 150 : 110;
     const offset = 16;
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
