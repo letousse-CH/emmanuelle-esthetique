@@ -1038,23 +1038,8 @@ export default function BlogEdit() {
             </div>
             )}
 
-            {/* Social Generator */}
-            {moduleFlags.social && (
-              formData.content ? (
-                <SocialContentGenerator
-                  title={formData.title || ''}
-                  content={formData.content}
-                  keyword={seoBrief?.keyword || ''}
-                  coverImage={formData.cover_image || undefined}
-                  sourceType="article"
-                  sourceRef={id}
-                />
-              ) : (
-                <div className="bg-white border border-dashed border-stone-200 rounded-xl p-8 text-center">
-                  <p className="text-stone-700 text-sm">Quand l'article aura du texte, vous pourrez en tirer ici des publications pour les réseaux sociaux.</p>
-                </div>
-              )
-            )}
+            {/* Réseaux sociaux : la publication se prépare dans /admin/social */}
+            <SocialContentGenerator articleId={id} published={isEditing && publishMode === 'published'} />
           </div>
         )}
 

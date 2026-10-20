@@ -3,7 +3,7 @@
  *
  * À appeler périodiquement par un ordonnanceur externe (fonction planifiée
  * Netlify, cron système, service tiers) — ce projet n'en embarque pas, comme
- * /api/cron/publish et /api/cron/generate-social.
+ * /api/cron/publish et /api/cron/social-publish.
  *
  * La route n'a pas besoin d'être appelée à la minute près : chaque
  * automatisation est comparée à sa dernière occurrence prévue, pas à l'heure

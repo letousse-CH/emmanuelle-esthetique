@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import {
   Search, PenLine, ChevronDown, ChevronUp, ChevronRight,
@@ -22,7 +21,6 @@ import {
   Field, Input, PageHeader, Select, Tabs, Spinner
 } from '../../../components/admin/ui';
 import { supabase } from '../../../services/supabase';
-import SocialContentGenerator from '../../../components/admin/SocialContentGenerator';
 import { useModuleFlags } from '../../../hooks/useModuleFlags';
 import { useAiJob } from '../../../hooks/useAiJob';
 import AiJobProgress from '../../../components/admin/AiJobProgress';
@@ -268,52 +266,6 @@ function readScanCache(): { at: string; result: ScanResult } | null {
 }
 function writeScanCache(result: ScanResult) {
   try { localStorage.setItem(SCAN_CACHE_KEY, JSON.stringify({ at: new Date().toISOString(), result })); } catch { /* stockage indisponible */ }
-}
-
-// ── Modale Réseaux Sociaux ────────────────────────────────────────────────────
-
-function SocialModal({ idea, onClose }: { idea: SeoIdea; onClose: () => void }) {
-  const [mounted, setMounted] = useState(false);
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
-  useEffect(() => setMounted(true), []);
-  useEffect(() => {
-    panelRef.current?.focus();
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-  if (!mounted) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[999999] bg-stone-900/80 backdrop-blur-xs flex items-center justify-center p-4 lg:p-10" onClick={onClose}>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="social-modal-title"
-        tabIndex={-1}
-        className="bg-stone-50 rounded-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl outline-none border border-stone-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sticky top-0 z-10 px-6 py-4 border-b border-stone-200 bg-white flex items-center justify-between">
-          <p id="social-modal-title" className="text-sm font-semibold text-stone-900 truncate pr-4">{idea.suggestedTitle}</p>
-          <button onClick={onClose} aria-label="Fermer" className="p-1.5 text-stone-600 hover:text-stone-900 rounded-lg hover:bg-stone-100 transition-colors shrink-0 cursor-pointer">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="p-6">
-          <SocialContentGenerator
-            title={idea.suggestedTitle}
-            intro={idea.suggestedIntro}
-            keyword={idea.keyword}
-            sourceType="suggestion"
-            sourceRef={idea.suggestedSlug || idea.keyword}
-          />
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
 }
 
 // ── Main SeoHub Component ──────────────────────────────────────────────────────

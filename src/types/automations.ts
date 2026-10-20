@@ -6,7 +6,6 @@ export type ActionType =
   | 'webhook'
   | 'email'
   | 'generate_article'
-  | 'generate_social'
   | 'keyword_scan'
   | 'newsletter_digest'
   | 'publish_scheduled';
@@ -109,17 +108,6 @@ export const ACTION_CATALOG: Record<ActionType, ActionSpec> = {
         hint: "Facultatif. Si aucune idée ne correspond, la plus ancienne est prise quand même." },
     ],
   },
-  generate_social: {
-    label: 'Préparer des posts réseaux sociaux',
-    description: 'Décline vos contenus récents en posts Instagram, LinkedIn et Facebook.',
-    detail:
-      "Repère les articles publiés, les entrées de flux RSS et les idées non encore déclinées, génère les trois formats, et les range dans le calendrier /admin/social avec une date de publication proposée. Rien n'est publié automatiquement.",
-    requires: 'Le module Réseaux sociaux activé et une clé IA valide.',
-    fields: [
-      { key: 'count', label: 'Nombre de posts par passage', type: 'number', placeholder: '3',
-        hint: 'Entre 1 et 10. Trois est un bon rythme pour ne pas saturer le calendrier.' },
-    ],
-  },
   keyword_scan: {
     label: 'Scanner les mots-clés',
     description: 'Relance la veille SEO et repère les sujets que vous ne couvrez pas.',
@@ -217,15 +205,6 @@ export const AUTOMATION_RECIPES: AutomationRecipe[] = [
     trigger_config: { cron: '0 6 * * *' },
     action_type: 'publish_scheduled',
     action_config: {},
-  },
-  {
-    id: 'social-weekly',
-    name: 'Remplir le calendrier social',
-    summary: 'Chaque lundi matin, prépare trois posts à relire pour la semaine.',
-    trigger_type: 'schedule',
-    trigger_config: { cron: '0 7 * * 1' },
-    action_type: 'generate_social',
-    action_config: { count: '3' },
   },
   {
     id: 'lead-alert',

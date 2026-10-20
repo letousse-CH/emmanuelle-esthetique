@@ -127,19 +127,7 @@ export default function Settings() {
   const [socialLinkedin, setSocialLinkedin]                   = useState('');
   const [socialYoutube, setSocialYoutube]                     = useState('');
   const [socialSpotify, setSocialSpotify]                     = useState('');
-  const [socialWebhookUrl, setSocialWebhookUrl]               = useState('');
-  const [socialLinkedinToken, setSocialLinkedinToken]         = useState('');
-  // Pas de valeur par défaut ici : un secret écrit en dur partait dans le code
-  // envoyé au navigateur. Ces clés ne sont plus réécrites depuis cet écran.
-  const [socialLinkedinClientId, setSocialLinkedinClientId]   = useState('');
-  const [socialLinkedinClientSecret, setSocialLinkedinClientSecret] = useState('');
-  const [socialLinkedinPageId, setSocialLinkedinPageId]       = useState('');
-  const [socialMetaToken, setSocialMetaToken]                 = useState('');
-  const [socialInstagramAccountId, setSocialInstagramAccountId] = useState('');
-  const [socialFacebookPageId, setSocialFacebookPageId]       = useState('');
   const [aiLeadResponderEnabled, setAiLeadResponderEnabled]   = useState(true);
-  const [webhookTestStatus, setWebhookTestStatus]             = useState<string | null>(null);
-  const [webhookTesting, setWebhookTesting]                   = useState(false);
   const [socialLoading, setSocialLoading]                     = useState(false);
   const [socialFetching, setSocialFetching]                   = useState(true);
   const [socialMessage, setSocialMessage]                     = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -727,8 +715,6 @@ export default function Settings() {
       .select('key, value')
       .in('key', [
         'social_instagram', 'social_linkedin', 'social_youtube', 'social_spotify',
-        'social_webhook_url', 'social_linkedin_token', 'social_linkedin_client_id', 'social_linkedin_client_secret', 'social_linkedin_page_id',
-        'social_meta_token', 'social_instagram_account_id', 'social_facebook_page_id',
         'ai_lead_responder_enabled'
       ]);
     flagLoadError(error);
@@ -738,44 +724,9 @@ export default function Settings() {
       if (map.social_linkedin)  setSocialLinkedin(map.social_linkedin);
       if (map.social_youtube)   setSocialYoutube(map.social_youtube);
       if (map.social_spotify)   setSocialSpotify(map.social_spotify);
-      if (map.social_webhook_url) setSocialWebhookUrl(map.social_webhook_url);
-      if (map.social_linkedin_token) setSocialLinkedinToken(map.social_linkedin_token);
-      if (map.social_linkedin_client_id) setSocialLinkedinClientId(map.social_linkedin_client_id);
-      if (map.social_linkedin_client_secret) setSocialLinkedinClientSecret(map.social_linkedin_client_secret);
-      if (map.social_linkedin_page_id) setSocialLinkedinPageId(map.social_linkedin_page_id);
-      if (map.social_meta_token) setSocialMetaToken(map.social_meta_token);
-      if (map.social_instagram_account_id) setSocialInstagramAccountId(map.social_instagram_account_id);
-      if (map.social_facebook_page_id) setSocialFacebookPageId(map.social_facebook_page_id);
       if (map.ai_lead_responder_enabled !== undefined) setAiLeadResponderEnabled(map.ai_lead_responder_enabled !== 'false');
     }
     setSocialFetching(false);
-  };
-
-  const handleTestWebhook = async () => {
-    setWebhookTesting(true);
-    setWebhookTestStatus(null);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/admin/social-publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({
-          platform: 'linkedin',
-          title: 'Test Publication LinkedIn',
-          caption: 'Ceci est un post de test envoyé depuis Studio pour vérifier la connexion LinkedIn.',
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setWebhookTestStatus(data.result?.message || 'Publication LinkedIn réussie !');
-      } else {
-        setWebhookTestStatus(`Erreur : ${data.error || data.result?.message || 'Impossible de publier sur LinkedIn'}`);
-      }
-    } catch (e: any) {
-      setWebhookTestStatus(`Erreur : ${e.message}`);
-    } finally {
-      setWebhookTesting(false);
-    }
   };
 
   const handleSaveSocials = async (e: React.FormEvent) => {

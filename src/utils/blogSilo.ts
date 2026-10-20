@@ -22,7 +22,11 @@ const OTHER_PAGES: Array<{ path: string; label: string }> = [
   { path: '/contact', label: 'Contact et accès' },
 ];
 
-export function siteFactsForPrompt(settings: Record<string, string | undefined>): string {
+/**
+ * La carte des soins et les interdits (rien d'inventé, pas d'allégation
+ * médicale) : socle commun des prompts d'article et de réseaux sociaux.
+ */
+export function carteFactsForPrompt(settings: Record<string, string | undefined>): string {
   const owner = settings.business_owner?.trim();
   const bio = settings.business_owner_bio?.trim();
   const carte = CARTE.map((c) => {
@@ -41,7 +45,11 @@ Règles absolues :
 - Ne cite que des soins de cette carte, avec leur nom, leur durée et leur prix exacts. N'invente aucun soin, aucun prix, aucune durée, aucun produit, aucune promotion.
 - N'invente ni cliente, ni témoignage, ni anecdote datée, ni chiffre, ni statistique. Une observation de métier reste générale (« beaucoup de peaux… », « en cabine, on voit souvent… »).
 - Aucune allégation médicale : pas de diagnostic, pas de promesse de résultat. En cas de doute (peau lésée, maladie de peau, grossesse, traitement), conseille un avis médical.
-- Les soins sont réservés aux femmes.
+- Les soins sont réservés aux femmes.`;
+}
+
+export function siteFactsForPrompt(settings: Record<string, string | undefined>): string {
+  return `${carteFactsForPrompt(settings)}
 
 ━━━ LIENS INTERNES — OBLIGATOIRES ━━━
 - Fais 1 à 3 liens vers la page du soin dont parle l'article (adresse « page /soins/… » ci-dessus), dans une phrase naturelle : <a href="/soins/visage">les soins du visage Phytomer</a>.

@@ -12,7 +12,6 @@ import { getResendApiKey } from './secrets';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { getSupabaseAdmin } from '../utils/supabaseAdmin';
-import { runSocialAutomation } from './socialAutomation';
 import { publishScheduledArticles } from './publishScheduled';
 import { SITE_CONFIG } from '../config/site';
 import { createJob } from './aiJobs';
@@ -134,15 +133,6 @@ async function actionGenerateArticle(admin: SupabaseClient, config: Record<strin
   return { queued: true, jobId, via, title: next.title, published: false };
 }
 
-async function actionGenerateSocial(config: Record<string, string>) {
-  const count = Math.min(10, Math.max(1, Number.parseInt(config.count ?? '3', 10) || 3));
-  const summary = await runSocialAutomation(count);
-  if (summary.errors.length > 0 && summary.generated === 0) {
-    throw new Error(summary.errors.join(' · '));
-  }
-  return summary as unknown as Record<string, unknown>;
-}
-
 /**
  * Assemble un brouillon de campagne depuis les articles publiés après la
  * dernière newsletter. Le brouillon n'est **pas** envoyé : l'envoi reste un
@@ -215,7 +205,6 @@ export async function executeAutomation(
     case 'email':            return actionEmail(config, automation);
     case 'keyword_scan':     return actionKeywordScan();
     case 'generate_article': return actionGenerateArticle(admin, config);
-    case 'generate_social':  return actionGenerateSocial(config);
     case 'newsletter_digest':return actionNewsletterDigest(admin);
     case 'publish_scheduled':return actionPublishScheduled();
     default:

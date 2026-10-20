@@ -284,6 +284,52 @@ paragraphes), tarif (+ prix habituel barré), durée, conditions, période, nomb
   `scripts/add-offer-section-home.mjs` (essai par défaut, `--write`) pose la
   section sous l'en-tête de l'accueil — **après** le déploiement du code.
 
+## Réseaux sociaux : Instagram + Facebook (refonte du 2026-10-20)
+
+`/admin/social`, une seule page : la liste, l'éditeur, les comptes. **Une
+publication = un visuel + une légende**, publiés sur Instagram et/ou Facebook
+tout de suite ou à l'heure choisie. Migration
+`20261020_social_publication_fiable.sql` (appliquée en prod le 2026-10-20).
+Règles pures et testées : `src/types/social.ts` (`npx tsx scripts/test-social.ts`).
+L'ancien Studio (assistant, autopilote, calendrier, ADN de marque, LinkedIn,
+fiche Google, génération quotidienne de 3 posts par l'IA) est supprimé : ne pas
+le réintroduire.
+
+- **Rédaction** : `services/socialWriting.ts`, un appel IA court à partir d'une
+  idée, d'un soin de la carte, d'un article ou d'une offre ; la carte
+  (`carteFactsForPrompt`, `utils/blogSilo.ts`) est la seule source de noms et de prix.
+- **Visuel aux couleurs du site** (`utils/socialVisual.ts`) : polices, couleur
+  principale et logos de « Design & Style », algue `public/images/algue.svg`,
+  turquoise `--pb-accent`. Trois mises en page (photo plein cadre, éditorial
+  blanc, marine de l'offre du moment), portrait 4:5 ou carré. Le même dessin
+  sert à l'aperçu et au **JPEG** déposé sur R2 (`/api/admin/social/visual`) —
+  Instagram refuse tout autre format. R2 n'envoie pas de CORS : les photos
+  passent par `/api/admin/social/photo` (admin, hôtes de la médiathèque seulement).
+- **Légende** : la même pour les deux réseaux ; Instagram reçoit les hashtags,
+  Facebook le lien vers la page du site (pas en local) et trois hashtags (`captionFor`).
+- **Envoi** (`services/socialPublish.ts`) : une ligne `social_publications` par
+  réseau, écrite **par le serveur seul** ; le navigateur ne peut que rédiger,
+  archiver, supprimer un brouillon (déclencheur `social_posts_guard`). Un réseau
+  n'est publié qu'une fois : UNIQUE (post, réseau), verrou `locked_until`
+  conditionné à l'état lu, déclencheur qui interdit de remettre en file un envoi
+  publié. Facebook sans réponse → échec « vérifiez la Page avant de relancer »,
+  jamais de renvoi automatique. Instagram : conteneur, attente, `media_publish`.
+- **Programmation** : `/api/cron/social-publish`, toutes les dix minutes
+  (`netlify/functions/cron-social-publish.mjs`), termine aussi les envois laissés
+  en cours. Budgets : 25 s depuis l'écran, 20 s pour la tâche (Netlify : 60 s / 30 s).
+- **Connexion Meta** (`services/metaConnection.ts`) : OAuth Facebook Login
+  (`/api/admin/meta/login` en POST, `callback` protégé par `state`). Jeton
+  utilisateur longue durée → jeton de Page (n'expire pas), qui publie sur les
+  deux réseaux. **App Secret et jetons dans `app_secrets`, jamais dans `settings`**
+  (lisible par tout visiteur : c'est là qu'ils fuyaient avant cette date). Le
+  statut est vérifié en direct auprès de Meta (jeton, App Secret, Pages accessibles).
+  Version d'API : `GRAPH_VERSION` (`services/metaGraph.ts`), une seule constante.
+- Prérequis Meta (affichés dans l'écran Comptes) : adresse de retour
+  `https://<domaine>/api/admin/meta/callback` déclarée dans Facebook Login ; la
+  personne qui relie est dans « Rôles de l'app » tant que l'app est en mode
+  Développement, administre la Page (contrôle total) ; Instagram professionnel
+  relié à la Page.
+
 ## Puces du site : l'algue
 
 Toutes les listes à puces du site public ont pour puce l'algue de la charte
