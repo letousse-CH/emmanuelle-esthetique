@@ -20,6 +20,7 @@ import { addDays, formatDateLong, formatHeure, isValidDateStr, todayZurich } fro
 import { chf } from './format';
 import { validateContact, type ContactErrors } from './validation';
 import DayCalendar from './DayCalendar';
+import DayStrip from './DayStrip';
 import ConfirmationStep from './ConfirmationStep';
 import { FAMILIES, familyFromParam, familyOf, getFamily, type FamilyId } from './families';
 import {
@@ -34,6 +35,8 @@ import {
   type Pick,
 } from './seance';
 import {
+  AddedToast,
+  BottomSheet,
   FamilyNav,
   FamilySection,
   MobileBar,
@@ -60,6 +63,24 @@ interface ReservationClientProps {
   businessOwner?: string;
 }
 
+/** Champ qui ouvre le clavier (pas une case à cocher). */
+function isTextField(el: EventTarget | Element | null): boolean {
+  if (el instanceof HTMLTextAreaElement) return true;
+  return el instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'submit'].includes(el.type);
+}
+
+/** Ordre de saisie des coordonnées : la touche « Suivant » du clavier passe au champ d'après. */
+const FIELD_ORDER = ['rf-prenom', 'rf-nom', 'rf-telephone', 'rf-email', 'rf-cp', 'rf-ville', 'rf-notes'];
+
+function onFormKeyDown(e: React.KeyboardEvent<HTMLFormElement>) {
+  const t = e.target;
+  if (e.key !== 'Enter' || !(t instanceof HTMLInputElement) || !isTextField(t)) return;
+  const i = FIELD_ORDER.indexOf(t.id);
+  if (i < 0 || i >= FIELD_ORDER.length - 1) return;
+  e.preventDefault();
+  document.getElementById(FIELD_ORDER[i + 1])?.focus();
+}
+
 async function readJson<T = any>(res: Response): Promise<T | null> {
   try {
     return (await res.json()) as T;
@@ -70,6 +91,9 @@ async function readJson<T = any>(res: Response): Promise<T | null> {
 
 export default function ReservationClient({ businessPhone, businessOwner }: ReservationClientProps) {
   const searchParams = useSearchParams();
+  // Les effets suivent le contenu de l’adresse, pas l’objet : un retour d’étape (même adresse) en
+  // recrée un, ce qui rechargeait la carte des soins à chaque geste « retour ».
+  const paramsKey = searchParams?.toString() ?? '';
   const ownerFirstName = (businessOwner || '').trim().split(/\s+/)[0] || undefined;
   const owner = ownerFirstName || 'Emmanuelle';
 
@@ -94,7 +118,13 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
   const [picks, setPicks] = useState<Pick[]>([]);
   const [limitReached, setLimitReached] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const [announce, setAnnounce] = useState('');
+  const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+  // Saisie en cours (étape 3) : la barre du bas s'efface devant le clavier.
+  const [typing, setTyping] = useState(false);
+  // Sens du passage d'une étape à l'autre, pour l'animation d'entrée.
+  const [stepDir, setStepDir] = useState<'next' | 'prev'>('next');
 
   // ── Jour + heure
   const today = useMemo(() => todayZurich(), []);
@@ -141,6 +171,8 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
 
   useEffect(() => {
     setDrawerOpen(false);
+    setToast(null);
+    setTyping(false);
     if (firstRender.current) {
       firstRender.current = false;
       return;
@@ -149,6 +181,62 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     stepTopRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
     headingRef.current?.focus({ preventScroll: true });
   }, [currentStep]);
+
+  // ── Étapes et historique du navigateur : le geste « retour » du téléphone
+  // ramène à l'étape précédente au lieu de quitter la page. Chaque étape
+  // franchie ajoute une entrée (même adresse, `rsvStep` dans son état) ; un
+  // retour demandé depuis la page rembobine ces entrées.
+  const stepRef = useRef<StepNum>(1);
+  const allowedRef = useRef({ 2: false, 3: false });
+  const showStep = useCallback((s: StepNum) => {
+    const from = stepRef.current;
+    if (s === from) return;
+    stepRef.current = s;
+    setStepDir(s > from ? 'next' : 'prev');
+    setCurrentStep(s);
+  }, []);
+  const writeStepState = (s: StepNum, mode: 'push' | 'replace') => {
+    const state = { ...(window.history.state ?? {}), rsvStep: s };
+    if (mode === 'push') window.history.pushState(state, '', window.location.href);
+    else window.history.replaceState(state, '', window.location.href);
+  };
+
+  useEffect(() => {
+    // Une page rechargée repart de l'étape 1, même si l'entrée en mémorisait une autre.
+    writeStepState(1, 'replace');
+    const onPop = (e: PopStateEvent) => {
+      const target = Number((e.state as { rsvStep?: number } | null)?.rsvStep) || 1;
+      if (stepRef.current === 4) {
+        // Demande envoyée : « retour » quitte la réservation plutôt que de rouvrir le formulaire.
+        window.history.go(-target);
+        return;
+      }
+      const s = Math.min(Math.max(target, 1), 3) as 1 | 2 | 3;
+      if (s > stepRef.current && !(s === 2 ? allowedRef.current[2] : allowedRef.current[3])) return;
+      showStep(s);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [showStep]);
+
+  /** Change d'étape depuis la page, en tenant l'historique à jour. */
+  const navigateStep = (s: StepNum) => {
+    const from = stepRef.current;
+    if (s === from) return;
+    if (s === 4) {
+      writeStepState(4, 'replace');
+    } else if (s > from) {
+      writeStepState(s, 'push');
+    } else if (window.history.state?.rsvStep === from) {
+      // Les entrées des étapes intermédiaires sont derrière nous : on les rembobine
+      // (le `popstate` qui suit affiche l'étape).
+      window.history.go(s - from);
+      return;
+    } else {
+      writeStepState(s, 'replace');
+    }
+    showStep(s);
+  };
 
   // ── Catalogue des soins (base) + paramètres d'URL (?soin=, ?category=) ──
   useEffect(() => {
@@ -200,7 +288,8 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     return () => {
       cancelled = true;
     };
-  }, [searchParams, catalogKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey, catalogKey]);
 
   // ── Offres du moment (GET /api/offers) + paramètre `?offre=` ──
   useEffect(() => {
@@ -235,7 +324,8 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
     return () => {
       cancelled = true;
     };
-  }, [searchParams, catalogKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey, catalogKey]);
 
   // ── Séance : soin principal + soins en plus (estimation : le serveur recalcule) ──
   const seance = useMemo(
@@ -338,7 +428,38 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
       ?? offers.find((o) => `${OFFER_PREFIX}${o.id}` === key)?.titre
       ?? 'Soin';
     setAnnounce(wasPicked ? `${name} retiré de votre séance.` : `${name} ajouté à votre séance.`);
+    if (!wasPicked) {
+      setToast({ id: Date.now(), text: name });
+      // Petit retour tactile sur Android (iOS ignore l'appel).
+      try {
+        if (window.matchMedia?.('(pointer: coarse)').matches) navigator.vibrate?.(8);
+      } catch {
+        /* sans importance */
+      }
+    } else {
+      setToast(null);
+    }
   };
+
+  // La confirmation d'ajout s'efface d'elle-même.
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  // Hauteur réelle de la barre du bas (encoche comprise) : le volet se pose juste dessus.
+  const barRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const bar = barRef.current;
+    const root = rootRef.current;
+    if (!bar || !root) return;
+    const update = () => root.style.setProperty('--rsv-bar-h', `${Math.round(bar.getBoundingClientRect().height)}px`);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, [currentStep]);
   const setVariant = (key: string, variantIndex: number) =>
     setPicks((prev) => prev.map((p) => (p.key === key ? { ...p, variantIndex } : p)));
 
@@ -420,7 +541,8 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
       }
       return '';
     });
-  }, [calendar, isDayAvailable, searchParams, calendarRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendar, isDayAvailable, paramsKey, calendarRange]);
 
   // ── Horaires du jour choisi (GET /api/bookings/available-slots) ──
   useEffect(() => {
@@ -565,13 +687,13 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
           );
           setPicks((prev) => prev.filter((p) => !p.key.startsWith(OFFER_PREFIX)));
           setCatalogKey((k) => k + 1);
-          setCurrentStep(1);
+          navigateStep(1);
         } else if (code === 'soin_inconnu' || (!code && res.status === 422)) {
           setCatalogNotice(
             'Un de vos soins n’est plus disponible à la réservation en ligne. Vérifiez votre séance, ou contactez l’institut.'
           );
           setCatalogKey((k) => k + 1);
-          setCurrentStep(1);
+          navigateStep(1);
         } else if (code === 'creneau_pris' || code === 'periode_complete' || (!code && res.status === 409)) {
           // L'horaire a été pris entre-temps : on recharge les disponibilités.
           setSlotsNotice(
@@ -580,7 +702,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
           setSelectedTime(null);
           setCalendarKey((k) => k + 1);
           setSlotsKey((k) => k + 1);
-          setCurrentStep(2);
+          navigateStep(2);
         } else if (res.status === 429) {
           setSubmitError(`Trop de tentatives. Patientez quelques minutes avant de réessayer${phoneHint}.`);
         } else if (res.status === 400) {
@@ -609,7 +731,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
       setConfirmedImage(fam ? { url: fam.image, alt: fam.imageAlt } : null);
       setSubmittedPrenom(formData.prenom.trim());
       setSubmittedEstimate(seance.priceChf);
-      setCurrentStep(4);
+      navigateStep(4);
     } catch (err) {
       console.error('Erreur réservation:', err);
       setSubmitError(
@@ -626,9 +748,10 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
   // ── Bouton d'action de l'étape (récapitulatif et barre du bas) ──
   const canGoStep2 = !!main;
   const canGoStep3 = !!calendar && !!selectedDate && !!selectedTime && !loadingSlots && !slotsError;
+  allowedRef.current = { 2: canGoStep2, 3: canGoStep2 && canGoStep3 };
   const goTo = (s: StepNum) => {
     setCatalogNotice(null);
-    setCurrentStep(s);
+    navigateStep(s);
   };
 
   const renderCta = (compact: boolean) => {
@@ -741,7 +864,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
   return (
     <div className="rsv" ref={rootRef}>
       {/* L'en-tête éditorial (H1) est rendu par page.tsx, côté serveur. */}
-      <div ref={stepTopRef} style={{ scrollMarginTop: '6.5rem' }} />
+      <div ref={stepTopRef} style={{ scrollMarginTop: 'var(--rsv-top, 6.5rem)' }} />
       {currentStep < 4 && <Stepper step={currentStep} onGo={goTo} />}
 
       <div className="rsv-container rsv-body">
@@ -766,7 +889,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
           <div className="rsv-layout">
             {/* ═══ ÉTAPE 1 : SOINS ═══ */}
             {currentStep === 1 && (
-              <div className="rsv-main animate-fadein">
+              <div className={`rsv-main rsv-step-in is-${stepDir}`}>
                 {catalogNotice && (
                   <div role="alert" className="rsv-notice">
                     <AlertCircle aria-hidden="true" />
@@ -872,7 +995,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
 
             {/* ═══ ÉTAPE 2 : JOUR + HEURE ═══ */}
             {currentStep === 2 && (
-              <div className="rsv-main animate-fadein" style={{ gap: 40 }}>
+              <div className={`rsv-main rsv-step-in is-${stepDir}`} style={{ gap: 40 }}>
                 <div className="rsv-section-head" style={{ marginBottom: 0 }}>
                   <div className="rsv-eyebrow">Date et heure</div>
                   <h2 className="rsv-h2">Quand souhaitez-vous venir ?</h2>
@@ -910,7 +1033,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                   <div role="alert" className="rsv-notice">
                     <AlertCircle aria-hidden="true" />
                     <div>
-                      {calendarError} Nous ne pouvons pas enregistrer de demande sans consulter l&apos;agenda.
+                      {calendarError}{' '}Nous ne pouvons pas enregistrer de demande sans consulter l&apos;agenda.
                       {phoneLink && <> Vous pouvez aussi appeler l&apos;institut au {phoneLink}.</>}
                       <div>
                         <button type="button" className="rsv-retry" onClick={() => setCalendarKey((k) => k + 1)}>
@@ -932,17 +1055,33 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                 ) : calendar ? (
                   <div className="rsv-when-grid">
                     <section aria-label="Jour du rendez-vous" className={calendarLoading ? 'opacity-60 pointer-events-none' : ''} aria-busy={calendarLoading}>
-                      <DayCalendar
-                        from={calendarRange.from}
-                        to={calendarRange.to}
-                        jours={calendar.jours}
-                        selected={selectedDate}
-                        today={today}
-                        onSelect={(d) => {
-                          setSlotsNotice(null);
-                          setSelectedDate(d);
-                        }}
-                      />
+                      {/* Téléphone : bande de jours ; au-delà : calendrier du mois (CSS). */}
+                      <div className="rsv-only-phone">
+                        <DayStrip
+                          from={calendarRange.from}
+                          to={calendarRange.to}
+                          jours={calendar.jours}
+                          selected={selectedDate}
+                          today={today}
+                          onSelect={(d) => {
+                            setSlotsNotice(null);
+                            setSelectedDate(d);
+                          }}
+                        />
+                      </div>
+                      <div className="rsv-hide-phone">
+                        <DayCalendar
+                          from={calendarRange.from}
+                          to={calendarRange.to}
+                          jours={calendar.jours}
+                          selected={selectedDate}
+                          today={today}
+                          onSelect={(d) => {
+                            setSlotsNotice(null);
+                            setSelectedDate(d);
+                          }}
+                        />
+                      </div>
                     </section>
 
                     <section aria-labelledby="rsv-heure-titre">
@@ -1034,12 +1173,23 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
 
             {/* ═══ ÉTAPE 3 : COORDONNÉES ═══ */}
             {currentStep === 3 && (
-              <form id="rsv-form" className="rsv-main animate-fadein" style={{ gap: 36 }} onSubmit={handleSubmitBooking} noValidate>
+              <form
+                id="rsv-form"
+                className={`rsv-main rsv-step-in is-${stepDir}`}
+                style={{ gap: 36 }}
+                onSubmit={handleSubmitBooking}
+                onKeyDown={onFormKeyDown}
+                onFocus={(e) => {
+                  if (isTextField(e.target)) setTyping(true);
+                }}
+                onBlur={() => window.setTimeout(() => setTyping(isTextField(document.activeElement)), 80)}
+                noValidate
+              >
                 <div className="rsv-section-head" style={{ marginBottom: 0 }}>
                   <div className="rsv-eyebrow">Vos coordonnées</div>
                   <h2 className="rsv-h2">Dernière étape</h2>
                   <div className="rsv-lead">
-                    {owner} vous contacte à ce numéro pour confirmer votre rendez-vous. Vos coordonnées ne servent à
+                    {owner}{' '}vous contacte à ce numéro pour confirmer votre rendez-vous. Vos coordonnées ne servent à
                     rien d&apos;autre sans votre accord.
                   </div>
                 </div>
@@ -1067,18 +1217,18 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                 )}
 
                 <div className="rsv-form-grid">
-                  {field('prenom', 'Prénom', { type: 'text', autoComplete: 'given-name', maxLength: 80, placeholder: 'Sophie' }, { required: true })}
-                  {field('nom', 'Nom', { type: 'text', autoComplete: 'family-name', maxLength: 80, placeholder: 'Dufour' }, { required: true })}
+                  {field('prenom', 'Prénom', { type: 'text', autoComplete: 'given-name', autoCapitalize: 'words', enterKeyHint: 'next', maxLength: 80, placeholder: 'Sophie' }, { required: true })}
+                  {field('nom', 'Nom', { type: 'text', autoComplete: 'family-name', autoCapitalize: 'words', enterKeyHint: 'next', maxLength: 80, placeholder: 'Dufour' }, { required: true })}
                   {field(
                     'telephone',
                     'Téléphone',
-                    { type: 'tel', inputMode: 'tel', autoComplete: 'tel', maxLength: 30, placeholder: '079 123 45 67' },
+                    { type: 'tel', inputMode: 'tel', autoComplete: 'tel', enterKeyHint: 'next', maxLength: 30, placeholder: '079 123 45 67' },
                     { required: true, hint: `Mobile de préférence : ${owner} vous confirme le rendez-vous à ce numéro.` }
                   )}
                   {field(
                     'email',
                     'E-mail',
-                    { type: 'email', inputMode: 'email', autoComplete: 'email', maxLength: 120, placeholder: 'sophie.dufour@exemple.ch' },
+                    { type: 'email', inputMode: 'email', autoComplete: 'email', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false, enterKeyHint: 'next', maxLength: 120, placeholder: 'sophie.dufour@exemple.ch' },
                     { hint: 'Pour recevoir le récapitulatif de votre demande.' }
                   )}
                   <div className="rsv-field">
@@ -1091,6 +1241,7 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                       type="text"
                       inputMode="numeric"
                       autoComplete="postal-code"
+                      enterKeyHint="next"
                       maxLength={10}
                       placeholder="1607"
                       value={formData.codePostal}
@@ -1106,6 +1257,8 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
                       className="rsv-input"
                       type="text"
                       autoComplete="address-level2"
+                      autoCapitalize="words"
+                      enterKeyHint="next"
                       maxLength={80}
                       placeholder="Palézieux"
                       value={formData.ville}
@@ -1207,19 +1360,26 @@ export default function ReservationClient({ businessPhone, businessOwner }: Rese
 
       {currentStep < 4 && (
         <>
-          {drawerOpen && (
-            <>
-              <button type="button" className="rsv-scrim" aria-label="Fermer le récapitulatif" onClick={() => setDrawerOpen(false)} />
-              <div id="rsv-drawer" className="rsv-drawer">
-                <SeanceSummary {...summaryProps} cta={null} />
-              </div>
-            </>
+          <BottomSheet open={drawerOpen} onClose={closeDrawer}>
+            <SeanceSummary {...summaryProps} cta={null} />
+          </BottomSheet>
+          {!drawerOpen && (
+            <AddedToast
+              toast={toast}
+              onOpen={() => {
+                setToast(null);
+                setDrawerOpen(true);
+              }}
+            />
           )}
           <MobileBar
             seance={seance}
+            step={currentStep as 1 | 2 | 3}
             open={drawerOpen}
+            hidden={typing && !drawerOpen}
             onToggle={() => setDrawerOpen((o) => !o)}
             cta={renderCta(true)}
+            barRef={barRef}
           />
         </>
       )}

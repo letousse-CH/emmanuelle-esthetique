@@ -146,6 +146,9 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
   // donc jamais en mode clair.
   const solid = variant === 'plein' || scrolled;
   const lightMode = !solid && heroColor === 'dark';
+  // Réservation sur téléphone : une fois la page défilée, la barre se fait
+  // discrète pour laisser l'écran au parcours (univers, horaires, récapitulatif).
+  const compact = scrolled && !!pathname?.startsWith('/reservation');
 
   let menuItems: any[] = [];
   try {
@@ -182,7 +185,7 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
       ref={navRef}
       data-main-nav
       className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
-        solid ? 'bg-white/95 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-6'
+        solid ? `bg-white/95 backdrop-blur-md shadow-sm py-4${compact ? ' max-md:py-1.5' : ''}` : 'bg-transparent py-6'
       }`}
       data-light={lightMode ? 'true' : undefined}
     >
@@ -194,7 +197,7 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
           }`}
         >
         <Link href="/" className="flex items-center gap-3 group">
-          <div className={`transition-all duration-500 bg-transparent shrink-0 flex items-center ${scrolled ? 'h-[92px] w-[260px] max-md:h-[94px] max-md:w-[265px]' : 'h-[102px] w-[290px] max-md:h-[106px] max-md:w-[300px]'}`}>
+          <div className={`transition-all duration-500 bg-transparent shrink-0 flex items-center ${compact ? 'h-[92px] w-[260px] max-md:h-[56px] max-md:w-[160px]' : scrolled ? 'h-[92px] w-[260px] max-md:h-[94px] max-md:w-[265px]' :'h-[102px] w-[290px] max-md:h-[106px] max-md:w-[300px]'}`}>
             {logoUrl && !logoBroken ? (
               <img
                 {...optimizedImgProps(logoUrl, '300px', [384, 640])}

@@ -6,7 +6,7 @@
  * `ReservationClient`.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -18,6 +18,7 @@ import {
   Plus,
   UserRoundCheck,
   Wallet,
+  X,
 } from 'lucide-react';
 import type { PublicOffer } from '../../../types/offers';
 import { formatOfferDuration, formatOfferPeriod } from '../../../types/offers';
@@ -191,9 +192,22 @@ export function FamilyNav({
   active: string;
   onSelect: (id: Family['id']) => void;
 }) {
+  // Sur téléphone la barre défile en largeur : l'univers en cours y reste visible.
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const inner = innerRef.current;
+    const item = inner?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!inner || !item || inner.scrollWidth <= inner.clientWidth) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    inner.scrollTo({
+      left: Math.max(0, item.offsetLeft - (inner.clientWidth - item.offsetWidth) / 2),
+      behavior: reduce ? 'auto' : 'smooth',
+    });
+  }, [active]);
+
   return (
     <nav className="rsv-fnav" aria-label="Univers de soins">
-      <div className="rsv-fnav__inner">
+      <div className="rsv-fnav__inner" ref={innerRef}>
         {families.map(({ family, count, picked }) => (
           <button
             key={family.id}
@@ -333,17 +347,36 @@ export function SoinRow({
   children?: React.ReactNode;
 }) {
   const [localVariant, setLocalVariant] = useState(0);
+  const [expanded, setExpanded] = useState(false);
   const variantIndex = pick ? pick.variantIndex : localVariant;
   const v = item.variants?.[variantIndex];
   const price = v?.priceChf ?? item.priceChf;
   const duration = v?.durationLabel ?? item.durationLabel;
+  // Sur téléphone, une longue description se replie en trois lignes (la carte se parcourt d'un coup d'œil).
+  const longDesc = (item.description?.length ?? 0) > 150;
+  const descId = `rsv-desc-${item.id}`;
 
   return (
     <div className={`rsv-soin${pick ? ' is-picked' : ''}`}>
       <div>
         {item.tag && <div className="rsv-soin__tag">{item.tag}</div>}
         <h3 className="rsv-soin__name">{item.name}</h3>
-        {item.description && <div className="rsv-soin__desc">{item.description}</div>}
+        {item.description && (
+          <div id={descId} className={`rsv-soin__desc${longDesc && !expanded ? ' is-clamped' : ''}`}>
+            {item.description}
+          </div>
+        )}
+        {longDesc && (
+          <button
+            type="button"
+            className="rsv-more"
+            aria-expanded={expanded}
+            aria-controls={descId}
+            onClick={() => setExpanded((e) => !e)}
+          >
+            {expanded ? 'Réduire' : 'Lire la suite'}
+          </button>
+        )}
         {item.variants && item.variants.length > 1 && (
           <div className="rsv-variants" role="group" aria-label={`Durée : ${item.name}`}>
             {item.variants.map((vv, idx) => (
@@ -596,18 +629,30 @@ export function SeanceSummary({ seance, when, onRemove, cta, hint, nudge, ownerF
 
 export function MobileBar({
   seance,
+  step,
   open,
+  hidden,
   onToggle,
   cta,
+  barRef,
 }: {
   seance: Seance;
+  step: 1 | 2 | 3;
   open: boolean;
+  /** Escamotée pendant la saisie (le clavier occupe déjà le bas de l'écran). */
+  hidden?: boolean;
   onToggle: () => void;
   cta: React.ReactNode;
+  barRef?: React.Ref<HTMLDivElement>;
 }) {
   const count = seance.lines.length;
   return (
-    <div className="rsv-bar" id="rsv-bar">
+    <div className={`rsv-bar${hidden ? ' is-hidden' : ''}`} id="rsv-bar" ref={barRef}>
+      <div className="rsv-bar__progress" aria-hidden="true">
+        {[1, 2, 3].map((n) => (
+          <span key={n} className={n <= step ? 'is-on' : undefined} />
+        ))}
+      </div>
       <div className="rsv-bar__inner">
         <button
           type="button"
@@ -618,7 +663,14 @@ export function MobileBar({
           disabled={count === 0}
         >
           <span className="rsv-bar__label">
-            Votre séance{count > 0 ? ` · ${count} soin${count > 1 ? 's' : ''}` : ''}
+            {count > 0 ? (
+              <>
+                <span className="sr-only">Votre séance : </span>
+                {count} soin{count > 1 ? 's' : ''}
+              </>
+            ) : (
+              'Votre séance'
+            )}
             {count > 0 && <ChevronDown aria-hidden="true" />}
           </span>
           <span className="rsv-bar__total">
@@ -635,6 +687,98 @@ export function MobileBar({
         {cta}
       </div>
     </div>
+  );
+}
+
+// ── Volet « Votre séance » (mobile, tablette) ────────────────────────────────
+
+/**
+ * Volet qui monte du bas de l'écran, au-dessus de la barre (dont le bouton
+ * reste utilisable). Se ferme d'un glissement vers le bas, d'un toucher sur le
+ * voile, par la croix ou par Échap ; la page dessous ne défile plus.
+ */
+export function BottomSheet({
+  open,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const startY = useRef<number | null>(null);
+  const [dragY, setDragY] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = 'hidden';
+    closeRef.current?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      root.style.overflow = previous;
+      window.removeEventListener('keydown', onKey);
+      setDragY(0);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    startY.current = e.touches[0].clientY;
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (startY.current == null) return;
+    setDragY(Math.max(0, e.touches[0].clientY - startY.current));
+  };
+  const onTouchEnd = () => {
+    startY.current = null;
+    if (dragY > 72) onClose();
+    else setDragY(0);
+  };
+
+  return (
+    <>
+      <button type="button" className="rsv-scrim" aria-label="Fermer le récapitulatif" tabIndex={-1} onClick={onClose} />
+      <div
+        id="rsv-drawer"
+        role="dialog"
+        aria-label="Votre séance"
+        className={`rsv-drawer${dragY ? ' is-dragging' : ''}`}
+        style={dragY ? { transform: `translateY(${dragY}px)` } : undefined}
+      >
+        <div className="rsv-sheet__head" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+          <span className="rsv-sheet__handle" aria-hidden="true" />
+          <button ref={closeRef} type="button" className="rsv-sheet__close" onClick={onClose} aria-label="Fermer le récapitulatif">
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        {children}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Confirmation furtive d'un ajout, au-dessus de la barre du bas. Un toucher
+ * ouvre la séance. Purement visuelle : la région `aria-live` de la page
+ * annonce déjà l'ajout aux lecteurs d'écran.
+ */
+export function AddedToast({ toast, onOpen }: { toast: { id: number; text: string } | null; onOpen: () => void }) {
+  if (!toast) return null;
+  return (
+    <button key={toast.id} type="button" className="rsv-toast" onClick={onOpen} tabIndex={-1} aria-hidden="true">
+      <Check />
+      <span className="rsv-toast__text">
+        <strong>Ajouté</strong> · {toast.text}
+      </span>
+      <span className="rsv-toast__cta">Voir</span>
+    </button>
   );
 }
 
