@@ -44,6 +44,9 @@ export async function readAutopilot(): Promise<AutopilotSettings> {
 export async function proposeWeek(week: string, opts: { replace?: boolean; instruction?: string } = {}): Promise<{ created: number }> {
   const start = weekStart(week);
   const { from, to } = weekRange(start);
+  // Avant toute suppression : « Refaire » sur une semaine passée effaçait ses sujets, puis refusait.
+  const today = zurichDayKey(new Date());
+  if (weekEnd(start) < today) throw new Error('Cette semaine est passée.');
   if (opts.replace) {
     const { error } = await db()
       .from('social_posts')
@@ -55,8 +58,6 @@ export async function proposeWeek(week: string, opts: { replace?: boolean; instr
     if (error) throw new Error(error.message);
   }
 
-  const today = zurichDayKey(new Date());
-  if (weekEnd(start) < today) throw new Error('Cette semaine est passée.');
   const fromDay = start < today ? today : start;
   const days = Math.round((Date.parse(`${weekEnd(start)}T12:00:00Z`) - Date.parse(`${fromDay}T12:00:00Z`)) / 86_400_000) + 1;
 

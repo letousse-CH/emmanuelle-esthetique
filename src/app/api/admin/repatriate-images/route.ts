@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { isAdminRequest } from '../../../../utils/apiAuth';
-import { supabase } from '../../../../services/supabase';
+import { getSupabaseAdmin } from '../../../../utils/supabaseAdmin';
 import { getR2Config } from '../../../../utils/r2Config';
 
 // Identifiants R2 : app_secrets (admin) puis variables R2_* ; voir utils/r2Config.
@@ -93,136 +93,107 @@ export async function POST(req: NextRequest) {
       forcePathStyle: true,
     });
 
+    // Écritures avec la clé de service : la clé publique est refusée par RLS
+    // sans erreur, et le bouton annonçait un succès sans rien avoir changé.
+    const db = getSupabaseAdmin();
+    if (!db) {
+      return NextResponse.json({
+        success: false,
+        error: "Clé de service Supabase absente (SUPABASE_SERVICE_ROLE_KEY) : les pages ne peuvent pas être mises à jour.",
+      }, { status: 501 });
+    }
+
     const urlMap = new Map<string, string>();
     let processedCount = 0;
 
-    // 1. Table `media_assets`
-    try {
-      const { data: mediaAssets } = await supabase.from('media_assets').select('*');
-      if (mediaAssets && mediaAssets.length > 0) {
-        for (const asset of mediaAssets) {
-          if (isCandidateImageUrl(asset.url, cleanPublicUrl)) {
-            const newCdnUrl = await mirrorExternalImageToR2(asset.url, s3Client, bucket, cleanPublicUrl);
-            if (newCdnUrl) {
-              urlMap.set(asset.url, newCdnUrl);
-              await supabase.from('media_assets').update({ url: newCdnUrl }).eq('id', asset.id);
-              processedCount++;
-            }
-          }
+    /** Copie sur R2 (une seule fois par adresse) ; `undefined` si la copie échoue. */
+    const mirror = async (extUrl: string): Promise<string | undefined> => {
+      const known = urlMap.get(extUrl);
+      if (known) return known;
+      const cdnUrl = (await mirrorExternalImageToR2(extUrl, s3Client, bucket, cleanPublicUrl)) || undefined;
+      if (cdnUrl) urlMap.set(extUrl, cdnUrl);
+      return cdnUrl;
+    };
+
+    /** Remplace les images externes d'un texte (JSON ou HTML) ; renvoie le texte et le nombre d'images basculées. */
+    const rewrite = async (text: string): Promise<{ text: string; count: number }> => {
+      const urls = Array.from(new Set(
+        Array.from(text.matchAll(/https?:\/\/[^"\s\\]+/gi))
+          .map((m) => String(m[0]))
+          .filter((u) => isCandidateImageUrl(u, cleanPublicUrl))
+      ));
+      let count = 0;
+      for (const extUrl of urls) {
+        const cdnUrl = await mirror(extUrl);
+        if (cdnUrl) {
+          text = text.replaceAll(extUrl, cdnUrl);
+          count++;
         }
+      }
+      return { text, count };
+    };
+
+    // 1. Médiathèque (`media_assets`)
+    try {
+      const { data: mediaAssets } = await db.from('media_assets').select('id, url');
+      for (const asset of mediaAssets ?? []) {
+        if (!isCandidateImageUrl(asset.url, cleanPublicUrl)) continue;
+        const cdnUrl = await mirror(asset.url);
+        if (!cdnUrl) continue;
+        const { error } = await db.from('media_assets').update({ url: cdnUrl }).eq('id', asset.id);
+        if (error) console.error('media_assets:', error.message);
+        else processedCount++;
       }
     } catch (e) {
       console.error("Erreur table media_assets:", e);
     }
 
-    // 2. Table `media_library`
+    // 2. Pages : `content` (page builder v2, ce que lit le site) et `sections` (retour arrière).
     try {
-      const { data: mediaLib } = await supabase.from('media_library').select('*');
-      if (mediaLib && mediaLib.length > 0) {
-        for (const asset of mediaLib) {
-          if (isCandidateImageUrl(asset.url, cleanPublicUrl)) {
-            const newCdnUrl = await mirrorExternalImageToR2(asset.url, s3Client, bucket, cleanPublicUrl);
-            if (newCdnUrl) {
-              urlMap.set(asset.url, newCdnUrl);
-              await supabase.from('media_library').update({ url: newCdnUrl }).eq('id', asset.id);
-              processedCount++;
-            }
+      const { data: pages } = await db.from('dynamic_pages').select('id, sections, content');
+      for (const page of pages ?? []) {
+        const patch: Record<string, unknown> = {};
+        let count = 0;
+        for (const col of ['content', 'sections'] as const) {
+          if (page[col] == null) continue;
+          const before = JSON.stringify(page[col]);
+          const after = await rewrite(before);
+          if (after.text !== before) {
+            patch[col] = JSON.parse(after.text);
+            count += after.count;
           }
         }
-      }
-    } catch (e) {
-      // Ignorer si la table n'existe pas
-    }
-
-    // 3. Pages dynamiques (`dynamic_pages`)
-    try {
-      const { data: pages } = await supabase.from('dynamic_pages').select('id, slug, sections');
-      if (pages && pages.length > 0) {
-        for (const page of pages) {
-          let pageUpdated = false;
-          let sectionsStr = JSON.stringify(page.sections);
-
-          const candidateMatches = Array.from(sectionsStr.matchAll(/https?:\/\/[^"\s\\]+/gi))
-            .map((m: any) => String(m[0]))
-            .filter(u => isCandidateImageUrl(u, cleanPublicUrl));
-
-          const uniqueUrls = Array.from(new Set(candidateMatches));
-
-          for (const extUrl of uniqueUrls) {
-            let cdnUrl = urlMap.get(extUrl);
-            if (!cdnUrl) {
-              cdnUrl = (await mirrorExternalImageToR2(extUrl, s3Client, bucket, cleanPublicUrl)) || undefined;
-              if (cdnUrl) {
-                urlMap.set(extUrl, cdnUrl);
-                processedCount++;
-              }
-            }
-            if (cdnUrl) {
-              sectionsStr = sectionsStr.replaceAll(extUrl, cdnUrl);
-              pageUpdated = true;
-            }
-          }
-
-          if (pageUpdated) {
-            const updatedSections = JSON.parse(sectionsStr);
-            await supabase.from('dynamic_pages').update({ sections: updatedSections }).eq('id', page.id);
-          }
-        }
+        if (Object.keys(patch).length === 0) continue;
+        const { error } = await db.from('dynamic_pages').update(patch).eq('id', page.id);
+        if (error) console.error('dynamic_pages:', error.message);
+        else processedCount += count;
       }
     } catch (e) {
       console.error("Erreur dynamic_pages:", e);
     }
 
-    // 4. Articles de blog (`blog_posts`)
+    // 3. Articles du blog (`articles`)
     try {
-      const { data: posts } = await supabase.from('blog_posts').select('id, cover_image, content');
-      if (posts && posts.length > 0) {
-        for (const post of posts) {
-          let postUpdated = false;
-          let cover = post.cover_image;
-          let content = post.content || '';
-
-          if (isCandidateImageUrl(cover, cleanPublicUrl)) {
-            let cdnUrl = urlMap.get(cover);
-            if (!cdnUrl) {
-              cdnUrl = (await mirrorExternalImageToR2(cover, s3Client, bucket, cleanPublicUrl)) || undefined;
-              if (cdnUrl) {
-                urlMap.set(cover, cdnUrl);
-                processedCount++;
-              }
-            }
-            if (cdnUrl) {
-              cover = cdnUrl;
-              postUpdated = true;
-            }
-          }
-
-          const candidateContentUrls = Array.from(content.matchAll(/https?:\/\/[^"\s\\]+/gi))
-            .map((m: any) => String(m[0]))
-            .filter(u => isCandidateImageUrl(u, cleanPublicUrl));
-
-          for (const extUrl of Array.from(new Set(candidateContentUrls))) {
-            let cdnUrl = urlMap.get(extUrl);
-            if (!cdnUrl) {
-              cdnUrl = (await mirrorExternalImageToR2(extUrl, s3Client, bucket, cleanPublicUrl)) || undefined;
-              if (cdnUrl) {
-                urlMap.set(extUrl, cdnUrl);
-                processedCount++;
-              }
-            }
-            if (cdnUrl) {
-              content = content.replaceAll(extUrl, cdnUrl);
-              postUpdated = true;
-            }
-          }
-
-          if (postUpdated) {
-            await supabase.from('blog_posts').update({ cover_image: cover, content }).eq('id', post.id);
+      const { data: posts } = await db.from('articles').select('id, cover_image, content');
+      for (const post of posts ?? []) {
+        let cover = post.cover_image;
+        let count = 0;
+        if (isCandidateImageUrl(cover, cleanPublicUrl)) {
+          const cdnUrl = await mirror(cover);
+          if (cdnUrl) {
+            cover = cdnUrl;
+            count++;
           }
         }
+        const body = await rewrite(post.content || '');
+        count += body.count;
+        if (count === 0) continue;
+        const { error } = await db.from('articles').update({ cover_image: cover, content: body.text }).eq('id', post.id);
+        if (error) console.error('articles:', error.message);
+        else processedCount += count;
       }
     } catch (e) {
-      console.error("Erreur blog_posts:", e);
+      console.error("Erreur articles:", e);
     }
 
     return NextResponse.json({

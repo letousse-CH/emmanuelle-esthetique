@@ -2,6 +2,7 @@
  * Service Analytics & Suivi des Conversions Didactique (0 Jargon)
  */
 import { supabase } from './supabase';
+import { getSupabaseAdmin } from '../utils/supabaseAdmin';
 
 export type AnalyticsEventType = 'page_view' | 'cta_click' | 'form_submit';
 
@@ -77,7 +78,9 @@ export async function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
   let events: any[] = [];
 
   try {
-    const { data, error } = await supabase
+    // Appelée par une route serveur sans session : la lecture est réservée aux
+    // admins connectées (RLS), d'où la clé de service quand elle existe.
+    const { data, error } = await (getSupabaseAdmin() ?? supabase)
       .from('analytics_events')
       .select('*')
       .order('created_at', { ascending: false })

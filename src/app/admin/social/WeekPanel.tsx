@@ -72,10 +72,13 @@ export default function WeekPanel({ posts, brand, meta, initialWeek, onWeekChang
   const items = useMemo(() => {
     if (!week) return [];
     const { from, to } = weekRange(week);
+    // En instants, pas en texte : la base écrit `+00:00`, weekRange `.000Z`.
+    const fromMs = Date.parse(from);
+    const toMs = Date.parse(to);
     return posts
       .filter((p) => p.status !== 'archived' && (p.planned_at || p.scheduled_at || p.published_at))
-      .filter((p) => { const at = dateOf(p)!; return at >= from && at < to; })
-      .sort((a, b) => dateOf(a)!.localeCompare(dateOf(b)!));
+      .filter((p) => { const at = Date.parse(dateOf(p)!); return at >= fromMs && at < toMs; })
+      .sort((a, b) => Date.parse(dateOf(a)!) - Date.parse(dateOf(b)!));
   }, [posts, week]);
 
   const subjects = items.filter((p) => weekState(p) === 'sujet');
