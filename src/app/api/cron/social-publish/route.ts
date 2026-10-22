@@ -1,5 +1,5 @@
 /**
- * Publications programmées — point d'entrée planifié (toutes les dix minutes,
+ * Publications programmées — point d'entrée planifié (tous les quarts d'heure,
  * `netlify/functions/cron-social-publish.mjs`). Publie ce qui est arrivé à
  * l'heure et termine les envois Instagram laissés en cours.
  */

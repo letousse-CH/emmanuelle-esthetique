@@ -213,7 +213,7 @@ export function describeCron(expression?: string): string {
 /**
  * Prochaine occurrence prévue, en clair.
  *
- * L'ordonnanceur passe toutes les cinq minutes : on annonce donc une heure
+ * L'ordonnanceur passe tous les quarts d'heure : on annonce donc une heure
  * approchée, jamais une promesse à la seconde qu'on ne tiendrait pas.
  */
 export function describeNextRun(expression?: string): string | null {

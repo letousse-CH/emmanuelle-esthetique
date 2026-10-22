@@ -5,7 +5,7 @@
  * l'éditeur d'une publication, les comptes Facebook / Instagram.
  *
  * Une publication = un visuel aux couleurs du site + une légende, publiés tout
- * de suite ou à l'heure choisie (tâche planifiée toutes les dix minutes).
+ * de suite ou à l'heure choisie (tâche planifiée tous les quarts d'heure).
  * Règles : `src/types/social.ts` ; envoi : `src/services/socialPublish.ts`.
  */
 import React, { Suspense, useCallback, useEffect, useState } from 'react';

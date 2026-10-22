@@ -1089,7 +1089,7 @@ export default function BlogEdit() {
                     onChange={(e) => setScheduledAt(e.target.value)}
                     className="w-full px-3 py-2.5 border border-amber-300 focus:border-amber-500 rounded-lg outline-none bg-white text-stone-800 text-sm"
                   />
-                  <p className="text-[13px] text-amber-900">L'article sera mis en ligne automatiquement, à dix minutes près.</p>
+                  <p className="text-[13px] text-amber-900">L'article sera mis en ligne automatiquement, au quart d'heure près.</p>
                 </div>
               )}
 

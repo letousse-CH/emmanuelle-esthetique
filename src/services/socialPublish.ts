@@ -6,8 +6,8 @@
  * peut ralentir (de 0,1 à 2,5 s par requête mesurés le 2026-10-20). On avance
  * tant que le budget de temps le permet (25 s depuis l'écran, 20 s pour la
  * tâche planifiée ; Netlify coupe à 60 s et 30 s), puis on rend la main ; le
- * navigateur (tant que l'écran est ouvert) et la tâche planifiée (toutes les
- * dix minutes) reprennent là où on s'est arrêté.
+ * navigateur (tant que l'écran est ouvert) et la tâche planifiée (tous les
+ * quarts d'heure) reprennent là où on s'est arrêté.
  *
  * Ce qui garantit qu'un réseau ne reçoit jamais deux fois le même post :
  *  - UNIQUE (post_id, network) : un seul envoi par réseau ;
