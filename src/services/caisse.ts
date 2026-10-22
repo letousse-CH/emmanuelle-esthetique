@@ -10,7 +10,7 @@
 import { supabase } from './supabase';
 import type {
   CartLine, Client, ClientStats, ForfaitItem, GiftCard, ModePaiement,
-  Product, Service, ServiceCategory, StockMovement, Transaction, TransactionWithItems,
+  Product, Service, ServiceCategory, StockMovement, Subscription, Transaction, TransactionWithItems,
 } from '../types/caisse';
 import { clientFullName, remiseLabel } from '../types/caisse';
 
@@ -160,7 +160,7 @@ export async function listServices(includeInactive = true): Promise<Service[]> {
 export type ServiceInput = Pick<
   Service,
   'nom' | 'description' | 'prix_chf' | 'taux_tva_defaut' | 'active' | 'ordre' | 'category_id' | 'type'
->;
+> & Pick<Partial<Service>, 'validite_mois'>;
 
 export async function createService(input: ServiceInput): Promise<Service> {
   const { data, error } = await supabase
@@ -279,7 +279,7 @@ export async function listAllForfaitItems(): Promise<ForfaitItem[]> {
  */
 export async function setForfaitItems(
   forfaitId: string,
-  entries: { service_id: string; quantite: number }[],
+  entries: { service_id: string; quantite: number; offertes?: number }[],
 ): Promise<void> {
   const { error: delError } = await supabase
     .from('service_forfait_items')
@@ -294,6 +294,8 @@ export async function setForfaitItems(
       forfait_id: forfaitId,
       service_id: e.service_id,
       quantite: e.quantite,
+      // Colonne ajoutée avec les abonnements (20261022) : un forfait n'en envoie pas.
+      ...(e.offertes ? { offertes: e.offertes } : {}),
       ordre,
     })),
   );
@@ -454,15 +456,23 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     p_client_label: input.clientLabel,
     p_mode_paiement: input.modePaiement,
     p_note: input.note,
-    p_items: input.lines.map(l => ({
-      service_id: l.service_id,
-      product_id: l.product_id ?? null,
-      offer_id: l.offer_id ?? null,
-      description: remiseLabel(l),
-      prix_unitaire_ttc: l.prix_unitaire_ttc,
-      quantite: l.quantite,
-      taux_tva: l.taux_tva,
-    })),
+    p_items: input.lines.map(l => {
+      // Séance d'abonnement : Postgres force le prix à 0 et écrit le libellé.
+      // Prise sur un abonnement vendu par ce même ticket, elle désigne la ligne
+      // de vente par son rang, comme les bons.
+      const venduRang = l.seance?.vendu_key ? input.lines.findIndex(x => x.key === l.seance!.vendu_key) : -1;
+      return {
+        service_id: l.service_id,
+        product_id: l.product_id ?? null,
+        offer_id: l.offer_id ?? null,
+        description: remiseLabel(l),
+        prix_unitaire_ttc: l.prix_unitaire_ttc,
+        quantite: l.quantite,
+        taux_tva: l.taux_tva,
+        ...(l.seance?.credit_id ? { subscription_credit_id: l.seance.credit_id } : {}),
+        ...(venduRang >= 0 ? { seance_de_ligne: venduRang } : {}),
+      };
+    }),
     p_gift_card_code: input.giftCardCode ?? null,
     p_montant_bon: input.montantBon ?? 0,
     p_emissions: emissions.length > 0 ? emissions : null,
@@ -510,6 +520,49 @@ export async function listGiftCardsForSale(transactionId: string): Promise<GiftC
   return (data ?? []) as GiftCard[];
 }
 
+// ── Abonnements ─────────────────────────────────────────────────────────────
+
+const SUBSCRIPTION_SELECT = '*, subscription_credits(*)';
+
+function sortCredits(rows: Subscription[]): Subscription[] {
+  return rows.map(s => ({
+    ...s,
+    subscription_credits: [...(s.subscription_credits ?? [])].sort((a, b) => a.ordre - b.ordre),
+  }));
+}
+
+/** Abonnements vendus, les plus récents d'abord ; ceux d'une cliente si `clientId`. */
+export async function listSubscriptions(clientId?: string): Promise<Subscription[]> {
+  let query = supabase
+    .from('subscriptions')
+    .select(SUBSCRIPTION_SELECT)
+    .order('emis_le', { ascending: false })
+    .limit(2000);
+  if (clientId) query = query.eq('client_id', clientId);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return sortCredits((data ?? []) as Subscription[]);
+}
+
+/** Abonnements émis par une vente — pour les montrer juste après l'encaissement. */
+export async function listSubscriptionsForSale(transactionId: string): Promise<Subscription[]> {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select(SUBSCRIPTION_SELECT)
+    .eq('sale_transaction_id', transactionId)
+    .order('number_seq', { ascending: true });
+  if (error) throw new Error(error.message);
+  return sortCredits((data ?? []) as Subscription[]);
+}
+
+/** Repousse l'échéance (date `AAAA-MM-JJ`) ; l'échéance d'origine reste inscrite. */
+export async function prolongerSubscription(id: string, expireLe: string): Promise<void> {
+  const { error } = await supabase.rpc('caisse_subscription_prolonger', {
+    p_id: id,
+    p_expire_le: expireLe,
+  });
+  if (error) throw new Error(error.message);
+}
 
 export async function cancelTransaction(id: string, reason: string): Promise<Transaction> {
   const { data, error } = await supabase.rpc('caisse_cancel_transaction', {

@@ -9,7 +9,7 @@ import {
   UserRound, Search,
 } from 'lucide-react';
 import {
-  cancelTransaction, indiquerClienteFacture, listClients, listGiftCardsForSale, listProducts,
+  cancelTransaction, indiquerClienteFacture, listClients, listGiftCardsForSale, listSubscriptionsForSale, listProducts,
   listTransactions, matchClient,
 } from '../../../../services/caisse';
 import { useSettings } from '../../../../hooks/useSettings';
@@ -23,7 +23,7 @@ import {
   MODES_PAIEMENT, MODE_PAIEMENT_LABELS, clientFullName, clienteAIndiquer, formatAmount, formatCHF,
   ligneMarge, recetteEncaissee,
 } from '../../../../types/caisse';
-import type { Client, GiftCard, ModePaiement, TransactionWithItems } from '../../../../types/caisse';
+import type { Client, GiftCard, ModePaiement, Subscription, TransactionWithItems } from '../../../../types/caisse';
 
 type PeriodMode = 'mois' | 'annee';
 
@@ -782,12 +782,20 @@ export default function JournalClient() {
           intent={dialog.intent}
           onClose={() => setDialog(null)}
           onDone={() => { setDialog(null); load(); }}
-          onCorrected={(tx, bons) => {
+          onCorrected={(tx, bons, abos) => {
             // La facture fautive vient d'être annulée : on repart sur la caisse
             // avec son contenu pré-rempli, et le lien vers l'ancienne.
             // L'annulation a aussi annulé les bons qu'elle avait vendus : leurs
             // lignes en réémettent un (nouveau code, même bénéficiaire, même
             // durée), sinon la cliente paierait un bon qui n'existe plus.
+            // Séance prise sur un abonnement vendu par cette même facture :
+            // l'annulation vient d'annuler cet abonnement, la facture rectifiée
+            // en émettra un nouveau, et la séance doit viser celui-là.
+            const venteDuCredit = new Map<string, string>();
+            for (const a of abos) {
+              const ligneVente = tx.transaction_items.find(i => i.subscription_id === a.id);
+              if (ligneVente) for (const c of a.subscription_credits) venteDuCredit.set(c.id, ligneVente.id);
+            }
             setCaisseCorrection({
               corrigeTransactionId: tx.id,
               numero: tx.numero,
@@ -811,6 +819,14 @@ export default function JournalClient() {
                   taux_tva: Number(item.taux_tva),
                   gift_card: bon
                     ? { beneficiaire: bon.beneficiaire ?? '', validiteMois: dureeBonMois(bon) }
+                    : undefined,
+                  // Vente d'abonnement : la facture rectifiée en émettra un neuf.
+                  abonnement: item.subscription_id ? true : undefined,
+                  // Séance : l'annulation l'a rendue à son abonnement, on la reprend.
+                  seance: item.subscription_credit_id
+                    ? (venteDuCredit.has(item.subscription_credit_id)
+                        ? { credit_id: null, vendu_key: venteDuCredit.get(item.subscription_credit_id), code: null }
+                        : { credit_id: item.subscription_credit_id, code: null })
                     : undefined,
                 };
               }),
@@ -1086,10 +1102,12 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
   intent: 'cancel' | 'correct';
   onClose: () => void;
   onDone: () => void;
-  onCorrected: (tx: TransactionWithItems, bons: GiftCard[]) => void;
+  onCorrected: (tx: TransactionWithItems, bons: GiftCard[], abos: Subscription[]) => void;
 }) {
   const isCorrection = intent === 'correct';
   const venteDeBon = tx.transaction_items.some(i => i.gift_card_id);
+  const venteAbo = tx.transaction_items.some(i => i.subscription_id);
+  const seances = tx.transaction_items.filter(i => i.subscription_credit_id).length;
   const [reason, setReason] = useState(isCorrection ? 'Erreur de saisie' : '');
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
@@ -1101,8 +1119,9 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
     try {
       // Lus AVANT l'annulation : si la lecture échoue, rien n'est annulé.
       const bons = isCorrection && venteDeBon ? await listGiftCardsForSale(tx.id) : [];
+      const abos = isCorrection && venteAbo ? await listSubscriptionsForSale(tx.id) : [];
       await cancelTransaction(tx.id, reason.trim());
-      if (isCorrection) onCorrected(tx, bons);
+      if (isCorrection) onCorrected(tx, bons, abos);
       else onDone();
     } catch (err) {
       setError(`La facture n'a pas été modifiée${err instanceof Error ? ` (${err.message})` : ''}. Réessayez dans un instant.`);
@@ -1162,6 +1181,21 @@ function CancelDialog({ tx, intent, onClose, onDone, onCorrected }: {
             {isCorrection
               ? 'Le bon cadeau vendu par cette facture sera annulé. La facture rectifiée en émettra un nouveau, avec un nouveau code : remettez ce nouveau bon à la cliente.'
               : 'Le bon cadeau vendu par cette facture sera annulé : son code ne pourra plus servir.'}
+          </p>
+        )}
+
+        {seances > 0 && (
+          <p className="text-[14px] text-accent bg-accent/5 border border-accent/20 rounded-lg px-3.5 py-2.5">
+            {seances > 1 ? `Les ${seances} séances prises` : 'La séance prise'} sur cette facture
+            {seances > 1 ? ' seront rendues' : ' sera rendue'} à l&apos;abonnement.
+          </p>
+        )}
+
+        {venteAbo && (
+          <p className="text-[14px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3.5 py-2.5">
+            {isCorrection
+              ? 'L\'abonnement vendu par cette facture sera annulé ; la facture rectifiée en émettra un nouveau, avec un nouveau code. Impossible si des séances y ont déjà été prises sur d\'autres factures.'
+              : 'L\'abonnement vendu par cette facture sera annulé. Impossible si des séances y ont déjà été prises sur d\'autres factures : annulez d\'abord celles-ci.'}
           </p>
         )}
 

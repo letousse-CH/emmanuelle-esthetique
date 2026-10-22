@@ -3,7 +3,8 @@ import { renderToBuffer } from '@react-pdf/renderer';
 import FactureDocument from '../../../../../components/pdf/FactureDocument';
 import { getBusinessInfoServer } from '../../../../../config/site';
 import { getSettingsServer } from '../../../../../services/settingsServer';
-import type { TransactionWithItems } from '../../../../../types/caisse';
+import { compositionResume } from '../../../../../types/caisse';
+import type { SubscriptionCredit, TransactionWithItems } from '../../../../../types/caisse';
 import { getSupabaseAdmin } from '../../../../../utils/supabaseAdmin';
 import { isAdminEmail } from '../../../../../utils/apiAuth';
 
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     transaction.transaction_items = [...(transaction.transaction_items ?? [])]
       .sort((a, b) => a.ordre - b.ordre);
 
-    const [business, s, emisRes, utiliseRes] = await Promise.all([
+    const [business, s, emisRes, utiliseRes, abosRes] = await Promise.all([
       getBusinessInfoServer(),
       getSettingsServer([
         'caisse_tva_assujetti',
@@ -71,7 +72,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             .eq('id', transaction.gift_card_id)
             .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
+      // Abonnements ouverts par cette facture : code, séances et échéance.
+      transaction.transaction_items.some(i => i.subscription_id)
+        ? supabase
+            .from('subscriptions')
+            .select('code, libelle, expire_le, subscription_credits(libelle, seances, offertes, ordre)')
+            .eq('sale_transaction_id', id)
+            .order('number_seq', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
     ]);
+
+    const abonnements = (abosRes.data ?? []).map((a: {
+      code: string; libelle: string; expire_le: string;
+      subscription_credits: Pick<SubscriptionCredit, 'libelle' | 'seances' | 'offertes' | 'ordre'>[];
+    }) => ({
+      code: a.code,
+      libelle: a.libelle,
+      seances: compositionResume([...(a.subscription_credits ?? [])].sort((x, y) => x.ordre - y.ordre)),
+      expireLe: a.expire_le,
+    }));
 
     const giftCards = {
       emis: (emisRes.data ?? []).map((g: {
@@ -106,6 +125,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           mentions: s.caisse_facture_mentions,
         },
         giftCards,
+        abonnements,
       }),
     );
 

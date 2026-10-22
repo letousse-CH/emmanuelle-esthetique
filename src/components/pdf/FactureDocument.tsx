@@ -26,6 +26,14 @@ export interface FactureGiftCards {
   utilise: { code: string; montant: number; restant: number } | null;
 }
 
+/** Abonnements ouverts par cette vente. */
+export interface FactureAbonnement {
+  code: string;
+  libelle: string;
+  seances: string;
+  expireLe: string;
+}
+
 const SAGE = '#8A9A7B';
 const INK = '#3A3730';
 const MUTED = '#8C877D';
@@ -128,11 +136,12 @@ function dateTimeCH(iso: string): string {
   return `${date} à ${time}`;
 }
 
-export default function FactureDocument({ transaction, business, settings, giftCards }: {
+export default function FactureDocument({ transaction, business, settings, giftCards, abonnements = [] }: {
   transaction: TransactionWithItems;
   business: BusinessInfo;
   settings: FactureSettings;
   giftCards?: FactureGiftCards;
+  abonnements?: FactureAbonnement[];
 }) {
   const cancelled = transaction.status === 'annulee';
   const showTva = settings.tvaAssujetti || Number(transaction.total_tva) > 0;
@@ -281,6 +290,23 @@ export default function FactureDocument({ transaction, business, settings, giftC
               </Text>
             ))}
           </View>
+        ) : null}
+
+        {abonnements.length > 0 ? (
+          <View style={styles.giftBox}>
+            <Text style={styles.sectionLabel}>
+              ABONNEMENT{abonnements.length > 1 ? 'S' : ''} — SÉANCES PAYÉES D&apos;AVANCE
+            </Text>
+            {abonnements.map(a => (
+              <Text key={a.code} style={styles.giftLine}>
+                {a.code} — {a.libelle} ({a.seances}), valable jusqu&apos;au {dateCH(a.expireLe)}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
+        {transaction.mode_paiement === 'abonnement' ? (
+          <Text style={styles.note}>Séance réglée par abonnement, payé à son achat : rien à encaisser.</Text>
         ) : null}
 
         {giftCards?.utilise ? (

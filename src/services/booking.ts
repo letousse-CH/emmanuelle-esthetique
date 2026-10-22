@@ -326,6 +326,10 @@ export function classifyCatalogRow(
   const fromDesc = parseDurationMinutes(desc, 0);
   const dur = (fallback: number) => (fromDesc > 0 ? fromDesc : carteDurationForName(row.nom || '') ?? fallback);
 
+  // Une formule d'abonnement (« 10 massages ») se vend en caisse ; elle ne se
+  // réserve pas, même si son nom contient « massage ».
+  if (row.type === 'abonnement') return { kind: 'hors_ligne', durationMinutes: dur(60) };
+
   if (nom.includes('option') || nom.includes('teinture') || nom.includes('duo regard')) {
     return { kind: 'option', durationMinutes: nom.includes('duo regard') ? 20 : dur(15) };
   }
@@ -566,7 +570,8 @@ export async function getAdminCatalog(): Promise<AdminCatalogItem[]> {
     prix_chf: o.prix_chf,
     duree_minutes: o.duree_minutes,
   }));
-  return [...offerItems, ...(rowsRes.data ?? []).map((row: any) => {
+  // Les formules d'abonnement ne sont pas des rendez-vous : la séance, elle, l'est.
+  return [...offerItems, ...(rowsRes.data ?? []).filter((row: any) => row.type !== 'abonnement').map((row: any) => {
     const categorie = row.category_id ? cats.get(row.category_id) ?? null : null;
     const c = classifyCatalogRow(row, categorie || '');
     const type: AdminCatalogItem['type'] =

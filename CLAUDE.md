@@ -478,6 +478,37 @@ par défaut) n'affecte jamais un bon déjà vendu. Aucune durée minimale n'exis
 en droit suisse : un bon est une créance ordinaire, prescrite par 10 ans
 (CO art. 127) à défaut d'accord contraire.
 
+**Abonnements de séances** (2026-10-22, migration `20261022_caisse_abonnements.sql`,
+après `20261015_caisse_bons_tva_produits` — elle remplace `caisse_create_transaction`
+et `caisse_cancel_transaction`). Une formule = une entrée du catalogue
+`services.type = 'abonnement'` (prix, `validite_mois`, 12 par défaut) dont la
+composition vit dans `service_forfait_items` : `quantite` = séances au total,
+`offertes` = dont offertes (ex. 10 massages + 1 offert, + 1 soin visage offert).
+
+> **La recette entre une fois, à la vente (payée en une fois). Chaque séance
+> figure ensuite sur une facture à CHF 0.00.**
+
+- Contrairement au bon (une somme soustraite par `montant_bon`), une séance n'a pas
+  de prix propre : la ligne est à zéro, `recetteEncaissee` ne change pas.
+- Vente : Postgres reconnaît la formule par son `service_id`, exige une cliente
+  (nominatif) et une quantité 1, émet `subscriptions` (ABO-2026-0001, échéance
+  figée) + un compteur par soin (`subscription_credits`) AVANT les lignes.
+- Séance : ligne avec `subscription_credit_id` (ou `seance_de_ligne` = rang de la
+  vente sur le même ticket, première séance le jour de l'achat). Postgres force
+  prix 0 et TVA 0, vérifie cliente, échéance et solde sous verrou, et écrit le
+  libellé « séance 4/11 (abonnement ABO-…) ». Facture soldée par ses séances →
+  mode `abonnement` (refusé s'il reste un montant dû).
+- Annulation : rend les séances de la facture ; une vente d'abonnement ne s'annule
+  plus dès qu'une séance a été prise sur une autre facture. Prolonger :
+  `caisse_subscription_prolonger` (l'échéance d'origine reste).
+- Écrans : caisse (bloc « Séance d'abonnement » dès qu'une cliente en a un, bouton
+  « Déduire une séance »), `/admin/caisse/abonnements` (séances dues, prolonger),
+  fiche cliente, catalogue (bouton « Abonnement »). Exclues de la réservation en
+  ligne et de l'agenda (`classifyCatalogRow`). Règles pures dans `types/caisse.ts`
+  (`appliquerSeance`, `seanceLabel`, `subscriptionEncours`…), testées.
+- Migration vérifiée sur un Postgres PGlite en mémoire (toutes les migrations
+  rejouées + scénario), puis appliquée en production le 2026-10-22.
+
 **Corriger une erreur de caisse.** Bouton « Corriger » du journal : la facture
 fautive est annulée (elle reste au journal avec son numéro), et l'écran de
 caisse rouvre avec son panier pré-rempli via `src/utils/caissePrefill.ts`. La

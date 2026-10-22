@@ -112,17 +112,24 @@ export default function CockpitClient() {
         daily[d.getDate() - 1] += r;
         caTotal += r;
         // Une cliente accueillie = un passage avec soin ou produit ; acheter
-        // seulement un bon cadeau n'est pas une visite. Le panier mesure ce
-        // qu'elle a reçu (soins + produits), quelle que soit la façon de payer.
-        const items = t.transaction_items.filter(i => !i.gift_card_id);
-        if (items.length > 0) visites.push(items.reduce((acc, i) => acc + Number(i.total_ttc || 0), 0));
+        // seulement un bon cadeau ou un abonnement n'est pas une visite. Le
+        // panier mesure ce qu'elle a reçu (soins + produits), quelle que soit la
+        // façon de payer. Une séance d'abonnement est une visite, mais sa ligne
+        // à CHF 0 fausserait le panier moyen : elle n'y entre pas.
+        const items = t.transaction_items.filter(i => !i.gift_card_id && !i.subscription_id);
+        if (items.length > 0) {
+          const payes = items.filter(i => !i.subscription_credit_id);
+          visites.push(payes.length > 0 ? payes.reduce((acc, i) => acc + Number(i.total_ttc || 0), 0) : NaN);
+        }
       } else if (inMonth(d, m === 0 ? y - 1 : y, (m + 11) % 12) && d.getDate() <= Math.min(today, prevDim)) {
         prevToDate += r;
       }
     }
 
     const clientesCount = visites.length;
-    const panierMoyen = clientesCount > 0 ? Math.round((visites.reduce((a, v) => a + v, 0) / clientesCount) * 10) / 10 : 0;
+    // NaN = visite faite de séances d'abonnement seules : comptée, hors panier.
+    const paniers = visites.filter(v => !Number.isNaN(v));
+    const panierMoyen = paniers.length > 0 ? Math.round((paniers.reduce((a, v) => a + v, 0) / paniers.length) * 10) / 10 : 0;
     const r2 = (n: number) => Math.round(n * 100) / 100;
     const label = now.toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' });
     const prevLabel = new Date(y, m - 1, 1).toLocaleDateString('fr-CH', { month: 'long' });

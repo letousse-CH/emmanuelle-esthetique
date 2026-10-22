@@ -6,18 +6,28 @@
 import assert from 'node:assert/strict';
 import {
   CLIENT_DE_PASSAGE,
+  appliquerSeance,
   cartTotals,
   clienteAIndiquer,
+  compositionResume,
   contenanceDepuisNom,
   coutAchat,
   isGiftCardUsable,
+  isSubscriptionUsable,
   isVenteProduct,
   ligneMarge,
   recetteEncaissee,
   remisePatch,
+  seanceKey,
+  seanceLabel,
+  seancesAuTicket,
+  subscriptionEncours,
+  subscriptionStatusLabel,
   valeurStock,
   ventilerRecettes,
+  type CartLine,
   type GiftCard,
+  type Subscription,
 } from '../src/types/caisse';
 import {
   AVS_BORNE_HAUTE, addMonthsISO, computeAvsIndependant, decaissementsPeriode, dettesFournisseursAu,
@@ -121,6 +131,95 @@ test('bon utilisable : actif, solde positif, non échu', () => {
   assert.equal(isGiftCardUsable({ ...base, montant_restant: 0, status: 'epuise' }), false);
   assert.equal(isGiftCardUsable({ ...base, status: 'annule' }), false);
   assert.equal(isGiftCardUsable({ ...base, expire_le: '2020-01-01' }), false);
+});
+
+// ── Abonnements ─────────────────────────────────────────────────────────────
+
+const abonnement = (o: Partial<Subscription> = {}): Subscription => ({
+  id: 's', annee: 2026, number_seq: 1, code: 'ABO-2026-0001', service_id: 'f', libelle: 'Abonnement 10 massages',
+  client_id: 'c1', client_label: 'Mary Pousaz', prix_paye: 1320, sale_transaction_id: 't',
+  emis_le: '2026-10-22T08:00:00Z', expire_initiale: '2027-10-22', expire_le: '2027-10-22', prolonge_le: null,
+  status: 'active', created_at: '', updated_at: '',
+  subscription_credits: [
+    { id: 'k1', subscription_id: 's', service_id: 'massage', libelle: 'Massage 60 min', seances: 11, offertes: 1, restantes: 7, ordre: 0 },
+    { id: 'k2', subscription_id: 's', service_id: 'visage', libelle: 'Soin visage', seances: 1, offertes: 1, restantes: 1, ordre: 1 },
+  ],
+  ...o,
+});
+const le22oct = new Date('2026-10-22T12:00:00');
+
+test('abonnement : CA à la vente seulement, les séances à CHF 0 n’ajoutent rien', () => {
+  const v = ventilerRecettes([
+    { status: 'payee', total_ttc: 1320, montant_bon: 0, transaction_items: [item(1320)] },
+    { status: 'payee', total_ttc: 0, montant_bon: 0, transaction_items: [item(0)] },
+    { status: 'payee', total_ttc: 45, montant_bon: 0, transaction_items: [item(0), item(45, 'produit')] },
+  ]);
+  assert.deepEqual(v, { total: 1365, prestations: 1320, produits: 45, bons: 0 });
+});
+
+test('abonnement : composition lisible, séances offertes comprises', () => {
+  assert.equal(
+    compositionResume([
+      { libelle: 'Massage 60 min', seances: 11, offertes: 1 },
+      { libelle: 'Soin visage', seances: 1, offertes: 1 },
+    ]),
+    'Massage 60 min : 10 séances + 1 offerte · Soin visage : 1 séance offerte',
+  );
+  assert.equal(compositionResume([{ libelle: 'Drainage', seances: 6 }]), 'Drainage : 6 séances');
+});
+
+test('abonnement : utilisable, échu, terminé, annulé', () => {
+  assert.equal(isSubscriptionUsable(abonnement(), le22oct), true);
+  assert.equal(subscriptionStatusLabel(abonnement(), le22oct), 'En cours');
+  const echu = abonnement({ expire_le: '2026-10-21' });
+  assert.equal(isSubscriptionUsable(echu, le22oct), false);
+  assert.equal(subscriptionStatusLabel(echu, le22oct), 'Échu');
+  assert.equal(isSubscriptionUsable(abonnement({ expire_le: '2026-10-22' }), le22oct), true, 'valable le jour même');
+  const vide = abonnement({ status: 'epuise', subscription_credits: abonnement().subscription_credits.map(c => ({ ...c, restantes: 0 })) });
+  assert.equal(subscriptionStatusLabel(vide, le22oct), 'Terminé');
+  assert.equal(isSubscriptionUsable(abonnement({ status: 'annule' }), le22oct), false);
+});
+
+test('abonnement : séances dues = prix × restantes ÷ total (offertes comprises)', () => {
+  // 1320 × 8 / 12 = 880
+  assert.equal(subscriptionEncours(abonnement(), le22oct), 880);
+  assert.equal(subscriptionEncours(abonnement({ expire_le: '2026-01-01' }), le22oct), 0);
+  assert.equal(subscriptionEncours(abonnement({ status: 'annule' }), le22oct), 0);
+});
+
+test('séance : remplace le soin déjà au ticket, une seule unité, libellé numéroté', () => {
+  const credit = abonnement().subscription_credits[0];
+  const draft = { credit_id: credit.id, code: 'ABO-2026-0001' };
+  const massage: CartLine = { key: 'a', service_id: 'massage', description: 'Massage 60 min', prix_unitaire_ttc: 145, quantite: 2, taux_tva: 0 };
+  const huile: CartLine = { key: 'b', service_id: null, product_id: 'p', description: 'Huile', prix_unitaire_ttc: 45, quantite: 1, taux_tva: 0 };
+  const key = seanceKey(draft, credit.service_id);
+
+  const desc = seanceLabel(credit, seancesAuTicket([massage, huile], key), draft.code);
+  assert.equal(desc, 'Massage 60 min — séance 5/11 (abonnement ABO-2026-0001)');
+
+  const once = appliquerSeance([massage, huile], { service_id: 'massage', description: desc, draft }, 's1');
+  assert.deepEqual(once.map(l => [l.key, l.quantite, l.prix_unitaire_ttc]), [['a', 1, 145], ['s1', 1, 0], ['b', 1, 45]]);
+  assert.equal(seancesAuTicket(once, key), 1);
+  assert.equal(seanceLabel(credit, seancesAuTicket(once, key), draft.code), 'Massage 60 min — séance 6/11 (abonnement ABO-2026-0001)');
+
+  const twice = appliquerSeance(once, { service_id: 'massage', description: 'x', draft }, 's2');
+  assert.deepEqual(twice.map(l => l.key), ['s2', 's1', 'b'], 'la ligne au prix normal a disparu');
+  assert.equal(cartTotals(twice).ttc, 45);
+
+  const ajout = appliquerSeance([huile], { service_id: 'visage', description: 'Soin visage', draft: { credit_id: 'k2', code: null } }, 's3');
+  assert.deepEqual(ajout.map(l => l.key), ['b', 's3']);
+});
+
+test('séance du jour de l’achat : compteur désigné par la ligne de vente', () => {
+  const draft = { credit_id: null, vendu_key: 'v1', code: null };
+  assert.equal(seanceKey(draft, 'massage'), 'vendu:v1:massage');
+  assert.equal(
+    seanceLabel({ libelle: 'Massage 60 min', seances: 11, restantes: 11 }, 0, null),
+    'Massage 60 min — séance 1/11 (nouvel abonnement)',
+  );
+  const vente: CartLine = { key: 'v1', service_id: 'f', description: 'Abonnement 10 massages', prix_unitaire_ttc: 1320, quantite: 1, taux_tva: 0, abonnement: true };
+  const lignes = appliquerSeance([vente], { service_id: 'massage', description: 'Massage', draft }, 's1');
+  assert.deepEqual(lignes.map(l => l.key), ['v1', 's1'], 'la vente de la formule n’est jamais convertie');
 });
 
 test('AVS 2026 : minimum 530, barème jusqu’à 60’500, puis 10 %', () => {

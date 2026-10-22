@@ -4,20 +4,20 @@ import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore 
 import Link from 'next/link';
 import {
   X, Cake, Receipt, Loader2, Mail, MessageCircle, Package, Sparkles, AlertCircle, Pencil,
-  Phone, CalendarPlus, CreditCard, CalendarDays,
+  Phone, CalendarPlus, CreditCard, CalendarDays, Repeat,
 } from 'lucide-react';
 import { BottomSheet, ListGroup, ListRow } from '../../../../components/admin/mobile/ui';
 import { supabase } from '../../../../services/supabase';
 import { PERIODE_LABEL, STATUT_LABEL } from '../../../../types/booking';
 import type { Booking } from '../../../../types/booking';
-import { listClientTransactions, updateClient } from '../../../../services/caisse';
+import { listClientTransactions, listSubscriptions, updateClient } from '../../../../services/caisse';
 import {
   findSubscriberByEmail, subscribeEmail, unsubscribeEmail,
 } from '../../../../services/promotions';
 import {
-  clientAge, clientFullName, formatCHF, moisDepuis, recetteEncaissee,
+  clientAge, clientFullName, formatCHF, moisDepuis, recetteEncaissee, seancesRestantes, subscriptionStatusLabel,
 } from '../../../../types/caisse';
-import type { Client, ClientStats, TransactionWithItems } from '../../../../types/caisse';
+import type { Client, ClientStats, Subscription, TransactionWithItems } from '../../../../types/caisse';
 import type { Subscriber } from '../../../../types/promotions';
 import { toWhatsAppNumber } from '../../../../types/promotions';
 
@@ -216,6 +216,8 @@ export function ClientDetailView({
       </div>
 
       {!desktop && <UpcomingBookings clientId={client.id} preset={upcomingPreset} />}
+
+      <ClientAbonnements clientId={client.id} />
 
       {(client.date_naissance || client.notes) && (
         <div className="bg-stone-50 rounded-xl p-4 space-y-2.5 text-sm">
@@ -545,5 +547,50 @@ function ConsentRow({ icon: Icon, label, detail, checked, disabled, onToggle }: 
         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
       </button>
     </div>
+  );
+}
+
+/** Abonnements de la cliente qui ont encore des séances (échus compris : à prolonger). */
+function ClientAbonnements({ clientId }: { clientId: string }) {
+  const [subs, setSubs] = useState<Subscription[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    listSubscriptions(clientId)
+      .then(list => { if (!cancelled) setSubs(list.filter(sub => sub.status === 'active' && seancesRestantes(sub) > 0)); })
+      // Migration des abonnements pas encore appliquée : la fiche reste lisible.
+      .catch(() => { if (!cancelled) setSubs([]); });
+    return () => { cancelled = true; };
+  }, [clientId]);
+
+  if (subs.length === 0) return null;
+  return (
+    <section aria-label="Abonnements" className="bg-stone-50 rounded-xl p-4 space-y-3">
+      <p className="text-[14px] lg:text-[12.5px] font-medium text-stone-700 flex items-center gap-1.5">
+        <Repeat size={12} /> Abonnements
+      </p>
+      {subs.map(sub => {
+        const label = subscriptionStatusLabel(sub);
+        return (
+          <div key={sub.id} className="space-y-1">
+            <p className="flex flex-wrap items-baseline gap-x-2 text-[15px] lg:text-sm font-semibold text-stone-900">
+              {sub.libelle}
+              <span className="font-normal text-stone-500 tabular-nums text-[13px] lg:text-[12px]">{sub.code}</span>
+              {label === 'Échu' && <span className="text-[12px] font-semibold text-amber-800 bg-amber-50 px-1.5">Échu</span>}
+            </p>
+            {sub.subscription_credits.map(c => (
+              <p key={c.id} className="text-[14px] lg:text-[12.5px] text-stone-700 tabular-nums">
+                <span className="font-semibold text-stone-950">{c.restantes}</span> / {c.seances} · {c.libelle}
+              </p>
+            ))}
+            <p className="text-[13px] lg:text-[12px] text-stone-500">
+              Jusqu&apos;au {new Date(`${sub.expire_le}T00:00:00`).toLocaleDateString('fr-CH')}
+              {label === 'Échu' && (
+                <> · <Link href="/admin/caisse/abonnements" className="text-accent font-medium hover:underline">prolonger</Link></>
+              )}
+            </p>
+          </div>
+        );
+      })}
+    </section>
   );
 }

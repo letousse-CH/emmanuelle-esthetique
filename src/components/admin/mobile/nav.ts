@@ -17,6 +17,7 @@ import {
   CreditCard,
   Sparkles,
   Gift,
+  Repeat,
   Megaphone,
   Bot,
   Workflow,
@@ -100,6 +101,7 @@ const I = {
   depenses: { name: 'Factures & Dépenses', path: '/admin/caisse/depenses', icon: Receipt },
   bilan: { name: 'Bilan & Fiscalité', path: '/admin/caisse/bilan', icon: Landmark },
   bons: { name: 'Bons cadeaux', path: '/admin/caisse/bons', icon: Gift },
+  abonnements: { name: 'Abonnements', path: '/admin/caisse/abonnements', icon: Repeat },
   promotions: { name: 'Promotions', path: '/admin/promotions', icon: Send },
   analytics: { name: 'Statistiques', path: '/admin/analytics', icon: TrendingUp },
   seo: { name: 'SEO et mots-clés', path: '/admin/seo', icon: Search },
@@ -126,7 +128,7 @@ export function buildNavGroups(flags: ModuleFlags, toCallCount = 0): NavGroup[] 
     },
     ...(flags.caisse
       ? [
-          { id: 'caisse', label: 'Caisse', icon: Wallet, items: [I.journal, I.clients, I.bons] },
+          { id: 'caisse', label: 'Caisse', icon: Wallet, items: [I.journal, I.clients, I.bons, I.abonnements] },
           { id: 'gestion', label: 'Gestion', icon: Briefcase, items: [I.cockpit, I.catalogue, I.depenses, I.bilan] },
         ]
       : []),
@@ -229,6 +231,7 @@ export function buildPlusGroups(flags: ModuleFlags, toCallCount = 0): PlusGroup[
               entry(I.caisse, { description: 'Nouvelle vente' }),
               entry(I.journal, { description: 'Les ventes passées' }),
               entry(I.bons, { name: 'Bons cadeaux', description: 'Vendre et utiliser' }),
+              entry(I.abonnements, { description: 'Séances restantes, échéances' }),
               entry(I.cockpit, { name: 'Cockpit hebdo', description: 'La semaine en un coup d’œil' }),
               entry(I.offres, { description: 'Site, réservation et caisse' }),
               entry(I.promotions, { description: 'Offres par e-mail ou WhatsApp' }),
@@ -244,7 +247,7 @@ export function buildPlusGroups(flags: ModuleFlags, toCallCount = 0): PlusGroup[
           {
             label: 'Ma gestion',
             entries: [
-              entry(I.catalogue, { name: 'Catalogue et stock', description: 'Soins, produits, forfaits' }),
+              entry(I.catalogue, { name: 'Catalogue et stock', description: 'Soins, forfaits, abonnements, produits' }),
               entry(I.depenses, { name: 'Dépenses', description: 'Factures reçues' }),
               entry(I.bilan, { name: 'Bilan', description: 'Chiffres et fiscalité' }),
             ],
@@ -303,6 +306,7 @@ export const CAISSE_SUBNAV: { name: string; path: string; exact?: boolean; icon:
   { name: 'Encaisser', path: '/admin/caisse', exact: true, icon: CreditCard },
   { name: 'Journal', path: '/admin/caisse/journal', icon: ScrollText },
   { name: 'Bons', path: '/admin/caisse/bons', icon: Gift },
+  { name: 'Abonnements', path: '/admin/caisse/abonnements', icon: Repeat },
   { name: 'Clientes', path: '/admin/caisse/clients', icon: UsersRound },
   { name: 'Catalogue', path: '/admin/caisse/prestations', icon: Sparkles },
   { name: 'Produits', path: '/admin/caisse/produits', icon: Package },

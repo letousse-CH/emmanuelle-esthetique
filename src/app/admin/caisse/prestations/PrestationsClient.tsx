@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Plus, Pencil, Trash2, X, Check, Loader2, ArrowUp, ArrowDown,
-  Layers, FolderCog,
+  Layers, FolderCog, Repeat,
 } from 'lucide-react';
 import { useSettings } from '../../../../hooks/useSettings';
 import CaisseCatalogNav from '../../../../components/admin/CaisseCatalogNav';
@@ -17,7 +17,7 @@ import {
 } from '../../../../services/caisse';
 import type { ServiceInput } from '../../../../services/caisse';
 import {
-  TAUX_TVA_CH, forfaitEconomie, forfaitValeurCumulee, formatCHF,
+  ABONNEMENT_VALIDITE_DEFAUT, TAUX_TVA_CH, compositionResume, forfaitEconomie, forfaitValeurCumulee, formatCHF,
 } from '../../../../types/caisse';
 import type { ForfaitItem, Service, ServiceCategory, ServiceType } from '../../../../types/caisse';
 
@@ -94,8 +94,8 @@ export default function PrestationsClient() {
   }, [services, categories]);
 
   const handleDelete = async (s: Service) => {
-    const quoi = s.type === 'forfait' ? 'le forfait' : 'la prestation';
-    if (!confirm(`Retirer ${quoi} « ${s.nom} » du catalogue ?\n\nLes factures déjà émises ne changent pas : le libellé et le prix y sont recopiés.`)) return;
+    const quoi = s.type === 'forfait' ? 'le forfait' : s.type === 'abonnement' ? 'la formule d\'abonnement' : 'la prestation';
+    if (!confirm(`Retirer ${quoi} « ${s.nom} » du catalogue ?\n\nLes factures déjà émises ne changent pas : le libellé et le prix y sont recopiés.${s.type === 'abonnement' ? ' Les abonnements déjà vendus gardent leurs séances.' : ''}`)) return;
     setBusyId(s.id);
     try {
       await deleteService(s.id);
@@ -149,7 +149,8 @@ export default function PrestationsClient() {
     }
   };
 
-  const prestations = useMemo(() => services.filter(s => s.type !== 'forfait'), [services]);
+  // Ce qui peut composer un forfait ou un abonnement : les prestations simples.
+  const prestations = useMemo(() => services.filter(s => s.type === 'prestation'), [services]);
 
   return (
     <div className="space-y-6">
@@ -159,12 +160,13 @@ export default function PrestationsClient() {
         <div className="max-w-2xl">
           <h1 className="sr-only text-[30px] font-semibold leading-tight tracking-tight text-stone-950 lg:not-sr-only">Prestations</h1>
           <p className="mt-1 text-[15px] text-stone-600">
-            Les soins et forfaits de l’écran d’encaissement, rangés par catégorie. Prix TTC.
+            Les soins, forfaits et abonnements de l’écran d’encaissement, rangés par catégorie. Prix TTC.
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2 max-w-[calc(100vw-2rem)]">
           <Button variant="ghost" icon={FolderCog} onClick={() => setShowCategories(true)}>Catégories</Button>
           <Button icon={Layers} onClick={() => setEditing({ service: null, type: 'forfait' })}>Forfait</Button>
+          <Button icon={Repeat} onClick={() => setEditing({ service: null, type: 'abonnement' })}>Abonnement</Button>
           <Button variant="primary" icon={Plus} onClick={() => setEditing({ service: null, type: 'prestation' })}>
             Prestation
           </Button>
@@ -269,9 +271,25 @@ export default function PrestationsClient() {
                                 <Layers size={11} /> Forfait
                               </span>
                             )}
+                            {s.type === 'abonnement' && (
+                              <span className="text-[12px] font-medium text-stone-700 bg-stone-100 border border-stone-200 px-2 py-0.5 inline-flex items-center gap-1 rounded">
+                                <Repeat size={11} /> Abonnement
+                              </span>
+                            )}
                             {!s.active && <span className="text-[11.5px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded">Masquée en caisse</span>}
                           </p>
-                          {s.type === 'forfait' ? (
+                          {s.type === 'abonnement' ? (
+                            <p className="truncate text-[12.5px] text-stone-600">
+                              {items.length === 0
+                                ? 'Séances à définir'
+                                : compositionResume(items.map(it => ({
+                                    libelle: it.service?.nom ?? '—',
+                                    seances: Number(it.quantite),
+                                    offertes: Number(it.offertes ?? 0),
+                                  })))}
+                              {' · '}valable {s.validite_mois ?? ABONNEMENT_VALIDITE_DEFAUT} mois
+                            </p>
+                          ) : s.type === 'forfait' ? (
                             <p className="truncate text-[12.5px] text-stone-600">
                               {items.length === 0
                                 ? 'Composition à définir'
@@ -361,7 +379,7 @@ export default function PrestationsClient() {
   );
 }
 
-// ── Prestation / forfait ────────────────────────────────────────────────────
+// ── Prestation / forfait / abonnement ───────────────────────────────────────
 
 function ServiceDialog({
   service, type, categories, prestations, initialComposition, nextOrder, tvaActive, tauxDefaut, onClose, onSaved,
@@ -378,6 +396,7 @@ function ServiceDialog({
   onSaved: () => void;
 }) {
   const isForfait = type === 'forfait';
+  const isAbonnement = type === 'abonnement';
 
   const [nom, setNom]                 = useState(service?.nom ?? '');
   const [description, setDescription] = useState(service?.description ?? '');
@@ -388,6 +407,16 @@ function ServiceDialog({
   const [parts, setParts]             = useState<{ service_id: string; quantite: number }[]>(
     initialComposition.map(it => ({ service_id: it.service_id, quantite: Number(it.quantite) })),
   );
+  // Abonnement : un soin × N séances payées (+ offertes du même soin), et en
+  // option un autre soin offert. Rangé dans la même composition qu'un forfait.
+  const mainInit  = initialComposition.find(it => Number(it.offertes ?? 0) < Number(it.quantite)) ?? initialComposition[0];
+  const bonusInit = initialComposition.find(it => it !== mainInit);
+  const [aboMain, setAboMain]         = useState(mainInit?.service_id ?? '');
+  const [aboPayees, setAboPayees]     = useState(mainInit ? Number(mainInit.quantite) - Number(mainInit.offertes ?? 0) : 10);
+  const [aboOffertes, setAboOffertes] = useState(mainInit ? Number(mainInit.offertes ?? 0) : 0);
+  const [aboBonus, setAboBonus]       = useState(bonusInit?.service_id ?? '');
+  const [aboBonusQte, setAboBonusQte] = useState(bonusInit ? Number(bonusInit.quantite) : 1);
+  const [validite, setValidite]       = useState(String(service?.validite_mois ?? ABONNEMENT_VALIDITE_DEFAUT));
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState<string | null>(null);
   // Fiche déjà créée lors d'un essai précédent (la composition du forfait a
@@ -408,9 +437,22 @@ function ServiceDialog({
     }));
   }, [parts, prestations]);
 
-  const valeurCumulee = forfaitValeurCumulee(partsDetail);
   const prixNum = Number(String(prix).replace(',', '.'));
+  const prixDe = (id: string) => Number(prestations.find(p => p.id === id)?.prix_chf ?? 0);
+  const valeurCumulee = isAbonnement
+    ? (aboMain ? prixDe(aboMain) * (aboPayees + aboOffertes) : 0) + (aboBonus ? prixDe(aboBonus) * aboBonusQte : 0)
+    : forfaitValeurCumulee(partsDetail);
   const economie = Number.isFinite(prixNum) ? valeurCumulee - prixNum : 0;
+
+  /** Composition enregistrée : `quantite` = séances au total, `offertes` = dont offertes. */
+  const aboParts = (): { service_id: string; quantite: number; offertes: number }[] => {
+    if (!aboMain) return [];
+    const main = { service_id: aboMain, quantite: aboPayees + aboOffertes, offertes: aboOffertes };
+    if (!aboBonus) return [main];
+    // Le même soin offert en plus : il rejoint les séances offertes du compteur.
+    if (aboBonus === aboMain) return [{ ...main, quantite: main.quantite + aboBonusQte, offertes: main.offertes + aboBonusQte }];
+    return [main, { service_id: aboBonus, quantite: aboBonusQte, offertes: aboBonusQte }];
+  };
 
   const addPart = (id: string) => {
     if (!id || parts.some(p => p.service_id === id)) return;
@@ -428,6 +470,15 @@ function ServiceDialog({
       setError('Un forfait doit contenir au moins une prestation.');
       return;
     }
+    const validiteNum = Number(validite);
+    if (isAbonnement) {
+      if (!aboMain) { setError('Choisissez le soin de l\'abonnement.'); return; }
+      if (!Number.isInteger(aboPayees) || aboPayees < 1) { setError('Indiquez au moins une séance payée.'); return; }
+      if (!Number.isInteger(validiteNum) || validiteNum < 1 || validiteNum > 120) {
+        setError('Validité : un nombre de mois entre 1 et 120.');
+        return;
+      }
+    }
     setSaving(true); setError(null);
     const payload: ServiceInput = {
       nom: nom.trim(),
@@ -438,6 +489,8 @@ function ServiceDialog({
       ordre: service?.ordre ?? nextOrder,
       category_id: categoryId || null,
       type,
+      // Seulement pour un abonnement : la colonne n'existe qu'à partir de 20261022.
+      ...(isAbonnement ? { validite_mois: validiteNum } : {}),
     };
     try {
       const saved = savedId
@@ -445,6 +498,7 @@ function ServiceDialog({
         : await createService(payload);
       setSavedId(saved.id);
       if (isForfait) await setForfaitItems(saved.id, parts);
+      if (isAbonnement) await setForfaitItems(saved.id, aboParts());
       onSaved();
     } catch (err) {
       setError(`L'enregistrement n'a pas abouti${err instanceof Error ? ` (${err.message})` : ''}. Vos saisies sont conservées : réessayez.`);
@@ -453,8 +507,8 @@ function ServiceDialog({
   };
 
   const titre = service
-    ? (isForfait ? 'Modifier le forfait' : 'Modifier la prestation')
-    : (isForfait ? 'Nouveau forfait' : 'Nouvelle prestation');
+    ? (isForfait ? 'Modifier le forfait' : isAbonnement ? 'Modifier l\'abonnement' : 'Modifier la prestation')
+    : (isForfait ? 'Nouveau forfait' : isAbonnement ? 'Nouvel abonnement' : 'Nouvelle prestation');
 
   return (
     <div className="fixed inset-0 z-50 bg-stone-900/40 flex items-center justify-center p-4 overflow-y-auto">
@@ -465,7 +519,8 @@ function ServiceDialog({
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-            {isForfait && <Layers size={14} className="text-accent" />} {titre}
+            {isForfait && <Layers size={14} className="text-accent" />}
+            {isAbonnement && <Repeat size={14} className="text-accent" />} {titre}
           </h3>
           <button onClick={close} aria-label="Fermer" className="rounded p-1 text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 cursor-pointer">
             <X size={16} />
@@ -477,7 +532,7 @@ function ServiceDialog({
             <label htmlFor="svc-nom" className="block text-[12.5px] font-medium text-stone-700 mb-1">Nom *</label>
             <input
               id="svc-nom" type="text" value={nom} onChange={e => setNom(e.target.value)} required autoFocus
-              placeholder={isForfait ? 'Forfait jambes + maillot + aisselles' : 'Soin du visage éclat — 60 min'}
+              placeholder={isForfait ? 'Forfait jambes + maillot + aisselles' : isAbonnement ? 'Abonnement 10 massages' : 'Soin du visage éclat — 60 min'}
               className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 placeholder:text-stone-500 focus:border-stone-900 focus:ring-1 focus:ring-stone-900 outline-none transition-colors"
             />
           </div>
@@ -567,6 +622,112 @@ function ServiceDialog({
             </div>
           )}
 
+          {isAbonnement && (
+            <div className="rounded-xl border border-stone-200 p-3.5 space-y-3 bg-stone-50">
+              <div>
+                <p className="text-[13px] font-medium text-stone-700 mb-1">Séances *</p>
+                <p className="text-[12px] text-stone-600 leading-relaxed">
+                  Payé en une fois à la vente : c&apos;est ce jour-là que la recette entre. Chaque séance
+                  se déduit ensuite en caisse, sur une facture à CHF 0.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="abo-main" className="block text-[12.5px] font-medium text-stone-700 mb-1">Soin</label>
+                <select
+                  id="abo-main" value={aboMain} onChange={e => setAboMain(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 bg-white focus:border-stone-900 outline-none cursor-pointer"
+                >
+                  <option value="">Choisir le soin…</option>
+                  {prestations.map(s => <option key={s.id} value={s.id}>{s.nom} — {formatCHF(s.prix_chf)}</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="abo-payees" className="block text-[12.5px] font-medium text-stone-700 mb-1">Séances payées</label>
+                  <input
+                    id="abo-payees" type="number" min={1} step={1} value={aboPayees}
+                    onChange={e => setAboPayees(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 tabular-nums bg-white focus:border-stone-900 outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="abo-offertes" className="block text-[12.5px] font-medium text-stone-700 mb-1">+ offertes de ce soin</label>
+                  <input
+                    id="abo-offertes" type="number" min={0} step={1} value={aboOffertes}
+                    onChange={e => setAboOffertes(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 tabular-nums bg-white focus:border-stone-900 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
+                <div>
+                  <label htmlFor="abo-bonus" className="block text-[12.5px] font-medium text-stone-700 mb-1">
+                    Autre soin offert <span className="text-stone-600">(facultatif)</span>
+                  </label>
+                  <select
+                    id="abo-bonus" value={aboBonus} onChange={e => setAboBonus(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 bg-white focus:border-stone-900 outline-none cursor-pointer"
+                  >
+                    <option value="">Aucun</option>
+                    {prestations.filter(s => s.id !== aboMain).map(s => (
+                      <option key={s.id} value={s.id}>{s.nom} — {formatCHF(s.prix_chf)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="abo-bonus-qte" className="block text-[12.5px] font-medium text-stone-700 mb-1">Séances</label>
+                  <input
+                    id="abo-bonus-qte" type="number" min={1} step={1} value={aboBonusQte} disabled={!aboBonus}
+                    onChange={e => setAboBonusQte(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 tabular-nums bg-white focus:border-stone-900 outline-none disabled:bg-stone-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="abo-validite" className="block text-[12.5px] font-medium text-stone-700 mb-1">Valable (mois)</label>
+                <input
+                  id="abo-validite" type="number" min={1} max={120} step={1} value={validite}
+                  onChange={e => setValidite(e.target.value)}
+                  className="w-28 px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-700 tabular-nums bg-white focus:border-stone-900 outline-none"
+                />
+                <p className="text-[12px] text-stone-600 mt-1">
+                  À compter du jour de la vente. L&apos;échéance est inscrite sur l&apos;abonnement vendu et se prolonge à la main.
+                </p>
+              </div>
+
+              {aboMain && (
+                <dl className="text-xs space-y-1 pt-1 border-t border-stone-200">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-stone-600">La cliente reçoit</dt>
+                    <dd className="text-right text-stone-700">
+                      {compositionResume(aboParts().map(p => ({
+                        libelle: prestations.find(x => x.id === p.service_id)?.nom ?? '—',
+                        seances: p.quantite,
+                        offertes: p.offertes,
+                      })))}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-stone-600">Valeur au prix de la carte</dt>
+                    <dd className="text-stone-700 tabular-nums">{formatCHF(valeurCumulee)}</dd>
+                  </div>
+                  {prix.trim() !== '' && Number.isFinite(prixNum) && (
+                    <div className="flex justify-between">
+                      <dt className="text-stone-600">Économie pour la cliente</dt>
+                      <dd className={`tabular-nums font-medium ${economie >= 0 ? 'text-stone-900' : 'text-amber-700'}`}>
+                        {economie >= 0 ? `− ${formatCHF(economie)}` : `+ ${formatCHF(-economie)}`}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+            </div>
+          )}
+
           <div>
             <label htmlFor="svc-desc" className="block text-[12.5px] font-medium text-stone-700 mb-1">
               Description <span className="text-stone-600">(facultatif)</span>
@@ -580,7 +741,7 @@ function ServiceDialog({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="svc-prix" className="block text-[12.5px] font-medium text-stone-700 mb-1">
-                {isForfait ? 'Prix du forfait TTC *' : 'Prix TTC (CHF) *'}
+                {isForfait ? 'Prix du forfait TTC *' : isAbonnement ? 'Prix de l\'abonnement TTC *' : 'Prix TTC (CHF) *'}
               </label>
               <input
                 id="svc-prix" type="text" inputMode="decimal" value={prix} onChange={e => setPrix(e.target.value)} required

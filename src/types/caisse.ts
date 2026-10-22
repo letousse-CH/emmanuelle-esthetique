@@ -3,11 +3,11 @@
  * Postgres, `number` ici) — jamais des centimes entiers.
  */
 
-export type ModePaiement = 'especes' | 'carte' | 'twint' | 'virement' | 'bon_cadeau';
+export type ModePaiement = 'especes' | 'carte' | 'twint' | 'virement' | 'bon_cadeau' | 'abonnement';
 export type TransactionStatus = 'payee' | 'annulee';
 
-/** Modes proposés à l'écran. `bon_cadeau` n'y figure pas : il se déduit du bon
- *  attaché à la vente quand celui-ci couvre la totalité du montant. */
+/** Modes proposés à l'écran. `bon_cadeau` et `abonnement` n'y figurent pas : ils
+ *  se déduisent du bon ou des séances d'abonnement quand ils soldent la facture. */
 export const MODES_PAIEMENT: { value: ModePaiement; label: string }[] = [
   { value: 'especes',  label: 'Espèces'  },
   { value: 'carte',    label: 'Carte'    },
@@ -21,6 +21,7 @@ export const MODE_PAIEMENT_LABELS: Record<ModePaiement, string> = {
   twint: 'TWINT',
   virement: 'Virement',
   bon_cadeau: 'Bon cadeau',
+  abonnement: 'Abonnement',
 };
 
 /**
@@ -116,8 +117,12 @@ export interface ServiceCategory {
  * Un forfait est une prestation à part entière, avec son propre prix groupé.
  * Sa composition (`ForfaitItem[]`) ne sert qu'à le monter dans l'admin et à
  * afficher l'économie réalisée : elle n'entre jamais dans un calcul de facture.
+ *
+ * Un abonnement est une formule de séances payées d'avance (ex. 10 massages +
+ * 1 offert). Sa composition dit combien de séances de quel soin la cliente
+ * reçoit ; elle est recopiée sur chaque abonnement vendu (`Subscription`).
  */
-export type ServiceType = 'prestation' | 'forfait';
+export type ServiceType = 'prestation' | 'forfait' | 'abonnement';
 
 export interface Service {
   id: string;
@@ -129,16 +134,24 @@ export interface Service {
   ordre: number;
   category_id: string | null;
   type: ServiceType;
+  /** Abonnement : validité en mois à compter de la vente (12 si vide). */
+  validite_mois?: number | null;
   created_at: string;
   updated_at: string;
 }
 
-/** Une prestation composant un forfait, jointe à sa fiche pour l'affichage. */
+/** Durée de validité par défaut d'un abonnement, en mois. */
+export const ABONNEMENT_VALIDITE_DEFAUT = 12;
+
+/** Une prestation composant un forfait ou un abonnement, jointe à sa fiche pour l'affichage. */
 export interface ForfaitItem {
   id: string;
   forfait_id: string;
   service_id: string;
+  /** Abonnement : nombre TOTAL de séances de ce soin, offertes comprises. */
   quantite: number;
+  /** Abonnement : combien de ces séances sont offertes. */
+  offertes?: number;
   ordre: number;
   created_at: string;
   /** Renseigné par la jointure de `listForfaitItems`. */
@@ -386,11 +399,179 @@ export function giftCardStatusLabel(card: GiftCard): string {
   return 'Valable';
 }
 
+// ── Abonnements de séances ──────────────────────────────────────────────────
+//
+// Payé en une fois à la vente (c'est là qu'entre la recette), puis consommé
+// séance par séance : chaque séance figure sur une facture à CHF 0.00. Voir
+// `supabase/migrations/20261022_caisse_abonnements.sql`.
+
+export type SubscriptionStatus = 'active' | 'epuise' | 'annule';
+
+/** Un compteur de séances d'un soin, recopié de la formule à la vente. */
+export interface SubscriptionCredit {
+  id: string;
+  subscription_id: string;
+  service_id: string | null;
+  libelle: string;
+  seances: number;
+  offertes: number;
+  restantes: number;
+  ordre: number;
+}
+
+export interface Subscription {
+  id: string;
+  annee: number;
+  number_seq: number;
+  code: string;
+  service_id: string | null;
+  libelle: string;
+  client_id: string;
+  client_label: string;
+  prix_paye: number;
+  sale_transaction_id: string;
+  emis_le: string;
+  expire_initiale: string;
+  expire_le: string;
+  prolonge_le: string | null;
+  status: SubscriptionStatus;
+  created_at: string;
+  updated_at: string;
+  /** Jointure de `listSubscriptions`, triée par `ordre`. */
+  subscription_credits: SubscriptionCredit[];
+}
+
+/** Échu : comme pour un bon, l'expiration se calcule à la lecture, jamais stockée. */
+export function isSubscriptionExpired(s: Pick<Subscription, 'expire_le'>, today: Date = new Date()): boolean {
+  const d = new Date(today);
+  d.setHours(0, 0, 0, 0);
+  return new Date(`${s.expire_le}T00:00:00`) < d;
+}
+
+export function seancesRestantes(s: Pick<Subscription, 'subscription_credits'>): number {
+  return (s.subscription_credits ?? []).reduce((n, c) => n + Number(c.restantes || 0), 0);
+}
+
+export function seancesTotales(s: Pick<Subscription, 'subscription_credits'>): number {
+  return (s.subscription_credits ?? []).reduce((n, c) => n + Number(c.seances || 0), 0);
+}
+
+export function isSubscriptionUsable(s: Subscription, today: Date = new Date()): boolean {
+  return s.status === 'active' && !isSubscriptionExpired(s, today) && seancesRestantes(s) > 0;
+}
+
+export function subscriptionStatusLabel(s: Subscription, today: Date = new Date()): string {
+  if (s.status === 'annule') return 'Annulé';
+  if (s.status === 'epuise' || seancesRestantes(s) === 0) return 'Terminé';
+  if (isSubscriptionExpired(s, today)) return 'Échu';
+  return 'En cours';
+}
+
+/**
+ * Valeur des séances encore dues : prix payé × séances restantes ÷ séances
+ * totales (les offertes comprises, puisque le prix les couvre aussi). Ce n'est
+ * pas une recette à venir — elle est déjà encaissée — mais un engagement envers
+ * la cliente. Un abonnement annulé ou échu n'engage plus rien.
+ */
+export function subscriptionEncours(s: Subscription, today: Date = new Date()): number {
+  if (s.status === 'annule' || isSubscriptionExpired(s, today)) return 0;
+  const total = seancesTotales(s);
+  if (total <= 0) return 0;
+  return round2(Number(s.prix_paye || 0) * seancesRestantes(s) / total);
+}
+
+const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+
+/** « Massage 60 min : 10 séances + 1 offerte · Soin visage : 1 séance offerte ». */
+export function compositionResume(items: { libelle: string; seances: number; offertes?: number }[]): string {
+  return items.map(it => {
+    const offertes = Number(it.offertes || 0);
+    const payees = Number(it.seances || 0) - offertes;
+    if (payees <= 0) return `${it.libelle} : ${pluriel(offertes, 'séance')} offerte${offertes > 1 ? 's' : ''}`;
+    return `${it.libelle} : ${pluriel(payees, 'séance')}${offertes > 0 ? ` + ${offertes} offerte${offertes > 1 ? 's' : ''}` : ''}`;
+  }).join(' · ');
+}
+
+/** Séance prise sur un abonnement, portée par une ligne du panier. */
+export interface SeanceDraft {
+  /** Compteur d'un abonnement déjà vendu. */
+  credit_id: string | null;
+  /** Abonnement vendu sur ce même ticket (séance prise le jour de l'achat) : clé de sa ligne. */
+  vendu_key?: string;
+  /** Code de l'abonnement, pour l'affichage (inconnu tant qu'il n'est pas émis). */
+  code: string | null;
+}
+
+/** Identifie un compteur, qu'il soit en base ou à émettre avec ce ticket. */
+export function seanceKey(draft: Pick<SeanceDraft, 'credit_id' | 'vendu_key'>, serviceId: string | null): string {
+  return draft.credit_id ?? `vendu:${draft.vendu_key ?? ''}:${serviceId ?? ''}`;
+}
+
+/** Séances déjà posées au ticket sur ce compteur. */
+export function seancesAuTicket(lines: CartLine[], key: string): number {
+  return lines.reduce(
+    (n, l) => n + (l.seance && seanceKey(l.seance, l.service_id) === key ? Number(l.quantite || 0) : 0),
+    0,
+  );
+}
+
+/**
+ * Libellé de la séance tel que Postgres l'écrira sur la facture (il le recalcule
+ * depuis le compteur, sous verrou : l'écran n'en donne qu'un aperçu).
+ */
+export function seanceLabel(
+  credit: Pick<SubscriptionCredit, 'libelle' | 'seances' | 'restantes'>,
+  dejaAuTicket: number,
+  code: string | null,
+): string {
+  const n = Number(credit.seances) - Number(credit.restantes) + dejaAuTicket + 1;
+  return `${credit.libelle} — séance ${n}/${credit.seances} (${code ? `abonnement ${code}` : 'nouvel abonnement'})`;
+}
+
+/**
+ * Déduit une séance au ticket. Si le soin y figure déjà au prix normal, cette
+ * ligne devient la séance (une ligne de quantité 2 n'en cède qu'une) ; sinon une
+ * ligne de séance s'ajoute. La séance vaut toujours CHF 0 et 0 % : le soin a été
+ * payé à l'achat de l'abonnement.
+ */
+export function appliquerSeance(
+  lines: CartLine[],
+  seance: { service_id: string | null; description: string; draft: SeanceDraft },
+  key: string,
+): CartLine[] {
+  const ligne: CartLine = {
+    key,
+    service_id: seance.service_id,
+    description: seance.description,
+    prix_unitaire_ttc: 0,
+    quantite: 1,
+    taux_tva: 0,
+    seance: seance.draft,
+  };
+  const i = seance.service_id
+    ? lines.findIndex(l => l.service_id === seance.service_id
+        && !l.seance && !l.gift_card && !l.abonnement && !l.product_id && !l.offer_id)
+    : -1;
+  if (i < 0) return [...lines, ligne];
+  const next = [...lines];
+  if (next[i].quantite > 1) {
+    next[i] = { ...next[i], quantite: next[i].quantite - 1 };
+    next.splice(i + 1, 0, ligne);
+  } else {
+    next[i] = ligne;
+  }
+  return next;
+}
+
 export interface TransactionItem {
   id: string;
   transaction_id: string;
   service_id: string | null;
   gift_card_id: string | null;
+  /** Abonnement vendu par cette ligne. */
+  subscription_id?: string | null;
+  /** Compteur d'abonnement sur lequel cette ligne a pris une séance (ligne à CHF 0). */
+  subscription_credit_id?: string | null;
   product_id: string | null;
   /** Offre du moment vendue par cette ligne : sert au décompte de ses places, jamais au prix. */
   offer_id?: string | null;
@@ -505,6 +686,10 @@ export interface CartLine {
   prix_base?: number;
   /** Présent si la ligne vend un bon cadeau, qui sera émis à la validation. */
   gift_card?: GiftCardDraft;
+  /** La ligne vend une formule d'abonnement (Postgres le vérifie sur la fiche). */
+  abonnement?: boolean;
+  /** La ligne est une séance prise sur un abonnement : CHF 0, forcé par Postgres. */
+  seance?: SeanceDraft;
 }
 
 /**

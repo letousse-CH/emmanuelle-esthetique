@@ -6,13 +6,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, UserPlus, X, Plus, Minus, Trash2, Check, Download,
   Receipt, AlertCircle, Loader2, Pencil, Gift, Ticket, PenLine, Layers, Package,
-  Cake, Mail, MessageCircle, CalendarCheck, ChevronRight, ChevronLeft, User, Percent,
+  Cake, Mail, MessageCircle, CalendarCheck, ChevronRight, ChevronLeft, User, Percent, Repeat,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
 import { AnimatedNumber, Button, Callout, Kbd, LinkButton, ProgressBar } from '../../../components/admin/ui';
 import {
-  createClient, createTransaction, findGiftCardByCode, listClients, listGiftCardsForSale,
-  listProducts, listServiceCategories, listServices, matchClient,
+  createClient, createTransaction, findGiftCardByCode, listAllForfaitItems, listClients, listGiftCardsForSale,
+  listProducts, listServiceCategories, listServices, listSubscriptions, listSubscriptionsForSale, matchClient,
 } from '../../../services/caisse';
 import { downloadBonCadeau, downloadFacture } from '../../../utils/factureDownload';
 import {
@@ -26,6 +26,7 @@ import type { Booking, BookingDetail } from '../../../types/booking';
 import {
   CLIENT_DE_PASSAGE, MODES_PAIEMENT, TAUX_TVA_CH, cartTotals, clientFullName, formatCHF, remisePatch,
   giftCardStatusLabel, isGiftCardUsable, isVenteProduct, recetteEncaissee, stockLevel,
+  appliquerSeance, compositionResume, isSubscriptionUsable, seanceKey, seanceLabel, seancesAuTicket,
 } from '../../../types/caisse';
 import { toWhatsAppNumber } from '../../../types/promotions';
 import { listCurrentOffers } from '../../../services/offers';
@@ -36,7 +37,8 @@ import OfferStrip from './OfferStrip';
 import { PRODUCT_COLOR, categoryColor } from '../../../components/admin/categoryColors';
 import { notifyAutomationEvent } from '../../../utils/automationEvent';
 import type {
-  CartLine, Client, GiftCard, ModePaiement, Product, Service, ServiceCategory, Transaction,
+  CartLine, Client, ForfaitItem, GiftCard, ModePaiement, Product, SeanceDraft, Service, ServiceCategory,
+  Subscription, Transaction,
 } from '../../../types/caisse';
 
 const newKey = () =>
@@ -97,6 +99,34 @@ async function markBookingDone(id: string): Promise<boolean> {
   }
 }
 
+/** Un compteur de séances proposé en caisse : abonnement en base, ou vendu sur ce ticket. */
+interface CompteurSeances {
+  key: string;
+  service_id: string | null;
+  libelle: string;
+  seances: number;
+  restantes: number;
+  draft: SeanceDraft;
+}
+
+interface AbonnementCaisse {
+  id: string;
+  code: string | null;
+  libelle: string;
+  expire_le: string | null;
+  compteurs: CompteurSeances[];
+}
+
+/** Clés locales régénérées (correction, brouillon) : la séance du jour suit sa ligne de vente. */
+function rekeyLines(lines: CartLine[]): CartLine[] {
+  const keys = new Map(lines.map(l => [l.key, newKey()]));
+  return lines.map(l => ({
+    ...l,
+    key: keys.get(l.key)!,
+    seance: l.seance?.vendu_key ? { ...l.seance, vendu_key: keys.get(l.seance.vendu_key) } : l.seance,
+  }));
+}
+
 export default function CaisseClient() {
   const settings = useSettings([
     'caisse_tva_assujetti', 'caisse_tva_taux_defaut', 'caisse_bon_validite_mois',
@@ -111,6 +141,10 @@ export default function CaisseClient() {
   const [products, setProducts] = useState<Product[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [offerStats, setOfferStats] = useState<Map<string, OfferStats>>(new Map());
+  // Composition des formules d'abonnement (séances d'un abonnement vendu sur ce ticket).
+  const [compositions, setCompositions] = useState<ForfaitItem[]>([]);
+  // Abonnements en cours de la cliente choisie.
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading]   = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -178,7 +212,7 @@ export default function CaisseClient() {
 
     if (pending) {
       setCorrection({ id: pending.corrigeTransactionId, numero: pending.numero });
-      setLines(pending.lines.map(l => ({ ...l, key: newKey() })));
+      setLines(rekeyLines(pending.lines));
       setMode(pending.modePaiement === 'bon_cadeau' ? 'twint' : pending.modePaiement);
       setNote(pending.note ?? '');
       if (pending.clientId) {
@@ -247,19 +281,49 @@ export default function CaisseClient() {
       const [c, s] = await Promise.all([listClients(), listServices(false)]);
       setClients(c); setServices(s);
 
-      const [cats, prod, current] = await Promise.all([
+      const [cats, prod, current, compo] = await Promise.all([
         listServiceCategories().catch(() => [] as ServiceCategory[]),
         listProducts(false).catch(() => [] as Product[]),
         listCurrentOffers(todayZurich()).catch(() => ({ offers: [] as Offer[], stats: new Map<string, OfferStats>() })),
+        listAllForfaitItems().catch(() => [] as ForfaitItem[]),
       ]);
       setCategories(cats); setProducts(prod.filter(isVenteProduct));
       setOffers(current.offers); setOfferStats(current.stats);
+      setCompositions(compo);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Erreur inconnue.');
     } finally {
       setLoading(false);
     }
   };
+
+  // ── Abonnements de la cliente ───────────────────────────────────────────────
+  // Rechargés à chaque changement de cliente (et après chaque encaissement) :
+  // le compteur fait foi en base, Postgres le revérifie sous verrou.
+  const [subsVersion, setSubsVersion] = useState(0);
+  useEffect(() => {
+    if (!client) { setSubscriptions([]); return; }
+    let cancelled = false;
+    listSubscriptions(client.id)
+      .then(list => { if (!cancelled) setSubscriptions(list.filter(sub => isSubscriptionUsable(sub))); })
+      .catch(() => { if (!cancelled) setSubscriptions([]); });
+    return () => { cancelled = true; };
+  }, [client, subsVersion]);
+
+  // Changer de cliente en cours de vente : ses séances d'abonnement quittent le
+  // ticket (un abonnement est nominatif). Pas au démarrage, où la cliente du
+  // brouillon arrive après ses lignes.
+  const prevClientId = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevClientId.current;
+    prevClientId.current = client?.id ?? null;
+    if (!prev || prev === client?.id) return;
+    setLines(ls => {
+      const kept = ls.filter(l => !l.seance?.credit_id);
+      if (kept.length !== ls.length) setRestoreNote('Les séances d\'abonnement de la cliente précédente ont été retirées du ticket.');
+      return kept;
+    });
+  }, [client]);
 
   // ── Pré-remplissage depuis un rendez-vous ───────────────────────────────────
   // Lit le rendez-vous, retrouve ses lignes dans le catalogue et ne fait QUE
@@ -363,15 +427,82 @@ export default function CaisseClient() {
   }, [giftCard, totals.ttc]);
 
   const resteAPayer = Math.round((totals.ttc - montantBon) * 100) / 100;
+  const hasSeance = lines.some(l => l.seance);
+  // Facture soldée par des séances d'abonnement seules : rien à encaisser, la
+  // recette est entrée à la vente de l'abonnement.
+  const soldeParAbonnement = hasSeance && resteAPayer === 0 && montantBon === 0;
   // Facture soldée par le seul bon : le mode de règlement devient « bon cadeau »
   // et aucune recette n'est encaissée (elle l'a été à la vente du bon).
-  const effectiveMode: ModePaiement = montantBon > 0 && resteAPayer === 0 ? 'bon_cadeau' : mode;
+  const effectiveMode: ModePaiement = montantBon > 0 && resteAPayer === 0
+    ? 'bon_cadeau'
+    : soldeParAbonnement ? 'abonnement' : mode;
+  // Un abonnement est nominatif : ni vente ni séance sans fiche cliente.
+  const abonnementSansCliente = !client && lines.some(l => l.abonnement || l.seance);
+
+  /**
+   * Compteurs proposés en caisse : ceux des abonnements en cours de la cliente,
+   * puis ceux d'un abonnement vendu sur ce ticket (première séance le jour même).
+   */
+  const abonnementsCaisse = useMemo<AbonnementCaisse[]>(() => {
+    if (!client) return [];
+    const enBase = subscriptions.map(sub => ({
+      id: sub.id,
+      code: sub.code,
+      libelle: sub.libelle,
+      expire_le: sub.expire_le,
+      compteurs: sub.subscription_credits
+        .filter(c => c.restantes > 0)
+        .map(c => ({
+          key: c.id, service_id: c.service_id, libelle: c.libelle, seances: c.seances, restantes: c.restantes,
+          draft: { credit_id: c.id, code: sub.code },
+        })),
+    }));
+    const byId = new Map(services.map(sv => [sv.id, sv]));
+    const vendus = lines.filter(l => l.abonnement && l.service_id).map(l => ({
+      id: `vendu:${l.key}`,
+      code: null,
+      libelle: byId.get(l.service_id!)?.nom ?? l.description,
+      expire_le: null,
+      compteurs: compositions
+        .filter(it => it.forfait_id === l.service_id)
+        .sort((a, b) => a.ordre - b.ordre)
+        .map(it => {
+          const draft: SeanceDraft = { credit_id: null, vendu_key: l.key, code: null };
+          return {
+            key: seanceKey(draft, it.service_id), service_id: it.service_id,
+            libelle: byId.get(it.service_id)?.nom ?? 'Soin', seances: Number(it.quantite), restantes: Number(it.quantite),
+            draft,
+          };
+        }),
+    }));
+    return [...enBase, ...vendus].filter(a => a.compteurs.length > 0);
+  }, [client, subscriptions, lines, compositions, services]);
+
+  const prendreSeance = (abo: AbonnementCaisse, c: CompteurSeances) => {
+    const deja = seancesAuTicket(lines, c.key);
+    if (deja >= c.restantes) return;
+    const description = seanceLabel(c, deja, abo.code);
+    setLines(prev => appliquerSeance(prev, { service_id: c.service_id, description, draft: c.draft }, newKey()));
+  };
 
   const addService = (s: Service) => {
+    // Un abonnement se vend à l'unité : chaque ligne en émettra un, nominatif.
+    if (s.type === 'abonnement') {
+      setLines(prev => [...prev, {
+        key: newKey(),
+        service_id: s.id,
+        description: s.nom,
+        prix_unitaire_ttc: Number(s.prix_chf),
+        quantite: 1,
+        taux_tva: Number(s.taux_tva_defaut ?? tauxDefaut),
+        abonnement: true,
+      }]);
+      return;
+    }
     setLines(prev => {
       // Deuxième clic sur la même prestation : on incrémente plutôt que
       // d'empiler une ligne identique.
-      const existing = prev.findIndex(l => l.service_id === s.id && l.prix_unitaire_ttc === Number(s.prix_chf));
+      const existing = prev.findIndex(l => l.service_id === s.id && !l.seance && l.prix_unitaire_ttc === Number(s.prix_chf));
       if (existing >= 0) {
         const next = [...prev];
         next[existing] = { ...next[existing], quantite: next[existing].quantite + 1 };
@@ -458,8 +589,9 @@ export default function CaisseClient() {
   const patchLine = (key: string, patch: Partial<CartLine>) =>
     setLines(prev => prev.map(l => (l.key === key ? { ...l, ...patch } : l)));
 
+  // Retirer la vente d'un abonnement retire aussi les séances prises dessus.
   const removeLine = (key: string) =>
-    setLines(prev => prev.filter(l => l.key !== key));
+    setLines(prev => prev.filter(l => l.key !== key && l.seance?.vendu_key !== key));
 
   const resetCart = () => {
     setClient(null); setLines([]); setNote(''); setSubmitError(null); setReceipt(null);
@@ -472,7 +604,7 @@ export default function CaisseClient() {
   // un double appui rapide pourrait sinon émettre deux factures.
   const submitLock = useRef(false);
   const handleSubmit = async () => {
-    if (lines.length === 0 || submitting || submitLock.current) return;
+    if (lines.length === 0 || submitting || submitLock.current || abonnementSansCliente) return;
     submitLock.current = true;
     setSubmitting(true); setSubmitError(null);
     try {
@@ -488,6 +620,7 @@ export default function CaisseClient() {
       });
       setReceipt(tx);
       clearCaisseDraft();
+      if (hasSeance || lines.some(l => l.abonnement)) setSubsVersion(v => v + 1);
       // Le rendez-vous n'est marqué « terminé » qu'APRÈS une facture émise.
       // Si ce PATCH échoue, la facture reste valable : on le signale sur la
       // quittance au lieu de l'annuler.
@@ -756,12 +889,25 @@ export default function CaisseClient() {
               )}
             </div>
 
+            {/* Séances d'abonnement de la cliente : déduites à CHF 0 */}
+            {abonnementsCaisse.length > 0 && (
+              <div className="border-t border-stone-100 px-5 py-3">
+                <p className="mb-2 text-[13px] font-medium text-stone-500">Séance d&apos;abonnement</p>
+                <AbonnementsPanel abonnements={abonnementsCaisse} lines={lines} onSeance={prendreSeance} />
+              </div>
+            )}
+
             {/* Paiement */}
             <div ref={paymentRef} className="space-y-4 border-t border-stone-100 bg-stone-50 px-5 py-5 scroll-mt-4">
               {resteAPayer === 0 && montantBon > 0 ? (
                 <p className="flex items-center gap-2.5 rounded-lg bg-warm-soft px-4 py-3 text-[14px] text-warm-ink">
                   <Ticket size={15} className="shrink-0" />
                   Intégralement réglé par le bon {giftCard?.code}.
+                </p>
+              ) : soldeParAbonnement ? (
+                <p className="flex items-center gap-2.5 rounded-lg bg-accent/5 px-4 py-3 text-[14px] text-stone-800">
+                  <Repeat size={15} className="shrink-0 text-accent" />
+                  Réglé par l&apos;abonnement : rien à encaisser.
                 </p>
               ) : (
                 <div role="radiogroup" aria-label={montantBon > 0 ? 'Mode de règlement du reste' : 'Mode de paiement'} className="grid grid-cols-4 gap-1 rounded-xl bg-stone-100 p-1">
@@ -793,6 +939,13 @@ export default function CaisseClient() {
                 />
               </div>
 
+              {abonnementSansCliente && (
+                <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-900">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  Un abonnement est nominatif : choisissez la cliente avant d&apos;encaisser.
+                </p>
+              )}
+
               {submitError && (
                 <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] text-red-700">
                   <AlertCircle size={14} className="mt-0.5 shrink-0" />
@@ -802,14 +955,16 @@ export default function CaisseClient() {
 
               <button
                 onClick={handleSubmit}
-                disabled={lines.length === 0 || submitting}
+                disabled={lines.length === 0 || submitting || abonnementSansCliente}
                 className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-accent text-[16px] font-semibold text-accent-fg transition-colors hover:bg-accent-hover disabled:opacity-40 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2"
               >
                 {submitting
                   ? <><Loader2 size={17} className="animate-spin" /> Encaissement…</>
                   : resteAPayer === 0 && montantBon > 0
                     ? <><Check size={17} /> Valider la prestation</>
-                    : <><Check size={17} /> Encaisser {formatCHF(resteAPayer)}</>}
+                    : soldeParAbonnement
+                      ? <><Check size={17} /> Valider la séance</>
+                      : <><Check size={17} /> Encaisser {formatCHF(resteAPayer)}</>}
               </button>
               <p className="text-center text-[12px] leading-relaxed text-stone-500">
                 La facture est numérotée et enregistrée définitivement. Une erreur se corrige depuis le journal (« Corriger »).
@@ -829,6 +984,8 @@ export default function CaisseClient() {
         lines={lines} tvaActive={tvaActive}
         totals={totals} montantBon={montantBon} resteAPayer={resteAPayer}
         giftCard={giftCard}
+        abonnements={abonnementsCaisse} onSeance={prendreSeance}
+        soldeParAbonnement={soldeParAbonnement} abonnementSansCliente={abonnementSansCliente}
         mode={mode} onMode={setMode}
         note={note} onNote={setNote}
         client={client} clients={clients}
@@ -1542,6 +1699,11 @@ function ServiceTile({ service, color, qty, onPick }: { service: Service; color:
             <Layers size={11} aria-hidden="true" /> Forfait
           </span>
         )}
+        {service.type === 'abonnement' && (
+          <span className="inline-flex items-center gap-1 bg-stone-100 px-2 py-0.5 text-[11.5px] font-medium text-stone-600 rounded">
+            <Repeat size={11} aria-hidden="true" /> Abonnement
+          </span>
+        )}
       </span>
       <TileCorner qty={qty} />
     </button>
@@ -1873,6 +2035,60 @@ function PanierGauge({ amount }: { amount: number }) {
   );
 }
 
+// ── Séances d'abonnement ────────────────────────────────────────────────────
+
+function AbonnementsPanel({ abonnements, lines, onSeance, large = false }: {
+  abonnements: AbonnementCaisse[];
+  lines: CartLine[];
+  onSeance: (abo: AbonnementCaisse, c: CompteurSeances) => void;
+  large?: boolean;
+}) {
+  return (
+    <div className={large ? 'space-y-4' : 'space-y-3'}>
+      {abonnements.map(abo => (
+        <div key={abo.id} className="space-y-1.5">
+          <p className={`flex min-w-0 items-center gap-2 font-semibold text-stone-900 ${large ? 'text-[15px]' : 'text-[14px]'}`}>
+            <Repeat size={large ? 17 : 15} className="shrink-0 text-accent" aria-hidden="true" />
+            <span className="truncate">{abo.libelle}</span>
+            <span className="shrink-0 font-normal text-stone-500 tabular-nums">{abo.code ?? 'vendu ce jour'}</span>
+          </p>
+          <ul className="space-y-1.5">
+            {abo.compteurs.map(c => {
+              const reste = c.restantes - seancesAuTicket(lines, c.key);
+              return (
+                <li key={c.key} className="flex items-center gap-3">
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-stone-800 ${large ? 'text-[15px]' : 'text-[13.5px]'}`}>{c.libelle}</span>
+                    <span className={`block text-stone-500 tabular-nums ${large ? 'text-[13.5px]' : 'text-[12.5px]'}`}>
+                      {reste} séance{reste > 1 ? 's' : ''} sur {c.seances}
+                    </span>
+                  </span>
+                  <button
+                    type="button" onClick={() => onSeance(abo, c)} disabled={reste <= 0}
+                    className={`shrink-0 rounded-lg border border-accent/40 font-semibold text-accent transition-colors hover:bg-accent/5 disabled:opacity-40 cursor-pointer ${
+                      large ? 'min-h-11 px-4 text-[15px]' : 'px-2.5 py-1 text-[12.5px]'
+                    }`}
+                  >
+                    Déduire une séance
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {abo.expire_le && (
+            <p className="text-[12px] text-stone-500">
+              Valable jusqu&apos;au {new Date(`${abo.expire_le}T00:00:00`).toLocaleDateString('fr-CH')}
+            </p>
+          )}
+        </div>
+      ))}
+      <p className="text-[12px] leading-relaxed text-stone-500">
+        La séance passe à CHF 0 : elle a été payée, et comptée dans les recettes, à l&apos;achat de l&apos;abonnement.
+      </p>
+    </div>
+  );
+}
+
 // ── Ligne de ticket ─────────────────────────────────────────────────────────
 
 function CartRow({ line, tvaActive, onPatch, onRemove }: {
@@ -1899,8 +2115,13 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {/* Un bon = une ligne : pour en vendre deux, on ajoute un second bon. */}
-        {!line.gift_card && (
+        {line.seance ? (
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-accent/10 px-2 text-[12.5px] font-medium text-accent">
+            <Repeat size={12} aria-hidden="true" /> Séance d&apos;abonnement · payée à l&apos;achat
+          </span>
+        ) : (<>
+        {/* Un bon = une ligne : pour en vendre deux, on ajoute un second bon. Idem pour un abonnement. */}
+        {!line.gift_card && !line.abonnement && (
           <div className="flex items-center rounded-lg bg-stone-50">
             <button
               onClick={() => onPatch({ quantite: Math.max(1, line.quantite - 1) })}
@@ -1945,6 +2166,12 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
           </button>
         )}
 
+        {line.abonnement && (
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-stone-100 px-2 text-[12.5px] font-medium text-stone-600">
+            <Repeat size={12} aria-hidden="true" /> Abonnement nominatif
+          </span>
+        )}
+
         {tvaActive && !line.gift_card && (
           <>
             <label htmlFor={`tva-${line.key}`} className="sr-only">Taux de TVA</label>
@@ -1960,8 +2187,9 @@ function CartRow({ line, tvaActive, onPatch, onRemove }: {
             </select>
           </>
         )}
+        </>)}
       </div>
-      {!line.gift_card && <RemiseControl line={line} onPatch={onPatch} />}
+      {!line.gift_card && !line.seance && <RemiseControl line={line} onPatch={onPatch} />}
     </li>
   );
 }
@@ -2035,12 +2263,14 @@ export function ReceiptPanel({ transaction, onNew, rdvId = null, rdvOutcome = nu
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emitted, setEmitted] = useState<GiftCard[]>([]);
+  const [abos, setAbos] = useState<Subscription[]>([]);
   const [bonBusy, setBonBusy] = useState<string | null>(null);
 
   // Bons émis par cette vente : leur code doit être recopié sur le bon physique
   // remis à la cliente, sinon il sera introuvable le jour de l'utilisation.
   useEffect(() => {
     listGiftCardsForSale(transaction.id).then(setEmitted).catch(() => setEmitted([]));
+    listSubscriptionsForSale(transaction.id).then(setAbos).catch(() => setAbos([]));
   }, [transaction.id]);
 
   const download = useCallback(async () => {
@@ -2079,6 +2309,9 @@ export function ReceiptPanel({ transaction, onNew, rdvId = null, rdvOutcome = nu
               dont {formatCHF(transaction.montant_bon)} réglés par bon cadeau · encaissé : {formatCHF(recetteEncaissee(transaction))}
             </p>
           )}
+          {transaction.mode_paiement === 'abonnement' && (
+            <p className="text-[13px] text-stone-700 mt-1">Séance réglée par l&apos;abonnement : rien n&apos;est encaissé.</p>
+          )}
           <p className="text-sm text-stone-700 mt-2">
             Facture <span className="font-medium text-stone-700">{transaction.numero}</span> · {transaction.client_label}
           </p>
@@ -2109,6 +2342,26 @@ export function ReceiptPanel({ transaction, onNew, rdvId = null, rdvOutcome = nu
             <p className="text-[12px] text-stone-600 leading-relaxed">
               Si vous remettez un bon papier, recopiez-y ce code : c&apos;est lui
               qu&apos;il faudra saisir le jour où la cliente viendra.
+            </p>
+          </div>
+        )}
+
+        {abos.length > 0 && (
+          <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 space-y-3 text-left">
+            <p className="text-[12px] font-semibold text-accent">
+              Abonnement{abos.length > 1 ? 's' : ''} ouvert{abos.length > 1 ? 's' : ''} au nom de {transaction.client_label}
+            </p>
+            {abos.map(a => (
+              <div key={a.id} className="space-y-1">
+                <p className="text-lg font-semibold text-stone-900 tracking-wide tabular-nums">{a.code}</p>
+                <p className="text-xs text-stone-600">
+                  {compositionResume(a.subscription_credits)} · valable jusqu&apos;au{' '}
+                  {new Date(`${a.expire_le}T00:00:00`).toLocaleDateString('fr-CH')}
+                </p>
+              </div>
+            ))}
+            <p className="text-[12px] text-stone-600 leading-relaxed">
+              Aux prochaines visites, choisissez la cliente en caisse : ses séances restantes s&apos;y affichent.
             </p>
           </div>
         )}
@@ -2180,6 +2433,11 @@ export interface MobileCheckoutProps {
   montantBon: number;
   resteAPayer: number;
   giftCard: GiftCard | null;
+  /** Abonnements en cours de la cliente (et celui vendu sur ce ticket). */
+  abonnements: AbonnementCaisse[];
+  onSeance: (abo: AbonnementCaisse, c: CompteurSeances) => void;
+  soldeParAbonnement: boolean;
+  abonnementSansCliente: boolean;
   mode: ModePaiement;
   onMode: (m: ModePaiement) => void;
   note: string;
@@ -2260,14 +2518,16 @@ export function MobileCheckout(p: MobileCheckoutProps) {
       <button
         type="button"
         onClick={p.onSubmit}
-        disabled={p.lines.length === 0 || p.submitting}
+        disabled={p.lines.length === 0 || p.submitting || p.abonnementSansCliente}
         className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-accent-fg text-[16px] font-semibold disabled:opacity-50 cursor-pointer"
       >
         {p.submitting
           ? <><Loader2 size={18} className="animate-spin" aria-hidden="true" /> Encaissement…</>
           : soldeParBon
             ? <><Check size={18} aria-hidden="true" /> Valider la prestation</>
-            : <><Check size={18} aria-hidden="true" /> Encaisser {formatCHF(p.resteAPayer)}</>}
+            : p.soldeParAbonnement
+              ? <><Check size={18} aria-hidden="true" /> Valider la séance</>
+              : <><Check size={18} aria-hidden="true" /> Encaisser {formatCHF(p.resteAPayer)}</>}
       </button>
     </div>
   );
@@ -2355,6 +2615,11 @@ export function MobileCheckout(p: MobileCheckoutProps) {
                   <Ticket size={18} className="shrink-0 text-accent" aria-hidden="true" />
                   Intégralement réglé par le bon {p.giftCard?.code}. Rien à encaisser.
                 </div>
+              ) : p.soldeParAbonnement ? (
+                <div className="flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-[15px] text-stone-800">
+                  <Repeat size={18} className="shrink-0 text-accent" aria-hidden="true" />
+                  Réglé par l&apos;abonnement. Rien à encaisser.
+                </div>
               ) : (
                 <SegmentedControl
                   label="Mode de paiement"
@@ -2409,6 +2674,20 @@ export function MobileCheckout(p: MobileCheckoutProps) {
               >
                 <Ticket size={18} aria-hidden="true" /> Utiliser un bon cadeau
               </button>
+            )}
+
+            {p.abonnements.length > 0 && (
+              <div className="rounded-xl bg-stone-50 p-4">
+                <p className="mb-3 text-[15px] font-semibold text-stone-900">Séance d&apos;abonnement</p>
+                <AbonnementsPanel abonnements={p.abonnements} lines={p.lines} onSeance={p.onSeance} large />
+              </div>
+            )}
+
+            {p.abonnementSansCliente && (
+              <p role="alert" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                Un abonnement est nominatif : choisissez la cliente avant d&apos;encaisser.
+              </p>
             )}
 
             <div>
@@ -2656,6 +2935,7 @@ function MobileCatalog({ services, categories, products, offers, offerStats, onP
                     </span>
                     <span className="flex items-center gap-1.5 text-[16px] font-semibold tabular-nums text-stone-950">
                       {s.type === 'forfait' && <Layers size={14} className="shrink-0 text-stone-500" aria-label="Forfait" />}
+                      {s.type === 'abonnement' && <Repeat size={14} className="shrink-0 text-stone-500" aria-label="Abonnement" />}
                       {formatCHF(s.prix_chf)}
                     </span>
                     {q > 0 && (
@@ -2755,8 +3035,20 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
         </button>
       </div>
 
+      {line.seance ? (
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent/10 px-3 text-[14px] font-medium text-accent">
+            <Repeat size={16} aria-hidden="true" /> Séance d&apos;abonnement
+          </span>
+          <p className="text-[19px] font-semibold tabular-nums text-stone-950">{formatCHF(0)}</p>
+        </div>
+      ) : (<>
       <div className="flex items-center justify-between gap-3">
-        {line.gift_card ? <span /> : (
+        {line.gift_card || line.abonnement ? (
+          line.abonnement
+            ? <span className="inline-flex min-h-11 items-center gap-2 text-[14px] font-medium text-stone-600"><Repeat size={16} aria-hidden="true" /> Abonnement nominatif</span>
+            : <span />
+        ) : (
         <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-1" role="group" aria-label={`Quantité de ${line.description}`}>
           <button
             type="button" aria-label="Diminuer la quantité" disabled={line.quantite <= 1}
@@ -2814,6 +3106,7 @@ function MobileCartLine({ line, tvaActive, onPatch, onRemove }: {
         </div>
       )}
       {!line.gift_card && <RemiseControl line={line} onPatch={onPatch} large />}
+      </>)}
     </li>
   );
 }
