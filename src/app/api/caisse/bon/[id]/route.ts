@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { renderToBuffer } from '@react-pdf/renderer';
-import BonCadeauDocument from '../../../../../components/pdf/BonCadeauDocument';
-import { getBusinessInfoServer } from '../../../../../config/site';
-import { getSettingsServer } from '../../../../../services/settingsServer';
-import type { GiftCard } from '../../../../../types/caisse';
+import { PdfError, renderBonCadeauPdf } from '../../../../../services/caissePdf';
 import { getSupabaseAdmin } from '../../../../../utils/supabaseAdmin';
 import { isAdminEmail } from '../../../../../utils/apiAuth';
 
@@ -29,37 +25,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   try {
-    const { data, error } = await supabase
-      .from('gift_cards')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!data) return NextResponse.json({ error: 'Bon cadeau introuvable.' }, { status: 404 });
-
-    const card = data as GiftCard;
-    if (card.status === 'annule') {
-      return NextResponse.json({ error: 'Ce bon a été annulé : il ne peut pas être imprimé.' }, { status: 409 });
-    }
-
-    const [business, s] = await Promise.all([
-      getBusinessInfoServer(),
-      getSettingsServer(['caisse_bon_mentions']),
-    ]);
-
-    const buffer = await renderToBuffer(
-      BonCadeauDocument({ card, business, mentions: s.caisse_bon_mentions }),
-    );
-
+    const { buffer, filename } = await renderBonCadeauPdf(supabase, id);
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${card.code}.pdf"`,
+        'Content-Disposition': `attachment; filename="${filename}"`,
         'Cache-Control': 'private, no-store',
       },
     });
   } catch (err) {
+    if (err instanceof PdfError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error('[caisse/bon] Génération PDF impossible:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Génération du PDF impossible.' },

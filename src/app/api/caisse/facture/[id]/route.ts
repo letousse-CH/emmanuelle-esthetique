@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { renderToBuffer } from '@react-pdf/renderer';
-import FactureDocument from '../../../../../components/pdf/FactureDocument';
-import { getBusinessInfoServer } from '../../../../../config/site';
-import { getSettingsServer } from '../../../../../services/settingsServer';
-import { compositionResume } from '../../../../../types/caisse';
-import type { SubscriptionCredit, TransactionWithItems } from '../../../../../types/caisse';
+import { PdfError, renderFacturePdf } from '../../../../../services/caissePdf';
 import { getSupabaseAdmin } from '../../../../../utils/supabaseAdmin';
 import { isAdminEmail } from '../../../../../utils/apiAuth';
 
@@ -32,113 +27,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   try {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*, transaction_items(*)')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    if (!data) {
-      return NextResponse.json({ error: 'Facture introuvable.' }, { status: 404 });
-    }
-
-    const transaction = data as TransactionWithItems;
-    transaction.transaction_items = [...(transaction.transaction_items ?? [])]
-      .sort((a, b) => a.ordre - b.ordre);
-
-    const [business, s, emisRes, utiliseRes, abosRes] = await Promise.all([
-      getBusinessInfoServer(),
-      getSettingsServer([
-        'caisse_tva_assujetti',
-        'caisse_tva_numero',
-        'caisse_iban',
-        'caisse_facture_mentions',
-      ]),
-      // Bons vendus par cette facture : leur code doit y figurer, c'est la
-      // preuve remise à l'acheteuse.
-      supabase
-        .from('gift_cards')
-        .select('code, libelle, montant_initial, expire_le')
-        .eq('sale_transaction_id', id)
-        .order('number_seq', { ascending: true }),
-      // Bon présenté en paiement, s'il y en a un.
-      transaction.gift_card_id
-        ? supabase
-            .from('gift_cards')
-            .select('code, montant_restant')
-            .eq('id', transaction.gift_card_id)
-            .maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
-      // Abonnements ouverts par cette facture : code, séances et échéance.
-      transaction.transaction_items.some(i => i.subscription_id)
-        ? supabase
-            .from('subscriptions')
-            .select('code, libelle, expire_le, subscription_credits(libelle, seances, offertes, ordre)')
-            .eq('sale_transaction_id', id)
-            .order('number_seq', { ascending: true })
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-
-    const abonnements = (abosRes.data ?? []).map((a: {
-      code: string; libelle: string; expire_le: string;
-      subscription_credits: Pick<SubscriptionCredit, 'libelle' | 'seances' | 'offertes' | 'ordre'>[];
-    }) => ({
-      code: a.code,
-      libelle: a.libelle,
-      seances: compositionResume([...(a.subscription_credits ?? [])].sort((x, y) => x.ordre - y.ordre)),
-      expireLe: a.expire_le,
-    }));
-
-    const giftCards = {
-      emis: (emisRes.data ?? []).map((g: {
-        code: string; libelle: string; montant_initial: number; expire_le: string;
-      }) => ({
-        code: g.code,
-        libelle: g.libelle,
-        montant: Number(g.montant_initial),
-        expireLe: g.expire_le,
-      })),
-      utilise: utiliseRes.data
-        ? {
-            code: (utiliseRes.data as { code: string }).code,
-            montant: Number(transaction.montant_bon),
-            restant: Number((utiliseRes.data as { montant_restant: number }).montant_restant),
-          }
-        : null,
-    };
-
-    // `renderToBuffer` exige un élément <Document> à la racine : on appelle
-    // donc `FactureDocument` comme une simple fonction pour récupérer ce
-    // <Document>, plutôt que de l'envelopper dans un composant intermédiaire
-    // que le typage de react-pdf refuserait.
-    const buffer = await renderToBuffer(
-      FactureDocument({
-        transaction,
-        business,
-        settings: {
-          tvaAssujetti: s.caisse_tva_assujetti === 'true',
-          tvaNumero: s.caisse_tva_numero,
-          iban: s.caisse_iban,
-          mentions: s.caisse_facture_mentions,
-        },
-        giftCards,
-        abonnements,
-      }),
-    );
-
+    const { buffer, filename } = await renderFacturePdf(supabase, id);
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${transaction.numero}.pdf"`,
+        'Content-Disposition': `attachment; filename="${filename}"`,
         // Une quittance ne doit jamais être servie depuis un cache partagé :
         // elle contient le nom de la cliente.
         'Cache-Control': 'private, no-store',
       },
     });
   } catch (err) {
+    if (err instanceof PdfError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error('[caisse/facture] Génération PDF impossible:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Génération du PDF impossible.' },

@@ -478,6 +478,41 @@ par défaut) n'affecte jamais un bon déjà vendu. Aucune durée minimale n'exis
 en droit suisse : un bon est une créance ordinaire, prescrite par 10 ans
 (CO art. 127) à défaut d'accord contraire.
 
+**Bons commandés en ligne, payés par TWINT** (2026-10-24, migration
+`20261024_bons_commande_en_ligne.sql`, après `20261022` ; ne remplace aucune
+fonction de caisse). Page `/bon-cadeau/commander` : montant libre (dès
+`bon_en_ligne_montant_min`, 100 par défaut, plafond 2'000) ou soins de la carte
+(toute la caisse active sauf abonnements ; un complément ne s'offre pas seul),
+bénéficiaire obligatoire, petit mot facultatif (300 caractères, imprimé sur le
+bon : `gift_cards.message`).
+
+> **Une commande n'est pas une vente.** Le compte TWINT est direct (code QR /
+> lien), sans API : l'exploitante voit l'argent dans son app, puis clique
+> « Paiement reçu » (Caisse › Bons cadeaux). Alors seulement
+> `bon_commande_confirmer` émet facture (mode `twint`) et bon en une
+> transaction, via `caisse_create_transaction`.
+
+- `gift_card_orders` (`CMD-2026-0001`) : écrite par le serveur seul
+  (`bon_commande_creer` / `_confirmer`, EXECUTE réservé à `service_role`),
+  lue par l'admin. Prix figés depuis le catalogue côté serveur. Contenu
+  immuable ; payée ou annulée = état final (déclencheur). Double clic : la
+  confirmation renvoie la commande déjà payée sans rien refaire.
+- Revenir sur une vente : annuler sa facture au journal (le bon s'annule, la
+  commande reste « payée »). Une commande non payée s'annule depuis l'écran.
+- E-mails (`services/giftOrders.ts`) : instructions de paiement (montant,
+  référence, QR, lien) ; à l'institut, e-mail + push ; après paiement, bon et
+  quittance en pièces jointes (`sendEmail` gère `attachments`, PDF rendus par
+  `services/caissePdf.ts`, partagé avec les routes de téléchargement). Un envoi
+  refusé est consigné (`email_erreur`) : bouton « Renvoyer le bon ».
+- Réglages (bouton « Réglages » de la section, table `settings`) :
+  `bon_en_ligne_actif`, `_montant_min`, `_twint_qr` (image), `_twint_lien`.
+  Ouverte = interrupteur + QR ou lien + module Caisse (`isGiftOrderOpen`) ;
+  sinon la page renvoie au contact et passe en `noindex` (hors sitemap).
+- Règles pures et testées : `src/types/giftOrders.ts`
+  (`npx tsx scripts/test-gift-orders.ts`). Boutons et textes de la page
+  `/bon-cadeau` : `scripts/bon-cadeau-en-ligne.mjs` (essai, puis `--write`),
+  **après** la mise en ligne et l'ouverture de la vente.
+
 **Abonnements de séances** (2026-10-22, migration `20261022_caisse_abonnements.sql`,
 après `20261015_caisse_bons_tva_produits` — elle remplace `caisse_create_transaction`
 et `caisse_cancel_transaction`). Une formule = une entrée du catalogue

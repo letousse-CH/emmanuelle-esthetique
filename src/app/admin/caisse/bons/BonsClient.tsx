@@ -12,6 +12,7 @@ import {
 } from '../../../../types/caisse';
 import type { GiftCard } from '../../../../types/caisse';
 import { AnimatedNumber, Button, Callout, LinkButton, PageHeader } from '../../../../components/admin/ui';
+import CommandesEnLigne from './CommandesEnLigne';
 
 const VENDRE_HREF = '/admin/caisse?vendre=bon';
 
@@ -95,6 +96,8 @@ export default function BonsClient() {
           {error}
         </Callout>
       )}
+
+      <CommandesEnLigne onSold={load} />
 
       <section aria-label="Encours des bons" className="flex flex-wrap items-end gap-x-12 gap-y-4 rounded-xl bg-stone-50 px-6 py-6 lg:px-8">
         <div>

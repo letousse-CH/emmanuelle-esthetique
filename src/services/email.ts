@@ -42,6 +42,8 @@ export interface SendEmailOptions {
   text?: string;
   from?: string;
   replyTo?: string;
+  /** Pièces jointes (PDF du bon, quittance…). */
+  attachments?: { filename: string; content: Buffer }[];
 }
 
 /**
@@ -88,6 +90,7 @@ export async function sendEmail(options: SendEmailOptions) {
       html: options.html,
       text: options.text,
       replyTo: options.replyTo || sender.replyTo,
+      ...(options.attachments?.length ? { attachments: options.attachments } : {}),
     });
     // Le SDK Resend ne lève pas d'exception : un refus (clé invalide, expéditeur
     // non vérifié…) arrive dans `result.error`, et doit être rapporté comme un échec.

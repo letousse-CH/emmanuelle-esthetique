@@ -32,6 +32,15 @@ const styles = StyleSheet.create({
 
   benef: { fontSize: 9.5, textAlign: 'center', marginTop: 18, color: MUTED },
   benefName: { fontFamily: 'Helvetica-Bold', fontSize: 12, textAlign: 'center', color: INK, marginTop: 3 },
+  message: { fontFamily: 'Helvetica-Oblique', fontSize: 9, lineHeight: 1.4, textAlign: 'center', color: INK, marginTop: 10, marginHorizontal: 40 },
+
+  // Avec un petit mot (jusqu'à 300 caractères), tout se resserre pour que le
+  // bon tienne sur une seule page A5.
+  titleCompact: { fontSize: 22, marginTop: 12 },
+  offerCompact: { marginTop: 12 },
+  amountCompact: { fontSize: 21, marginTop: 4 },
+  benefCompact: { marginTop: 10 },
+  mentionsCompact: { marginTop: 8 },
 
   footer: { marginTop: 'auto', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   footerBlock: { maxWidth: 250 },
@@ -64,6 +73,9 @@ export default function BonCadeauDocument({ card, business, mentions }: {
 
   // Un bon déjà entamé se distingue d'un bon neuf : c'est le solde qui compte.
   const entame = Number(card.montant_restant) !== Number(card.montant_initial);
+  // Le petit mot de l'acheteuse (bons commandés en ligne).
+  const message = (card.message ?? '').trim();
+  const compact = message !== '';
 
   return (
     <Document title={`${card.code} — ${business.name}`} author={business.name} subject="Bon cadeau">
@@ -81,11 +93,11 @@ export default function BonCadeauDocument({ card, business, mentions }: {
             </View>
           </View>
 
-          <Text style={styles.title}>BON CADEAU</Text>
+          <Text style={compact ? [styles.title, styles.titleCompact] : styles.title}>BON CADEAU</Text>
           <View style={styles.rule} />
 
-          <Text style={styles.offer}>{card.libelle}</Text>
-          <Text style={styles.amount}>
+          <Text style={compact ? [styles.offer, styles.offerCompact] : styles.offer}>{card.libelle}</Text>
+          <Text style={compact ? [styles.amount, styles.amountCompact] : styles.amount}>
             CHF {chf(entame ? card.montant_restant : card.montant_initial)}
           </Text>
           {entame ? (
@@ -94,10 +106,12 @@ export default function BonCadeauDocument({ card, business, mentions }: {
 
           {card.beneficiaire ? (
             <>
-              <Text style={styles.benef}>Pour</Text>
+              <Text style={compact ? [styles.benef, styles.benefCompact] : styles.benef}>Pour</Text>
               <Text style={styles.benefName}>{card.beneficiaire}</Text>
             </>
           ) : null}
+
+          {message ? <Text style={styles.message}>« {message} »</Text> : null}
 
           <View style={styles.footer}>
             <View style={styles.footerBlock}>
@@ -110,7 +124,7 @@ export default function BonCadeauDocument({ card, business, mentions }: {
             </View>
           </View>
 
-          <Text style={styles.mentions}>{mentions}</Text>
+          <Text style={compact ? [styles.mentions, styles.mentionsCompact] : styles.mentions}>{mentions}</Text>
         </View>
       </Page>
     </Document>

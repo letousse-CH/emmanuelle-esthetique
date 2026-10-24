@@ -37,6 +37,16 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   caisse_bon_mentions:
     "Ce bon est nominatif, non remboursable et non échangeable contre des espèces. Il peut être utilisé en une ou plusieurs fois jusqu'à la date d'échéance indiquée.",
 
+  // ── Bons cadeaux commandés en ligne (admin > Caisse > Bons cadeaux) ──
+  // Payés par TWINT sur le compte direct de l'institut : l'exploitante
+  // constate le paiement puis clique « Paiement reçu » (types/giftOrders.ts).
+  bon_en_ligne_actif:       'false',
+  // Minimum d'un bon à montant libre, en CHF (les bons « soins » valent leur prix).
+  bon_en_ligne_montant_min: '100',
+  // Image du code QR TWINT de l'institut, et/ou lien de paiement TWINT.
+  bon_en_ligne_twint_qr:    '',
+  bon_en_ligne_twint_lien:  '',
+
   // ── IA & Budget (admin > Paramètres > IA & Budget) ──────
   // Modèle Claude utilisé par toutes les générations ; voir src/constants/aiModels.ts.
   ai_model:                 'claude-opus-5',

@@ -366,6 +366,8 @@ export interface GiftCard {
   montant_initial: number;
   montant_restant: number;
   beneficiaire: string | null;
+  /** Petit mot imprimé sur le bon (commande en ligne). */
+  message?: string | null;
   acheteur_client_id: string | null;
   acheteur_label: string;
   sale_transaction_id: string | null;
