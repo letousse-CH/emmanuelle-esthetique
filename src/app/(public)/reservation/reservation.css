@@ -1169,3 +1169,16 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Fin de réservation : offrir le même soin (bon cadeau en ligne). */
+[data-site-theme] .rsv-gift {
+  display: flex; align-items: center; gap: 14px; margin-top: 28px; padding: 18px 20px;
+  background: var(--rsv-cream); border-left: 2px solid var(--rsv-lagon);
+  color: var(--rsv-text); text-decoration: none; font-size: 14.5px; line-height: 1.55;
+  transition: background-color 0.3s var(--rsv-ease);
+}
+[data-site-theme] .rsv-gift:hover { background: var(--rsv-sand); }
+[data-site-theme] .rsv-gift strong { color: var(--rsv-ink); font-weight: 600; }
+[data-site-theme] .rsv-gift > svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--rsv-ink); }
+[data-site-theme] .rsv-gift > svg:last-child { margin-left: auto; transition: transform 0.3s var(--rsv-ease); }
+[data-site-theme] .rsv-gift:hover > svg:last-child { transform: translateX(4px); }

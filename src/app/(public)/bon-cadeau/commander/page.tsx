@@ -8,6 +8,9 @@ import { getSupabaseAdmin } from '../../../../utils/supabaseAdmin';
 import { getGiftOrderSettings, isGiftOrderOpen, loadGiftCatalog } from '../../../../services/giftOrders';
 import { buildBreadcrumbJsonLd } from '../../../../utils/pageJsonLd';
 import type { GiftCatalogItem } from '../../../../types/giftOrders';
+import { QUALITY_HERO, optimizedImgProps } from '../../../../utils/imageOptim';
+import VoucherCard from '../../../../components/gift/VoucherCard';
+import { GIFT_VISUALS } from '../../../../components/gift/visuals';
 
 export const revalidate = 60;
 
@@ -32,7 +35,7 @@ export default async function CommanderBonPage() {
   const [business, settings, s] = await Promise.all([
     getBusinessInfoServer(),
     getGiftOrderSettings(),
-    getSettingsServer(['caisse_bon_validite_mois', 'caisse_bon_mentions']),
+    getSettingsServer(['caisse_bon_validite_mois', 'caisse_bon_mentions', 'footer_logo', 'global_logo']),
   ]);
   const open = await isGiftOrderOpen(settings).catch(() => false);
 
@@ -53,6 +56,10 @@ export default async function CommanderBonPage() {
     parents: [{ name: 'Bon cadeau', slug: 'bon-cadeau' }],
   });
   const validiteMois = Math.max(12, Number(s.caisse_bon_validite_mois) || 60);
+  // Le logo clair du pied de page, posé sur le bandeau marine du bon.
+  const logoLight = s.footer_logo || '';
+  const place = [business.addressPostal, business.addressCity].filter(Boolean).join(' ');
+  const businessName = business.name || SITE_CONFIG.name;
 
   return (
     <>
@@ -61,25 +68,49 @@ export default async function CommanderBonPage() {
       )}
       {/* En-tête rendu côté serveur : le H1 figure dans le HTML que lisent les moteurs. */}
       <div className="gco-hero">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/algue.svg" alt="" aria-hidden="true" className="gco-hero__algue" />
-        <div className="gco-container gco-hero__inner">
-          <div>
-            <div className="gco-eyebrow">Bon cadeau · Palézieux-Gare</div>
-            <h1>Offrir un bon cadeau</h1>
+        <div className="gco-container gco-hero__grid">
+          <div className="gco-hero__text">
+            <div className="gco-eyebrow">Bon cadeau · {business.addressCity || 'Palézieux-Gare'}</div>
+            <h1>Offrir un moment d’exception</h1>
             <div className="gco-lead">
               {open
-                ? 'Un montant ou des soins de la carte, le nom de la personne qui le recevra et, si vous le souhaitez, un petit mot imprimé sur le bon. Vous payez par TWINT ; le bon vous parvient en PDF par e-mail.'
+                ? 'Un soin du visage Phytomer, un massage, un rituel, ou un montant à choisir : composez le bon, ajoutez quelques mots, il arrive en PDF par e-mail, prêt à offrir.'
                 : 'Un montant ou un soin de la carte, pour la personne de votre choix : une parenthèse de douceur à offrir.'}
             </div>
+            {open && (
+              <>
+                <ul className="gco-assure algue-list">
+                  <li>Dès CHF {settings.montantMin}, ou les soins de votre choix</li>
+                  <li>Votre message imprimé sur le bon</li>
+                  <li>Valable {validiteMois} mois · paiement TWINT</li>
+                </ul>
+                <a href="#composer" data-btn="primary" className="gco-hero__cta">Composer mon bon</a>
+              </>
+            )}
           </div>
-          {open && (
-            <ul className="gco-assure algue-list">
-              <li>Dès CHF {settings.montantMin}, ou les soins de votre choix</li>
-              <li>Votre message imprimé sur le bon</li>
-              <li>Valable {validiteMois} mois</li>
-            </ul>
-          )}
+          <div className="gco-hero__visual" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              {...optimizedImgProps(GIFT_VISUALS.hero.url, '(min-width: 1024px) 460px, 80vw', undefined, QUALITY_HERO)}
+              alt=""
+              className="gco-hero__photo"
+              style={{ objectPosition: GIFT_VISUALS.hero.focus }}
+              fetchPriority="high"
+            />
+            <VoucherCard
+              businessName={businessName}
+              logoLight={logoLight}
+              place={place}
+              beneficiaire="Léa"
+              montant={150}
+              message="Prends du temps pour toi."
+              validiteMois={validiteMois}
+              className="gv--hero"
+              sizes="200px"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/algue.svg" alt="" className="gco-hero__algue" />
+          </div>
         </div>
       </div>
       <GiftOrderClient
@@ -88,9 +119,11 @@ export default async function CommanderBonPage() {
         montantMin={settings.montantMin}
         validiteMois={validiteMois}
         mentions={s.caisse_bon_mentions}
-        businessName={business.name || SITE_CONFIG.name}
+        businessName={businessName}
         ownerFirstName={(business.owner || '').trim().split(/\s+/)[0] || ''}
         phone={business.phone || ''}
+        logoLight={logoLight}
+        place={place}
       />
     </>
   );

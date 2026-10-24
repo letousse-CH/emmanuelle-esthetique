@@ -1,0 +1,72 @@
+/*
+ * Le bon cadeau en miniature (`components/gift/VoucherCard.tsx`) : la même
+ * mise en page que le PDF imprimé. Textes en `cqw` : ils suivent la largeur
+ * de la carte, qui garde le format A5 paysage.
+ */
+
+.gv {
+  --gv-serif: var(--font-serif, Georgia, 'Times New Roman', serif);
+  --gv-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --gv-shadow: 0 40px 80px -36px rgba(18, 40, 58, 0.45), 0 12px 28px -18px rgba(18, 40, 58, 0.3);
+}
+
+[data-site-theme] .gv {
+  container-type: inline-size;
+  position: relative;
+  display: grid;
+  grid-template-columns: 36% 64%;
+  width: 100%;
+  aspect-ratio: 595 / 420;
+  background: #fff;
+  color: #22252a;
+  box-shadow: var(--gv-shadow);
+  overflow: hidden;
+  text-align: left;
+}
+[data-site-theme] .gv__side { position: relative; background: #12283a; min-height: 100%; }
+[data-site-theme] .gv__photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 60%; }
+[data-site-theme] .gv__band {
+  position: absolute; left: 0; right: 0; bottom: 0; min-height: 22%;
+  display: grid; align-content: center; gap: 1.6cqw; padding: 3.4cqw 3.8cqw;
+  background: rgba(18, 40, 58, 0.86);
+}
+[data-site-theme] .gv__logo { display: block; width: 92%; height: auto; }
+[data-site-theme] .gv__brand { font-family: var(--gv-serif); font-size: 3cqw; color: #fff; }
+[data-site-theme] .gv__place { font-size: 1.15cqw; letter-spacing: 0.3em; text-transform: uppercase; color: #c9dde1; }
+[data-site-theme] .gv__main {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start;
+  padding: 5.4cqw 5.6cqw 4cqw; min-height: 100%;
+}
+[data-site-theme] .gv__main::before {
+  content: ''; position: absolute; inset: 2cqw; border: 1px solid #dce4e7; pointer-events: none;
+}
+[data-site-theme] .gv__algue { position: absolute; right: -3cqw; bottom: 3cqw; width: 28cqw; opacity: 0.09; pointer-events: none; }
+[data-site-theme] .gv__top { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 2cqw; }
+[data-site-theme] .gv__eyebrow { font-size: 1.45cqw; font-weight: 700; letter-spacing: 0.42em; text-transform: uppercase; color: #3e97a1; }
+[data-site-theme] .gv__code { font-size: 1.3cqw; letter-spacing: 0.16em; color: #6b7378; white-space: nowrap; }
+[data-site-theme] .gv__rule { display: block; width: 6cqw; height: 1px; margin-top: 2cqw; background: #3e97a1; }
+[data-site-theme] .gv__for { margin-top: 3.4cqw; font-family: var(--gv-serif); font-style: italic; font-size: 2.2cqw; color: #6b7378; }
+[data-site-theme] .gv__name {
+  font-family: var(--gv-serif); font-size: 5.2cqw; line-height: 1.12; color: #12283a; overflow-wrap: anywhere;
+  transition: color 0.3s var(--gv-ease);
+}
+[data-site-theme] .gv__name.is-empty { color: #c3ccd0; }
+[data-site-theme] .gv__box {
+  display: grid; gap: 0.8cqw; width: 100%; margin-top: 3cqw; padding: 2.4cqw 2.8cqw; background: #f7f3ec;
+}
+[data-site-theme] .gv__label { font-size: 1.15cqw; letter-spacing: 0.32em; text-transform: uppercase; color: #6b7378; }
+[data-site-theme] .gv__offer { font-family: var(--gv-serif); font-size: 2.3cqw; line-height: 1.35; color: #22252a; }
+[data-site-theme] .gv__amount { display: flex; align-items: baseline; gap: 1.2cqw; font-family: var(--gv-serif); font-size: 5.4cqw; line-height: 1; color: #12283a; font-variant-numeric: tabular-nums; }
+[data-site-theme] .gv__amount small { font-family: inherit; font-size: 1.5cqw; letter-spacing: 0.24em; color: #6b7378; }
+[data-site-theme] .gv__msg {
+  margin-top: 2.4cqw; padding-left: 2cqw; border-left: 1px solid #3e97a1;
+  font-family: var(--gv-serif); font-style: italic; font-size: 2.15cqw; line-height: 1.5; color: #22252a;
+  white-space: pre-line; overflow-wrap: anywhere;
+}
+[data-site-theme] .gv__foot {
+  display: flex; width: 100%; justify-content: space-between; gap: 2cqw; margin-top: auto; padding-top: 2.6cqw;
+  font-size: 1.45cqw; color: #22252a;
+}
+[data-site-theme] .gv__foot small { display: block; margin-bottom: 0.5cqw; font-size: 1cqw; letter-spacing: 0.3em; text-transform: uppercase; color: #6b7378; }
+[data-site-theme] .gv__foot-r { text-align: right; }
+

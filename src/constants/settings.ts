@@ -46,6 +46,9 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   // Image du code QR TWINT de l'institut, et/ou lien de paiement TWINT.
   bon_en_ligne_twint_qr:    '',
   bon_en_ligne_twint_lien:  '',
+  // Photo du bon cadeau PDF (JPG ou PNG, portrait) ; vide = la photo intégrée
+  // (bocal de coquillages, cabine). Le logo vient de `footer_logo` (version claire).
+  caisse_bon_image:         '',
 
   // ── IA & Budget (admin > Paramètres > IA & Budget) ──────
   // Modèle Claude utilisé par toutes les générations ; voir src/constants/aiModels.ts.

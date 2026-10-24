@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { Instagram, Linkedin, Youtube, Music2 } from 'lucide-react';
+import { Instagram, Linkedin, Youtube, Music2, Gift } from 'lucide-react';
 import { useSettings, settingsCache } from '../hooks/useSettings';
 import type { FooterVariant } from '../constants/chromeVariants';
 import { optimizedImgProps } from '../utils/imageOptim';
@@ -335,6 +335,13 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
                 </p>
               )}
             </address>
+            <Link
+              href="/bon-cadeau/commander"
+              className="mt-6 inline-flex items-center gap-2 border-b border-[color-mix(in_srgb,var(--footer-ink)_25%,transparent)] pb-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-[color:color-mix(in_srgb,var(--footer-ink)_75%,transparent)] transition-colors hover:border-sage hover:text-[color:var(--footer-ink)]"
+            >
+              <Gift size={14} strokeWidth={1.75} aria-hidden />
+              Offrir un bon cadeau
+            </Link>
           </div>
 
           {/* Logo */}

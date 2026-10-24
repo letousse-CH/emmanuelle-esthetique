@@ -103,6 +103,11 @@ export const SECTION_PRESETS: SectionPreset[] = [
     build: () => withProps(createSection('1-col', [createBlock('current_offer')]), { background: 'warm', paddingY: 'medium', width: 'wide' }),
   },
   {
+    id: 'gift-cta', label: 'Offrir un bon cadeau', hint: 'Photo, bon en miniature et bouton vers la commande en ligne', category: 'offre',
+    keywords: 'bon cadeau offrir cadeau noel anniversaire',
+    build: () => withProps(createSection('1-col', [createBlock('gift_cta')]), { background: 'warm', paddingY: 'large', width: 'wide' }),
+  },
+  {
     id: 'faq', label: 'Questions fréquentes', hint: 'Accordéon, compris par Google', category: 'confiance',
     keywords: 'faq questions reponses',
     build: () => withProps(createSection('1-col', [createBlock('faq')]), {}),

@@ -761,3 +761,31 @@
     -webkit-mask: none; mask: none;
   }
 }
+
+/* ── Offrir un bon cadeau (`gift_cta`) ─────────────────────────────────────
+   La photo de l'univers, le bon en miniature posé en biais sur son coin, et
+   le texte. Le bon lui-même : components/gift/voucher.css. */
+.pb-gift { display: grid; gap: clamp(2.5rem, 6vw, 5.5rem); align-items: center; }
+@media (min-width: 900px) {
+  .pb-gift { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .pb-gift-rev .pb-gift-visual { order: 2; }
+}
+.pb-gift-visual { position: relative; padding-bottom: clamp(3rem, 8vw, 5rem); max-width: 560px; width: 100%; }
+@media (max-width: 899px) { .pb-gift-visual { margin-inline: auto; } }
+.pb-gift-photo {
+  display: block; width: 74%; margin-left: auto; aspect-ratio: 4 / 5; object-fit: cover;
+  box-shadow: 0 40px 80px -36px rgba(18, 40, 58, 0.45);
+}
+.pb-gift-rev .pb-gift-photo { margin-left: 0; margin-right: auto; }
+.pb-gift .pb-gift-card {
+  position: absolute; left: 0; bottom: 0; width: 76%;
+  transform: rotate(-3deg); transform-origin: left bottom;
+  transition: transform 0.9s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.pb-gift-rev .pb-gift-card { left: auto; right: 0; transform: rotate(3deg); transform-origin: right bottom; }
+.pb-gift:hover .pb-gift-card { transform: rotate(-1.5deg) translateY(-6px); }
+.pb-gift-rev:hover .pb-gift-card { transform: rotate(1.5deg) translateY(-6px); }
+.pb-gift-body { display: grid; gap: 1.1rem; justify-items: start; max-width: 34rem; }
+.pb-gift-body .pb-h2 { margin: 0; }
+.pb-gift-body .pb-btns { margin-top: .5rem; align-items: center; gap: 1.25rem; }
+@media (prefers-reduced-motion: reduce) { .pb-gift .pb-gift-card { transition: none; } }

@@ -91,6 +91,9 @@ export default function MotionLayer() {
           allowNestedScroll: true,
         });
         lenisRef.current = lenis;
+        // Exposé aux parcours qui défilent eux-mêmes (bon cadeau) : un `scrollTo`
+        // natif pendant une inertie Lenis serait aussitôt repris par elle.
+        (window as unknown as { __lenis?: unknown }).__lenis = lenis;
         // La parallaxe se calcule dans la même image que le défilement : avec l'événement natif
         // `scroll`, elle arrivait à l'image suivante et tremblait par rapport au contenu.
         window.removeEventListener('scroll', schedule);
@@ -98,7 +101,7 @@ export default function MotionLayer() {
         let raf = 0;
         const loop = (t: number) => { lenis.raf(t); raf = requestAnimationFrame(loop); };
         raf = requestAnimationFrame(loop);
-        cleanups.push(() => { cancelAnimationFrame(raf); lenis.destroy(); lenisRef.current = null; });
+        cleanups.push(() => { delete (window as unknown as { __lenis?: unknown }).__lenis; cancelAnimationFrame(raf); lenis.destroy(); lenisRef.current = null; });
       })
       .catch(() => { /* défilement natif : rien à faire */ });
 

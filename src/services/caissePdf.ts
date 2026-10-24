@@ -8,8 +8,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { renderToBuffer } from '@react-pdf/renderer';
 import FactureDocument from '../components/pdf/FactureDocument';
-import BonCadeauDocument from '../components/pdf/BonCadeauDocument';
-import { getBusinessInfoServer } from '../config/site';
+import BonCadeauDocument, { type BonImages, type PdfImage } from '../components/pdf/BonCadeauDocument';
+import { BON_ALGUE_PNG, BON_PHOTO_JPG } from '../components/pdf/bonCadeauAssets';
+import { SITE_CONFIG, getBusinessInfoServer } from '../config/site';
 import { getSettingsServer } from './settingsServer';
 import { compositionResume } from '../types/caisse';
 import type { GiftCard, SubscriptionCredit, TransactionWithItems } from '../types/caisse';
@@ -142,12 +143,62 @@ export async function renderBonCadeauPdf(db: SupabaseClient, id: string): Promis
 
   const [business, s] = await Promise.all([
     getBusinessInfoServer(),
-    getSettingsServer(['caisse_bon_mentions']),
+    getSettingsServer(['caisse_bon_mentions', 'caisse_bon_image', 'footer_logo']),
   ]);
+  const images = await loadBonImages(s.caisse_bon_image, s.footer_logo);
 
   const buffer = await renderToBuffer(
-    BonCadeauDocument({ card, business, mentions: s.caisse_bon_mentions }),
+    BonCadeauDocument({ card, business, mentions: s.caisse_bon_mentions, images, bookingUrl: bookingUrl() }),
   );
 
   return { buffer, filename: `${card.code}.pdf` };
+}
+
+// ── Images du bon ────────────────────────────────────────────────────────────
+
+const BUNDLED_PHOTO: PdfImage = { data: Buffer.from(BON_PHOTO_JPG, 'base64'), format: 'jpg' };
+const BUNDLED_ALGUE: PdfImage = { data: Buffer.from(BON_ALGUE_PNG, 'base64'), format: 'png' };
+
+/** Images déjà lues, gardées tant que la fonction reste chaude (les URL changent avec le fichier). */
+const imageCache = new Map<string, PdfImage | null>();
+
+/**
+ * Lit une image distante pour le PDF. react-pdf ne connaît que le JPEG et le
+ * PNG : un WebP ou un SVG est ignoré (le bon s'en passe), comme une image
+ * injoignable au bout de 4 s.
+ */
+async function fetchPdfImage(url: string): Promise<PdfImage | null> {
+  if (!/^https?:\/\//i.test(url)) return null;
+  if (imageCache.has(url)) return imageCache.get(url)!;
+  let img: PdfImage | null = null;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = Buffer.from(await res.arrayBuffer());
+      if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) img = { data, format: 'png' };
+      else if (data[0] === 0xff && data[1] === 0xd8) img = { data, format: 'jpg' };
+    }
+  } catch (err) {
+    console.warn('[caissePdf] Image du bon injoignable:', url, err instanceof Error ? err.message : err);
+  }
+  imageCache.set(url, img);
+  return img;
+}
+
+async function loadBonImages(photoUrl: string, logoUrl: string): Promise<BonImages> {
+  const [photo, logoLight] = await Promise.all([
+    photoUrl ? fetchPdfImage(photoUrl) : Promise.resolve(null),
+    logoUrl ? fetchPdfImage(logoUrl) : Promise.resolve(null),
+  ]);
+  return { photo: photo ?? BUNDLED_PHOTO, logoLight, algue: BUNDLED_ALGUE };
+}
+
+/** « emmanuelle-esthetique.ch/reservation », sans protocole. */
+function bookingUrl(): string {
+  try {
+    const u = new URL(SITE_CONFIG.url);
+    return `${u.hostname.replace(/^www\./, '')}/reservation`;
+  } catch {
+    return '';
+  }
 }

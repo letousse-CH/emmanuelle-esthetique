@@ -12,8 +12,10 @@ import type {
   HeadingBlock, TextBlock, ImageBlock, ButtonBlock, QuoteBlock, VideoBlock,
   HeroBlock, CardsBlock, FaqBlock, StepsBlock, OffersBlock, PriceListBlock, ChecklistBlock,
   CalloutBlock, StatsBlock, TestimonialsBlock, GalleryBlock, MarqueeBlock,
-  ContactBlock, GoogleReviewsBlock, CurrentOfferBlock,
+  ContactBlock, GoogleReviewsBlock, CurrentOfferBlock, GiftCtaBlock,
 } from './types';
+import VoucherCard from '../gift/VoucherCard';
+import { GIFT_VISUALS, familyTitle, familyVisual } from '../gift/visuals';
 import { sanitizeHtml } from './sanitize';
 import LegacySection from './LegacySection';
 import GoogleReviews from '../GoogleReviews';
@@ -58,6 +60,8 @@ export interface BlockData {
   offers?: PublicOffer[];
   /** Nom de l'institut, repris dans le message de partage d'une offre. */
   brand?: string;
+  /** Ce que le bon en miniature de l'encart « Offrir » affiche. */
+  gift?: { businessName: string; logoLight: string; place: string; validiteMois: number };
 }
 
 interface Ctx {
@@ -647,6 +651,51 @@ function CurrentOfferView({ b, ctx }: { b: CurrentOfferBlock; ctx: Ctx }) {
   );
 }
 
+/**
+ * Offrir un bon cadeau : photo de l'univers, le bon en miniature posé dessus,
+ * et le bouton qui ouvre la commande sur cet univers (`?famille=`).
+ */
+function GiftCtaView({ b, ctx }: { b: GiftCtaBlock; ctx: Ctx }) {
+  const fam = b.famille || '';
+  const visual = b.image ? { url: b.image, alt: '', focus: undefined } : fam ? familyVisual(fam) : GIFT_VISUALS.hero;
+  const href = fam ? `/bon-cadeau/commander?famille=${fam}` : '/bon-cadeau/commander';
+  const g = ctx.data?.gift;
+  return (
+    <div className={`pb-gift ${b.imagePosition === 'right' ? 'pb-gift-rev' : ''}`}>
+      <div className="pb-gift-visual">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          {...imgAttrs(ctx, visual.url, '(min-width: 900px) 36vw, 80vw')}
+          alt={visual.alt}
+          className="pb-gift-photo"
+          style={visual.focus ? { objectPosition: visual.focus } : undefined}
+          decoding="async"
+        />
+        <VoucherCard
+          businessName={g?.businessName ?? ''}
+          logoLight={g?.logoLight}
+          place={g?.place}
+          beneficiaire="Léa"
+          offer={fam ? familyTitle(fam).title : undefined}
+          montant={fam ? undefined : 150}
+          validiteMois={g?.validiteMois ?? 60}
+          className="pb-gift-card"
+          sizes="200px"
+        />
+      </div>
+      <div className="pb-gift-body">
+        {b.eyebrow && <span className="pb-eyebrow" {...f(ctx, 'eyebrow')}>{b.eyebrow}</span>}
+        {b.title && <h2 className="pb-h pb-h2" {...f(ctx, 'title')}>{b.title}</h2>}
+        {b.text && <p className="pb-lead" {...f(ctx, 'text')}>{b.text}</p>}
+        <div className="pb-btns">
+          <Btn text={b.ctaText || 'Offrir un bon cadeau'} url={href} ctx={ctx} field="ctaText" />
+          {b.secondaryText && <Btn text={b.secondaryText} url="/bon-cadeau/commander?type=montant" variant="link" ctx={ctx} field="secondaryText" />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Sceau rond, décoratif : texte circulaire qui tourne lentement, l'algue de la charte au centre. */
 function Seal({ ring, id }: { ring: string; id: string }) {
   const pathId = `pbco-ring-${id}`;
@@ -693,6 +742,7 @@ function BlockView({ block, ctx }: { block: ContentBlock; ctx: Ctx }) {
     case 'contact_form': return <div className="pb-contact-form"><ContactForm /></div>;
     case 'google_reviews': return <GoogleReviewsView b={block} ctx={ctx} />;
     case 'current_offer': return <CurrentOfferView b={block} ctx={ctx} />;
+    case 'gift_cta': return <GiftCtaView b={block} ctx={ctx} />;
     case 'legacy_section': return <LegacySection section={block.section} />;
     default: return null;
   }
@@ -860,6 +910,10 @@ export function BlockRenderer({ content, editor, images, data }: { content: Cont
 }
 
 /** La page contient-elle un bloc « Offre du moment » ? (évite une requête inutile) */
+export function hasGiftBlock(content: ContentStructure): boolean {
+  return content.some((s) => s.columns.some((c) => c.blocks.some((b) => b.type === 'gift_cta')));
+}
+
 export function hasCurrentOfferBlock(content: ContentStructure): boolean {
   return content.some((s) => s.columns.some((c) => c.blocks.some((b) => b.type === 'current_offer')));
 }

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { MessageCircle, Phone, Info } from 'lucide-react';
+import { ArrowRight, Gift, MessageCircle, Phone, Info } from 'lucide-react';
 import { PERIODE_LABEL, type PublicBookingView } from '../../../types/booking';
 import { optimizedImgProps } from '../../../utils/imageOptim';
 import { formatDateLong, formatHeure } from './dates';
@@ -136,6 +136,15 @@ export default function ConfirmationStep({
             Retour à l&apos;accueil
           </Link>
         </div>
+
+        {/* Le moment où l'on pense aux autres : offrir le même soin. */}
+        <Link href={`/bon-cadeau/commander?soin=${encodeURIComponent(booking.service_nom)}`} className="rsv-gift">
+          <Gift aria-hidden="true" />
+          <span>
+            <strong>Ce soin ferait plaisir à quelqu&apos;un ?</strong> Offrez-le en bon cadeau, avec votre petit mot.
+          </span>
+          <ArrowRight aria-hidden="true" />
+        </Link>
       </div>
 
       {image && (

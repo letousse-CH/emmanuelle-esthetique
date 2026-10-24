@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { Menu, X, ChevronDown } from 'lucide-react';
+import { Menu, X, ChevronDown, Gift } from 'lucide-react';
 import { useSettings, settingsCache } from '../hooks/useSettings';
 import { useModuleFlags } from '../hooks/useModuleFlags';
 import type { HeaderVariant } from '../constants/chromeVariants';
@@ -19,6 +19,10 @@ import { optimizedImgProps } from '../utils/imageOptim';
 // Paramètres > Design & Style, la navbar affiche le nom du site en toutes
 // lettres (voir plus bas). Un `src=""` ferait recharger la page entière par le
 // navigateur en plus d'afficher une image cassée.
+
+/** Commande d'un bon cadeau en ligne (app/(public)/bon-cadeau/commander). */
+const GIFT_ORDER_PATH = '/bon-cadeau/commander';
+const isGiftPath = (path?: string) => !!path && /^\/bon-cadeau(\/|$)/.test(path);
 
 function readHeroColor(): 'dark' | 'light' {
   try {
@@ -278,10 +282,12 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
               <Link
                 key={idx}
                 href={item.path}
-                className={`text-sm uppercase tracking-[0.2em] font-medium transition-colors duration-300 hover:text-sage ${
+                className={`inline-flex items-center text-sm uppercase tracking-[0.2em] font-medium transition-colors duration-300 hover:text-sage ${
                   isActive ? 'text-sage' : lightMode ? 'text-white/90' : 'text-stone-deep/70'
                 }`}
               >
+                {/* Le bon cadeau se repère d'un coup d'œil dans le menu. */}
+                {isGiftPath(item.path) && <Gift aria-hidden className="mr-1.5 h-3.5 w-3.5 -translate-y-px" strokeWidth={1.75} />}
                 {item.name}
               </Link>
             );
@@ -361,6 +367,14 @@ export default function Navbar({ initialVariant, initialLogoUrl, initialNavigati
                 className="bg-stone-900 text-white py-4 text-center font-bold uppercase tracking-widest rounded-2xl shadow-md hover:bg-stone-800 transition-all"
               >
                 Prendre rendez-vous
+              </Link>
+              <Link
+                data-btn="secondary"
+                href={GIFT_ORDER_PATH}
+                className="-mt-3 flex items-center justify-center gap-2 border border-stone-300 py-3.5 text-center text-sm font-semibold uppercase tracking-widest text-stone-deep rounded-2xl"
+              >
+                <Gift aria-hidden className="h-4 w-4" strokeWidth={1.75} />
+                Offrir un bon cadeau
               </Link>
             </div>
           </motion.div>

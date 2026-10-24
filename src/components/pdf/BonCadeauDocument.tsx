@@ -1,52 +1,93 @@
 /**
- * Bon cadeau imprimable — format A5 paysage, à remettre à l'acheteuse.
+ * Bon cadeau imprimable — A5 paysage, à remettre ou à transmettre.
  *
- * Mêmes contraintes que la quittance : polices standard du format PDF, aucun
- * fichier externe à charger (voir FactureDocument.tsx).
+ * Mise en page « carte de spa » : une photo pleine hauteur à gauche, le logo
+ * en blanc sur un bandeau marine ; à droite, sur papier blanc, la bénéficiaire,
+ * le soin ou la valeur, le petit mot, l'échéance et le code. L'algue de la
+ * charte en filigrane.
+ *
+ * Polices standard du format PDF (Times pour les titres, Helvetica pour le
+ * reste) : rien à charger. Les images arrivent déjà lues (`BonImages`,
+ * préparées par `services/caissePdf.ts`) ; une image absente laisse sa place
+ * au nom de l'institut, jamais un cadre vide.
  */
 import React from 'react';
-import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import type { GiftCard } from '../../types/caisse';
 import type { BusinessInfo } from '../../config/site';
 
-const SAGE = '#8A9A7B';
-const INK = '#3A3730';
-const MUTED = '#8C877D';
-const PAPER = '#FAF7F2';
+const MARINE = '#12283A';
+const LAGON = '#3E97A1';
+const INK = '#22252A';
+const MUTED = '#6B7378';
+const LINE = '#DCE4E7';
+const CREAM = '#F7F3EC';
+
+export interface PdfImage { data: Buffer; format: 'png' | 'jpg' }
+
+export interface BonImages {
+  /** Photo du panneau gauche (portrait). */
+  photo: PdfImage | null;
+  /** Logo en blanc, posé sur le bandeau marine. */
+  logoLight: PdfImage | null;
+  /** Algue de la charte, en filigrane. */
+  algue: PdfImage | null;
+}
+
+const PHOTO_W = 214;
 
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Helvetica', color: INK, backgroundColor: PAPER, padding: 0 },
-  frame: { margin: 18, borderWidth: 1, borderColor: SAGE, borderStyle: 'solid', flexGrow: 1, padding: 26 },
+  page: { fontFamily: 'Helvetica', color: INK, backgroundColor: '#FFFFFF', flexDirection: 'row' },
 
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  business: { fontFamily: 'Helvetica-Bold', fontSize: 12 },
-  businessSub: { fontSize: 7.5, color: MUTED, marginTop: 2 },
-  code: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: SAGE, letterSpacing: 1 },
-  codeLabel: { fontSize: 6.5, letterSpacing: 1.4, color: MUTED, textAlign: 'right', marginBottom: 2 },
+  // ── Panneau photo ──
+  side: { width: PHOTO_W, height: '100%', position: 'relative', backgroundColor: MARINE },
+  photo: { width: PHOTO_W, height: '100%', objectFit: 'cover' },
+  band: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 92, backgroundColor: MARINE, opacity: 0.86 },
+  bandContent: { position: 'absolute', left: 22, right: 22, bottom: 22 },
+  logo: { width: 150, height: 24, objectFit: 'contain', objectPositionX: 0 },
+  sideName: { fontFamily: 'Times-Roman', fontSize: 17, color: '#FFFFFF', letterSpacing: 0.5 },
+  sidePlace: { marginTop: 8, fontSize: 6.5, letterSpacing: 2, color: '#C9DDE1' },
 
-  title: { fontFamily: 'Helvetica-Bold', fontSize: 26, letterSpacing: 3, marginTop: 26, textAlign: 'center' },
-  rule: { borderBottomWidth: 1, borderBottomColor: SAGE, borderBottomStyle: 'solid', width: 90, alignSelf: 'center', marginTop: 10 },
+  // ── Panneau texte ──
+  main: { flex: 1, position: 'relative', paddingTop: 34, paddingBottom: 26, paddingHorizontal: 36 },
+  frame: { position: 'absolute', top: 12, left: 12, right: 12, bottom: 12, borderWidth: 0.6, borderColor: LINE, borderStyle: 'solid' },
+  algue: { position: 'absolute', right: -18, bottom: 18, width: 170, height: 170, opacity: 0.09 },
 
-  offer: { fontSize: 12, textAlign: 'center', marginTop: 20, lineHeight: 1.5 },
-  amount: { fontFamily: 'Helvetica-Bold', fontSize: 24, textAlign: 'center', marginTop: 8 },
+  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  eyebrow: { fontFamily: 'Helvetica-Bold', fontSize: 7.5, letterSpacing: 3.2, color: LAGON },
+  code: { fontSize: 7.5, letterSpacing: 1.6, color: MUTED },
+  codeStrong: { fontFamily: 'Helvetica-Bold', color: MARINE },
+  rule: { width: 34, borderBottomWidth: 0.8, borderBottomColor: LAGON, borderBottomStyle: 'solid', marginTop: 12 },
 
-  benef: { fontSize: 9.5, textAlign: 'center', marginTop: 18, color: MUTED },
-  benefName: { fontFamily: 'Helvetica-Bold', fontSize: 12, textAlign: 'center', color: INK, marginTop: 3 },
-  message: { fontFamily: 'Helvetica-Oblique', fontSize: 9, lineHeight: 1.4, textAlign: 'center', color: INK, marginTop: 10, marginHorizontal: 40 },
+  forLabel: { marginTop: 22, fontFamily: 'Times-Italic', fontSize: 11, color: MUTED },
+  forName: { marginTop: 2, fontFamily: 'Times-Roman', fontSize: 27, color: MARINE, lineHeight: 1.15 },
 
-  // Avec un petit mot (jusqu'à 300 caractères), tout se resserre pour que le
-  // bon tienne sur une seule page A5.
-  titleCompact: { fontSize: 22, marginTop: 12 },
-  offerCompact: { marginTop: 12 },
-  amountCompact: { fontSize: 21, marginTop: 4 },
-  benefCompact: { marginTop: 10 },
-  mentionsCompact: { marginTop: 8 },
+  offerBox: { marginTop: 18, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: CREAM },
+  offerLabel: { fontSize: 6.5, letterSpacing: 2.2, color: MUTED },
+  offerText: { marginTop: 5, fontFamily: 'Times-Roman', fontSize: 12.5, lineHeight: 1.35, color: INK },
+  amountRow: { marginTop: 8, flexDirection: 'row', alignItems: 'flex-end' },
+  amountCur: { fontSize: 9, letterSpacing: 1.6, color: MUTED, marginRight: 6, marginBottom: 5 },
+  amount: { fontFamily: 'Times-Roman', fontSize: 28, color: MARINE, lineHeight: 1 },
+  amountNote: { marginLeft: 10, marginBottom: 5, fontSize: 7.5, color: MUTED },
 
-  footer: { marginTop: 'auto', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  footerBlock: { maxWidth: 250 },
-  footerLabel: { fontSize: 6.5, letterSpacing: 1.2, color: MUTED, marginBottom: 2 },
-  footerValue: { fontSize: 9 },
-  mentions: { fontSize: 6.5, color: MUTED, lineHeight: 1.5, marginTop: 14 },
+  message: { marginTop: 14, paddingLeft: 11, borderLeftWidth: 1, borderLeftColor: LAGON, borderLeftStyle: 'solid' },
+  messageText: { fontFamily: 'Times-Italic', fontSize: 10.5, lineHeight: 1.45, color: INK },
+
+  footer: { marginTop: 'auto', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: 14 },
+  fLabel: { fontSize: 6, letterSpacing: 1.8, color: MUTED, marginBottom: 3 },
+  fValue: { fontSize: 9, color: INK },
+  fValueStrong: { fontFamily: 'Helvetica-Bold', fontSize: 9, color: MARINE },
+  book: { width: 168, textAlign: 'right' },
+  bookUrl: { fontSize: 8, color: INK, textAlign: 'right' },
+  mentions: { marginTop: 10, fontSize: 6, lineHeight: 1.5, color: MUTED },
+
+  // Libellé ou message longs : tout se resserre pour tenir sur une page.
+  compactName: { fontSize: 23, marginTop: 1 },
+  compactFor: { marginTop: 16 },
+  compactBox: { marginTop: 12, paddingVertical: 10 },
+  compactAmount: { fontSize: 24 },
+  compactMessage: { marginTop: 10 },
+  compactMessageText: { fontSize: 9.5, lineHeight: 1.4 },
 });
 
 function chf(value: number | string | null | undefined): string {
@@ -62,69 +103,102 @@ function dateCH(value: string): string {
   });
 }
 
-export default function BonCadeauDocument({ card, business, mentions }: {
+/** « Bon cadeau — A + B » → « A + B » ; « Bon cadeau » seul → rien (c'est un montant). */
+function offerFromLibelle(libelle: string): string {
+  const s = libelle.trim();
+  if (/^bon cadeau$/i.test(s)) return '';
+  return s.replace(/^bon cadeau\s*[—–-]\s*/i, '');
+}
+
+export default function BonCadeauDocument({ card, business, mentions, images, bookingUrl }: {
   card: GiftCard;
   business: BusinessInfo;
   mentions: string;
+  images?: BonImages;
+  /** Adresse de réservation affichée en pied (« emmanuelle-esthetique.ch/reservation »). */
+  bookingUrl?: string;
 }) {
-  const contact = [business.phone, business.email].filter(Boolean).join(' · ');
-  const address = [business.addressStreet, [business.addressPostal, business.addressCity].filter(Boolean).join(' ')]
-    .filter(Boolean).join(', ');
+  const img: BonImages = images ?? { photo: null, logoLight: null, algue: null };
+  const place = [business.addressPostal, business.addressCity].filter(Boolean).join(' ');
 
   // Un bon déjà entamé se distingue d'un bon neuf : c'est le solde qui compte.
   const entame = Number(card.montant_restant) !== Number(card.montant_initial);
-  // Le petit mot de l'acheteuse (bons commandés en ligne).
   const message = (card.message ?? '').trim();
-  const compact = message !== '';
+  const offer = offerFromLibelle(card.libelle);
+  const compact = message.length > 140 || offer.length > 90 || (message.length > 60 && offer.length > 50);
 
   return (
     <Document title={`${card.code} — ${business.name}`} author={business.name} subject="Bon cadeau">
       <Page size="A5" orientation="landscape" style={styles.page}>
-        <View style={styles.frame}>
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.business}>{business.name}</Text>
-              {address ? <Text style={styles.businessSub}>{address}</Text> : null}
-              {contact ? <Text style={styles.businessSub}>{contact}</Text> : null}
-            </View>
-            <View>
-              <Text style={styles.codeLabel}>CODE DU BON</Text>
-              <Text style={styles.code}>{card.code}</Text>
-            </View>
+        <View style={styles.side}>
+          {img.photo ? <Image src={img.photo} style={styles.photo} /> : null}
+          <View style={styles.band} />
+          <View style={styles.bandContent}>
+            {img.logoLight
+              ? <Image src={img.logoLight} style={styles.logo} />
+              : <Text style={styles.sideName}>{business.name}</Text>}
+            {place ? <Text style={styles.sidePlace}>{place.toUpperCase()}</Text> : null}
           </View>
+        </View>
 
-          <Text style={compact ? [styles.title, styles.titleCompact] : styles.title}>BON CADEAU</Text>
+        <View style={styles.main}>
+          <View style={styles.frame} fixed />
+          {img.algue ? <Image src={img.algue} style={styles.algue} /> : null}
+
+          <View style={styles.top}>
+            <Text style={styles.eyebrow}>BON CADEAU</Text>
+            <Text style={styles.code}>N° <Text style={styles.codeStrong}>{card.code}</Text></Text>
+          </View>
           <View style={styles.rule} />
-
-          <Text style={compact ? [styles.offer, styles.offerCompact] : styles.offer}>{card.libelle}</Text>
-          <Text style={compact ? [styles.amount, styles.amountCompact] : styles.amount}>
-            CHF {chf(entame ? card.montant_restant : card.montant_initial)}
-          </Text>
-          {entame ? (
-            <Text style={styles.benef}>Solde restant sur un bon de CHF {chf(card.montant_initial)}</Text>
-          ) : null}
 
           {card.beneficiaire ? (
             <>
-              <Text style={compact ? [styles.benef, styles.benefCompact] : styles.benef}>Pour</Text>
-              <Text style={styles.benefName}>{card.beneficiaire}</Text>
+              <Text style={compact ? [styles.forLabel, styles.compactFor] : styles.forLabel}>Offert à</Text>
+              <Text style={compact ? [styles.forName, styles.compactName] : styles.forName}>{card.beneficiaire}</Text>
             </>
-          ) : null}
+          ) : (
+            <Text style={compact ? [styles.forName, styles.compactName, styles.compactFor] : [styles.forName, { marginTop: 22 }]}>
+              Une parenthèse de douceur
+            </Text>
+          )}
 
-          {message ? <Text style={styles.message}>« {message} »</Text> : null}
-
-          <View style={styles.footer}>
-            <View style={styles.footerBlock}>
-              <Text style={styles.footerLabel}>ÉMIS LE</Text>
-              <Text style={styles.footerValue}>{dateCH(card.emis_le)}</Text>
-            </View>
-            <View>
-              <Text style={styles.footerLabel}>VALABLE JUSQU&apos;AU</Text>
-              <Text style={styles.footerValue}>{dateCH(card.expire_le)}</Text>
+          <View style={compact ? [styles.offerBox, styles.compactBox] : styles.offerBox}>
+            <Text style={styles.offerLabel}>{offer ? 'VALABLE POUR' : 'D’UNE VALEUR DE'}</Text>
+            {offer ? <Text style={styles.offerText}>{offer}</Text> : null}
+            <View style={styles.amountRow}>
+              <Text style={styles.amountCur}>CHF</Text>
+              <Text style={compact ? [styles.amount, styles.compactAmount] : styles.amount}>
+                {chf(entame ? card.montant_restant : card.montant_initial)}
+              </Text>
+              {entame ? <Text style={styles.amountNote}>solde d’un bon de CHF {chf(card.montant_initial)}</Text> : null}
             </View>
           </View>
 
-          <Text style={compact ? [styles.mentions, styles.mentionsCompact] : styles.mentions}>{mentions}</Text>
+          {message ? (
+            <View style={compact ? [styles.message, styles.compactMessage] : styles.message}>
+              <Text style={compact ? [styles.messageText, styles.compactMessageText] : styles.messageText}>« {message} »</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.footer}>
+            <View style={{ marginRight: 18 }}>
+              <Text style={styles.fLabel}>VALABLE JUSQU’AU</Text>
+              <Text style={styles.fValueStrong}>{dateCH(card.expire_le)}</Text>
+            </View>
+            <View>
+              <Text style={styles.fLabel}>ÉMIS LE</Text>
+              <Text style={styles.fValue}>{dateCH(card.emis_le)}</Text>
+            </View>
+            <View style={styles.book}>
+              <Text style={[styles.fLabel, { textAlign: 'right' }]}>RÉSERVER</Text>
+              {/* Un seul « mot » pour react-pdf : l'adresse ne se coupe jamais par un trait d'union. */}
+              {bookingUrl ? <Text style={styles.bookUrl} hyphenationCallback={(w) => [w]}>{bookingUrl}</Text> : null}
+              {business.phone ? <Text style={[styles.fValue, { textAlign: 'right' }]}>{business.phone}</Text> : null}
+            </View>
+          </View>
+          <Text style={styles.mentions}>
+            {mentions}{business.addressStreet ? ` ${business.name} · ${business.addressStreet}, ${place}.` : ''}
+          </Text>
         </View>
       </Page>
     </Document>

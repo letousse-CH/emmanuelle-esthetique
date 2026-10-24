@@ -512,6 +512,28 @@ bon : `gift_cards.message`).
   (`npx tsx scripts/test-gift-orders.ts`). Boutons et textes de la page
   `/bon-cadeau` : `scripts/bon-cadeau-en-ligne.mjs` (essai, puis `--write`),
   **après** la mise en ligne et l'ouverture de la vente.
+- **Parcours** (`bon-cadeau/commander/GiftOrderClient.tsx`, styles `gco-*`) :
+  quatre écrans (le cadeau → montant ou soins → pour qui → coordonnées), chacun
+  une entrée de l'historique (le « retour » du navigateur revient d'un écran),
+  puis le paiement sur fond marin. Liens directs : `?famille=corps`,
+  `?soin=<id ou nom>`, `?montant=150`, `?type=montant|soins`. Photos de cabine :
+  `components/gift/visuals.ts`. Les défilements passent par Lenis
+  (`window.__lenis`, posé par `MotionLayer`) : un `scrollTo` natif pendant son
+  inertie serait repris, et Lenis ajoute la `scroll-margin` CSS au décalage.
+- **Le bon** : PDF « carte de spa » (`components/pdf/BonCadeauDocument.tsx`) —
+  photo pleine hauteur, logo clair (`footer_logo`) sur bandeau marine,
+  bénéficiaire, soin ou valeur, petit mot, algue en filigrane. Photo par défaut
+  et algue intégrées (`bonCadeauAssets.ts`, base64) ; autre photo : réglage
+  `caisse_bon_image` (JPG/PNG — react-pdf ignore WebP et SVG). Le nom de
+  l'acheteuse n'y figure pas (la signature passe par le petit mot). Le même
+  dessin en miniature à l'écran : `components/gift/VoucherCard.tsx` (`gv-*`).
+- **Bloc `gift_cta`** (« Offrir un bon cadeau », page builder) : photo de
+  l'univers, bon en miniature, bouton vers la commande sur cet univers. Posé
+  avant la FAQ des pages soins, de la carte et de l'accueil par
+  `scripts/add-gift-sections.mjs` (essai, puis `--write`, **après** la mise en
+  ligne). Autres liens « Offrir » : icône cadeau sur l'entrée « Bon cadeau » du
+  menu, bouton du menu mobile, barre mobile du bas, pied de page, écran de fin
+  de réservation (« Offrir ce soin »).
 
 **Abonnements de séances** (2026-10-22, migration `20261022_caisse_abonnements.sql`,
 après `20261015_caisse_bons_tva_produits` — elle remplace `caisse_create_transaction`

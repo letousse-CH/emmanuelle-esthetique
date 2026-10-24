@@ -108,6 +108,25 @@ export interface CurrentOfferBlock {
 }
 
 /**
+ * Encart « Offrir un bon cadeau » : une photo, le bon en miniature et un
+ * bouton vers le parcours de commande, l'univers déjà choisi (`famille`).
+ * Les pages soins le portent juste avant leurs questions fréquentes.
+ */
+export type GiftFamilyChoice = '' | 'visage' | 'corps' | 'mains-pieds' | 'regard' | 'epilation';
+export interface GiftCtaBlock {
+  id: string; type: 'gift_cta';
+  eyebrow?: string; title?: string; text?: string;
+  /** Univers présélectionné dans le parcours ; vide = l'acheteuse choisit. */
+  famille?: GiftFamilyChoice;
+  /** Photo ; vide = celle de l'univers. */
+  image?: string;
+  ctaText?: string;
+  /** Lien discret vers un bon à montant libre ; vide = masqué. */
+  secondaryText?: string;
+  imagePosition?: 'left' | 'right';
+}
+
+/**
  * Section Studio conservée telle quelle (conversion sans perte, ou section
  * fonctionnelle déjà existante : derniers articles, newsletter…). Rendue par
  * son composant d'origine.
@@ -119,7 +138,7 @@ export type ContentBlock =
   | SpacerBlock | DividerBlock | HeroBlock | CardsBlock | FaqBlock | StepsBlock
   | OffersBlock | PriceListBlock | ChecklistBlock | CalloutBlock | StatsBlock | TestimonialsBlock
   | GalleryBlock | MarqueeBlock | ContactBlock | ContactFormBlock | GoogleReviewsBlock | CurrentOfferBlock
-  | LegacySectionBlock;
+  | GiftCtaBlock | LegacySectionBlock;
 
 export type BlockType = ContentBlock['type'];
 

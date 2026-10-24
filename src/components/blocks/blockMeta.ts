@@ -260,6 +260,35 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
     ],
     create: () => ({ id: uid(), type: 'current_offer', eyebrow: 'Offre du moment', ctaText: 'Réserver cette offre', showPlaces: true, showConditions: true, imagePosition: 'left' }),
   },
+  gift_cta: {
+    type: 'gift_cta', label: 'Offrir un bon cadeau', description: 'Photo, bon cadeau en miniature et bouton « Offrir » qui ouvre la commande en ligne, univers déjà choisi.', category: 'action',
+    keywords: 'bon cadeau offrir cadeau noel anniversaire fete des meres carte cadeau voucher',
+    fields: [
+      eyebrow, title,
+      { key: 'text', label: 'Texte', kind: 'textarea' },
+      {
+        key: 'famille', label: 'Soins proposés', kind: 'select',
+        help: 'Le bouton ouvre la commande sur cet univers de soins. « Au choix » : l\'acheteuse choisit entre un montant et des soins.',
+        options: [
+          { value: '', label: 'Au choix (montant ou soins)' },
+          { value: 'visage', label: 'Soins du visage' },
+          { value: 'corps', label: 'Corps & massages' },
+          { value: 'mains-pieds', label: 'Mains & pieds' },
+          { value: 'regard', label: 'Regard' },
+          { value: 'epilation', label: 'Épilation' },
+        ],
+      },
+      { key: 'image', label: 'Photo', kind: 'image', help: 'Vide : la photo de l\'univers choisi.' },
+      { key: 'ctaText', label: 'Texte du bouton', kind: 'text' },
+      { key: 'secondaryText', label: 'Lien « montant libre »', kind: 'text', help: 'Vide : le lien est masqué.' },
+      { key: 'imagePosition', label: 'Photo', kind: 'select', style: true, options: [{ value: 'left', label: 'À gauche' }, { value: 'right', label: 'À droite' }] },
+    ],
+    create: () => ({
+      id: uid(), type: 'gift_cta', eyebrow: 'Bon cadeau', title: 'Offrez une parenthèse de douceur',
+      text: 'Un soin ou un montant à son nom, avec votre petit mot : le bon arrive en PDF par e-mail, prêt à offrir.',
+      famille: '', ctaText: 'Offrir un bon cadeau', secondaryText: '', imagePosition: 'left',
+    }),
+  },
   pricelist: {
     type: 'pricelist', label: 'Carte des tarifs', description: 'Une ligne par soin : nom, durée, prix. Idéal pour la carte complète.', category: 'offre',
     keywords: 'tarifs prix carte liste soins epilation tableau',
