@@ -3,8 +3,6 @@ import { supabase } from '../services/supabase';
 
 import { SITE_CONFIG } from '../config/site';
 import { getModuleFlagsServer } from '../config/modules';
-import { getSettingsServer } from '../services/settingsServer';
-import { GIFT_SETTING_KEYS, giftOrderOpen, parseGiftOrderSettings } from '../types/giftOrders';
 
 export const revalidate = 3600; // Cache for 1 hour
 
@@ -39,11 +37,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: '/reservation', priority: 0.8, changeFrequency: 'monthly' },
   ];
 
-  // Commande de bons en ligne : listée seulement quand elle est ouverte (sinon la page est `noindex`).
-  const gift = parseGiftOrderSettings(await getSettingsServer([...GIFT_SETTING_KEYS]));
-  if (moduleFlags.caisse && giftOrderOpen(gift)) {
-    routes.push({ path: '/bon-cadeau/commander', priority: 0.6, changeFrequency: 'monthly' });
-  }
+  // La commande de bons en ligne vit sur /bon-cadeau, listée avec les pages dynamiques.
 
   try {
     const [{ data: articles }, { data: events }, { data: dynamicPages }] = await Promise.all([

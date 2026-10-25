@@ -43,8 +43,8 @@ export const SETTINGS_DEFAULTS: Record<string, string> = {
   bon_en_ligne_actif:       'false',
   // Minimum d'un bon à montant libre, en CHF (les bons « soins » valent leur prix).
   bon_en_ligne_montant_min: '100',
-  // Image du code QR TWINT de l'institut, et/ou lien de paiement TWINT.
-  bon_en_ligne_twint_qr:    '',
+  // Lien de paiement TWINT (portail commerçant, https://go.twint.ch/…) : le
+  // site y ajoute montant et référence. Pas de code QR statique en ligne.
   bon_en_ligne_twint_lien:  '',
   // Photo du bon cadeau PDF (JPG ou PNG, portrait) ; vide = la photo intégrée
   // (bocal de coquillages, cabine). Le logo vient de `footer_logo` (version claire).

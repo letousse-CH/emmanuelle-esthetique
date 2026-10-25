@@ -3,8 +3,8 @@
  *
  * 1. La cliente commande (`createGiftOrder`) : rien n'est vendu, une commande
  *    `en_attente` est déposée et la cliente reçoit le montant, la référence et
- *    le code QR / lien TWINT de l'institut. L'institut est prévenu (push +
- *    e-mail).
+ *    le lien de paiement TWINT de l'institut, pré-rempli avec les deux
+ *    (`twintPayUrl`). L'institut est prévenu (push + e-mail).
  * 2. L'exploitante voit l'argent dans son app TWINT et clique « Paiement reçu »
  *    (`confirmGiftOrder`) : Postgres émet la facture et le bon en une
  *    transaction (`bon_commande_confirmer`), puis le bon part par e-mail en PDF,
@@ -26,7 +26,7 @@ import {
 import { chfMail, escapeHtml, mailRow, mailShell } from '../utils/bookingEmails';
 import { renderBonCadeauPdf, renderFacturePdf } from './caissePdf';
 import {
-  GIFT_SETTING_KEYS, giftLineLabel, giftOrderOpen, isHttpUrl, parseGiftOrderSettings, validateGiftOrder,
+  GIFT_SETTING_KEYS, giftLineLabel, giftOrderOpen, parseGiftOrderSettings, twintPayUrl, validateGiftOrder,
   type GiftCatalogItem, type GiftFamily, type GiftOrder, type GiftOrderField, type GiftOrderPublicView,
   type GiftOrderSettings,
 } from '../types/giftOrders';
@@ -161,8 +161,7 @@ export async function createGiftOrder(raw: unknown): Promise<GiftOrderPublicView
     libelle: order.libelle,
     beneficiaire: order.beneficiaire,
     acheteur_email: order.acheteur_email,
-    twintQr: settings.twintQr,
-    twintLien: isHttpUrl(settings.twintLien) ? settings.twintLien : '',
+    twintLien: twintPayUrl(settings.twintLien, order.montant, order.reference),
   };
 }
 
@@ -282,15 +281,14 @@ function recapBlock(o: GiftOrder, extra: string[] = []): string {
 /** À la commande : comment payer. */
 async function sendPaymentInstructions(o: GiftOrder, s: GiftOrderSettings): Promise<void> {
   const owner = await ownerFirstName();
-  const lien = isHttpUrl(s.twintLien) ? s.twintLien : '';
+  const lien = twintPayUrl(s.twintLien, o.montant, o.reference);
   const html = mailShell(`
     <p>Bonjour ${escapeHtml(o.acheteur_prenom)},</p>
     <p>Merci pour votre commande de bon cadeau. Il reste une étape : le paiement par TWINT.</p>
     ${recapBlock(o, [mailRow('Référence :', escapeHtml(o.reference))])}
-    <p><strong>Payez ${escapeHtml(chfMail(o.montant))} par TWINT</strong>${lien ? ' avec le bouton ci-dessous (sur votre téléphone)' : ''}${s.twintQr ? `${lien ? ', ou' : ''} en scannant ce code avec l'app TWINT` : ''} :</p>
-    ${lien ? `<p><a href="${escapeHtml(lien)}" style="display:inline-block;background:#12283a;color:#fff;text-decoration:none;padding:12px 22px;border-radius:4px;">Payer ${escapeHtml(chfMail(o.montant))} avec TWINT</a></p>` : ''}
-    ${s.twintQr ? `<p><img src="${escapeHtml(s.twintQr)}" alt="Code QR TWINT de ${escapeHtml(owner.nom)}" width="220" style="width:220px;height:auto;border:1px solid #e7e5e4;"/></p>` : ''}
-    <p>Indiquez le montant exact. Dès que ${escapeHtml(owner.prenom || 'l\'institut')} a reçu votre paiement, le bon vous est envoyé en PDF à cette adresse, prêt à imprimer ou à transmettre.</p>
+    <p><strong>Payez ${escapeHtml(chfMail(o.montant))} par TWINT</strong> avec ce bouton : le montant et la référence de votre commande sont déjà remplis.</p>
+    ${lien ? `<p><a href="${escapeHtml(lien)}" style="display:inline-block;background:#262626;color:#fff;text-decoration:none;padding:13px 22px;border-radius:6px;font-weight:600;">Payer ${escapeHtml(chfMail(o.montant))} avec TWINT</a></p>` : ''}
+    <p>Sur téléphone, l'app TWINT s'ouvre ; sur ordinateur, un code s'affiche, à scanner avec l'app. Gardez le montant exact. Dès que ${escapeHtml(owner.prenom || 'l\'institut')} a reçu votre paiement, le bon vous est envoyé en PDF à cette adresse, prêt à imprimer ou à transmettre.</p>
     <p>Vous avez changé d'avis ? Ne payez pas : la commande sera simplement annulée.</p>
     <p>À bientôt,<br/>${escapeHtml(owner.prenom || owner.nom)}</p>`);
 

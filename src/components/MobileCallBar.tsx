@@ -16,7 +16,7 @@ export default function MobileCallBar({ phone }: { phone?: string }) {
 
   // Ne pas afficher la barre sticky sur la page de réservation elle-même
   // Ni sur la commande d'un bon cadeau, qui a sa propre barre d'action.
-  if (pathname?.startsWith('/reservation') || pathname?.startsWith('/bon-cadeau/commander')) {
+  if (pathname?.startsWith('/reservation') || pathname?.startsWith('/bon-cadeau')) {
     return null;
   }
 
@@ -41,7 +41,7 @@ export default function MobileCallBar({ phone }: { phone?: string }) {
           </Link>
           {/* Sans `data-btn` : la charte imposerait son rembourrage, et « Réserver en ligne » passerait sur deux lignes. */}
           <Link
-            href="/bon-cadeau/commander"
+            href="/bon-cadeau"
             className="flex h-[42px] min-w-[42px] shrink-0 items-center justify-center gap-1.5 rounded-full border border-border bg-stone-100 px-3 text-xs font-medium text-stone-deep shadow-xs hover:bg-stone-200 transition-colors"
             title="Offrir un bon cadeau"
             aria-label="Offrir un bon cadeau"

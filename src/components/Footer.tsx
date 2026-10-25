@@ -336,7 +336,7 @@ export default function Footer({ initialVariant, initialTheme, initialBgColor, i
               )}
             </address>
             <Link
-              href="/bon-cadeau/commander"
+              href="/bon-cadeau"
               className="mt-6 inline-flex items-center gap-2 border-b border-[color-mix(in_srgb,var(--footer-ink)_25%,transparent)] pb-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-[color:color-mix(in_srgb,var(--footer-ink)_75%,transparent)] transition-colors hover:border-sage hover:text-[color:var(--footer-ink)]"
             >
               <Gift size={14} strokeWidth={1.75} aria-hidden />

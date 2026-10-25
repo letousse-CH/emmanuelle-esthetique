@@ -20,8 +20,8 @@ import { optimizedImgProps } from '../utils/imageOptim';
 // lettres (voir plus bas). Un `src=""` ferait recharger la page entière par le
 // navigateur en plus d'afficher une image cassée.
 
-/** Commande d'un bon cadeau en ligne (app/(public)/bon-cadeau/commander). */
-const GIFT_ORDER_PATH = '/bon-cadeau/commander';
+/** Page du bon cadeau et de sa commande en ligne (app/(public)/bon-cadeau). */
+const GIFT_ORDER_PATH = '/bon-cadeau';
 const isGiftPath = (path?: string) => !!path && /^\/bon-cadeau(\/|$)/.test(path);
 
 function readHeroColor(): 'dark' | 'light' {

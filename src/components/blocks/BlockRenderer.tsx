@@ -658,7 +658,7 @@ function CurrentOfferView({ b, ctx }: { b: CurrentOfferBlock; ctx: Ctx }) {
 function GiftCtaView({ b, ctx }: { b: GiftCtaBlock; ctx: Ctx }) {
   const fam = b.famille || '';
   const visual = b.image ? { url: b.image, alt: '', focus: undefined } : fam ? familyVisual(fam) : GIFT_VISUALS.hero;
-  const href = fam ? `/bon-cadeau/commander?famille=${fam}` : '/bon-cadeau/commander';
+  const href = fam ? `/bon-cadeau?famille=${fam}` : '/bon-cadeau';
   const g = ctx.data?.gift;
   return (
     <div className={`pb-gift ${b.imagePosition === 'right' ? 'pb-gift-rev' : ''}`}>
@@ -689,7 +689,7 @@ function GiftCtaView({ b, ctx }: { b: GiftCtaBlock; ctx: Ctx }) {
         {b.text && <p className="pb-lead" {...f(ctx, 'text')}>{b.text}</p>}
         <div className="pb-btns">
           <Btn text={b.ctaText || 'Offrir un bon cadeau'} url={href} ctx={ctx} field="ctaText" />
-          {b.secondaryText && <Btn text={b.secondaryText} url="/bon-cadeau/commander?type=montant" variant="link" ctx={ctx} field="secondaryText" />}
+          {b.secondaryText && <Btn text={b.secondaryText} url="/bon-cadeau?type=montant" variant="link" ctx={ctx} field="secondaryText" />}
         </div>
       </div>
     </div>

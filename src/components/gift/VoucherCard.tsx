@@ -19,7 +19,11 @@ export interface VoucherCardProps {
   beneficiaire?: string;
   /** Soins offerts ; vide pour un montant. */
   offer?: string;
-  /** Absent : la ligne du montant est masquée (encart d'une page soins). */
+  /**
+   * Montant d'un bon « valeur ». Ignoré quand `offer` est donné : un bon
+   * « soins » ne montre pas de prix, comme le bon imprimé. Absent : la ligne
+   * du montant est masquée (encart d'une page soins).
+   */
   montant?: number;
   message?: string;
   validiteMois: number;
@@ -64,7 +68,7 @@ export default function VoucherCard(p: VoucherCardProps) {
         <span className="gv__box">
           <span className="gv__label">{p.offer ? 'Valable pour' : 'D’une valeur de'}</span>
           {p.offer && <span className="gv__offer">{p.offer}</span>}
-          {p.montant !== undefined && (
+          {p.montant !== undefined && !p.offer && (
             <span className="gv__amount"><small>CHF</small>{p.montant > 0 ? chf(p.montant) : '—'}</span>
           )}
         </span>

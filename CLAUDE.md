@@ -480,14 +480,14 @@ en droit suisse : un bon est une créance ordinaire, prescrite par 10 ans
 
 **Bons commandés en ligne, payés par TWINT** (2026-10-24, migration
 `20261024_bons_commande_en_ligne.sql`, après `20261022` ; ne remplace aucune
-fonction de caisse). Page `/bon-cadeau/commander` : montant libre (dès
+fonction de caisse). Page `/bon-cadeau` : montant libre (dès
 `bon_en_ligne_montant_min`, 100 par défaut, plafond 2'000) ou soins de la carte
 (toute la caisse active sauf abonnements ; un complément ne s'offre pas seul),
 bénéficiaire obligatoire, petit mot facultatif (300 caractères, imprimé sur le
 bon : `gift_cards.message`).
 
-> **Une commande n'est pas une vente.** Le compte TWINT est direct (code QR /
-> lien), sans API : l'exploitante voit l'argent dans son app, puis clique
+> **Une commande n'est pas une vente.** Le compte TWINT est direct (lien de
+> paiement), sans API : l'exploitante voit l'argent dans son app, puis clique
 > « Paiement reçu » (Caisse › Bons cadeaux). Alors seulement
 > `bon_commande_confirmer` émet facture (mode `twint`) et bon en une
 > transaction, via `caisse_create_transaction`.
@@ -499,20 +499,38 @@ bon : `gift_cards.message`).
   confirmation renvoie la commande déjà payée sans rien refaire.
 - Revenir sur une vente : annuler sa facture au journal (le bon s'annule, la
   commande reste « payée »). Une commande non payée s'annule depuis l'écran.
+- **Paiement = lien TWINT pré-rempli** (2026-10-25) : `twintPayUrl` ajoute au
+  lien du portail commerçant `&amount=150.00&trxInfo=Bon+cadeau+CMD-…` (notice
+  TWINT « personnaliser le lien de paiement »). Écran de paiement : bouton
+  officiel `public/images/twint-payer-fr.svg` (version claire) ; sur ordinateur,
+  TWINT affiche son propre QR, qui porte montant et référence. **Pas de code QR
+  statique** : TWINT le réserve au paiement sur place. Le motif ne porte que la
+  référence (TWINT y interdit les données personnelles) ; l'acheteuse peut
+  encore modifier les champs, d'où la vérification du montant avant « Paiement
+  reçu ». Ne jamais publier le lien seul, sans référence de commande (interdit).
 - E-mails (`services/giftOrders.ts`) : instructions de paiement (montant,
-  référence, QR, lien) ; à l'institut, e-mail + push ; après paiement, bon et
+  référence, lien pré-rempli) ; à l'institut, e-mail + push ; après paiement, bon et
   quittance en pièces jointes (`sendEmail` gère `attachments`, PDF rendus par
   `services/caissePdf.ts`, partagé avec les routes de téléchargement). Un envoi
   refusé est consigné (`email_erreur`) : bouton « Renvoyer le bon ».
 - Réglages (bouton « Réglages » de la section, table `settings`) :
-  `bon_en_ligne_actif`, `_montant_min`, `_twint_qr` (image), `_twint_lien`.
-  Ouverte = interrupteur + QR ou lien + module Caisse (`isGiftOrderOpen`) ;
-  sinon la page renvoie au contact et passe en `noindex` (hors sitemap).
+  `bon_en_ligne_actif`, `_montant_min`, `_twint_lien` (`https://go.twint.ch/…`
+  seulement, `isTwintPayLink`). L'ancien `_twint_qr` n'est plus lu.
+  Ouverte = interrupteur + lien TWINT + module Caisse (`isGiftOrderOpen`) ;
+  sinon le parcours cède la place à un renvoi au contact (la page reste indexée).
 - Règles pures et testées : `src/types/giftOrders.ts`
   (`npx tsx scripts/test-gift-orders.ts`). Boutons et textes de la page
   `/bon-cadeau` : `scripts/bon-cadeau-en-ligne.mjs` (essai, puis `--write`),
   **après** la mise en ligne et l'ouverture de la vente.
-- **Parcours** (`bon-cadeau/commander/GiftOrderClient.tsx`, styles `gco-*`) :
+- **Une seule page `/bon-cadeau`** (fusion du 2026-10-25,
+  `app/(public)/bon-cadeau/page.tsx`, prioritaire sur `[...slug]`) : en-tête
+  (H1) et parcours rendus par le code, puis le contenu de la page `bon-cadeau`
+  du page builder (conditions, FAQ ; SEO de la page dans l'admin).
+  `/bon-cadeau/commander` redirige en 308 (`next.config.ts`), paramètres
+  compris. `scripts/fusion-bon-cadeau.mjs` (essai, puis `--write`, **après** la
+  mise en ligne) retire du contenu l'ancien en-tête, les trois cartes et
+  l'encart « Commander », que le code affiche déjà.
+- **Parcours** (`bon-cadeau/GiftOrderClient.tsx`, styles `gco-*`) :
   quatre écrans (le cadeau → montant ou soins → pour qui → coordonnées), chacun
   une entrée de l'historique (le « retour » du navigateur revient d'un écran),
   puis le paiement sur fond marin. Liens directs : `?famille=corps`,
@@ -522,7 +540,9 @@ bon : `gift_cards.message`).
   inertie serait repris, et Lenis ajoute la `scroll-margin` CSS au décalage.
 - **Le bon** : PDF « carte de spa » (`components/pdf/BonCadeauDocument.tsx`) —
   photo pleine hauteur, logo clair (`footer_logo`) sur bandeau marine,
-  bénéficiaire, soin ou valeur, petit mot, algue en filigrane. Photo par défaut
+  bénéficiaire, soin ou valeur, petit mot, algue en filigrane. **Un bon
+  « soins » n'affiche pas de prix** (le soin seulement ; son solde s'il est
+  entamé) : seul le bon « montant » montre sa valeur. Photo par défaut
   et algue intégrées (`bonCadeauAssets.ts`, base64) ; autre photo : réglage
   `caisse_bon_image` (JPG/PNG — react-pdf ignore WebP et SVG). Le nom de
   l'acheteuse n'y figure pas (la signature passe par le petit mot). Le même

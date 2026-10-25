@@ -87,16 +87,18 @@ export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export interface GiftOrderSettings {
   actif: boolean;
   montantMin: number;
-  /** Image du code QR TWINT de l'institut. */
-  twintQr: string;
-  /** Lien de paiement TWINT (ouvre l'app sur téléphone). */
+  /**
+   * Lien de paiement TWINT de l'institut (portail commerçant TWINT,
+   * `https://go.twint.ch/…`). Le site y ajoute le montant et la référence de
+   * chaque commande (`twintPayUrl`). Pas de code QR : TWINT réserve le code QR
+   * statique au paiement sur place.
+   */
   twintLien: string;
 }
 
 export const GIFT_SETTING_KEYS = [
   'bon_en_ligne_actif',
   'bon_en_ligne_montant_min',
-  'bon_en_ligne_twint_qr',
   'bon_en_ligne_twint_lien',
 ] as const;
 
@@ -105,27 +107,42 @@ export function parseGiftOrderSettings(s: Record<string, string | undefined | nu
   return {
     actif: String(s.bon_en_ligne_actif ?? '').trim() === 'true',
     montantMin: Number.isFinite(min) && min > 0 ? Math.min(min, GIFT_MAX) : GIFT_MIN_DEFAULT,
-    twintQr: String(s.bon_en_ligne_twint_qr ?? '').trim(),
     twintLien: String(s.bon_en_ligne_twint_lien ?? '').trim(),
   };
 }
 
 /**
- * La commande en ligne est-elle ouverte ? Il faut l'interrupteur ET un moyen
- * de payer : sans code QR ni lien, l'acheteuse ne saurait pas où envoyer
- * l'argent.
+ * La commande en ligne est-elle ouverte ? Il faut l'interrupteur ET le lien de
+ * paiement TWINT : sans lui, l'acheteuse ne saurait pas où envoyer l'argent.
  */
 export function giftOrderOpen(s: GiftOrderSettings): boolean {
-  return s.actif && (s.twintQr !== '' || isHttpUrl(s.twintLien));
+  return s.actif && isTwintPayLink(s.twintLien);
 }
 
-export function isHttpUrl(v: string): boolean {
+/** Un lien de paiement TWINT officiel (`https://go.twint.ch/…`). */
+export function isTwintPayLink(v: string): boolean {
   try {
     const u = new URL(v);
-    return u.protocol === 'https:' || u.protocol === 'http:';
+    return u.protocol === 'https:' && u.hostname === 'go.twint.ch';
   } catch {
     return false;
   }
+}
+
+/**
+ * Le lien de paiement pré-rempli pour une commande : montant (`amount`, en
+ * CHF, point décimal) et motif (`trxInfo`), selon la notice TWINT
+ * « personnaliser le lien de paiement ». L'acheteuse peut encore les modifier :
+ * l'exploitante vérifie le montant avant « Paiement reçu ». Le motif ne porte
+ * que la référence — TWINT interdit d'y mettre des données personnelles — et
+ * c'est elle qui permet de rapprocher le paiement de sa commande.
+ */
+export function twintPayUrl(lien: string, montant: number, reference: string): string {
+  if (!isTwintPayLink(lien)) return '';
+  const u = new URL(lien);
+  u.searchParams.set('amount', round2(montant).toFixed(2));
+  u.searchParams.set('trxInfo', `Bon cadeau ${reference}`);
+  return u.toString();
 }
 
 export function round2(n: number): number {
@@ -300,6 +317,6 @@ export interface GiftOrderPublicView {
   libelle: string;
   beneficiaire: string;
   acheteur_email: string;
-  twintQr: string;
+  /** Lien de paiement TWINT pré-rempli (montant + référence). */
   twintLien: string;
 }

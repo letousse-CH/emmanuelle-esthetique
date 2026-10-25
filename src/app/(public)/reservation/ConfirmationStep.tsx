@@ -138,7 +138,7 @@ export default function ConfirmationStep({
         </div>
 
         {/* Le moment où l'on pense aux autres : offrir le même soin. */}
-        <Link href={`/bon-cadeau/commander?soin=${encodeURIComponent(booking.service_nom)}`} className="rsv-gift">
+        <Link href={`/bon-cadeau?soin=${encodeURIComponent(booking.service_nom)}`} className="rsv-gift">
           <Gift aria-hidden="true" />
           <span>
             <strong>Ce soin ferait plaisir à quelqu&apos;un ?</strong> Offrez-le en bon cadeau, avec votre petit mot.

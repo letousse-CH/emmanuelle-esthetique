@@ -6,7 +6,8 @@
 import assert from 'node:assert/strict';
 import {
   GIFT_MAX, GIFT_MESSAGE_MAX, GIFT_QTE_MAX,
-  cleanText, giftOrderLibelle, giftOrderOpen, joursDepuis, parseGiftOrderSettings, parseMontant,
+  cleanText, giftOrderLibelle, giftOrderOpen, isTwintPayLink, joursDepuis, parseGiftOrderSettings, parseMontant,
+  twintPayUrl,
   validateGiftOrder,
 } from '../src/types/giftOrders';
 
@@ -135,11 +136,36 @@ test('type manquant', () => {
 
 console.log('Réglages et libellés');
 
-test('ouverte seulement avec l’interrupteur ET un moyen de payer', () => {
+const PAYLINK = 'https://go.twint.ch/1/e/tw?tw=acq.Ab12-cd_34.';
+
+test('ouverte seulement avec l’interrupteur ET le lien de paiement TWINT', () => {
   assert.equal(giftOrderOpen(parseGiftOrderSettings({ bon_en_ligne_actif: 'true' })), false);
   assert.equal(giftOrderOpen(parseGiftOrderSettings({ bon_en_ligne_actif: 'true', bon_en_ligne_twint_lien: 'pas un lien' })), false);
-  assert.equal(giftOrderOpen(parseGiftOrderSettings({ bon_en_ligne_actif: 'true', bon_en_ligne_twint_qr: 'https://x/qr.png' })), true);
-  assert.equal(giftOrderOpen(parseGiftOrderSettings({ bon_en_ligne_actif: 'false', bon_en_ligne_twint_qr: 'https://x/qr.png' })), false);
+  assert.equal(giftOrderOpen(parseGiftOrderSettings({ bon_en_ligne_actif: 'true', bon_en_ligne_twint_lien: PAYLINK })), true);
+  assert.equal(giftOrderOpen(parseGiftOrderSettings({ bon_en_ligne_actif: 'false', bon_en_ligne_twint_lien: PAYLINK })), false);
+  // L'ancien code QR statique ne suffit plus : TWINT le réserve au paiement sur place.
+  assert.equal(giftOrderOpen(parseGiftOrderSettings({ bon_en_ligne_actif: 'true', bon_en_ligne_twint_qr: 'https://x/qr.png' })), false);
+});
+
+test('lien TWINT officiel seulement', () => {
+  assert.equal(isTwintPayLink(PAYLINK), true);
+  assert.equal(isTwintPayLink('http://go.twint.ch/1/e/tw?tw=acq.x.'), false);
+  assert.equal(isTwintPayLink('https://go.twint.ch.exemple.com/1/e/tw'), false);
+  assert.equal(isTwintPayLink('https://x/qr.png'), false);
+});
+
+test('lien pré-rempli : montant et référence (notice TWINT)', () => {
+  assert.equal(
+    twintPayUrl(PAYLINK, 150, 'CMD-2026-0001'),
+    `${PAYLINK}&amount=150.00&trxInfo=Bon+cadeau+CMD-2026-0001`,
+  );
+  assert.equal(twintPayUrl(PAYLINK, 89.5, 'CMD-2026-0002').includes('&amount=89.50&'), true);
+  // Un lien déjà pré-rempli à la main est remplacé, pas doublé.
+  const u = new URL(twintPayUrl(`${PAYLINK}&amount=10&trxInfo=x`, 200, 'CMD-2026-0003'));
+  assert.deepEqual(u.searchParams.getAll('amount'), ['200.00']);
+  assert.deepEqual(u.searchParams.getAll('trxInfo'), ['Bon cadeau CMD-2026-0003']);
+  assert.equal(u.searchParams.get('tw'), 'acq.Ab12-cd_34.');
+  assert.equal(twintPayUrl('https://x/qr.png', 150, 'CMD-2026-0001'), '');
 });
 
 test('minimum par défaut : CHF 100', () => {

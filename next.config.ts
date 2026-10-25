@@ -59,6 +59,9 @@ const nextConfig: NextConfig = {
       // /contact a désormais sa propre page réelle (NAP + formulaire) — plus
       // de redirection vers /a-propos.
       { source: '/about', destination: '/a-propos', permanent: true },
+      // La commande d'un bon cadeau vit sur /bon-cadeau depuis le 2026-10-25.
+      // Les paramètres (?famille=, ?soin=, ?montant=, ?type=) suivent.
+      { source: '/bon-cadeau/commander', destination: '/bon-cadeau', permanent: true },
     ];
   },
 };

@@ -4,22 +4,21 @@
  * Bons cadeaux commandés sur le site, payés par TWINT.
  *
  * Le compte TWINT de l'institut ne prévient pas le site : l'exploitante
- * rapproche chaque commande (référence, montant, nom) de son relevé TWINT,
- * puis clique « Paiement reçu ». La facture et le bon sont alors émis par
+ * rapproche chaque commande de son relevé TWINT (le lien de paiement porte la
+ * référence en motif, voir `twintPayUrl`), puis clique « Paiement reçu ». La facture et le bon sont alors émis par
  * Postgres, et le bon part à l'acheteuse en PDF.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import {
-  Check, Download, ExternalLink, Image as ImageIcon, Mail, Settings2, X,
+  Check, Download, ExternalLink, Mail, Settings2, X,
 } from 'lucide-react';
 import { supabase } from '../../../../services/supabase';
 import { adminFetch, errorMessage } from '../../../../components/admin/reservations/lib';
 import { downloadBonCadeau } from '../../../../utils/factureDownload';
 import { formatCHF } from '../../../../types/caisse';
 import {
-  GIFT_SETTING_KEYS, giftLineLabel, giftOrderOpen, giftOrderStatusLabel, isHttpUrl, joursDepuis,
+  GIFT_SETTING_KEYS, giftLineLabel, giftOrderOpen, giftOrderStatusLabel, isTwintPayLink, joursDepuis,
   parseGiftOrderSettings,
   type GiftOrder, type GiftOrderSettings,
 } from '../../../../types/giftOrders';
@@ -28,9 +27,7 @@ import {
   Badge, Button, Callout, Field, Input, SectionHeading, ToggleRow,
 } from '../../../../components/admin/ui';
 
-const MediaPickerModal = dynamic(() => import('../../../../components/pagebuilder/MediaPickerModal'), { ssr: false });
-
-const PUBLIC_PATH = '/bon-cadeau/commander';
+const PUBLIC_PATH = '/bon-cadeau';
 
 type Pending = { kind: 'confirmer' | 'annuler'; order: GiftOrder } | null;
 
@@ -261,7 +258,7 @@ export default function CommandesEnLigne({ onSold }: { onSold: () => void }) {
                   {formatCHF(pending.order.montant)} reçu sur TWINT ?
                 </h3>
                 <p className="text-[14px] leading-relaxed text-stone-700">
-                  Vérifiez dans l&apos;app TWINT le paiement de <strong>{pending.order.acheteur_prenom} {pending.order.acheteur_nom}</strong> (commande {pending.order.reference}).
+                  Vérifiez dans l&apos;app TWINT le paiement portant le motif <strong>« Bon cadeau {pending.order.reference} »</strong> ({pending.order.acheteur_prenom} {pending.order.acheteur_nom}), et son montant : l&apos;acheteuse peut le modifier avant de payer.
                   En confirmant, la facture (mode TWINT) et le bon sont émis, et le bon part à {pending.order.acheteur_email}.
                 </p>
                 <div className="flex justify-end gap-2">
@@ -304,25 +301,22 @@ function pickDefaults(): Record<string, string> {
 function VenteEnLigneSettings({ initial, onSaved }: { initial: GiftOrderSettings; onSaved: (s: GiftOrderSettings) => void }) {
   const [actif, setActif] = useState(initial.actif);
   const [min, setMin] = useState(String(initial.montantMin));
-  const [qr, setQr] = useState(initial.twintQr);
   const [lien, setLien] = useState(initial.twintLien);
-  const [picker, setPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const lienInvalide = lien.trim() !== '' && !isHttpUrl(lien.trim());
-  const sansPaiement = actif && !qr.trim() && (!lien.trim() || lienInvalide);
+  const lienInvalide = lien.trim() !== '' && !isTwintPayLink(lien.trim());
+  const sansPaiement = actif && (!lien.trim() || lienInvalide);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (lienInvalide) { setError('Le lien TWINT doit commencer par https://'); return; }
-    if (sansPaiement) { setError('Ajoutez le code QR TWINT ou un lien de paiement : sans eux, l\'acheteuse ne saurait pas où payer.'); return; }
+    if (lienInvalide) { setError('Le lien de paiement TWINT commence par https://go.twint.ch/'); return; }
+    if (sansPaiement) { setError('Ajoutez le lien de paiement TWINT : sans lui, l\'acheteuse ne saurait pas où payer.'); return; }
     setSaving(true);
     const rows = [
       { key: 'bon_en_ligne_actif', value: String(actif) },
       { key: 'bon_en_ligne_montant_min', value: String(Math.max(1, Math.round(Number(min.replace(',', '.')) || 100))) },
-      { key: 'bon_en_ligne_twint_qr', value: qr.trim() },
       { key: 'bon_en_ligne_twint_lien', value: lien.trim() },
     ];
     const { error: err } = await supabase.from('settings').upsert(rows, { onConflict: 'key' });
@@ -338,7 +332,6 @@ function VenteEnLigneSettings({ initial, onSaved }: { initial: GiftOrderSettings
   };
 
   return (
-    <>
     <form onSubmit={save} className="space-y-4 rounded-xl bg-stone-50 px-5 py-5 lg:px-6">
       <ToggleRow
         title="Commande en ligne ouverte"
@@ -346,41 +339,20 @@ function VenteEnLigneSettings({ initial, onSaved }: { initial: GiftOrderSettings
         checked={actif}
         onChange={setActif}
       />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Montant libre minimal (CHF)" htmlFor="bon-min" hint="Les bons « soins » valent le prix des soins choisis.">
-          <Input id="bon-min" inputMode="numeric" value={min} onChange={e => setMin(e.target.value)} />
-        </Field>
-        <Field
-          label="Lien de paiement TWINT (facultatif)" htmlFor="bon-lien"
-          error={lienInvalide ? 'Le lien doit commencer par https://' : undefined}
-          hint="Sur téléphone, il ouvre l'app TWINT. Laissez vide si vous n'avez que le code QR."
-        >
-          <Input id="bon-lien" value={lien} onChange={e => setLien(e.target.value)} placeholder="https://…" />
-        </Field>
-      </div>
-      <Field label="Code QR TWINT de l'institut" hint="Photo ou capture du code QR de votre compte TWINT, affiché à l'acheteuse après sa commande et dans l'e-mail.">
-        <div className="flex flex-wrap items-center gap-4">
-          {qr ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={qr} alt="Code QR TWINT" className="size-28 rounded border border-stone-200 bg-white object-contain" />
-          ) : (
-            <span className="grid size-28 place-items-center rounded border border-dashed border-stone-300 bg-white text-stone-400">
-              <ImageIcon size={22} />
-            </span>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" icon={ImageIcon} onClick={() => setPicker(true)}>Choisir l&apos;image</Button>
-            {qr && <Button type="button" size="sm" variant="ghost" onClick={() => setQr('')}>Retirer</Button>}
-          </div>
-        </div>
+      <Field label="Montant libre minimal (CHF)" htmlFor="bon-min" hint="Les bons « soins » valent le prix des soins choisis.">
+        <Input id="bon-min" inputMode="numeric" value={min} onChange={e => setMin(e.target.value)} className="max-w-40" />
       </Field>
-      {(error || sansPaiement) && <Callout tone={error ? 'danger' : 'warning'}>{error ?? 'Sans code QR ni lien TWINT, la vente reste fermée sur le site.'}</Callout>}
+      <Field
+        label="Lien de paiement TWINT" htmlFor="bon-lien"
+        error={lienInvalide ? 'Le lien de paiement TWINT commence par https://go.twint.ch/' : undefined}
+        hint="Votre lien de paiement, créé dans le portail commerçant TWINT. Le site y ajoute le montant et la référence de chaque commande : l'acheteuse n'a rien à saisir. (Le code QR statique est réservé au paiement sur place.)"
+      >
+        <Input id="bon-lien" value={lien} onChange={e => setLien(e.target.value)} placeholder="https://go.twint.ch/1/e/tw?tw=acq.…" />
+      </Field>
+      {(error || sansPaiement) && <Callout tone={error ? 'danger' : 'warning'}>{error ?? 'Sans lien de paiement TWINT, la vente reste fermée sur le site.'}</Callout>}
       <div className="flex justify-end">
         <Button type="submit" variant="primary" loading={saving}>Enregistrer</Button>
       </div>
     </form>
-    {/* Hors du formulaire : la médiathèque a ses propres boutons. */}
-    <MediaPickerModal isOpen={picker} onClose={() => setPicker(false)} onSelect={(url: string) => { setQr(url); setPicker(false); }} />
-    </>
   );
 }

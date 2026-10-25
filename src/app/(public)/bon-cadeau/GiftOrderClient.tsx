@@ -16,15 +16,15 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Check, Loader2, Minus, Plus, Smartphone, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2, Minus, Plus, Sparkles } from 'lucide-react';
 import {
   GIFT_FAMILY_ORDER, GIFT_MAX, GIFT_MESSAGE_MAX, GIFT_PRESETS, GIFT_QTE_MAX,
   giftLineLabel, parseMontant, validateGiftOrder,
   type GiftCatalogItem, type GiftFamily, type GiftOrderField, type GiftOrderPublicView, type GiftOrderType,
-} from '../../../../types/giftOrders';
-import { optimizedImgProps } from '../../../../utils/imageOptim';
-import VoucherCard from '../../../../components/gift/VoucherCard';
-import { GIFT_VISUALS, familyTitle, familyVisual, type Visual } from '../../../../components/gift/visuals';
+} from '../../../types/giftOrders';
+import { optimizedImgProps } from '../../../utils/imageOptim';
+import VoucherCard from '../../../components/gift/VoucherCard';
+import { GIFT_VISUALS, familyTitle, familyVisual, type Visual } from '../../../components/gift/visuals';
 
 interface Props {
   open: boolean;
@@ -392,32 +392,28 @@ export default function GiftOrderClient(props: Props) {
               {' '}{owner} vous envoie le bon en PDF à <strong>{done.acheteur_email}</strong>.
             </div>
 
+            {/* Bouton officiel TWINT (version claire, pour le fond marin). Le
+                lien porte déjà le montant et la référence (`twintPayUrl`). */}
             {done.twintLien && (
-              <a href={done.twintLien} data-btn="primary" className="gco-pay__twint" target="_blank" rel="noopener noreferrer">
-                <Smartphone /> Payer {chf(done.montant)} avec TWINT
+              <a href={done.twintLien} className="gco-pay__twint" target="_blank" rel="noopener noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/images/twint-payer-fr.svg" alt={`Payer ${chf(done.montant)} avec TWINT`} width={248} height={58} />
               </a>
             )}
 
             <ol className="gco-paysteps">
-              <li><span>1</span><div>{done.twintLien ? 'Touchez le bouton, ou scannez le code avec l’app TWINT.' : 'Ouvrez l’app TWINT et scannez le code.'}</div></li>
-              <li><span>2</span><div>Payez <strong>{chf(done.montant)}</strong>, le montant exact de votre commande.</div></li>
+              <li><span>1</span><div>Touchez « Payer avec TWINT » : l’app s’ouvre avec le montant et la référence déjà remplis. Sur ordinateur, scannez le code qui s’affiche avec l’app TWINT.</div></li>
+              <li><span>2</span><div>Vérifiez le montant, <strong>{chf(done.montant)}</strong>, et confirmez le paiement.</div></li>
               <li><span>3</span><div>Le bon arrive par e-mail, en PDF, dès que le paiement est vu — en général le jour même.</div></li>
             </ol>
 
             <div className="gco-pay__note">
-              Ces indications vous ont aussi été envoyées par e-mail : sur téléphone, ouvrez-le sur un autre écran pour
-              scanner le code. Vous avez changé d’avis ? Ne payez pas, la commande sera simplement annulée.
+              Ce bouton vous a aussi été envoyé par e-mail. Vous avez changé d’avis ? Ne payez pas, la commande sera
+              simplement annulée.
             </div>
           </div>
 
           <aside className="gco-pay__side gco-screen">
-            {done.twintQr && (
-              <figure className="gco-pay__qr">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={done.twintQr} alt="Code QR TWINT de l’institut" />
-                <figcaption><strong>{chf(done.montant)}</strong> · réf. {done.reference}</figcaption>
-              </figure>
-            )}
             {voucher('gv--pay', '200px', done.montant)}
             <Link href="/" className="gco-link gco-link--light">Retour au site <ArrowRight /></Link>
           </aside>

@@ -1,41 +1,56 @@
+/**
+ * `/bon-cadeau` : la page du bon cadeau ET sa commande en ligne (fusionnées le
+ * 2026-10-25 ; `/bon-cadeau/commander` y redirige en 301, `next.config.ts`).
+ *
+ * En tête, rendus par le code : l'en-tête (H1) et le parcours de commande. En
+ * dessous, le contenu de la page `bon-cadeau` du page builder (conditions,
+ * FAQ…), qu'Emmanuelle modifie comme les autres pages. Cette route passe
+ * avant l'attrape-tout `[...slug]`.
+ */
 import type { Metadata } from 'next';
 import GiftOrderClient from './GiftOrderClient';
 import './bon-cadeau.css';
-import { getBusinessInfoServer, SITE_CONFIG } from '../../../../config/site';
-import { getSettingsServer } from '../../../../services/settingsServer';
-import { supabase } from '../../../../services/supabase';
-import { getSupabaseAdmin } from '../../../../utils/supabaseAdmin';
-import { getGiftOrderSettings, isGiftOrderOpen, loadGiftCatalog } from '../../../../services/giftOrders';
-import { buildBreadcrumbJsonLd } from '../../../../utils/pageJsonLd';
-import type { GiftCatalogItem } from '../../../../types/giftOrders';
-import { QUALITY_HERO, optimizedImgProps } from '../../../../utils/imageOptim';
-import VoucherCard from '../../../../components/gift/VoucherCard';
-import { GIFT_VISUALS } from '../../../../components/gift/visuals';
+import { getBusinessInfoServer, SITE_CONFIG } from '../../../config/site';
+import { getSettingsServer } from '../../../services/settingsServer';
+import { supabase } from '../../../services/supabase';
+import { getSupabaseAdmin } from '../../../utils/supabaseAdmin';
+import { getGiftOrderSettings, isGiftOrderOpen, loadGiftCatalog } from '../../../services/giftOrders';
+import { buildBreadcrumbJsonLd } from '../../../utils/pageJsonLd';
+import { fetchPageBySlug } from '../../../services/dynamicPages';
+import { buildMetadata, getPageMeta } from '../../../services/pageMeta';
+import BlockPage from '../../../components/blocks/BlockPage';
+import PageChrome from '../../../components/PageChrome';
+import type { GiftCatalogItem } from '../../../types/giftOrders';
+import { QUALITY_HERO, optimizedImgProps } from '../../../utils/imageOptim';
+import VoucherCard from '../../../components/gift/VoucherCard';
+import { GIFT_VISUALS } from '../../../components/gift/visuals';
 
 export const revalidate = 60;
 
-const PATH = '/bon-cadeau/commander';
+const SLUG = 'bon-cadeau';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const [business, open] = await Promise.all([getBusinessInfoServer(), isGiftOrderOpen().catch(() => false)]);
+  const [business, page] = await Promise.all([getBusinessInfoServer(), fetchPageBySlug(SLUG, false)]);
   const name = business.name || SITE_CONFIG.name;
-  const title = `Commander un bon cadeau | ${name}`;
+  // Réglages SEO de la page (admin) d'abord ; à défaut, ce texte.
+  const title = `Bon cadeau à offrir | ${name}`;
   const description = `Offrez un bon cadeau ${name} : un montant dès CHF 100 ou un ou plusieurs soins de la carte, avec votre petit mot. Paiement TWINT, bon envoyé en PDF par e-mail.`;
-  return {
+  const meta = await getPageMeta(page?.slug ?? SLUG, {
     title,
     description,
-    alternates: { canonical: `${SITE_CONFIG.url}${PATH}` },
-    openGraph: { title, description, url: `${SITE_CONFIG.url}${PATH}`, type: 'website' },
-    // Tant que la vente en ligne est fermée, la page ne fait que renvoyer au contact.
-    robots: open ? undefined : { index: false, follow: true },
-  };
+    og_title: title,
+    og_description: description,
+    og_image: SITE_CONFIG.seoDefaults.ogImage,
+  });
+  return buildMetadata(SLUG, meta, `${SITE_CONFIG.url}/${SLUG}`);
 }
 
-export default async function CommanderBonPage() {
-  const [business, settings, s] = await Promise.all([
+export default async function BonCadeauPage() {
+  const [business, settings, s, page] = await Promise.all([
     getBusinessInfoServer(),
     getGiftOrderSettings(),
     getSettingsServer(['caisse_bon_validite_mois', 'caisse_bon_mentions', 'footer_logo', 'global_logo']),
+    fetchPageBySlug(SLUG, false),
   ]);
   const open = await isGiftOrderOpen(settings).catch(() => false);
 
@@ -45,15 +60,15 @@ export default async function CommanderBonPage() {
       catalogue = await loadGiftCatalog(getSupabaseAdmin() ?? supabase);
     } catch (err) {
       // Sans carte, le montant libre reste possible.
-      console.warn('[bon-cadeau/commander] Carte indisponible:', err);
+      console.warn('[bon-cadeau] Carte indisponible:', err);
     }
   }
 
   const breadcrumbLd = buildBreadcrumbJsonLd({
-    slug: 'bon-cadeau/commander',
-    pageTitle: 'Commander un bon cadeau',
+    slug: SLUG,
+    pageTitle: page?.title || 'Bon cadeau',
     siteUrl: SITE_CONFIG.url,
-    parents: [{ name: 'Bon cadeau', slug: 'bon-cadeau' }],
+    parents: [],
   });
   const validiteMois = Math.max(12, Number(s.caisse_bon_validite_mois) || 60);
   // Le logo clair du pied de page, posé sur le bandeau marine du bon.
@@ -125,6 +140,14 @@ export default async function CommanderBonPage() {
         logoLight={logoLight}
         place={place}
       />
+      {page && (
+        <>
+          {(!page.show_header || !page.show_footer) && (
+            <PageChrome showHeader={page.show_header ?? true} showFooter={page.show_footer ?? true} />
+          )}
+          <BlockPage page={page} />
+        </>
+      )}
     </>
   );
 }

@@ -3,7 +3,7 @@
  *
  * Mise en page « carte de spa » : une photo pleine hauteur à gauche, le logo
  * en blanc sur un bandeau marine ; à droite, sur papier blanc, la bénéficiaire,
- * le soin ou la valeur, le petit mot, l'échéance et le code. L'algue de la
+ * le soin (sans prix) ou la valeur, le petit mot, l'échéance et le code. L'algue de la
  * charte en filigrane.
  *
  * Polices standard du format PDF (Times pour les titres, Helvetica pour le
@@ -65,6 +65,8 @@ const styles = StyleSheet.create({
   offerBox: { marginTop: 18, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: CREAM },
   offerLabel: { fontSize: 6.5, letterSpacing: 2.2, color: MUTED },
   offerText: { marginTop: 5, fontFamily: 'Times-Roman', fontSize: 12.5, lineHeight: 1.35, color: INK },
+  // Sans prix dessous, le soin prend la place du montant.
+  offerSolo: { fontSize: 16, lineHeight: 1.3 },
   amountRow: { marginTop: 8, flexDirection: 'row', alignItems: 'flex-end' },
   amountCur: { fontSize: 9, letterSpacing: 1.6, color: MUTED, marginRight: 6, marginBottom: 5 },
   amount: { fontFamily: 'Times-Roman', fontSize: 28, color: MARINE, lineHeight: 1 },
@@ -125,6 +127,9 @@ export default function BonCadeauDocument({ card, business, mentions, images, bo
   const entame = Number(card.montant_restant) !== Number(card.montant_initial);
   const message = (card.message ?? '').trim();
   const offer = offerFromLibelle(card.libelle);
+  // Un bon « soins » ne montre pas de prix : il offre des soins, pas une
+  // somme. Sauf entamé, où seul le solde dit ce qu'il vaut encore.
+  const showAmount = !offer || entame;
   const compact = message.length > 140 || offer.length > 90 || (message.length > 60 && offer.length > 50);
 
   return (
@@ -164,14 +169,16 @@ export default function BonCadeauDocument({ card, business, mentions, images, bo
 
           <View style={compact ? [styles.offerBox, styles.compactBox] : styles.offerBox}>
             <Text style={styles.offerLabel}>{offer ? 'VALABLE POUR' : 'D’UNE VALEUR DE'}</Text>
-            {offer ? <Text style={styles.offerText}>{offer}</Text> : null}
-            <View style={styles.amountRow}>
-              <Text style={styles.amountCur}>CHF</Text>
-              <Text style={compact ? [styles.amount, styles.compactAmount] : styles.amount}>
-                {chf(entame ? card.montant_restant : card.montant_initial)}
-              </Text>
-              {entame ? <Text style={styles.amountNote}>solde d’un bon de CHF {chf(card.montant_initial)}</Text> : null}
-            </View>
+            {offer ? <Text style={!showAmount && !compact ? [styles.offerText, styles.offerSolo] : styles.offerText}>{offer}</Text> : null}
+            {showAmount ? (
+              <View style={styles.amountRow}>
+                <Text style={styles.amountCur}>CHF</Text>
+                <Text style={compact ? [styles.amount, styles.compactAmount] : styles.amount}>
+                  {chf(entame ? card.montant_restant : card.montant_initial)}
+                </Text>
+                {entame ? <Text style={styles.amountNote}>solde d’un bon de CHF {chf(card.montant_initial)}</Text> : null}
+              </View>
+            ) : null}
           </View>
 
           {message ? (
