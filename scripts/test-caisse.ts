@@ -16,6 +16,7 @@ import {
   isSubscriptionUsable,
   isVenteProduct,
   ligneMarge,
+  listeDePrix,
   recetteEncaissee,
   remisePatch,
   seanceKey,
@@ -27,6 +28,7 @@ import {
   ventilerRecettes,
   type CartLine,
   type GiftCard,
+  type Product,
   type Subscription,
 } from '../src/types/caisse';
 import {
@@ -370,6 +372,31 @@ test('contenance lue à la fin du nom', () => {
   assert.equal(contenanceDepuisNom('Perfect Visage - Lait Démaquillant Douceur - 1 l'), '1 l');
   assert.equal(contenanceDepuisNom('Papier Parathermique - Petit - 0.40 x 200 m'), '0.40 x 200 m');
   assert.equal(contenanceDepuisNom('Drap de Lit Bleu Cabine'), null);
+});
+
+test('liste de prix : produits vente actifs, par marque puis par nom', () => {
+  const fiche = (id: string, nom: string, extra: Partial<Product> = {}) => ({
+    id, nom, marque: null, reference: null, contenance: null, prix_vente_chf: 42,
+    active: true, usage_type: 'vente' as const, ...extra,
+  });
+  const groupes = listeDePrix([
+    fiche('serum', 'Oligoforce - Sérum - 30 ml', { marque: 'Phytomer', contenance: '30 ml', reference: '100330' }),
+    fiche('bougie', 'Bougie parfumée'),
+    fiche('lait', 'Lait Démaquillant - 1 l', { marque: 'PHYTOMER ' }),
+    fiche('baume', 'Baume à lèvres', { marque: 'Alga Maris' }),
+    fiche('lime', 'Lime à ongles - 10 cm', { contenance: '12 cm' }),
+    fiche('cabine', 'Masque cabine - 500 ml', { marque: 'Phytomer', usage_type: 'cabine' }),
+    fiche('testeur', 'Testeur : Hydralgue - 30 ml', { marque: 'Phytomer', usage_type: 'testeur' }),
+    fiche('masque', 'Masque désactivé', { marque: 'Phytomer', active: false }),
+  ]);
+  assert.deepEqual(groupes.map(g => g.marque), ['Alga Maris', 'Phytomer', null], 'sans marque en dernier');
+  assert.deepEqual(groupes[1].lignes.map(l => l.id), ['lait', 'serum'], 'cabine, testeur et désactivé exclus ; casse de la marque ignorée');
+  assert.deepEqual(groupes[1].lignes[1], { id: 'serum', nom: 'Oligoforce - Sérum', contenance: '30 ml', reference: '100330', prix: 42 });
+  assert.equal(groupes[1].lignes[0].contenance, '1 l', 'contenance lue dans le nom si la fiche n’en a pas');
+  assert.equal(groupes[1].lignes[0].nom, 'Lait Démaquillant');
+  const lime = groupes[2].lignes.find(l => l.id === 'lime');
+  assert.equal(lime?.nom, 'Lime à ongles - 10 cm', 'contenance différente : le nom reste entier');
+  assert.equal(lime?.contenance, '12 cm');
 });
 
 test('reclassement : la facture corrige les fiches restées « vente », relie ses lignes', () => {

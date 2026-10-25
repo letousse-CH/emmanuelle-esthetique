@@ -1,0 +1,155 @@
+/* Fiche « Liste de prix » des produits vente (ListePrix.tsx).
+
+   Montée dans <body> par un portail et absente de l'écran. À l'impression, elle
+   remplace la page : le menu, l'en-tête et la liste de l'admin s'effacent, la
+   feuille A4 ne porte qu'elle. Le sélecteur `body:has(> .lp-sheet)` ne vaut que
+   sur la page Produits vente : les autres impressions (bilan) n'en reçoivent rien.
+
+   Sous 1024 px, l'admin passe en mode application (admin.css) — c'est le cas de
+   la largeur d'une feuille A4 : html et body sont donc remis à leur hauteur
+   naturelle, sans quoi la fiche serait coupée après la première page. */
+
+.lp-sheet { display: none; }
+
+@media print {
+  html:has(> body > .lp-sheet),
+  body:has(> .lp-sheet) {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  body:has(> .lp-sheet) > :not(.lp-sheet) { display: none !important; }
+
+  .lp-sheet {
+    display: block;
+    page: liste-prix;
+    color: var(--color-stone-900, #1c1917);
+    font-size: 10pt;
+    line-height: 1.35;
+    /* Lignes zébrées et filets imprimés tels quels, même « sans arrière-plans ». */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@page liste-prix {
+  size: A4 portrait;
+  margin: 14mm 15mm 16mm;
+
+  /* Cases de marge déclarées, même vides : Chrome n'y imprime plus sa date,
+     le titre de l'onglet ni l'adresse de la page. */
+  @top-left { content: ""; }
+  @top-center { content: ""; }
+  @top-right { content: ""; }
+  @bottom-left { content: ""; }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-size: 8pt;
+    color: #78716c;
+  }
+}
+
+/* ── En-tête ─────────────────────────────────────────────────────────────── */
+
+.lp-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12mm;
+  padding-bottom: 5mm;
+  margin-bottom: 6mm;
+  border-bottom: 1.5pt solid var(--color-stone-900, #1c1917);
+}
+.lp-institut {
+  margin: 0 0 1.5mm;
+  font-size: 9pt;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-stone-500, #78716c);
+}
+.lp-title {
+  margin: 0;
+  font-size: 22pt;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.lp-sub {
+  margin: 1.5mm 0 0;
+  font-size: 10pt;
+  color: var(--color-stone-600, #57534e);
+}
+.lp-date {
+  margin: 0;
+  text-align: right;
+  font-size: 9pt;
+  color: var(--color-stone-500, #78716c);
+  white-space: nowrap;
+}
+.lp-date strong {
+  display: block;
+  margin-top: 0.5mm;
+  font-size: 11pt;
+  font-weight: 600;
+  color: var(--color-stone-900, #1c1917);
+}
+
+/* ── Tableau : filet 1 px, en-tête blanc, lignes zébrées (.zebra) ──────────── */
+
+.lp-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 0.75pt solid var(--color-stone-200, #dedcd6);
+  background: #fff;
+}
+.lp-table th,
+.lp-table td {
+  padding: 2.2mm 3mm;
+  text-align: left;
+  vertical-align: baseline;
+}
+.lp-table thead th {
+  font-size: 8.5pt;
+  font-weight: 600;
+  color: var(--color-stone-500, #78716c);
+  background: #fff;
+  border-bottom: 0.75pt solid var(--color-stone-200, #dedcd6);
+}
+.lp-table tr { break-inside: avoid; }
+.lp-table tbody td { border-top: 0.5pt solid var(--color-stone-100, #ebeae6); }
+
+/* Intertitre de marque : jamais seul en bas de page. */
+.lp-table .lp-group { break-after: avoid; }
+.lp-table .lp-group th {
+  padding-top: 4mm;
+  font-size: 8.5pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-stone-900, #1c1917);
+  background: #fff;
+  border-bottom: 0.75pt solid var(--color-stone-200, #dedcd6);
+}
+
+.lp-nom { font-weight: 500; }
+.lp-ref {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8.5pt;
+  color: var(--color-stone-600, #57534e);
+}
+.lp-table .lp-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.lp-table td.lp-num { font-weight: 600; }
+.lp-muted { font-weight: 400; font-style: italic; color: var(--color-stone-500, #78716c); }
+
+.lp-foot {
+  margin: 4mm 0 0;
+  font-size: 8.5pt;
+  color: var(--color-stone-500, #78716c);
+}

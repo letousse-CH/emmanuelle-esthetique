@@ -226,6 +226,62 @@ export function contenanceDepuisNom(nom: string): string | null {
   return m ? m[1].trim() : null;
 }
 
+// ── Liste de prix imprimable ────────────────────────────────────────────────
+
+export interface LignePrix {
+  id: string;
+  /** Sans la contenance finale quand elle figure dans sa colonne. */
+  nom: string;
+  contenance: string | null;
+  reference: string | null;
+  prix: number;
+}
+
+export interface GroupePrix {
+  /** Marque telle que saisie sur la première fiche du groupe ; null = sans marque. */
+  marque: string | null;
+  lignes: LignePrix[];
+}
+
+/**
+ * Fiche « Imprimer la liste de prix » (Produits vente) : les produits actifs
+ * dont l'usage est « vente » (`isVenteProduct`, jamais le nom), à leur prix de
+ * vente du moment. Rangés par marque — les fiches sans marque en dernier —,
+ * puis par nom. Ni prix d'achat ni marge : la fiche peut traîner sur le comptoir.
+ */
+export function listeDePrix(
+  products: Pick<Product, 'id' | 'nom' | 'marque' | 'reference' | 'contenance' | 'prix_vente_chf' | 'active' | 'usage_type'>[],
+): GroupePrix[] {
+  const parNom = new Intl.Collator('fr-CH', { sensitivity: 'base', numeric: true });
+  const groupes = new Map<string, GroupePrix>();
+  for (const p of products) {
+    if (!p.active || !isVenteProduct(p)) continue;
+    const marque = p.marque?.trim() || null;
+    // « Phytomer » et « PHYTOMER » sont la même marque.
+    const cle = marque ? marque.toLocaleLowerCase('fr-CH') : '';
+    const nomComplet = (p.nom || '').trim();
+    const lue = contenanceDepuisNom(nomComplet);
+    const contenance = p.contenance?.trim() || lue;
+    // « Oligoforce - Sérum - 30 ml » + contenance « 30 ml » : le nom perd sa fin,
+    // la colonne la porte. Une contenance différente laisse le nom intact.
+    const nom = lue && contenance && lue.toLocaleLowerCase('fr-CH') === contenance.toLocaleLowerCase('fr-CH')
+      ? nomComplet.slice(0, nomComplet.length - lue.length).replace(/\s*[-–]\s*$/, '')
+      : nomComplet;
+    const groupe = groupes.get(cle) ?? { marque, lignes: [] };
+    groupe.lignes.push({
+      id: p.id,
+      nom,
+      contenance,
+      reference: p.reference?.trim() || null,
+      prix: Number(p.prix_vente_chf || 0),
+    });
+    groupes.set(cle, groupe);
+  }
+  return [...groupes.values()]
+    .sort((a, b) => (a.marque === null ? 1 : b.marque === null ? -1 : parNom.compare(a.marque, b.marque)))
+    .map(g => ({ ...g, lignes: g.lignes.sort((a, b) => parNom.compare(a.nom, b.nom)) }));
+}
+
 export type StockMovementType = 'reception' | 'vente' | 'retour' | 'inventaire' | 'perte';
 
 export const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {

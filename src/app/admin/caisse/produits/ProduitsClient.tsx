@@ -19,6 +19,7 @@ import { listFacturesAchat } from '../../../../services/financeService';
 import FactureAchatSelect, { type FactureAchatOption } from './FactureAchatSelect';
 import type { ProductUsageType } from '../../../../types/finance';
 import ReclassementCallout from './ReclassementCallout';
+import ListePrix from './ListePrix';
 import {
   STOCK_MOVEMENTS_MANUELS, STOCK_MOVEMENT_LABELS, TAUX_TVA_CH,
   coutAchat, formatAmount, formatCHF, isVenteProduct, margeCHF, margePct, stockLevel,
@@ -146,9 +147,12 @@ export default function ProduitsClient() {
             Ce que vous revendez aux clientes. Le stock se décompte à chaque encaissement ; les produits de soin vivent dans le stock cabine.
           </p>
         </div>
-        <Button variant="primary" icon={Plus} onClick={() => setEditing('new')}>
-          Ajouter un produit
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <ListePrix products={products} tvaActive={tvaActive} />
+          <Button variant="primary" icon={Plus} onClick={() => setEditing('new')}>
+            Ajouter un produit
+          </Button>
+        </div>
       </header>
 
       {error && (
