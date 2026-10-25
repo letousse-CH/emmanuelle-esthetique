@@ -418,8 +418,7 @@
 [data-site-theme] .gco--pay h2.gco-h2 { color: #fff !important; max-width: 16ch; }
 [data-site-theme] .gco-family__text h3 { color: #fff !important; }
 [data-site-theme] .gco-pay__amount { font-family: var(--gco-serif); font-size: clamp(3rem, 2.4rem + 3vw, 4.8rem); line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
-[data-site-theme] .gco-pay__lead { font-size: 16px; line-height: 1.75; color: rgba(255, 255, 255, 0.8); max-width: 56ch; }
-[data-site-theme] .gco-pay__lead strong { color: #fff; }
+[data-site-theme] .gco-pay__for { margin-top: -10px; font-size: 16px; line-height: 1.6; color: rgba(255, 255, 255, 0.8); max-width: 56ch; }
 [data-site-theme] .gco-pay__twint {
   display: inline-block; line-height: 0; border-radius: 6px;
   box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.7); transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -427,14 +426,20 @@
 [data-site-theme] .gco-pay__twint:hover { transform: translateY(-2px); box-shadow: 0 24px 48px -18px rgba(0, 0, 0, 0.8); }
 [data-site-theme] .gco-pay__twint:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
 [data-site-theme] .gco-pay__twint img { display: block; width: auto; height: 58px; border-radius: 6px; }
-[data-site-theme] .gco-paysteps { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 14px; width: 100%; max-width: 56ch; }
-[data-site-theme] .gco-paysteps > li { display: flex; gap: 14px; align-items: baseline; font-size: 15px; line-height: 1.6; color: rgba(255, 255, 255, 0.88); }
-[data-site-theme] .gco-paysteps > li::before { display: none; }
-[data-site-theme] .gco-paysteps > li > span {
-  flex-shrink: 0; width: 28px; height: 28px; display: grid; place-items: center; transform: translateY(-2px);
-  border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 50%; font-family: var(--gco-serif); font-size: 13px;
+[data-site-theme] .gco-pay__how { font-size: 15px; line-height: 1.6; color: rgba(255, 255, 255, 0.88); max-width: 46ch; }
+/* Téléphone ou tablette (doigt, pas de survol) : l'app s'ouvre. Sinon : code à scanner. */
+[data-site-theme] .gco-on-touch { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  [data-site-theme] .gco-on-touch { display: inline; }
+  [data-site-theme] .gco-on-desk { display: none; }
+  [data-site-theme] .gco-pay__twint img { height: 64px; }
 }
 [data-site-theme] .gco-pay__note { font-size: 13.5px; line-height: 1.65; color: rgba(255, 255, 255, 0.6); max-width: 56ch; }
+[data-site-theme] .gco-pay__note strong { color: rgba(255, 255, 255, 0.85); font-weight: 600; }
+/* Sur petit écran, rien sous le bouton que l'essentiel : le bon en miniature attend le bureau. */
+@media (max-width: 959px) {
+  [data-site-theme] .gco-pay__side .gv--pay { display: none; }
+}
 [data-site-theme] .gco-pay__side { display: grid; gap: 28px; justify-items: center; }
 [data-site-theme] .gco-pay__side .gv--pay { max-width: 320px; }
 

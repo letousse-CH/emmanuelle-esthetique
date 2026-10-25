@@ -384,32 +384,28 @@ export default function GiftOrderClient(props: Props) {
         </div>
         <div className="gco-container gco-pay">
           <div className="gco-pay__main gco-screen">
-            <div className="gco-eyebrow gco-eyebrow--light">Commande {done.reference} enregistrée</div>
-            <h2 ref={headingRef} tabIndex={-1} className="gco-h2 gco-h2--xl">Plus qu’une étape : le paiement TWINT</h2>
+            <div className="gco-eyebrow gco-eyebrow--light">Commande {done.reference}</div>
+            <h2 ref={headingRef} tabIndex={-1} className="gco-h2">Il ne reste qu’à payer</h2>
             <div className="gco-pay__amount">{chf(done.montant)}</div>
-            <div className="gco-pay__lead">
-              {done.libelle} pour {done.beneficiaire}. Payez ce montant exact par TWINT : dès réception du paiement,
-              {' '}{owner} vous envoie le bon en PDF à <strong>{done.acheteur_email}</strong>.
-            </div>
+            <div className="gco-pay__for">{done.libelle} pour {done.beneficiaire}</div>
 
             {/* Bouton officiel TWINT (version claire, pour le fond marin). Le
-                lien porte déjà le montant et la référence (`twintPayUrl`). */}
+                lien porte déjà le montant et la référence (`twintPayUrl`) : sur
+                téléphone, TWINT ouvre l'app ; sur ordinateur, sa page montre un
+                code à scanner. Une seule phrase, celle de l'appareil (CSS). */}
             {done.twintLien && (
               <a href={done.twintLien} className="gco-pay__twint" target="_blank" rel="noopener noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/images/twint-payer-fr.svg" alt={`Payer ${chf(done.montant)} avec TWINT`} width={248} height={58} />
               </a>
             )}
-
-            <ol className="gco-paysteps">
-              <li><span>1</span><div>Touchez « Payer avec TWINT » : l’app s’ouvre avec le montant et la référence déjà remplis. Sur ordinateur, scannez le code qui s’affiche avec l’app TWINT.</div></li>
-              <li><span>2</span><div>Vérifiez le montant, <strong>{chf(done.montant)}</strong>, et confirmez le paiement.</div></li>
-              <li><span>3</span><div>Le bon arrive par e-mail, en PDF, dès que le paiement est vu — en général le jour même.</div></li>
-            </ol>
+            <div className="gco-pay__how">
+              <span className="gco-on-touch">L’app TWINT s’ouvre, le montant est déjà rempli{'\u00a0'}: il ne reste qu’à confirmer.</span>
+              <span className="gco-on-desk">Une page TWINT s’ouvre avec un code{'\u00a0'}: scannez-le avec l’app TWINT de votre téléphone.</span>
+            </div>
 
             <div className="gco-pay__note">
-              Ce bouton vous a aussi été envoyé par e-mail. Vous avez changé d’avis ? Ne payez pas, la commande sera
-              simplement annulée.
+              Dès réception du paiement, {owner} vous envoie le bon en PDF à <strong>{done.acheteur_email}</strong>.
             </div>
           </div>
 

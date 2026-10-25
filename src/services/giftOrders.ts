@@ -282,14 +282,15 @@ function recapBlock(o: GiftOrder, extra: string[] = []): string {
 async function sendPaymentInstructions(o: GiftOrder, s: GiftOrderSettings): Promise<void> {
   const owner = await ownerFirstName();
   const lien = twintPayUrl(s.twintLien, o.montant, o.reference);
+  // Le bouton d'abord : l'e-mail s'ouvre le plus souvent sur le téléphone,
+  // où le lien ouvre l'app TWINT, montant et référence déjà remplis.
   const html = mailShell(`
     <p>Bonjour ${escapeHtml(o.acheteur_prenom)},</p>
-    <p>Merci pour votre commande de bon cadeau. Il reste une étape : le paiement par TWINT.</p>
+    <p>Merci pour votre commande. Il ne reste qu'à payer <strong>${escapeHtml(chfMail(o.montant))}</strong> par TWINT :</p>
+    ${lien ? `<p><a href="${escapeHtml(lien)}" style="display:inline-block;background:#262626;color:#fff;text-decoration:none;padding:14px 24px;border-radius:6px;font-weight:600;">Payer ${escapeHtml(chfMail(o.montant))} avec TWINT</a></p>` : ''}
+    <p style="font-size:13px;color:#57534e;">Le montant est déjà rempli. Sur ordinateur, scannez le code qui s'affiche avec l'app TWINT de votre téléphone.</p>
     ${recapBlock(o, [mailRow('Référence :', escapeHtml(o.reference))])}
-    <p><strong>Payez ${escapeHtml(chfMail(o.montant))} par TWINT</strong> avec ce bouton : le montant et la référence de votre commande sont déjà remplis.</p>
-    ${lien ? `<p><a href="${escapeHtml(lien)}" style="display:inline-block;background:#262626;color:#fff;text-decoration:none;padding:13px 22px;border-radius:6px;font-weight:600;">Payer ${escapeHtml(chfMail(o.montant))} avec TWINT</a></p>` : ''}
-    <p>Sur téléphone, l'app TWINT s'ouvre ; sur ordinateur, un code s'affiche, à scanner avec l'app. Gardez le montant exact. Dès que ${escapeHtml(owner.prenom || 'l\'institut')} a reçu votre paiement, le bon vous est envoyé en PDF à cette adresse, prêt à imprimer ou à transmettre.</p>
-    <p>Vous avez changé d'avis ? Ne payez pas : la commande sera simplement annulée.</p>
+    <p>Dès réception du paiement, ${escapeHtml(owner.prenom || 'l\'institut')} vous envoie le bon en PDF à cette adresse. Vous avez changé d'avis ? Ne payez pas : la commande sera simplement annulée.</p>
     <p>À bientôt,<br/>${escapeHtml(owner.prenom || owner.nom)}</p>`);
 
   const res = await sendEmail({
